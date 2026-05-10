@@ -1,0 +1,530 @@
+import type {
+  AutomationRun,
+  AutomationSettings,
+  GeneratedContent,
+  Platform,
+  ProductQueueItem,
+  QueueStatus,
+  RunMode
+} from "@/types/automation";
+import type {
+  MutableMockAutomationRepository,
+  QueueFilters,
+  QueueSummary,
+  SettingsValidationResult
+} from "@/lib/repositories/types";
+import { assignSlots } from "@/lib/scheduler";
+import { getQueueSummary } from "@/lib/status";
+import { toDateInputValue } from "@/lib/format";
+
+const DEFAULT_EXCLUDED_CATEGORIES = [
+  "의류",
+  "신발",
+  "건강식품",
+  "화장품",
+  "식품",
+  "고가전자제품",
+  "대형가구"
+];
+
+const RUN_MODES: RunMode[] = [
+  "generate_only",
+  "youtube_private",
+  "youtube_unlisted",
+  "youtube_public"
+];
+
+export class SettingsValidationError extends Error {
+  constructor(
+    message: string,
+    public field?: keyof AutomationSettings
+  ) {
+    super(message);
+    this.name = "SettingsValidationError";
+  }
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+export function createDefaultSettings(
+  overrides: Partial<AutomationSettings> = {}
+): AutomationSettings {
+  return {
+    id: "default",
+    daily_target_count: 69,
+    batch_size: 3,
+    interval_hours: 1,
+    start_hour: 1,
+    end_hour: 23,
+    run_mode: "generate_only",
+    is_paused: true,
+    youtube_upload_enabled: false,
+    approval_required: true,
+    max_daily_uploads: 6,
+    category_include: [],
+    category_exclude: DEFAULT_EXCLUDED_CATEGORIES,
+    updated_at: nowIso(),
+    ...overrides
+  };
+}
+
+export function validateSettingsInput(
+  input: Partial<AutomationSettings>
+): SettingsValidationResult {
+  if (input.daily_target_count !== undefined && !isIntBetween(input.daily_target_count, 1, 200)) {
+    return { ok: false, field: "daily_target_count", message: "하루 생성 상품 수는 1~200 사이여야 합니다." };
+  }
+  if (input.batch_size !== undefined && !isIntBetween(input.batch_size, 1, 10)) {
+    return { ok: false, field: "batch_size", message: "배치 크기는 1~10 사이여야 합니다." };
+  }
+  if (
+    input.interval_hours !== undefined &&
+    ![1, 2, 3, 6, 12].includes(input.interval_hours)
+  ) {
+    return { ok: false, field: "interval_hours", message: "실행 간격은 1, 2, 3, 6, 12 중 하나여야 합니다." };
+  }
+  if (input.start_hour !== undefined && !isIntBetween(input.start_hour, 0, 23)) {
+    return { ok: false, field: "start_hour", message: "시작 시간은 0~23 사이여야 합니다." };
+  }
+  if (input.end_hour !== undefined && !isIntBetween(input.end_hour, 0, 23)) {
+    return { ok: false, field: "end_hour", message: "종료 시간은 0~23 사이여야 합니다." };
+  }
+  if (input.max_daily_uploads !== undefined && !isIntBetween(input.max_daily_uploads, 0, 69)) {
+    return { ok: false, field: "max_daily_uploads", message: "하루 공개 업로드 제한은 0~69 사이여야 합니다." };
+  }
+  if (input.run_mode !== undefined && !RUN_MODES.includes(input.run_mode)) {
+    return { ok: false, field: "run_mode", message: "지원하지 않는 실행 모드입니다." };
+  }
+
+  return { ok: true, value: input };
+}
+
+function isIntBetween(value: number, min: number, max: number) {
+  return Number.isInteger(value) && value >= min && value <= max;
+}
+
+const EXAMPLE_PRODUCTS = [
+  ["무선 미니 청소기", "차량/데스크 정리", "생활/청소용품"],
+  ["접이식 노트북 거치대", "재택근무 생산성", "디지털/주변기기"],
+  ["초소형 보풀 제거기", "겨울 의류 관리", "생활/가전"],
+  ["USB 충전식 손난로", "출근길 방한", "계절/난방"],
+  ["싱크대 물막이 실리콘", "주방 물튐 방지", "주방/수납"],
+  ["침대틈새 수납함", "원룸 공간 절약", "홈/정리"],
+  ["자석 케이블 홀더", "책상 케이블 정리", "디지털/액세서리"],
+  ["샤워기 필터 세트", "욕실 관리", "욕실/생활"],
+  ["미니 전동 드라이버", "셀프 수리", "공구/DIY"],
+  ["여행용 압축 파우치", "짐 줄이기", "여행/수납"],
+  ["투명 냉장고 정리함", "냉장고 동선 개선", "주방/정리"],
+  ["무타공 도어 후크", "좁은 현관 정리", "생활/수납"]
+];
+
+const STATUS_PATTERN: QueueStatus[] = [
+  "scheduled",
+  "processing",
+  "content_ready",
+  "video_render_started",
+  "video_ready",
+  "blog_draft_created",
+  "ready_for_manual_upload",
+  "manual_review",
+  "error",
+  "skipped",
+  "hold",
+  "scheduled"
+];
+
+function createQueueItem(index: number, status: QueueStatus, date: string): ProductQueueItem {
+  const example = EXAMPLE_PRODUCTS[(index - 1) % EXAMPLE_PRODUCTS.length];
+  const hasAffiliate = !["scheduled", "processing", "error", "skipped", "hold"].includes(status);
+  const hasVideo = [
+    "video_ready",
+    "blog_draft_created",
+    "ready_for_manual_upload",
+    "manual_review"
+  ].includes(status);
+  const hasBlog = ["blog_draft_created", "ready_for_manual_upload", "manual_review"].includes(status);
+  const id = `queue-${String(index).padStart(3, "0")}`;
+  const updatedAt = nowIso();
+
+  return {
+    id,
+    queue_date: date,
+    queue_rank: index,
+    upload_slot: Math.ceil(index / 3),
+    scheduled_at: new Date(`${date}T01:00:00`).toISOString(),
+    keyword: example[0],
+    theme: example[1],
+    product_name: `${example[0]} ${index}`,
+    category_path: example[2],
+    price_now_text: `${(9900 + index * 700).toLocaleString("ko-KR")}원`,
+    thumbnail_url: `https://picsum.photos/seed/commerce-${index}/360/240`,
+    raw_coupang_url: `https://www.coupang.com/vp/products/mock-${index}`,
+    selected_affiliate_url: hasAffiliate ? `https://link.coupang.com/a/mock-${index}` : "",
+    product_score: Math.min(98, 70 + (index % 29)),
+    score_reason: "검색 의도와 계절성, 가격 접근성이 좋아 30일 내 반응 가능성이 높습니다.",
+    video_angle: "짧은 문제 제기 후 사용 전후 차이를 보여주는 쇼츠 구성",
+    queue_status: status,
+    video_url: hasVideo ? `https://example.com/mock-assets/video-${id}.mp4` : "",
+    video_snapshot_url: hasVideo ? `https://picsum.photos/seed/snapshot-${index}/480/270` : "",
+    blog_draft_url: hasBlog ? `https://example.com/mock-blog-drafts/${id}` : "",
+    youtube_upload_status:
+      status === "ready_for_manual_upload" ? "ready_to_upload" : status === "manual_review" ? "manual_review" : "not_ready",
+    tiktok_upload_status:
+      status === "ready_for_manual_upload" ? "ready_to_upload" : status === "manual_review" ? "manual_review" : "not_ready",
+    threads_post_status:
+      status === "ready_for_manual_upload" ? "ready_to_post" : status === "manual_review" ? "manual_review" : "not_ready",
+    manual_review_status:
+      status === "ready_for_manual_upload"
+        ? "ready_for_review"
+        : status === "manual_review"
+          ? "manual_review"
+          : "not_ready",
+    error_message:
+      status === "error"
+        ? "영상 렌더링 응답을 받지 못했습니다. n8n 실행 로그에서 원인을 확인하세요."
+        : "",
+    created_at: updatedAt,
+    updated_at: updatedAt
+  };
+}
+
+export function createMockQueueItems(settings = createDefaultSettings()): ProductQueueItem[] {
+  const date = toDateInputValue();
+  const items = Array.from({ length: settings.daily_target_count }, (_, index) => {
+    const position = index + 1;
+    const status = position <= STATUS_PATTERN.length ? STATUS_PATTERN[index] : "scheduled";
+    return createQueueItem(position, status, date);
+  });
+
+  return assignSlots(items, settings);
+}
+
+export function createMockGeneratedContents(queue: ProductQueueItem[]): GeneratedContent[] {
+  return queue
+    .filter((item) => item.selected_affiliate_url || item.video_url || item.blog_draft_url)
+    .map((item) => {
+      const createdAt = nowIso();
+      return {
+        id: `content-${item.id}`,
+        product_queue_id: item.id,
+        raw_coupang_url: item.raw_coupang_url,
+        product_name: item.product_name,
+        selected_affiliate_url: item.selected_affiliate_url,
+        video_title: `${item.keyword} 바로 써본 핵심 포인트`,
+        video_script: `${item.product_name}의 장점과 주의점을 35초 안에 비교합니다.`,
+        caption_1: `${item.keyword}, 이런 상황이면 꽤 유용합니다.`,
+        caption_2: "가격과 사용 장면을 같이 확인하세요.",
+        caption_3: "구매 전 상세페이지와 후기를 꼭 확인하세요.",
+        threads_text: `${item.keyword} 찾는 분들을 위한 짧은 체크리스트입니다. 링크와 가격은 변동될 수 있어요.`,
+        blog_title: `${item.keyword} 추천 포인트와 구매 전 체크사항`,
+        blog_body: "상품 특징, 사용 장면, 장단점, 구매 전 확인할 점을 정리한 초안입니다.",
+        hashtags: "#쿠팡파트너스 #생활용품 #쇼츠추천",
+        youtube_description: `${item.product_name}\n\n이 포스팅은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받을 수 있습니다.`,
+        tiktok_caption: `${item.keyword} 짧게 보고 결정하기 #쿠팡파트너스`,
+        disclosure_text: "이 포스팅은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받을 수 있습니다.",
+        content_source: "fallback",
+        creatomate_render_id: item.video_url ? `mock-render-${item.id}` : "",
+        video_url: item.video_url,
+        video_snapshot_url: item.video_snapshot_url,
+        video_status: item.video_url ? "ready" : "not_started",
+        blog_draft_url: item.blog_draft_url,
+        blog_draft_status: item.blog_draft_url ? "created" : "not_started",
+        created_at: createdAt,
+        updated_at: createdAt
+      };
+    });
+}
+
+export function createMockRuns(): AutomationRun[] {
+  const startedAt = new Date(Date.now() - 1000 * 60 * 30).toISOString();
+  const finishedAt = new Date(Date.now() - 1000 * 60 * 29).toISOString();
+
+  return [
+    {
+      id: "run-local-seed",
+      run_type: "manual_batch",
+      status: "success",
+      processed_count: 69,
+      error_count: 0,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      log: "로컬 mock queue seed가 생성되었습니다. 외부 Webhook 호출은 수행하지 않았습니다.",
+      safe_message: "로컬 샘플 큐가 준비되었습니다."
+    },
+    {
+      id: "run-webhook-missing",
+      run_type: "webhook_test",
+      status: "failed",
+      processed_count: 0,
+      error_count: 1,
+      started_at: finishedAt,
+      finished_at: finishedAt,
+      log: "n8n Webhook 설정이 없어 실행할 수 없습니다.",
+      safe_message: "n8n Webhook 설정이 없어 실행할 수 없습니다."
+    }
+  ];
+}
+
+function sanitizeRun(run: AutomationRun): AutomationRun {
+  return {
+    ...run,
+    log: run.log
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]")
+      .replace(/https?:\/\/[^\s"]*webhook[^\s"]*/gi, "[webhook-url-redacted]")
+  };
+}
+
+export class InMemoryAutomationRepository implements MutableMockAutomationRepository {
+  private settings: AutomationSettings;
+  private queue: ProductQueueItem[];
+  private contents: GeneratedContent[];
+  private runs: AutomationRun[];
+
+  constructor() {
+    this.settings = createDefaultSettings();
+    this.queue = createMockQueueItems(this.settings);
+    this.contents = createMockGeneratedContents(this.queue);
+    this.runs = createMockRuns();
+  }
+
+  async getSettings() {
+    return clone(this.settings);
+  }
+
+  async updateSettings(input: Partial<AutomationSettings>) {
+    const validation = validateSettingsInput(input);
+    if (!validation.ok) {
+      throw new SettingsValidationError(validation.message, validation.field);
+    }
+
+    this.settings = {
+      ...this.settings,
+      ...validation.value,
+      updated_at: nowIso()
+    };
+    this.queue = assignSlots(this.queue, this.settings);
+    return clone(this.settings);
+  }
+
+  async resetSettings() {
+    this.settings = createDefaultSettings();
+    this.queue = assignSlots(this.queue, this.settings);
+    return clone(this.settings);
+  }
+
+  async getQueue(filters: QueueFilters = {}) {
+    let items = [...this.queue];
+
+    if (filters.date) {
+      items = items.filter((item) => item.queue_date === filters.date);
+    }
+    if (filters.status && filters.status !== "all") {
+      items = items.filter((item) => item.queue_status === filters.status);
+    }
+    if (filters.upload_status) {
+      items = items.filter(
+        (item) =>
+          item.youtube_upload_status === filters.upload_status ||
+          item.tiktok_upload_status === filters.upload_status ||
+          item.threads_post_status === filters.upload_status
+      );
+    }
+    if (filters.keyword) {
+      const keyword = filters.keyword.toLowerCase();
+      items = items.filter(
+        (item) =>
+          item.keyword.toLowerCase().includes(keyword) ||
+          item.product_name.toLowerCase().includes(keyword)
+      );
+    }
+    if (filters.theme) {
+      const theme = filters.theme.toLowerCase();
+      items = items.filter((item) => item.theme.toLowerCase().includes(theme));
+    }
+
+    if (filters.priority === "issues-first") {
+      items = items.sort((a, b) => priorityWeight(a) - priorityWeight(b) || a.queue_rank - b.queue_rank);
+    } else {
+      items = items.sort((a, b) => a.queue_rank - b.queue_rank);
+    }
+
+    if (filters.limit) {
+      items = items.slice(0, filters.limit);
+    }
+
+    return clone(items);
+  }
+
+  async getQueueSummary(): Promise<QueueSummary> {
+    return getQueueSummary(this.queue);
+  }
+
+  async getQueueItem(id: string) {
+    return clone(this.queue.find((item) => item.id === id) ?? null);
+  }
+
+  async retryQueueItem(id: string) {
+    return this.updateQueueItem(id, {
+      queue_status: "scheduled",
+      error_message: "",
+      youtube_upload_status: "not_ready",
+      tiktok_upload_status: "not_ready",
+      threads_post_status: "not_ready",
+      manual_review_status: "not_ready"
+    });
+  }
+
+  async holdQueueItem(id: string) {
+    return this.updateQueueItem(id, { queue_status: "hold" });
+  }
+
+  async skipQueueItem(id: string) {
+    return this.updateQueueItem(id, { queue_status: "skipped" });
+  }
+
+  async markManualUploaded(id: string, platform: Platform) {
+    const item = this.queue.find((queueItem) => queueItem.id === id);
+    if (!item) {
+      return null;
+    }
+
+    if (platform === "youtube") {
+      item.youtube_upload_status = "manual_review";
+      item.queue_status = "uploaded";
+    }
+    if (platform === "tiktok") {
+      item.tiktok_upload_status = "uploaded";
+      item.queue_status = "uploaded";
+    }
+    if (platform === "threads") {
+      item.threads_post_status = "posted";
+      item.queue_status = "posted";
+    }
+    item.manual_review_status = "approved";
+    item.updated_at = nowIso();
+
+    return clone(item);
+  }
+
+  async getRuns() {
+    return clone([...this.runs].sort((a, b) => b.started_at.localeCompare(a.started_at)));
+  }
+
+  async appendRun(run: AutomationRun) {
+    const safeRun = sanitizeRun(run);
+    this.runs.unshift(safeRun);
+    return clone(safeRun);
+  }
+
+  async getGeneratedContentByQueueItem(id: string) {
+    return clone(this.contents.find((content) => content.product_queue_id === id) ?? null);
+  }
+
+  async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {
+    if (mode === "simulate-transition") {
+      this.queue = this.queue.map((item) => {
+        if (item.queue_status === "scheduled") {
+          return { ...item, queue_status: "processing", updated_at: nowIso() };
+        }
+        if (item.queue_status === "processing") {
+          return {
+            ...item,
+            queue_status: "video_ready",
+            video_url: `https://example.com/mock-assets/video-${item.id}.mp4`,
+            video_snapshot_url: `https://picsum.photos/seed/snapshot-${item.id}/480/270`,
+            updated_at: nowIso()
+          };
+        }
+        if (item.queue_status === "video_ready") {
+          return {
+            ...item,
+            queue_status: "blog_draft_created",
+            blog_draft_url: `https://example.com/mock-blog-drafts/${item.id}`,
+            updated_at: nowIso()
+          };
+        }
+        if (item.queue_status === "blog_draft_created") {
+          return {
+            ...item,
+            queue_status: "ready_for_manual_upload",
+            youtube_upload_status: "ready_to_upload",
+            tiktok_upload_status: "ready_to_upload",
+            threads_post_status: "ready_to_post",
+            manual_review_status: "ready_for_review",
+            updated_at: nowIso()
+          };
+        }
+        if (item.queue_status === "error") {
+          return { ...item, queue_status: "scheduled", error_message: "", updated_at: nowIso() };
+        }
+        return item;
+      });
+    } else {
+      this.queue = createMockQueueItems(this.settings);
+      if (mode === "error-sample") {
+        this.queue = this.queue.map((item, index) =>
+          index < 5
+            ? {
+                ...item,
+                queue_status: "error",
+                error_message: "개발용 오류 샘플입니다. 실제 Webhook 성공으로 처리하지 않았습니다.",
+                updated_at: nowIso()
+              }
+            : item
+        );
+      }
+    }
+
+    this.contents = createMockGeneratedContents(this.queue);
+    await this.appendRun({
+      id: `run-seed-${Date.now()}`,
+      run_type: "manual_batch",
+      status: "success",
+      processed_count: this.queue.length,
+      error_count: this.queue.filter((item) => item.queue_status === "error").length,
+      started_at: nowIso(),
+      finished_at: nowIso(),
+      log: `개발용 seed 실행: ${mode}. 외부 Webhook 호출 없음.`,
+      safe_message: "개발용 샘플 데이터가 갱신되었습니다."
+    });
+    return clone(this.queue);
+  }
+
+  private async updateQueueItem(id: string, patch: Partial<ProductQueueItem>) {
+    const index = this.queue.findIndex((item) => item.id === id);
+    if (index === -1) {
+      return null;
+    }
+
+    this.queue[index] = {
+      ...this.queue[index],
+      ...patch,
+      updated_at: nowIso()
+    };
+
+    return clone(this.queue[index]);
+  }
+}
+
+function priorityWeight(item: ProductQueueItem) {
+  if (item.queue_status === "error") {
+    return 0;
+  }
+  if (item.queue_status === "manual_review") {
+    return 1;
+  }
+  if (item.queue_status === "ready_for_manual_upload") {
+    return 2;
+  }
+  return 3;
+}
+
+export function createMockAutomationRepository(): MutableMockAutomationRepository {
+  return new InMemoryAutomationRepository();
+}
