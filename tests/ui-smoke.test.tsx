@@ -25,6 +25,8 @@ describe("ui smoke", () => {
           nextBatchConfigured: false,
           retryItemConfigured: false,
           secretConfigured: false,
+          callbackBaseUrlConfigured: false,
+          callbackSecretConfigured: false,
           holdItemConfigured: false,
           skipItemConfigured: false
         }}
@@ -56,6 +58,8 @@ describe("ui smoke", () => {
           nextBatchConfigured: false,
           retryItemConfigured: false,
           secretConfigured: false,
+          callbackBaseUrlConfigured: false,
+          callbackSecretConfigured: false,
           holdItemConfigured: false,
           skipItemConfigured: false
         }}
@@ -89,6 +93,8 @@ describe("ui smoke", () => {
           nextBatchConfigured: false,
           retryItemConfigured: false,
           secretConfigured: false,
+          callbackBaseUrlConfigured: false,
+          callbackSecretConfigured: false,
           holdItemConfigured: true,
           skipItemConfigured: true
         }}

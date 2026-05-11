@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { GET as getSettings, POST as postSettings } from "../app/api/settings/route";
 import { GET as getQueue } from "../app/api/queue/route";
 import { POST as runNightlyScout } from "../app/api/run/nightly-scout/route";
-import { resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
+import { getAutomationRepository, resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
 
 async function readJson(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
@@ -13,6 +13,10 @@ describe("api routes", () => {
     resetMockRepositoryForTests();
     delete process.env.N8N_NIGHTLY_SCOUT_WEBHOOK_URL;
     delete process.env.N8N_WEBHOOK_SECRET;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   test("GET /api/settings returns settings without secrets", async () => {
@@ -58,5 +62,45 @@ describe("api routes", () => {
     expect(payload.message).toBe("n8n Webhook 설정이 없어 실행할 수 없습니다.");
     expect(serialized).not.toContain("N8N_NIGHTLY_SCOUT_WEBHOOK_URL");
     expect(serialized).not.toContain("N8N_WEBHOOK_SECRET");
+    const runs = await getAutomationRepository().getRuns();
+    expect(runs[0]).toMatchObject({ status: "failed", run_type: "nightly_scout" });
+  });
+
+  test("POST /api/run/nightly-scout records successful webhook response", async () => {
+    process.env.N8N_NIGHTLY_SCOUT_WEBHOOK_URL = "https://n8n.example.com/webhook/nightly-secret";
+    process.env.N8N_WEBHOOK_SECRET = "n8n-secret";
+    process.env.PUBLIC_APP_BASE_URL = "http://localhost:3001";
+    await getAutomationRepository().updateSettings({ is_paused: false });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          run_id: "n8n-run-1",
+          processed_count: 69,
+          error_count: 0
+        }),
+        { status: 200 }
+      )
+    );
+
+    const response = await runNightlyScout(
+      new Request("http://localhost/api/run/nightly-scout", { method: "POST" })
+    );
+    const payload = await readJson(response);
+    const runs = await getAutomationRepository().getRuns();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.request_id).toMatch(/^nightly_scout-/);
+    expect(runs[0]).toMatchObject({
+      run_type: "nightly_scout",
+      status: "success",
+      request_id: payload.request_id,
+      n8n_run_id: "n8n-run-1",
+      processed_count: 69,
+      error_count: 0
+    });
+    expect(JSON.stringify(payload)).not.toContain("n8n-secret");
+    expect(runs[0].log).not.toContain("nightly-secret");
   });
 });

@@ -2,9 +2,9 @@ import { AlertTriangle, CalendarClock, CheckCircle2, PauseCircle } from "lucide-
 import type { AutomationRun, AutomationSettings, ProductQueueItem } from "@/types/automation";
 import type { QueueSummary } from "@/lib/repositories/types";
 import type { N8nConfigStatus } from "@/lib/server/env";
+import { formatDateTime } from "@/lib/format";
 import { getDailyCapacity, getDailyCapacityWarning, getNextRunAt } from "@/lib/scheduler";
 import { getRecentErrors } from "@/lib/status";
-import { formatDateTime } from "@/lib/format";
 import { GuardNotice } from "@/components/GuardNotice";
 import { QueueTable } from "@/components/QueueTable";
 import { RunActionPanel } from "@/components/RunActionPanel";
@@ -29,6 +29,9 @@ export function DashboardView({
   const recentErrors = getRecentErrors(items, 5);
   const recentItems = items.slice(0, 10);
   const lastRun = runs[0];
+  const recentWebhookRuns = runs
+    .filter((run) => ["nightly_scout", "next_batch", "manual_batch", "retry_item"].includes(run.run_type))
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -39,29 +42,20 @@ export function DashboardView({
               Commerce Automation Control Center
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              쿠팡 링크와 상품 큐를 기반으로 제휴 콘텐츠, 쇼츠 영상, 블로그 초안, SNS 문구를 자동 생성하고,
-              운영자가 안전하게 검수, 실행, 업로드 큐를 관리하는 자동화 관제 웹앱.
+              쿠팡 상품 큐, 콘텐츠 생성, n8n 실행 로그, 수동 업로드 준비 상태를 한 화면에서 확인하는
+              운영 관제실입니다.
             </p>
           </div>
           <div className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[420px]">
-            <div className="rounded-lg bg-slate-100 px-3 py-2">
-              <span className="block text-xs text-slate-500">현재 모드</span>
-              <span className="font-bold text-slate-900">{settings.run_mode}</span>
-            </div>
-            <div className="rounded-lg bg-slate-100 px-3 py-2">
-              <span className="block text-xs text-slate-500">자동화 상태</span>
-              <span className="font-bold text-slate-900">{settings.is_paused ? "일시정지" : "실행 가능"}</span>
-            </div>
-            <div className="rounded-lg bg-slate-100 px-3 py-2">
-              <span className="block text-xs text-slate-500">마지막 실행</span>
-              <span className="font-bold text-slate-900">{lastRun ? formatDateTime(lastRun.started_at) : "-"}</span>
-            </div>
+            <InfoPill label="현재 모드" value={settings.run_mode} />
+            <InfoPill label="자동화 상태" value={settings.is_paused ? "일시정지" : "실행 가능"} />
+            <InfoPill label="마지막 실행" value={lastRun ? formatDateTime(lastRun.started_at) : "-"} />
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="오늘 큐 수" value={summary.total} helper="기본 목표 69개" icon={<CalendarClock size={20} />} />
+        <StatCard label="오늘 큐" value={summary.total} helper="기본 목표 69개" icon={<CalendarClock size={20} />} />
         <StatCard label="처리 예정" value={summary.scheduled} tone="info" />
         <StatCard label="처리 중" value={summary.processing} tone="info" />
         <StatCard label="video_ready" value={summary.video_ready} tone="success" />
@@ -87,7 +81,9 @@ export function DashboardView({
         <StatCard
           label="YouTube 안전"
           value={settings.youtube_upload_enabled ? "활성" : "비활성"}
-          helper={`공개 업로드 제한 ${settings.max_daily_uploads}개, 승인 필요 ${settings.approval_required ? "YES" : "NO"}`}
+          helper={`공개 업로드 제한 ${settings.max_daily_uploads}개, 승인 필요 ${
+            settings.approval_required ? "YES" : "NO"
+          }`}
           tone={settings.youtube_upload_enabled ? "warning" : "default"}
           icon={settings.youtube_upload_enabled ? <AlertTriangle size={20} /> : <CheckCircle2 size={20} />}
         />
@@ -101,6 +97,42 @@ export function DashboardView({
 
       <GuardNotice settings={settings} item={items[0]} />
       <RunActionPanel settings={settings} diagnostics={diagnostics} />
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-base font-bold text-slate-950">최근 실행 결과</h2>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {recentWebhookRuns.length === 0 ? (
+            <p className="text-sm text-slate-500">최근 webhook 실행 결과가 없습니다.</p>
+          ) : (
+            recentWebhookRuns.map((run) => (
+              <div key={run.id} className="rounded-lg bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-slate-950">{run.run_type}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      run.status === "success"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : run.status === "running"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {run.status}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">request_id: {run.request_id ?? "-"}</p>
+                <p className="mt-2 text-sm text-slate-700">{run.safe_message}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  processed {run.processed_count} / errors {run.error_count}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {formatDateTime(run.started_at)} - {formatDateTime(run.finished_at)}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -132,11 +164,18 @@ export function DashboardView({
       </section>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-950">최근 생성 상품 10개</h2>
-        </div>
+        <h2 className="text-base font-bold text-slate-950">최근 생성 상품 10개</h2>
         <QueueTable items={recentItems} />
       </section>
+    </div>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-slate-100 px-3 py-2">
+      <span className="block text-xs text-slate-500">{label}</span>
+      <span className="font-bold text-slate-900">{value}</span>
     </div>
   );
 }

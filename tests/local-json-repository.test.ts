@@ -72,4 +72,30 @@ describe("localJsonAutomationRepository", () => {
 
     expect(runs.some((run) => run.id === "run-persisted")).toBe(true);
   });
+
+  test("upserts queue items and updates by raw url", async () => {
+    const repository = createLocalJsonAutomationRepository({ dataDir });
+    const existing = (await repository.getQueue({ limit: 1 }))[0];
+
+    await repository.updateQueueItemByRawUrl(existing.raw_coupang_url, {
+      queue_status: "ready_for_manual_upload",
+      video_url: "https://cdn.example/video.mp4"
+    });
+    await repository.upsertQueueItems([
+      {
+        ...existing,
+        id: "new-upserted-item",
+        raw_coupang_url: "https://www.coupang.com/vp/products/upserted",
+        product_name: "upserted product",
+        queue_rank: 999
+      }
+    ]);
+
+    const updated = await repository.getQueueItem(existing.id);
+    const upserted = await repository.getQueueItem("new-upserted-item");
+
+    expect(updated?.queue_status).toBe("ready_for_manual_upload");
+    expect(updated?.video_url).toBe("https://cdn.example/video.mp4");
+    expect(upserted?.product_name).toBe("upserted product");
+  });
 });

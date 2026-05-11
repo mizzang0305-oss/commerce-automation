@@ -15,17 +15,32 @@ export async function POST(request: Request) {
   }
 
   const settings = await repository.getSettings();
-  const result = await callN8nWebhook("retry_item", buildN8nPayload("retry_item", { settings, item }));
+  const payload = buildN8nPayload("retry_item", { settings, item });
+  const result = await callN8nWebhook("retry_item", payload);
 
   await repository.appendRun(
     createAutomationRun({
+      request_id: result.requestId,
+      n8n_run_id: result.runId,
+      http_status: result.httpStatus,
       run_type: "retry_item",
       status: result.ok ? "success" : "failed",
-      processed_count: result.ok ? 1 : 0,
+      processed_count: result.processedCount || (result.ok ? 1 : 0),
+      error_count: result.errorCount,
       log: result.log,
       safe_message: result.message
     })
   );
 
-  return NextResponse.json({ ok: result.ok, message: result.message, item }, { status: result.ok ? 200 : 503 });
+  return NextResponse.json(
+    {
+      ok: result.ok,
+      message: result.message,
+      request_id: result.requestId,
+      response_status: result.httpStatus,
+      safe_summary: result.safeSummary,
+      item
+    },
+    { status: result.ok ? 200 : 503 }
+  );
 }

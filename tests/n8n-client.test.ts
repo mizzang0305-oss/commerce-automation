@@ -40,36 +40,63 @@ describe("n8nClient", () => {
 
   test("builds explicit nightly scout payload", () => {
     const settings = createDefaultSettings();
+    process.env.PUBLIC_APP_BASE_URL = "http://localhost:3001";
 
-    expect(buildN8nPayload("nightly_scout", { settings })).toMatchObject({
+    const payload = buildN8nPayload("nightly_scout", { settings });
+
+    expect(payload).toMatchObject({
       type: "nightly_scout",
       settings,
       requested_count: 69,
       date_range_days: 30,
-      run_mode: "generate_only"
+      mode: "generate_queue",
+      callback: {
+        url: "http://localhost:3001/api/callback/n8n/nightly-scout",
+        method: "POST"
+      }
     });
+    expect(payload.request_id).toMatch(/^nightly_scout-/);
+    expect(new Date(payload.requested_at).toString()).not.toBe("Invalid Date");
+    expect(JSON.stringify(payload)).not.toContain("super-secret");
   });
 
   test("builds explicit next batch payload", () => {
     const settings = createDefaultSettings({ interval_hours: 3 });
+    process.env.PUBLIC_APP_BASE_URL = "http://localhost:3001";
 
     expect(buildN8nPayload("next_batch", { settings })).toMatchObject({
       type: "next_batch",
       settings,
       batch_size: 3,
       interval_hours: 3,
-      run_mode: "generate_only"
+      mode: "process_next_batch",
+      callback: {
+        url: "http://localhost:3001/api/callback/n8n/batch-result",
+        method: "POST"
+      }
     });
   });
 
   test("builds explicit retry item payload", () => {
     const settings = createDefaultSettings();
     const item = createQueueItemFixture();
+    process.env.PUBLIC_APP_BASE_URL = "http://localhost:3001";
 
     expect(buildN8nPayload("retry_item", { settings, item })).toMatchObject({
       type: "retry_item",
       item,
-      settings
+      settings,
+      mode: "retry_item",
+      callback: {
+        url: "http://localhost:3001/api/callback/n8n/item-result",
+        method: "POST"
+      }
     });
+  });
+
+  test("omits callback when PUBLIC_APP_BASE_URL is missing", () => {
+    const payload = buildN8nPayload("next_batch", { settings: createDefaultSettings() });
+
+    expect(payload.callback).toBeNull();
   });
 });

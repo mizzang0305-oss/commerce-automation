@@ -48,6 +48,12 @@ export interface AutomationRepository {
   holdQueueItem(id: string): Promise<ProductQueueItem | null>;
   skipQueueItem(id: string): Promise<ProductQueueItem | null>;
   markManualUploaded(id: string, platform: Platform): Promise<ProductQueueItem | null>;
+  upsertQueueItems(items: ProductQueueItem[]): Promise<void>;
+  updateQueueItemByRawUrl(
+    raw_coupang_url: string,
+    patch: Partial<ProductQueueItem>
+  ): Promise<ProductQueueItem | null>;
+  updateQueueItemById(id: string, patch: Partial<ProductQueueItem>): Promise<ProductQueueItem | null>;
   getRuns(): Promise<AutomationRun[]>;
   appendRun(run: AutomationRun): Promise<AutomationRun>;
   getGeneratedContentByQueueItem(id: string): Promise<GeneratedContent | null>;

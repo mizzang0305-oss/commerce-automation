@@ -57,6 +57,7 @@ export type ContentSource = "gemini" | "openai" | "fallback";
 export type AutomationRunType =
   | "nightly_scout"
   | "hourly_batch"
+  | "next_batch"
   | "manual_batch"
   | "retry_item"
   | "hold_item"
@@ -143,6 +144,9 @@ export type GeneratedContent = {
 
 export type AutomationRun = {
   id: string;
+  request_id?: string;
+  n8n_run_id?: string;
+  http_status?: number;
   run_type: AutomationRunType;
   status: AutomationRunStatus;
   processed_count: number;

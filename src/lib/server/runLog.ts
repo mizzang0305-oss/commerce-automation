@@ -1,6 +1,9 @@
 import type { AutomationRun, AutomationRunStatus, AutomationRunType } from "@/types/automation";
 
 export function createAutomationRun(input: {
+  request_id?: string;
+  n8n_run_id?: string;
+  http_status?: number;
   run_type: AutomationRunType;
   status: AutomationRunStatus;
   processed_count?: number;
@@ -13,6 +16,9 @@ export function createAutomationRun(input: {
   const now = new Date().toISOString();
   return {
     id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    request_id: input.request_id,
+    n8n_run_id: input.n8n_run_id,
+    http_status: input.http_status,
     run_type: input.run_type,
     status: input.status,
     processed_count: input.processed_count ?? 0,

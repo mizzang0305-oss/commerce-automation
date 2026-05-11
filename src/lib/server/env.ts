@@ -12,6 +12,8 @@ export type N8nConfigStatus = {
   holdItemConfigured: boolean;
   skipItemConfigured: boolean;
   secretConfigured: boolean;
+  callbackBaseUrlConfigured: boolean;
+  callbackSecretConfigured: boolean;
 };
 
 export function getN8nConfigStatus(): N8nConfigStatus {
@@ -21,7 +23,9 @@ export function getN8nConfigStatus(): N8nConfigStatus {
     retryItemConfigured: Boolean(process.env.N8N_RETRY_ITEM_WEBHOOK_URL),
     holdItemConfigured: Boolean(process.env.N8N_HOLD_ITEM_WEBHOOK_URL),
     skipItemConfigured: Boolean(process.env.N8N_SKIP_ITEM_WEBHOOK_URL),
-    secretConfigured: Boolean(process.env.N8N_WEBHOOK_SECRET)
+    secretConfigured: Boolean(process.env.N8N_WEBHOOK_SECRET),
+    callbackBaseUrlConfigured: Boolean(process.env.PUBLIC_APP_BASE_URL),
+    callbackSecretConfigured: Boolean(process.env.COMMERCE_AUTOMATION_API_SECRET)
   };
 }
 

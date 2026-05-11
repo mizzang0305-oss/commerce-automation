@@ -216,6 +216,42 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(item);
   }
 
+  async upsertQueueItems(items: ProductQueueItem[]) {
+    const queue = await this.readQueue();
+    for (const incoming of items) {
+      const index = queue.findIndex(
+        (item) => item.id === incoming.id || item.raw_coupang_url === incoming.raw_coupang_url
+      );
+      if (index === -1) {
+        queue.push({ ...incoming, updated_at: nowIso() });
+      } else {
+        queue[index] = {
+          ...queue[index],
+          ...incoming,
+          id: queue[index].id || incoming.id,
+          updated_at: nowIso()
+        };
+      }
+    }
+    await atomicWriteJson(
+      this.paths.queue,
+      queue.sort((a, b) => a.queue_rank - b.queue_rank)
+    );
+  }
+
+  async updateQueueItemByRawUrl(raw_coupang_url: string, patch: Partial<ProductQueueItem>) {
+    const queue = await this.readQueue();
+    const item = queue.find((queueItem) => queueItem.raw_coupang_url === raw_coupang_url);
+    if (!item) {
+      return null;
+    }
+    return this.updateQueueItem(item.id, patch);
+  }
+
+  async updateQueueItemById(id: string, patch: Partial<ProductQueueItem>) {
+    return this.updateQueueItem(id, patch);
+  }
+
   async getRuns() {
     await this.ensureInitialized();
     const runs = await readJson<AutomationRun[]>(this.paths.runs);

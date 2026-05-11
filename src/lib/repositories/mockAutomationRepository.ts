@@ -412,6 +412,37 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(item);
   }
 
+  async upsertQueueItems(items: ProductQueueItem[]) {
+    for (const incoming of items) {
+      const index = this.queue.findIndex(
+        (item) => item.id === incoming.id || item.raw_coupang_url === incoming.raw_coupang_url
+      );
+      if (index === -1) {
+        this.queue.push({ ...incoming, updated_at: nowIso() });
+      } else {
+        this.queue[index] = {
+          ...this.queue[index],
+          ...incoming,
+          id: this.queue[index].id || incoming.id,
+          updated_at: nowIso()
+        };
+      }
+    }
+    this.queue = this.queue.sort((a, b) => a.queue_rank - b.queue_rank);
+  }
+
+  async updateQueueItemByRawUrl(raw_coupang_url: string, patch: Partial<ProductQueueItem>) {
+    const item = this.queue.find((queueItem) => queueItem.raw_coupang_url === raw_coupang_url);
+    if (!item) {
+      return null;
+    }
+    return this.updateQueueItem(item.id, patch);
+  }
+
+  async updateQueueItemById(id: string, patch: Partial<ProductQueueItem>) {
+    return this.updateQueueItem(id, patch);
+  }
+
   async getRuns() {
     return clone([...this.runs].sort((a, b) => b.started_at.localeCompare(a.started_at)));
   }

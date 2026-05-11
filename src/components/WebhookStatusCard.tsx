@@ -5,6 +5,8 @@ const labels: Array<[keyof N8nConfigStatus, string]> = [
   ["nextBatchConfigured", "Next batch webhook"],
   ["retryItemConfigured", "Retry item webhook"],
   ["secretConfigured", "Webhook secret"],
+  ["callbackBaseUrlConfigured", "Callback base URL"],
+  ["callbackSecretConfigured", "Callback API secret"],
   ["holdItemConfigured", "Hold item webhook"],
   ["skipItemConfigured", "Skip item webhook"]
 ];
