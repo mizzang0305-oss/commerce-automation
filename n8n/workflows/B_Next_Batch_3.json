@@ -1,0 +1,274 @@
+{
+  "name": "B_Next_Batch_3",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "next-batch",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "batch-webhook",
+      "name": "Webhook - next-batch",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst body = input.body ?? input;\nconst settings = body.settings ?? {};\nconst requestId = body.request_id ?? 'next_batch-' + Date.now();\nconst baseUrl = String($vars.COMMERCE_AUTOMATION_BASE_URL ?? '').replace(/\\/$/, '');\nconst callbackUrl = baseUrl ? baseUrl + '/api/callback/n8n/batch-result' : '';\nconst items = Array.isArray(body.items) ? body.items.slice(0, Number(body.batch_size ?? settings.batch_size ?? 3)) : [];\nconst disclosure = '파트너스 활동을 통해 일정액의 수수료를 제공받을 수 있습니다.';\nif (!callbackUrl) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', processed_count: 0, error_count: 1, items: [], error_message: 'callback URL 설정이 없어 결과를 전달할 수 없습니다.' } } }];\n}\nif (items.length === 0) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', processed_count: 0, error_count: 1, items: [], error_message: '처리할 items가 없어 batch를 실행하지 않았습니다.' } } }];\n}\nconst processableItems = items.filter((item) => item.selected_affiliate_url);\nif (processableItems.length === 0) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', processed_count: 0, error_count: items.length, items: items.map((item) => ({ ...item, queue_status: 'error', error_message: '제휴 링크가 없어 처리할 수 없습니다.' })), error_message: '제휴 링크가 없어 처리할 수 없습니다.' } } }];\n}\nif (!$vars.GEMINI_API_KEY || !$vars.CREATOMATE_API_KEY || !$vars.CREATOMATE_TEMPLATE_ID) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', processed_count: 0, error_count: processableItems.length, items: processableItems.map((item) => ({ ...item, queue_status: 'error', error_message: '콘텐츠 생성 API 설정이 없어 처리할 수 없습니다.' })), error_message: '콘텐츠 생성 API 설정이 없어 처리할 수 없습니다.' } } }];\n}\nreturn processableItems.map((item) => ({ json: { requestId, callbackUrl, settings, item, disclosure, geminiPayload: { contents: [{ parts: [{ text: '쿠팡 제휴 쇼츠/블로그 초안을 JSON으로 생성하세요. 반드시 고지 문구 포함: ' + disclosure + '\\n상품명: ' + item.product_name + '\\n키워드: ' + item.keyword + '\\n제휴링크: ' + item.selected_affiliate_url }] }] } } }));"
+      },
+      "id": "batch-prepare",
+      "name": "Prepare Batch Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + $vars.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.geminiPayload) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "batch-gemini",
+      "name": "Gemini Generate Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const inputs = $input.all();\nreturn inputs.map((entry) => {\n  const item = entry.json.item ?? {};\n  const text = JSON.stringify(entry.json.candidates ?? entry.json.body ?? entry.json);\n  const disclosure = entry.json.disclosure;\n  const hasDisclosure = text.includes(disclosure);\n  if (!hasDisclosure) {\n    return { json: { requestId: entry.json.requestId, callbackUrl: entry.json.callbackUrl, item: { ...item, queue_status: 'error', error_message: '쿠팡파트너스 고지 문구가 없어 업로드 준비 상태로 전환할 수 없습니다.' }, skipRender: true } };\n  }\n  return { json: { requestId: entry.json.requestId, callbackUrl: entry.json.callbackUrl, item: { ...item, disclosure_text: disclosure }, disclosure, generatedText: text, renderPayload: { template_id: $vars.CREATOMATE_TEMPLATE_ID, modifications: { product_name: item.product_name, thumbnail_url: item.thumbnail_url, affiliate_url: item.selected_affiliate_url, disclosure_text: disclosure } } } };\n});"
+      },
+      "id": "batch-render-prepare",
+      "name": "Prepare Creatomate Render And Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.creatomate.com/v1/renders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$vars.CREATOMATE_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.renderPayload) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "batch-creatomate",
+      "name": "Creatomate Create Render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "title": "={{ 'Commerce Draft - ' + ($json.item?.product_name ?? 'item') }}",
+        "text": "={{ $json.generatedText ?? '' }}"
+      },
+      "id": "batch-google-docs",
+      "name": "Google Docs - create blog draft",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ],
+      "notes": "Attach a Google Docs OAuth credential in n8n. Without a real document URL, the callback builder keeps the item out of ready_for_manual_upload."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const inputs = $input.all();\nconst first = inputs[0]?.json ?? {};\nif (first.callbackBody) return [{ json: first }];\nconst requestId = first.requestId ?? 'next_batch-' + Date.now();\nconst callbackUrl = first.callbackUrl ?? '';\nconst items = inputs.map((entry) => {\n  const source = entry.json.item ?? {};\n  const render = entry.json.body ?? entry.json;\n  const videoUrl = render.url ?? render.video_url ?? render.render_url ?? '';\n  const snapshotUrl = render.snapshot_url ?? render.video_snapshot_url ?? '';\n  const blogDraftUrl = render.blog_draft_url ?? entry.json.blog_draft_url ?? '';\n  const disclosureText = source.disclosure_text ?? entry.json.disclosure ?? entry.json.renderPayload?.modifications?.disclosure_text ?? '';\n  if (source.error_message) return source;\n  if (!source.selected_affiliate_url || !disclosureText || !videoUrl || !blogDraftUrl) {\n    return { ...source, disclosure_text: disclosureText, queue_status: 'error', error_message: '제휴 링크, 고지 문구, 영상 URL 또는 블로그 초안 URL이 없어 업로드 준비 상태로 전환하지 않았습니다.' };\n  }\n  return { ...source, disclosure_text: disclosureText, queue_status: 'ready_for_manual_upload', video_url: videoUrl, video_snapshot_url: snapshotUrl, blog_draft_url: blogDraftUrl, youtube_upload_status: 'ready_to_upload', tiktok_upload_status: 'ready_to_upload', threads_post_status: 'ready_to_post', manual_review_status: 'ready_for_review', error_message: '' };\n});\nconst errorCount = items.filter((item) => item.queue_status === 'error').length;\nreturn [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: errorCount > 0 ? 'failed' : 'success', processed_count: items.length - errorCount, error_count: errorCount, items, error_message: errorCount > 0 ? '일부 상품 처리에 실패했습니다.' : '' } } }];"
+      },
+      "id": "batch-callback-build",
+      "name": "Build Batch Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$vars.COMMERCE_AUTOMATION_API_SECRET}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.callbackBody) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "batch-callback",
+      "name": "Callback - batch result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, request_id: $json.body?.request_id ?? $json.request_id ?? null, message: 'Workflow accepted. Result will be sent by callback.' }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "batch-respond",
+      "name": "Respond - batch accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        -180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - next-batch": {
+      "main": [
+        [
+          {
+            "node": "Respond - batch accepted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Batch Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Batch Items": {
+      "main": [
+        [
+          {
+            "node": "Gemini Generate Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Generate Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare Creatomate Render And Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Creatomate Render And Draft": {
+      "main": [
+        [
+          {
+            "node": "Creatomate Create Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate Create Render": {
+      "main": [
+        [
+          {
+            "node": "Google Docs - create blog draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Docs - create blog draft": {
+      "main": [
+        [
+          {
+            "node": "Build Batch Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Batch Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback - batch result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

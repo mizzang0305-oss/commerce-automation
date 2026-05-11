@@ -1,0 +1,247 @@
+{
+  "name": "C_Retry_Item",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "retry-item",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "retry-webhook",
+      "name": "Webhook - retry-item",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst body = input.body ?? input;\nconst requestId = body.request_id ?? 'retry_item-' + Date.now();\nconst baseUrl = String($vars.COMMERCE_AUTOMATION_BASE_URL ?? '').replace(/\\/$/, '');\nconst callbackUrl = baseUrl ? baseUrl + '/api/callback/n8n/item-result' : '';\nconst item = body.item;\nconst disclosure = '파트너스 활동을 통해 일정액의 수수료를 제공받을 수 있습니다.';\nif (!callbackUrl) return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', item: item ?? {}, error_message: 'callback URL 설정이 없어 결과를 전달할 수 없습니다.' } } }];\nif (!item) return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', item: {}, error_message: '재시도할 item이 없습니다.' } } }];\nreturn [{ json: { requestId, callbackUrl, item, disclosure, geminiPayload: { contents: [{ parts: [{ text: 'retry_item 모드로 상품 콘텐츠를 다시 생성하세요. 반드시 고지 문구 포함: ' + disclosure + '\\n상품명: ' + item.product_name + '\\n제휴링크: ' + item.selected_affiliate_url }] }] } } }];"
+      },
+      "id": "retry-prepare",
+      "name": "Prepare Retry Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + $vars.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.geminiPayload) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "retry-gemini",
+      "name": "Gemini Regenerate Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const inputs = $input.all();\nreturn inputs.map((entry) => {\n  const item = entry.json.item ?? {};\n  const text = JSON.stringify(entry.json.candidates ?? entry.json.body ?? entry.json);\n  const disclosure = entry.json.disclosure;\n  const hasDisclosure = text.includes(disclosure);\n  if (!hasDisclosure) {\n    return { json: { requestId: entry.json.requestId, callbackUrl: entry.json.callbackUrl, item: { ...item, queue_status: 'error', error_message: '쿠팡파트너스 고지 문구가 없어 업로드 준비 상태로 전환할 수 없습니다.' }, skipRender: true } };\n  }\n  return { json: { requestId: entry.json.requestId, callbackUrl: entry.json.callbackUrl, item: { ...item, disclosure_text: disclosure }, disclosure, generatedText: text, renderPayload: { template_id: $vars.CREATOMATE_TEMPLATE_ID, modifications: { product_name: item.product_name, thumbnail_url: item.thumbnail_url, affiliate_url: item.selected_affiliate_url, disclosure_text: disclosure } } } };\n});"
+      },
+      "id": "retry-render-prepare",
+      "name": "Prepare Retry Render",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.creatomate.com/v1/renders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$vars.CREATOMATE_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.renderPayload) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "retry-creatomate",
+      "name": "Creatomate Retry Render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const first = $input.first()?.json ?? {};\nif (first.callbackBody) return [{ json: first }];\nconst item = first.item ?? {};\nconst render = first.body ?? first;\nconst videoUrl = render.url ?? render.video_url ?? '';\nconst blogDraftUrl = render.blog_draft_url ?? first.blog_draft_url ?? '';\nconst disclosureText = item.disclosure_text ?? first.disclosure ?? first.renderPayload?.modifications?.disclosure_text ?? '';\nconst resultItem = item.selected_affiliate_url && disclosureText && videoUrl && blogDraftUrl\n  ? { ...item, disclosure_text: disclosureText, queue_status: 'ready_for_manual_upload', video_url: videoUrl, blog_draft_url: blogDraftUrl, youtube_upload_status: 'ready_to_upload', tiktok_upload_status: 'ready_to_upload', threads_post_status: 'ready_to_post', manual_review_status: 'ready_for_review', error_message: '' }\n  : { ...item, disclosure_text: disclosureText, queue_status: 'error', error_message: '제휴 링크, 고지 문구, 영상 URL 또는 블로그 초안 URL이 없어 재시도 처리를 완료하지 않았습니다.' };\nreturn [{ json: { callbackUrl: first.callbackUrl, callbackBody: { request_id: first.requestId, status: resultItem.queue_status === 'error' ? 'failed' : 'success', item: resultItem, error_message: resultItem.error_message ?? '' } } }];"
+      },
+      "id": "retry-callback-build",
+      "name": "Build Retry Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$vars.COMMERCE_AUTOMATION_API_SECRET}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.callbackBody) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "retry-callback",
+      "name": "Callback - retry item result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, request_id: $json.body?.request_id ?? $json.request_id ?? null, message: 'Workflow accepted. Result will be sent by callback.' }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "retry-respond",
+      "name": "Respond - retry accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        -180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - retry-item": {
+      "main": [
+        [
+          {
+            "node": "Respond - retry accepted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Retry Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Retry Item": {
+      "main": [
+        [
+          {
+            "node": "Gemini Regenerate Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Regenerate Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare Retry Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Retry Render": {
+      "main": [
+        [
+          {
+            "node": "Creatomate Retry Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creatomate Retry Render": {
+      "main": [
+        [
+          {
+            "node": "Build Retry Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Retry Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback - retry item result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:n8n-workflows": "node scripts/build-n8n-workflows.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

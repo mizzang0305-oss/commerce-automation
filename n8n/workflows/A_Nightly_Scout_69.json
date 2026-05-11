@@ -1,0 +1,183 @@
+{
+  "name": "A_Nightly_Scout_69",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nightly-scout",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "nightly-webhook",
+      "name": "Webhook - nightly-scout",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const crypto = require('crypto');\nconst input = $input.first()?.json ?? {};\nconst body = input.body ?? input;\nconst settings = body.settings ?? {};\nconst requestId = body.request_id ?? 'nightly_scout-' + Date.now();\nconst requestedCount = Number(body.requested_count ?? settings.daily_target_count ?? 69);\nconst queueDate = new Date().toISOString().slice(0, 10);\nconst baseUrl = String($vars.COMMERCE_AUTOMATION_BASE_URL ?? '').replace(/\\/$/, '');\nconst callbackUrl = baseUrl ? baseUrl + '/api/callback/n8n/nightly-scout' : '';\nconst excludedCategories = settings.category_exclude ?? ['의류', '신발', '건강식품', '화장품', '식품', '고가전자제품', '대형가구'];\nconst keywords = ['배수구 거름망', '틈새 청소솔', '케이블 정리 클립', '차량용 쓰레기봉투', '강아지 배변봉투', '제습제', '습기제거제', '미니 선풍기', '보냉백', '텀블러 세척솔', '냉장고 정리 트레이', '욕실 청소솔', '차량용 정리함', '반려동물 산책용품'];\nfunction safeFailure(message) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', queue_date: queueDate, created_count: 0, items: [], error_message: message } } }];\n}\nif (!callbackUrl) return safeFailure('callback URL 설정이 없어 결과를 전달할 수 없습니다.');\nif (!$vars.COUPANG_ACCESS_KEY || !$vars.COUPANG_SECRET_KEY) return safeFailure('쿠팡파트너스 API 설정이 없어 큐를 생성할 수 없습니다.');\nconst maxKeywords = Math.min(keywords.length, Math.max(1, Math.ceil(requestedCount / 3)));\nfunction signedSearch(keyword) {\n  const path = '/v2/providers/affiliate_open_api/apis/openapi/products/search';\n  const query = '?keyword=' + encodeURIComponent(keyword) + '&limit=10';\n  const signedDate = new Date().toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}Z$/, 'Z').slice(2);\n  const message = signedDate + 'GET' + path + query;\n  const signature = crypto.createHmac('sha256', $vars.COUPANG_SECRET_KEY).update(message).digest('hex');\n  return { url: 'https://api-gateway.coupang.com' + path + query, authorization: 'CEA algorithm=HmacSHA256, access-key=' + $vars.COUPANG_ACCESS_KEY + ', signed-date=' + signedDate + ', signature=' + signature };\n}\nreturn keywords.slice(0, maxKeywords).map((keyword) => {\n  const signed = signedSearch(keyword);\n  return { json: { requestId, queueDate, requestedCount, settings, keyword, excludedCategories, callbackUrl, coupangUrl: signed.url, coupangAuthorization: signed.authorization } };\n});"
+      },
+      "id": "nightly-prepare",
+      "name": "Prepare Coupang Search Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.coupangUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.coupangAuthorization }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "nightly-coupang-search",
+      "name": "Coupang Product Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const inputs = $input.all();\nconst first = inputs[0]?.json ?? {};\nconst requestId = first.requestId ?? first.callbackBody?.request_id ?? 'nightly_scout-' + Date.now();\nconst queueDate = first.queueDate ?? new Date().toISOString().slice(0, 10);\nconst callbackUrl = first.callbackUrl ?? '';\nconst requestedCount = Number(first.requestedCount ?? 69);\nconst excludedCategories = first.excludedCategories ?? ['의류', '신발', '건강식품', '화장품', '식품', '고가전자제품', '대형가구'];\nif (first.callbackBody?.status === 'failed') return [{ json: first }];\nfunction productsFrom(json) {\n  const data = json.data ?? json.body?.data ?? json;\n  return data.productData ?? data.products ?? data.items ?? [];\n}\nfunction containsExcluded(category) {\n  return excludedCategories.some((excluded) => String(category ?? '').includes(excluded));\n}\nfunction scoreProduct(product, keyword) {\n  const category = product.categoryName ?? product.category_path ?? '';\n  let score = 30;\n  score += /제습|습기|선풍기|보냉|나들이|차량|반려|청소/.test(keyword) ? 25 : 10;\n  score += /정리|청소|거름망|클립|봉투|트레이|솔/.test(keyword) ? 15 : 8;\n  score += Number(product.productPrice ?? 0) > 0 && Number(product.productPrice ?? 0) <= 30000 ? 15 : 5;\n  score += product.isRocket ? 10 : 0;\n  score += /솔|클립|봉투|거름망|트레이|정리함/.test(keyword) ? 10 : 5;\n  score += /봉투|거름망|제습제|습기제거제|세척솔/.test(keyword) ? 10 : 4;\n  score += 10;\n  if (containsExcluded(category)) score -= 30;\n  return Math.max(0, Math.min(100, score));\n}\nconst seen = new Set();\nconst candidates = [];\nfor (const item of inputs) {\n  const keyword = item.json.keyword ?? '생활용품';\n  for (const product of productsFrom(item.json)) {\n    const productId = String(product.productId ?? product.id ?? product.raw_coupang_url ?? product.productUrl ?? '');\n    if (!productId || seen.has(productId)) continue;\n    seen.add(productId);\n    const category = product.categoryName ?? product.categoryPath ?? '';\n    if (containsExcluded(category)) continue;\n    candidates.push({ product, keyword, score: scoreProduct(product, keyword) });\n  }\n}\nconst selected = candidates.sort((a, b) => b.score - a.score).slice(0, requestedCount);\nif (selected.length === 0) {\n  return [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'failed', queue_date: queueDate, created_count: 0, items: [], error_message: '쿠팡 상품 검색 결과가 없어 큐를 생성하지 않았습니다.' } } }];\n}\nconst items = selected.map(({ product, keyword, score }, index) => {\n  const rank = index + 1;\n  const slot = Math.floor(index / 3) + 1;\n  const hour = Math.min(23, 1 + slot - 1);\n  const scheduledAt = queueDate + 'T' + String(hour).padStart(2, '0') + ':00:00+09:00';\n  return {\n    id: 'coupang-' + (product.productId ?? rank) + '-' + queueDate.replace(/-/g, ''),\n    queue_date: queueDate, queue_rank: rank, upload_slot: slot, scheduled_at: scheduledAt, keyword,\n    theme: /차량/.test(keyword) ? '차량/나들이' : /반려|강아지/.test(keyword) ? '반려동물' : '생활 문제 해결',\n    product_name: product.productName ?? product.name ?? keyword, category_path: product.categoryName ?? product.categoryPath ?? '',\n    price_now_text: product.productPrice ? Number(product.productPrice).toLocaleString('ko-KR') + '원' : '',\n    thumbnail_url: product.productImage ?? product.thumbnail ?? '', raw_coupang_url: product.productUrl ?? '', selected_affiliate_url: product.productUrl ?? '',\n    product_score: score, score_reason: '시즌성, 생활 문제 해결성, 가격대, 배송 장점 기준으로 선별했습니다.',\n    video_angle: keyword + ' 활용 전후 비교 쇼츠', queue_status: 'scheduled',\n    youtube_upload_status: 'not_ready', tiktok_upload_status: 'not_ready', threads_post_status: 'not_ready', manual_review_status: 'not_ready', error_message: ''\n  };\n});\nreturn [{ json: { callbackUrl, callbackBody: { request_id: requestId, status: 'success', queue_date: queueDate, created_count: items.length, items, error_message: '' } } }];"
+      },
+      "id": "nightly-score",
+      "name": "Score Products And Build Queue Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$vars.COMMERCE_AUTOMATION_API_SECRET}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.callbackBody) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "nightly-callback",
+      "name": "Callback - nightly scout result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, request_id: $json.body?.request_id ?? $json.request_id ?? null, message: 'Workflow accepted. Result will be sent by callback.' }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "nightly-respond",
+      "name": "Respond - nightly scout accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        -180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - nightly-scout": {
+      "main": [
+        [
+          {
+            "node": "Respond - nightly scout accepted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Coupang Search Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Coupang Search Requests": {
+      "main": [
+        [
+          {
+            "node": "Coupang Product Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coupang Product Search": {
+      "main": [
+        [
+          {
+            "node": "Score Products And Build Queue Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Products And Build Queue Callback": {
+      "main": [
+        [
+          {
+            "node": "Callback - nightly scout result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
