@@ -3,6 +3,7 @@ from ..config import WorkerConfig
 from ..storage_client import StorageClient
 from ..utils.files import clean_dir
 from ..media.image_downloader import download_image
+from ..media.ffmpeg_check import require_ffmpeg_for_video_render
 from ..media.subtitle_generator import write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
@@ -11,15 +12,21 @@ from ..media.video_renderer import render_vertical_video
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
     payload = job.get("payload", {})
-    product_name = str(payload.get("product_name", "product"))
-    image_url = str(payload.get("image_url", ""))
-    script = str(payload.get("script", ""))
-    affiliate_url = str(payload.get("selected_affiliate_url", ""))
-    disclosure_text = str(payload.get("disclosure_text", ""))
+    product_name = str(payload.get("product_name", "product")).strip() or "product"
+    image_url = str(payload.get("image_url", "")).strip()
+    script = str(payload.get("script", "")).strip()
+    affiliate_url = str(payload.get("selected_affiliate_url", "")).strip()
+    disclosure_text = str(payload.get("disclosure_text", "")).strip()
     if not affiliate_url:
         raise ValueError("selected_affiliate_url is required for video_render")
     if not disclosure_text:
         raise ValueError("disclosure_text is required for video_render")
+    if not script:
+        raise ValueError("script is required for video_render")
+    if not image_url:
+        raise ValueError("image_url is required for video_render")
+
+    ffmpeg_exe = require_ffmpeg_for_video_render()
 
     work_dir = clean_dir(Path("temp") / job["id"])
     output_dir = clean_dir(Path("outputs") / job["id"])
@@ -28,7 +35,14 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     audio_path = create_tts_audio(script, work_dir / "voiceover.wav")
     srt_path = write_srt(script, output_dir / "captions.srt")
     heartbeat()
-    video_path = render_vertical_video(image_path, audio_path, srt_path, output_dir / "video.mp4", product_name)
+    video_path = render_vertical_video(
+        image_path,
+        audio_path,
+        srt_path,
+        output_dir / "video.mp4",
+        product_name,
+        ffmpeg_exe=ffmpeg_exe,
+    )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
     package_path = output_dir / "upload_package.txt"
     package_path.write_text(

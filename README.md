@@ -14,6 +14,15 @@ Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` 
 - Storage: local or S3/R2/Supabase-compatible abstraction used by the worker for generated files.
 - n8n: legacy/optional. Nightly scout can still be backed by n8n or another product collector, but `/api/run/next-batch` no longer calls n8n.
 
+## OSS Foundation
+
+- `imageio-ffmpeg`: bundled ffmpeg executable fallback for Python Worker `video_render`.
+- `recharts`: dashboard/jobs operational charts.
+- `@tanstack/react-table`: installed for future high-volume `/queue` and `/jobs` table upgrades; the full table migration is deferred.
+- `shadcn/ui`: evaluated with `npx shadcn@latest info`. This project has Tailwind v4 without an existing `components.json`, so shadcn `init` is deferred to avoid broad config churn.
+- `moviepy`: optional video-template dependency in `python-worker/requirements-video.txt`; not part of the default worker install.
+- `crawlee` and `playwright`: optional collector dependencies in `python-worker/requirements-collector.txt`; not part of the default worker install.
+
 ## Key Pages
 
 - `/dashboard`: overview and run controls.
@@ -75,7 +84,7 @@ This flow verifies WebApp -> `worker_jobs` -> Python Worker -> local storage art
 npm run dev
 ```
 
-2. Create a renderable smoke item from `/dev/test-lab` with **Worker smoke 상품 생성**, or call:
+2. Create a renderable smoke item from `/dev/test-lab` with **워커 스모크용 상품 생성**, or call:
 
 ```powershell
 Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{"mode":"worker-smoke"}' http://localhost:3000/api/dev/seed
@@ -97,11 +106,76 @@ For local storage, worker outputs are written under `python-worker/outputs/stora
 
 `/mock-storage` is local smoke tooling. It is disabled in production unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should use Supabase Storage, Cloudflare R2, S3, or another real storage backend and should not set `ENABLE_MOCK_STORAGE_ROUTE`.
 
-If `ffmpeg` is missing, `video_render` fails/retries. That is expected and is not treated as success. Check with:
+## Windows ffmpeg Setup
+
+`ffmpeg` is required only when a `video_render` job actually renders an MP4. Missing `ffmpeg` does not stop worker startup, but the `video_render` job must fail/retry safely and must not become `video_ready`.
+
+The worker resolves ffmpeg in this order:
+
+1. `IMAGEIO_FFMPEG_EXE`
+2. `imageio-ffmpeg`
+3. system `PATH`
+
+System ffmpeg is optional when `imageio-ffmpeg` works, but installing it is still recommended for smoke verification and local diagnostics.
+
+Check the current shell:
 
 ```powershell
 ffmpeg -version
+where.exe ffmpeg
 ```
+
+Install with `winget`:
+
+```powershell
+winget --version
+winget search ffmpeg
+winget install --id Gyan.FFmpeg --source winget --accept-source-agreements --accept-package-agreements
+```
+
+Close every PowerShell window, open a new one, and verify again:
+
+```powershell
+ffmpeg -version
+where.exe ffmpeg
+```
+
+Alternative package:
+
+```powershell
+winget install --id BtbN.FFmpeg --source winget --accept-source-agreements --accept-package-agreements
+```
+
+Manual install:
+
+1. Open the official FFmpeg download page and choose a Windows build from gyan.dev or BtbN.
+2. Extract it so `C:\Tools\ffmpeg\bin\ffmpeg.exe` exists.
+3. Add `C:\Tools\ffmpeg\bin` to the user PATH:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  [Environment]::GetEnvironmentVariable("Path", "User") + ";C:\Tools\ffmpeg\bin",
+  "User"
+)
+```
+
+4. Restart PowerShell and run `ffmpeg -version`.
+
+Smoke rerun after installing Python 3.12 and ffmpeg:
+
+```powershell
+cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
+ffmpeg -version
+py -3.12 --version
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+py -3.12 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip
+.\.venv\Scripts\pip install -r requirements.txt
+.\.venv\Scripts\python worker.py
+```
+
+Safety expectation: `ffmpeg` missing means `video_render` reports `retry_wait` or `failed`; `video_ready` without `video_url` is a bug. Public upload and YouTube/TikTok/Threads posting remain unimplemented.
 
 ## Local JSON Tables
 

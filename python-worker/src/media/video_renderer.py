@@ -1,15 +1,18 @@
 from pathlib import Path
-import shutil
 import subprocess
 
 
-def render_vertical_video(image_path: Path, audio_path: Path, srt_path: Path, target: Path, title: str) -> Path:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        raise RuntimeError("ffmpeg is required for video_render; refusing to report fake success")
+def render_vertical_video(
+    image_path: Path,
+    audio_path: Path,
+    srt_path: Path,
+    target: Path,
+    title: str,
+    ffmpeg_exe: str,
+) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        ffmpeg,
+        ffmpeg_exe,
         "-y",
         "-loop",
         "1",
