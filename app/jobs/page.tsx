@@ -3,8 +3,10 @@ import { summarizeWorkerJobs, getStaleWorkerJobs } from "@/lib/workerAnalytics";
 import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
-import type { WorkerJobStatus } from "@/types/automation";
+import type { WorkerJobStatus, WorkerJobType } from "@/types/automation";
 import { StatCard } from "@/components/StatCard";
+import { WorkerJobStatusChart } from "@/components/charts/WorkerJobStatusChart";
+import { WorkerJobTypeChart } from "@/components/charts/WorkerJobTypeChart";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,11 @@ export default async function JobsPage({
   const staleJobs = getStaleWorkerJobs(allJobs);
   const todayVideoJobs = countKstDailyVideoRenderJobs(allJobs);
   const remainingVideos = Math.max(0, settings.max_daily_videos - todayVideoJobs);
+  const workerStatusChartData = statuses
+    .filter((item): item is WorkerJobStatus => item !== "all")
+    .map((item) => ({ label: getWorkerJobStatusLabel(item), value: summary.byStatus[item] }));
+  const workerTypeChartData = (Object.entries(summary.byType) as Array<[WorkerJobType, number]>)
+    .map(([type, value]) => ({ label: getWorkerJobTypeLabel(type), value }));
 
   return (
     <div className="space-y-5">
@@ -62,6 +69,19 @@ export default async function JobsPage({
           video_render 완료 작업 중 video_url이 없는 항목이 있습니다. 이 상태는 fake success 가능성이 있으므로 즉시 확인하세요.
         </section>
       ) : null}
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">상태별 작업 수 차트</h2>
+          <p className="mt-1 text-sm text-slate-500">대기, 처리 중, 재시도 대기, 실패를 빠르게 비교합니다.</p>
+          <WorkerJobStatusChart data={workerStatusChartData} />
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">작업 유형 분포</h2>
+          <p className="mt-1 text-sm text-slate-500">영상 생성과 시트 동기화 작업 비중을 확인합니다.</p>
+          <WorkerJobTypeChart data={workerTypeChartData} />
+        </div>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

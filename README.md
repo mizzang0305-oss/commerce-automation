@@ -14,6 +14,15 @@ Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` 
 - Storage: local or S3/R2/Supabase-compatible abstraction used by the worker for generated files.
 - n8n: legacy/optional. Nightly scout can still be backed by n8n or another product collector, but `/api/run/next-batch` no longer calls n8n.
 
+## OSS Foundation
+
+- `imageio-ffmpeg`: bundled ffmpeg executable fallback for Python Worker `video_render`.
+- `recharts`: dashboard/jobs operational charts.
+- `@tanstack/react-table`: installed for future high-volume `/queue` and `/jobs` table upgrades; the full table migration is deferred.
+- `shadcn/ui`: evaluated with `npx shadcn@latest info`. This project has Tailwind v4 without an existing `components.json`, so shadcn `init` is deferred to avoid broad config churn.
+- `moviepy`: optional video-template dependency in `python-worker/requirements-video.txt`; not part of the default worker install.
+- `crawlee` and `playwright`: optional collector dependencies in `python-worker/requirements-collector.txt`; not part of the default worker install.
+
 ## Key Pages
 
 - `/dashboard`: overview and run controls.
@@ -100,6 +109,14 @@ For local storage, worker outputs are written under `python-worker/outputs/stora
 ## Windows ffmpeg Setup
 
 `ffmpeg` is required only when a `video_render` job actually renders an MP4. Missing `ffmpeg` does not stop worker startup, but the `video_render` job must fail/retry safely and must not become `video_ready`.
+
+The worker resolves ffmpeg in this order:
+
+1. `IMAGEIO_FFMPEG_EXE`
+2. `imageio-ffmpeg`
+3. system `PATH`
+
+System ffmpeg is optional when `imageio-ffmpeg` works, but installing it is still recommended for smoke verification and local diagnostics.
 
 Check the current shell:
 

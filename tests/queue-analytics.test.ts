@@ -1,7 +1,16 @@
 import { describe, expect, test } from "vitest";
 import type { GeneratedContent, ProductAsset, ProductQueueItem, WorkerJob } from "@/types/automation";
 import {
+  countManualReview,
+  countMissingAffiliateUrl,
+  countMissingDisclosureText,
+  countMissingThumbnailUrl,
+  countMissingVideoScript,
+  countQueueByStatus,
+  countVideoReady,
   getManualReviewReasons,
+  getManualReviewReasonSummary,
+  getProcessingTooLongItems,
   getRenderableChecklist,
   summarizeQueueItems
 } from "@/lib/queueAnalytics";
@@ -30,6 +39,13 @@ describe("queue analytics", () => {
     expect(summary.missingScriptCount).toBe(1);
     expect(summary.missingThumbnailUrlCount).toBe(1);
     expect(summary.videoReadyWithoutVideoUrlCount).toBe(1);
+    expect(countQueueByStatus(items).video_ready).toBe(2);
+    expect(countMissingAffiliateUrl(items)).toBe(1);
+    expect(countMissingThumbnailUrl(items)).toBe(1);
+    expect(countVideoReady(items)).toBe(2);
+    expect(countManualReview(items)).toBe(1);
+    expect(countMissingDisclosureText([...contents.values()].filter(Boolean) as GeneratedContent[])).toBe(1);
+    expect(countMissingVideoScript([...contents.values()].filter(Boolean) as GeneratedContent[])).toBe(1);
   });
 
   test("groups manual review reasons", () => {
@@ -41,6 +57,19 @@ describe("queue analytics", () => {
 
     expect(reasons[0]).toEqual({ reason: "제휴 링크가 없습니다.", count: 2 });
     expect(reasons[1]).toEqual({ reason: "사유 미입력", count: 1 });
+    expect(getManualReviewReasonSummary([
+      buildItem({ id: "a", queue_status: "manual_review", error_message: "제휴 링크가 없습니다." })
+    ])).toEqual([{ reason: "제휴 링크가 없습니다.", count: 1 }]);
+  });
+
+  test("detects queue items processing too long", () => {
+    const items = [
+      buildItem({ id: "fresh", queue_status: "processing", updated_at: "2026-05-24T00:50:00.000Z" }),
+      buildItem({ id: "stale", queue_status: "video_render_started", updated_at: "2026-05-24T00:00:00.000Z" }),
+      buildItem({ id: "done", queue_status: "video_ready", updated_at: "2026-05-24T00:00:00.000Z" })
+    ];
+
+    expect(getProcessingTooLongItems(items, new Date("2026-05-24T01:00:00.000Z"), 30).map((item) => item.id)).toEqual(["stale"]);
   });
 
   test("builds renderable checklist with missing values", () => {

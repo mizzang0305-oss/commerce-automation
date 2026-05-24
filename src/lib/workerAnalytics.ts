@@ -13,28 +13,13 @@ const WORKER_JOB_STATUSES: WorkerJobStatus[] = [
 const WORKER_JOB_TYPES: WorkerJobType[] = ["video_render", "sheet_sync"];
 
 export function summarizeWorkerJobs(jobs: WorkerJob[]) {
-  const byStatus = Object.fromEntries(WORKER_JOB_STATUSES.map((status) => [status, 0])) as Record<WorkerJobStatus, number>;
-  const byType = Object.fromEntries(WORKER_JOB_TYPES.map((type) => [type, 0])) as Record<WorkerJobType, number>;
-  const failureReasons = new Map<string, number>();
-  let ffmpegFailureCount = 0;
+  const byStatus = countJobsByStatus(jobs);
+  const byType = countJobsByType(jobs);
   const retryWaitJobs: WorkerJob[] = [];
-  const completedVideoRenderMissingVideoUrl: WorkerJob[] = [];
 
   for (const job of jobs) {
-    byStatus[job.status] += 1;
-    byType[job.job_type] += 1;
-
     if (job.status === "retry_wait") {
       retryWaitJobs.push(job);
-    }
-    if (job.error_message) {
-      failureReasons.set(job.error_message, (failureReasons.get(job.error_message) ?? 0) + 1);
-      if (job.error_message.toLowerCase().includes("ffmpeg")) {
-        ffmpegFailureCount += 1;
-      }
-    }
-    if (job.job_type === "video_render" && job.status === "completed" && !getStringResult(job, "video_url")) {
-      completedVideoRenderMissingVideoUrl.push(job);
     }
   }
 
@@ -42,18 +27,48 @@ export function summarizeWorkerJobs(jobs: WorkerJob[]) {
     total: jobs.length,
     byStatus,
     byType,
-    ffmpegFailureCount,
+    ffmpegFailureCount: countFfmpegFailures(jobs),
     retryWaitJobs,
-    completedVideoRenderMissingVideoUrl,
-    topFailureReasons: [...failureReasons.entries()]
-      .map(([reason, count]) => ({ reason, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
+    completedVideoRenderMissingVideoUrl: getCompletedVideoJobsWithoutVideoUrl(jobs),
+    topFailureReasons: getRecentFailureReasons(jobs, 5)
   };
+}
+
+export function countJobsByStatus(jobs: WorkerJob[]) {
+  const byStatus = Object.fromEntries(WORKER_JOB_STATUSES.map((status) => [status, 0])) as Record<WorkerJobStatus, number>;
+  for (const job of jobs) {
+    byStatus[job.status] += 1;
+  }
+  return byStatus;
+}
+
+export function countJobsByType(jobs: WorkerJob[]) {
+  const byType = Object.fromEntries(WORKER_JOB_TYPES.map((type) => [type, 0])) as Record<WorkerJobType, number>;
+  for (const job of jobs) {
+    byType[job.job_type] += 1;
+  }
+  return byType;
 }
 
 export function countFfmpegFailures(jobs: WorkerJob[]) {
   return jobs.filter((job) => job.error_message.toLowerCase().includes("ffmpeg")).length;
+}
+
+export function getRecentFailureReasons(jobs: WorkerJob[], limit = 5) {
+  const failureReasons = new Map<string, number>();
+  for (const job of jobs) {
+    if (job.error_message) {
+      failureReasons.set(job.error_message, (failureReasons.get(job.error_message) ?? 0) + 1);
+    }
+  }
+  return [...failureReasons.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, "ko"))
+    .slice(0, limit);
+}
+
+export function getCompletedVideoJobsWithoutVideoUrl(jobs: WorkerJob[]) {
+  return jobs.filter((job) => job.job_type === "video_render" && job.status === "completed" && !getStringResult(job, "video_url"));
 }
 
 export function getStaleWorkerJobs(jobs: WorkerJob[], now: Date = new Date(), thresholdMinutes = 30) {

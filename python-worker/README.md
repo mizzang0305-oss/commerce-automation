@@ -24,9 +24,25 @@ Copy-Item .env.example .env
 
 Python 3.14 is intentionally not supported for this worker. Some binary wheels can lag new interpreter releases, which can force source builds for packages such as Pillow on Windows.
 
+## Requirements Sets
+
+- `requirements.txt`: default worker runtime, including `imageio-ffmpeg` for ffmpeg fallback.
+- `requirements-video.txt`: optional MoviePy stack for future advanced video templates.
+- `requirements-collector.txt`: optional Crawlee Python and Playwright stack for future collector work.
+
+MoviePy and Crawlee are not part of the default worker install. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
+
 ## ffmpeg
 
 `ffmpeg` is required for real MP4 rendering, but it is not required for worker startup or `sheet_sync`. The worker checks it when a `video_render` job starts.
+
+Resolution order:
+
+1. `IMAGEIO_FFMPEG_EXE`
+2. `imageio-ffmpeg`
+3. system `PATH`
+
+System ffmpeg is optional when `imageio-ffmpeg` resolves correctly, but installing it is recommended for smoke verification and local diagnostics.
 
 Check the current shell:
 

@@ -4,13 +4,15 @@ import type {
   AutomationSettings,
   GeneratedContent,
   ProductQueueItem,
+  QueueStatus,
   WorkerHeartbeat,
-  WorkerJob
+  WorkerJob,
+  WorkerJobStatus
 } from "@/types/automation";
 import type { QueueSummary } from "@/lib/repositories/types";
 import type { N8nConfigStatus } from "@/lib/server/env";
 import { summarizeQueueItems } from "@/lib/queueAnalytics";
-import { getQueueStatusLabel } from "@/lib/statusLabels";
+import { getQueueStatusLabel, getWorkerJobStatusLabel } from "@/lib/statusLabels";
 import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 import { summarizeWorkerHeartbeats, summarizeWorkerJobs } from "@/lib/workerAnalytics";
 import { formatDateTime } from "@/lib/format";
@@ -21,6 +23,8 @@ import { QueueTable } from "@/components/QueueTable";
 import { RunActionPanel } from "@/components/RunActionPanel";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { QueueStatusChart } from "@/components/charts/QueueStatusChart";
+import { WorkerJobStatusChart } from "@/components/charts/WorkerJobStatusChart";
 
 export function DashboardView({
   settings,
@@ -54,6 +58,11 @@ export function DashboardView({
   const queueAnalytics = summarizeQueueItems(items, contents);
   const todayVideoJobs = countKstDailyVideoRenderJobs(workerJobs);
   const remainingVideos = Math.max(0, settings.max_daily_videos - todayVideoJobs);
+  const workerStatusChartData = (Object.entries(workerSummary.byStatus) as Array<[WorkerJobStatus, number]>)
+    .map(([status, value]) => ({ label: getWorkerJobStatusLabel(status), value }));
+  const queueStatusChartData = (Object.entries(queueAnalytics.byStatus) as Array<[QueueStatus, number]>)
+    .filter(([, value]) => value > 0)
+    .map(([status, value]) => ({ label: getQueueStatusLabel(status), value }));
 
   return (
     <div className="space-y-6">
@@ -123,6 +132,19 @@ export function DashboardView({
 
       <GuardNotice settings={settings} item={items[0]} />
       <RunActionPanel settings={settings} diagnostics={diagnostics} />
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">워커 작업 상태 차트</h2>
+          <p className="mt-1 text-sm text-slate-500">대기, 처리 중, 재시도, 실패 흐름을 한눈에 봅니다.</p>
+          <WorkerJobStatusChart data={workerStatusChartData} />
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">상품 큐 상태 분포</h2>
+          <p className="mt-1 text-sm text-slate-500">수동 검토와 영상 준비 완료 비율을 확인합니다.</p>
+          <QueueStatusChart data={queueStatusChartData} />
+        </div>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

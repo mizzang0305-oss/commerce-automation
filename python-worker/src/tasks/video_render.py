@@ -11,7 +11,7 @@ from ..media.video_renderer import render_vertical_video
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
-    require_ffmpeg_for_video_render()
+    ffmpeg_exe = require_ffmpeg_for_video_render()
     payload = job.get("payload", {})
     product_name = str(payload.get("product_name", "product"))
     image_url = str(payload.get("image_url", ""))
@@ -30,7 +30,14 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     audio_path = create_tts_audio(script, work_dir / "voiceover.wav")
     srt_path = write_srt(script, output_dir / "captions.srt")
     heartbeat()
-    video_path = render_vertical_video(image_path, audio_path, srt_path, output_dir / "video.mp4", product_name)
+    video_path = render_vertical_video(
+        image_path,
+        audio_path,
+        srt_path,
+        output_dir / "video.mp4",
+        product_name,
+        ffmpeg_exe=ffmpeg_exe,
+    )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
     package_path = output_dir / "upload_package.txt"
     package_path.write_text(

@@ -2,6 +2,10 @@ import { describe, expect, test } from "vitest";
 import type { WorkerHeartbeat, WorkerJob } from "@/types/automation";
 import {
   countFfmpegFailures,
+  countJobsByStatus,
+  countJobsByType,
+  getCompletedVideoJobsWithoutVideoUrl,
+  getRecentFailureReasons,
   getStaleWorkerJobs,
   summarizeWorkerHeartbeats,
   summarizeWorkerJobs
@@ -22,9 +26,15 @@ describe("worker analytics", () => {
     expect(summary.byStatus.retry_wait).toBe(1);
     expect(summary.byType.video_render).toBe(3);
     expect(summary.byType.sheet_sync).toBe(1);
+    expect(countJobsByStatus(jobs).completed).toBe(2);
+    expect(countJobsByType(jobs).sheet_sync).toBe(1);
     expect(summary.ffmpegFailureCount).toBe(1);
     expect(countFfmpegFailures(jobs)).toBe(1);
     expect(summary.completedVideoRenderMissingVideoUrl).toHaveLength(1);
+    expect(getCompletedVideoJobsWithoutVideoUrl(jobs)).toHaveLength(1);
+    expect(getRecentFailureReasons(jobs, 1)).toEqual([
+      { reason: "ffmpeg가 PATH에 없어 영상 렌더링을 실행하지 못했습니다.", count: 1 }
+    ]);
   });
 
   test("detects stale processing and claimed jobs", () => {

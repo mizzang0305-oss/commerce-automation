@@ -1,13 +1,18 @@
 from pathlib import Path
 import subprocess
-from .ffmpeg_check import require_ffmpeg_for_video_render
 
 
-def render_vertical_video(image_path: Path, audio_path: Path, srt_path: Path, target: Path, title: str) -> Path:
-    require_ffmpeg_for_video_render()
+def render_vertical_video(
+    image_path: Path,
+    audio_path: Path,
+    srt_path: Path,
+    target: Path,
+    title: str,
+    ffmpeg_exe: str,
+) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        "ffmpeg",
+        ffmpeg_exe,
         "-y",
         "-loop",
         "1",

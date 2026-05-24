@@ -24,6 +24,15 @@ AUTOMATION_DATA_DIR=./data
 
 n8n variables are legacy/optional for Nightly Scout/product collection.
 
+## OSS Foundation Notes
+
+- `imageio-ffmpeg` is part of the default Python Worker install and provides a bundled ffmpeg executable fallback.
+- Recharts powers the dashboard/jobs analysis charts.
+- TanStack Table is installed for a later queue/jobs table migration; current tables remain in place.
+- shadcn/ui was inspected with the CLI, but `init` is deferred because the project has Tailwind v4 and no existing `components.json`.
+- MoviePy is optional in `python-worker/requirements-video.txt`.
+- Crawlee Python and Playwright are optional in `python-worker/requirements-collector.txt`; collectors must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
+
 ## Start Python Worker
 
 ```powershell
@@ -66,6 +75,14 @@ For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR
 ### Windows ffmpeg Setup
 
 `ffmpeg` is required for real MP4 rendering. It is checked when a `video_render` job starts; missing `ffmpeg` does not stop the worker process from starting.
+
+Resolution order:
+
+1. `IMAGEIO_FFMPEG_EXE`
+2. `imageio-ffmpeg`
+3. system `PATH`
+
+System ffmpeg is optional when `imageio-ffmpeg` resolves correctly, but installing it is recommended for smoke verification, performance checks, and easier local diagnostics.
 
 Check the current shell:
 
@@ -160,6 +177,15 @@ Copy-Item .env.example .env
    - upload package URL points to `/mock-storage/upload-packages/...`
 
 If the job is `retry_wait` or `failed`, inspect `error_message`. Missing `ffmpeg` is the most common local failure. That is expected and is not fake success. `video_ready` without `video_url` is a bug.
+
+Optional worker dependency sets:
+
+```powershell
+.\.venv\Scripts\pip install -r requirements-video.txt
+.\.venv\Scripts\pip install -r requirements-collector.txt
+```
+
+Use `requirements-video.txt` only when testing MoviePy-based video templates. Use `requirements-collector.txt` only for future collector work, not for the default worker.
 
 ## Run Next Batch
 

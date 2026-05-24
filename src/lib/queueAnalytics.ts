@@ -20,28 +20,11 @@ export function summarizeQueueItems(
   items: ProductQueueItem[],
   contents: Map<string, GeneratedContent | null> = new Map()
 ) {
-  const byStatus = Object.fromEntries(QUEUE_STATUSES.map((status) => [status, 0])) as Record<QueueStatus, number>;
-  let missingAffiliateUrlCount = 0;
-  let missingDisclosureTextCount = 0;
-  let missingScriptCount = 0;
-  let missingThumbnailUrlCount = 0;
+  const byStatus = countQueueByStatus(items);
+  const contentsList = [...contents.values()].filter((content): content is GeneratedContent => Boolean(content));
   let videoReadyWithoutVideoUrlCount = 0;
 
   for (const item of items) {
-    byStatus[item.queue_status] += 1;
-    const content = contents.get(item.id);
-    if (!item.selected_affiliate_url.trim()) {
-      missingAffiliateUrlCount += 1;
-    }
-    if (content && !content.disclosure_text.trim()) {
-      missingDisclosureTextCount += 1;
-    }
-    if (content && !content.video_script.trim()) {
-      missingScriptCount += 1;
-    }
-    if (!item.thumbnail_url.trim()) {
-      missingThumbnailUrlCount += 1;
-    }
     if (item.queue_status === "video_ready" && !item.video_url.trim()) {
       videoReadyWithoutVideoUrlCount += 1;
     }
@@ -50,15 +33,51 @@ export function summarizeQueueItems(
   return {
     total: items.length,
     byStatus,
-    manualReviewCount: byStatus.manual_review,
-    videoReadyCount: byStatus.video_ready,
-    missingAffiliateUrlCount,
-    missingDisclosureTextCount,
-    missingScriptCount,
-    missingThumbnailUrlCount,
+    manualReviewCount: countManualReview(items),
+    videoReadyCount: countVideoReady(items),
+    missingAffiliateUrlCount: countMissingAffiliateUrl(items),
+    missingDisclosureTextCount: countMissingDisclosureText(contentsList),
+    missingScriptCount: countMissingVideoScript(contentsList),
+    missingThumbnailUrlCount: countMissingThumbnailUrl(items),
     videoReadyWithoutVideoUrlCount,
-    manualReviewReasons: getManualReviewReasons(items)
+    manualReviewReasons: getManualReviewReasonSummary(items)
   };
+}
+
+export function countQueueByStatus(items: ProductQueueItem[]) {
+  const byStatus = Object.fromEntries(QUEUE_STATUSES.map((status) => [status, 0])) as Record<QueueStatus, number>;
+  for (const item of items) {
+    byStatus[item.queue_status] += 1;
+  }
+  return byStatus;
+}
+
+export function countMissingAffiliateUrl(items: ProductQueueItem[]) {
+  return items.filter((item) => !item.selected_affiliate_url.trim()).length;
+}
+
+export function countMissingThumbnailUrl(items: ProductQueueItem[]) {
+  return items.filter((item) => !item.thumbnail_url.trim()).length;
+}
+
+export function countVideoReady(items: ProductQueueItem[]) {
+  return items.filter((item) => item.queue_status === "video_ready").length;
+}
+
+export function countManualReview(items: ProductQueueItem[]) {
+  return items.filter((item) => item.queue_status === "manual_review").length;
+}
+
+export function countMissingDisclosureText(contents: GeneratedContent[]) {
+  return contents.filter((content) => !content.disclosure_text.trim()).length;
+}
+
+export function countMissingVideoScript(contents: GeneratedContent[]) {
+  return contents.filter((content) => !content.video_script.trim()).length;
+}
+
+export function getManualReviewReasonSummary(items: ProductQueueItem[]) {
+  return getManualReviewReasons(items);
 }
 
 export function getManualReviewReasons(items: ProductQueueItem[]) {
@@ -74,6 +93,21 @@ export function getManualReviewReasons(items: ProductQueueItem[]) {
   return [...reasons.entries()]
     .map(([reason, count]) => ({ reason, count }))
     .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, "ko"));
+}
+
+export function getProcessingTooLongItems(
+  items: ProductQueueItem[],
+  now: Date = new Date(),
+  thresholdMinutes = 60
+) {
+  const thresholdMs = thresholdMinutes * 60 * 1000;
+  return items.filter((item) => {
+    if (item.queue_status !== "processing" && item.queue_status !== "video_render_started") {
+      return false;
+    }
+    const timestamp = item.updated_at || item.scheduled_at;
+    return now.getTime() - new Date(timestamp).getTime() > thresholdMs;
+  });
 }
 
 export function getRenderableChecklist(

@@ -1,4 +1,13 @@
-import type { QueueStatus, RunMode, WorkerJobStatus, WorkerJobType } from "@/types/automation";
+import type {
+  ManualReviewStatus,
+  QueueStatus,
+  RunMode,
+  ThreadsPostStatus,
+  TikTokUploadStatus,
+  WorkerJobStatus,
+  WorkerJobType,
+  YouTubeUploadStatus
+} from "@/types/automation";
 
 export const queueStatusLabels: Record<QueueStatus, string> = {
   scheduled: "예약됨",
@@ -38,6 +47,25 @@ export const runModeLabels: Record<RunMode, string> = {
   youtube_public: "위험: YouTube 공개 업로드 모드"
 };
 
+type UploadStatus = YouTubeUploadStatus | TikTokUploadStatus | ThreadsPostStatus | ManualReviewStatus;
+
+export const uploadStatusLabels: Record<UploadStatus, string> = {
+  not_ready: "준비 안 됨",
+  ready_to_upload: "업로드 준비",
+  private_uploaded: "비공개 업로드 완료",
+  unlisted_uploaded: "일부 공개 업로드 완료",
+  public_uploaded: "공개 업로드 완료",
+  manual_review: "수동 검토",
+  blocked: "차단됨",
+  error: "오류",
+  uploaded: "업로드 완료",
+  ready_to_post: "게시 준비",
+  posted: "게시 완료",
+  ready_for_review: "검토 준비",
+  approved: "승인됨",
+  rejected: "반려됨"
+};
+
 export function getQueueStatusLabel(status: QueueStatus) {
   return queueStatusLabels[status] ?? status;
 }
@@ -52,4 +80,12 @@ export function getWorkerJobTypeLabel(type: WorkerJobType) {
 
 export function getRunModeLabel(mode: RunMode) {
   return runModeLabels[mode] ?? mode;
+}
+
+export function getUploadStatusLabel(status: UploadStatus) {
+  return uploadStatusLabels[status] ?? status;
+}
+
+export function getBooleanStatusLabel(value: boolean) {
+  return value ? "예" : "아니오";
 }

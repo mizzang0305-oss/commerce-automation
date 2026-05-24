@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { getQueueStatusLabel, getRunModeLabel, getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
+import {
+  getBooleanStatusLabel,
+  getQueueStatusLabel,
+  getRunModeLabel,
+  getUploadStatusLabel,
+  getWorkerJobStatusLabel,
+  getWorkerJobTypeLabel
+} from "@/lib/statusLabels";
 
 describe("status labels", () => {
   test("returns Korean queue status labels", () => {
@@ -20,5 +27,12 @@ describe("status labels", () => {
 
   test("returns Korean run mode labels", () => {
     expect(getRunModeLabel("generate_only")).toBe("생성 전용");
+  });
+
+  test("returns Korean upload and boolean labels", () => {
+    expect(getUploadStatusLabel("ready_to_upload")).toBe("업로드 준비");
+    expect(getUploadStatusLabel("ready_for_review")).toBe("검토 준비");
+    expect(getBooleanStatusLabel(true)).toBe("예");
+    expect(getBooleanStatusLabel(false)).toBe("아니오");
   });
 });
