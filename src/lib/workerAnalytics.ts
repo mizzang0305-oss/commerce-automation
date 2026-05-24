@@ -52,6 +52,10 @@ export function summarizeWorkerJobs(jobs: WorkerJob[]) {
   };
 }
 
+export function countFfmpegFailures(jobs: WorkerJob[]) {
+  return jobs.filter((job) => job.error_message.toLowerCase().includes("ffmpeg")).length;
+}
+
 export function getStaleWorkerJobs(jobs: WorkerJob[], now: Date = new Date(), thresholdMinutes = 30) {
   const thresholdMs = thresholdMinutes * 60 * 1000;
   return jobs.filter((job) => {

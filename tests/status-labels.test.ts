@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getQueueStatusLabel, getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
+import { getQueueStatusLabel, getRunModeLabel, getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 
 describe("status labels", () => {
   test("returns Korean queue status labels", () => {
@@ -16,5 +16,9 @@ describe("status labels", () => {
   test("returns Korean worker job type labels", () => {
     expect(getWorkerJobTypeLabel("video_render")).toBe("영상 생성");
     expect(getWorkerJobTypeLabel("sheet_sync")).toBe("시트 동기화");
+  });
+
+  test("returns Korean run mode labels", () => {
+    expect(getRunModeLabel("generate_only")).toBe("생성 전용");
   });
 });

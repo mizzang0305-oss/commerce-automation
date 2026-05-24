@@ -3,14 +3,15 @@
 import { useMemo, useState } from "react";
 import type { AutomationSettings, RunMode } from "@/types/automation";
 import { getAvailableSlotCount, getDailyCapacity, getDailyCapacityWarning } from "@/lib/scheduler";
+import { getRunModeLabel } from "@/lib/statusLabels";
 import { StatCard } from "@/components/StatCard";
 
 const intervalOptions = [1, 2, 3, 6, 12];
 const runModes: Array<{ value: RunMode; label: string }> = [
-  { value: "generate_only", label: "생성 전용(generate_only)" },
-  { value: "youtube_private", label: "YouTube 비공개 준비" },
-  { value: "youtube_unlisted", label: "YouTube 일부 공개 준비" },
-  { value: "youtube_public", label: "위험: YouTube 공개 업로드 모드" }
+  { value: "generate_only", label: `${getRunModeLabel("generate_only")}(generate_only)` },
+  { value: "youtube_private", label: getRunModeLabel("youtube_private") },
+  { value: "youtube_unlisted", label: getRunModeLabel("youtube_unlisted") },
+  { value: "youtube_public", label: getRunModeLabel("youtube_public") }
 ];
 
 export function SettingsForm({
@@ -150,8 +151,10 @@ export function SettingsForm({
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">목표 생성 수: {form.daily_target_count}개</p>
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">사용 가능한 실행 슬롯: {availableSlots}개</p>
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">하루 처리 가능량: {capacity}개</p>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">실행 모드: {getRunModeLabel(form.run_mode)}({form.run_mode})</p>
           {capacityWarning ? <p className="rounded-lg bg-yellow-50 px-3 py-2 font-semibold text-yellow-800">{capacityWarning}</p> : null}
           {!form.python_worker_enabled ? <p className="rounded-lg bg-yellow-50 px-3 py-2 font-semibold text-yellow-800">Python Worker가 꺼져 있으면 next-batch가 worker job을 만들 수 없습니다.</p> : null}
+          {!form.allowed_worker_job_types.includes("video_render") ? <p className="rounded-lg bg-yellow-50 px-3 py-2 font-semibold text-yellow-800">video_render가 허용되지 않으면 다음 배치가 영상 생성 작업을 만들 수 없습니다.</p> : null}
           {form.run_mode !== "generate_only" ? <p className="rounded-lg bg-red-50 px-3 py-2 font-semibold text-red-700">운영 기본값은 generate_only입니다. 공개 업로드는 구현되어 있지 않습니다.</p> : null}
           {form.youtube_upload_enabled ? <p className="rounded-lg bg-red-50 px-3 py-2 font-semibold text-red-700">youtube_upload_enabled=true는 위험 설정입니다. 실제 공개 업로드는 구현하지 않습니다.</p> : null}
         </div>

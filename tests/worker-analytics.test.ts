@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { WorkerHeartbeat, WorkerJob } from "@/types/automation";
 import {
+  countFfmpegFailures,
   getStaleWorkerJobs,
   summarizeWorkerHeartbeats,
   summarizeWorkerJobs
@@ -22,6 +23,7 @@ describe("worker analytics", () => {
     expect(summary.byType.video_render).toBe(3);
     expect(summary.byType.sheet_sync).toBe(1);
     expect(summary.ffmpegFailureCount).toBe(1);
+    expect(countFfmpegFailures(jobs)).toBe(1);
     expect(summary.completedVideoRenderMissingVideoUrl).toHaveLength(1);
   });
 
