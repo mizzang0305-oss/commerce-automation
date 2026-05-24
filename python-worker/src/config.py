@@ -35,7 +35,10 @@ def load_config() -> WorkerConfig:
         heartbeat_interval_seconds=int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "15")),
         storage_backend=os.getenv("STORAGE_BACKEND", "local"),
         local_storage_base_dir=Path(os.getenv("LOCAL_STORAGE_BASE_DIR", "./outputs/storage")),
-        public_storage_base_url=os.getenv("PUBLIC_STORAGE_BASE_URL", "").rstrip("/"),
+        public_storage_base_url=os.getenv(
+            "PUBLIC_STORAGE_BASE_URL",
+            os.getenv("STORAGE_LOCAL_BASE_URL", ""),
+        ).rstrip("/"),
         s3_endpoint_url=os.getenv("S3_ENDPOINT_URL", ""),
         s3_access_key_id=os.getenv("S3_ACCESS_KEY_ID", ""),
         s3_secret_access_key=os.getenv("S3_SECRET_ACCESS_KEY", ""),
