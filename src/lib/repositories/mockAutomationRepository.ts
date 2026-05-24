@@ -600,6 +600,30 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       return null;
     }
 
+    if (this.workerJobs[index].job_type === "video_render" && !getResultUrl(result, "video_url")) {
+      const retryCount = this.workerJobs[index].retry_count + 1;
+      const status = retryCount < this.workerJobs[index].max_retries ? "retry_wait" : "failed";
+      const errorMessage = "영상 렌더 결과에 video_url이 없어 완료 처리하지 않았습니다.";
+      this.workerJobs[index] = {
+        ...this.workerJobs[index],
+        status,
+        result,
+        retry_count: retryCount,
+        heartbeat_at: nowIso(),
+        finished_at: status === "failed" ? nowIso() : "",
+        error_message: errorMessage
+      };
+      await this.persistWorkerJobAssets(this.workerJobs[index], { includeVideo: false });
+      if (this.workerJobs[index].product_queue_id) {
+        await this.updateQueueItem(this.workerJobs[index].product_queue_id, {
+          queue_status: "error",
+          error_message: errorMessage
+        });
+      }
+      await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+      return clone(this.workerJobs[index]);
+    }
+
     const finishedAt = nowIso();
     this.workerJobs[index] = {
       ...this.workerJobs[index],
@@ -773,10 +797,11 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     }
 
     const result = job.result;
-    const videoUrl = typeof result.video_url === "string" ? result.video_url : "";
-    const thumbnailUrl = typeof result.thumbnail_url === "string" ? result.thumbnail_url : "";
-    const srtUrl = typeof result.srt_url === "string" ? result.srt_url : "";
-    const uploadPackageUrl = typeof result.upload_package_url === "string" ? result.upload_package_url : "";
+    const videoUrl = getResultUrl(result, "video_url");
+    if (!videoUrl) {
+      return;
+    }
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
 
     await this.updateQueueItem(job.product_queue_id, {
       queue_status: "video_ready",
@@ -785,26 +810,8 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       error_message: ""
     });
 
-    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
-      ["video", "rendered-videos", videoUrl],
-      ["thumbnail", "thumbnails", thumbnailUrl],
-      ["subtitle", "subtitles", srtUrl],
-      ["upload_package", "upload-packages", uploadPackageUrl]
-    ];
-    for (const [assetType, bucket, url] of assets) {
-      if (!url) {
-        continue;
-      }
-      this.productAssets.push({
-        id: `asset-${job.id}-${assetType}`,
-        product_queue_id: job.product_queue_id,
-        worker_job_id: job.id,
-        asset_type: assetType,
-        bucket,
-        url,
-        created_at: nowIso()
-      });
-    }
+    await this.persistWorkerJobAssets(job, { includeVideo: true });
+    this.productionHistory = this.productionHistory.filter((item) => item.id !== `history-${job.id}`);
     this.productionHistory.push({
       id: `history-${job.id}`,
       product_queue_id: job.product_queue_id,
@@ -814,6 +821,39 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       metadata: result,
       created_at: nowIso()
     });
+  }
+
+  private async persistWorkerJobAssets(job: WorkerJob, options: { includeVideo: boolean }) {
+    if (!job.product_queue_id) {
+      return;
+    }
+    const result = job.result;
+    const videoUrl = getResultUrl(result, "video_url");
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
+    const srtUrl = getResultUrl(result, "srt_url");
+    const uploadPackageUrl = getResultUrl(result, "upload_package_url");
+    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
+      ["video", "rendered-videos", videoUrl],
+      ["thumbnail", "thumbnails", thumbnailUrl],
+      ["subtitle", "subtitles", srtUrl],
+      ["upload_package", "upload-packages", uploadPackageUrl]
+    ];
+    for (const [assetType, bucket, url] of assets) {
+      if (!url || (!options.includeVideo && assetType === "video")) {
+        continue;
+      }
+      const id = `asset-${job.id}-${assetType}`;
+      this.productAssets = this.productAssets.filter((asset) => asset.id !== id);
+      this.productAssets.push({
+        id,
+        product_queue_id: job.product_queue_id,
+        worker_job_id: job.id,
+        asset_type: assetType,
+        bucket,
+        url,
+        created_at: nowIso()
+      });
+    }
   }
 }
 
@@ -832,6 +872,11 @@ function priorityWeight(item: ProductQueueItem) {
 
 function sortWorkerJobs(a: WorkerJob, b: WorkerJob) {
   return b.priority - a.priority || a.created_at.localeCompare(b.created_at);
+}
+
+function getResultUrl(result: Record<string, unknown>, key: string) {
+  const value = result[key];
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export function createMockAutomationRepository(): MutableMockAutomationRepository {

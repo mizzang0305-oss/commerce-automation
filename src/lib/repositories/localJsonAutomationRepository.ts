@@ -405,6 +405,30 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     if (index === -1) {
       return null;
     }
+    if (jobs[index].job_type === "video_render" && !getResultUrl(result, "video_url")) {
+      const retryCount = jobs[index].retry_count + 1;
+      const status = retryCount < jobs[index].max_retries ? "retry_wait" : "failed";
+      const errorMessage = "영상 렌더 결과에 video_url이 없어 완료 처리하지 않았습니다.";
+      jobs[index] = {
+        ...jobs[index],
+        status,
+        result,
+        retry_count: retryCount,
+        heartbeat_at: nowIso(),
+        finished_at: status === "failed" ? nowIso() : "",
+        error_message: errorMessage
+      };
+      await atomicWriteJson(this.paths.workerJobs, jobs);
+      await this.persistWorkerJobAssets(jobs[index], { includeVideo: false });
+      if (jobs[index].product_queue_id) {
+        await this.updateQueueItem(jobs[index].product_queue_id, {
+          queue_status: "error",
+          error_message: errorMessage
+        });
+      }
+      await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+      return clone(jobs[index]);
+    }
     const finishedAt = nowIso();
     jobs[index] = {
       ...jobs[index],
@@ -696,10 +720,11 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     }
 
     const result = job.result;
-    const videoUrl = typeof result.video_url === "string" ? result.video_url : "";
-    const thumbnailUrl = typeof result.thumbnail_url === "string" ? result.thumbnail_url : "";
-    const srtUrl = typeof result.srt_url === "string" ? result.srt_url : "";
-    const uploadPackageUrl = typeof result.upload_package_url === "string" ? result.upload_package_url : "";
+    const videoUrl = getResultUrl(result, "video_url");
+    if (!videoUrl) {
+      return;
+    }
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
 
     await this.updateQueueItem(job.product_queue_id, {
       queue_status: "video_ready",
@@ -708,31 +733,10 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       error_message: ""
     });
 
-    const productAssets = await readJson<ProductAsset[]>(this.paths.productAssets);
-    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
-      ["video", "rendered-videos", videoUrl],
-      ["thumbnail", "thumbnails", thumbnailUrl],
-      ["subtitle", "subtitles", srtUrl],
-      ["upload_package", "upload-packages", uploadPackageUrl]
-    ];
-    for (const [assetType, bucket, url] of assets) {
-      if (!url) {
-        continue;
-      }
-      productAssets.push({
-        id: `asset-${job.id}-${assetType}`,
-        product_queue_id: job.product_queue_id,
-        worker_job_id: job.id,
-        asset_type: assetType,
-        bucket,
-        url,
-        created_at: nowIso()
-      });
-    }
-    await atomicWriteJson(this.paths.productAssets, productAssets);
-
+    await this.persistWorkerJobAssets(job, { includeVideo: true });
     const productionHistory = await readJson<ProductionHistory[]>(this.paths.productionHistory);
-    productionHistory.push({
+    const dedupedHistory = productionHistory.filter((item) => item.id !== `history-${job.id}`);
+    dedupedHistory.push({
       id: `history-${job.id}`,
       product_queue_id: job.product_queue_id,
       worker_job_id: job.id,
@@ -741,7 +745,43 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       metadata: result,
       created_at: nowIso()
     });
-    await atomicWriteJson(this.paths.productionHistory, productionHistory);
+    await atomicWriteJson(this.paths.productionHistory, dedupedHistory);
+  }
+
+  private async persistWorkerJobAssets(job: WorkerJob, options: { includeVideo: boolean }) {
+    if (!job.product_queue_id) {
+      return;
+    }
+    const result = job.result;
+    const videoUrl = getResultUrl(result, "video_url");
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
+    const srtUrl = getResultUrl(result, "srt_url");
+    const uploadPackageUrl = getResultUrl(result, "upload_package_url");
+    const productAssets = await readJson<ProductAsset[]>(this.paths.productAssets);
+    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
+      ["video", "rendered-videos", videoUrl],
+      ["thumbnail", "thumbnails", thumbnailUrl],
+      ["subtitle", "subtitles", srtUrl],
+      ["upload_package", "upload-packages", uploadPackageUrl]
+    ];
+    let updatedAssets = productAssets;
+    for (const [assetType, bucket, url] of assets) {
+      if (!url || (!options.includeVideo && assetType === "video")) {
+        continue;
+      }
+      const id = `asset-${job.id}-${assetType}`;
+      updatedAssets = updatedAssets.filter((asset) => asset.id !== id);
+      updatedAssets.push({
+        id,
+        product_queue_id: job.product_queue_id,
+        worker_job_id: job.id,
+        asset_type: assetType,
+        bucket,
+        url,
+        created_at: nowIso()
+      });
+    }
+    await atomicWriteJson(this.paths.productAssets, updatedAssets);
   }
 }
 
@@ -760,6 +800,11 @@ function priorityWeight(item: ProductQueueItem) {
 
 function sortWorkerJobs(a: WorkerJob, b: WorkerJob) {
   return b.priority - a.priority || a.created_at.localeCompare(b.created_at);
+}
+
+function getResultUrl(result: Record<string, unknown>, key: string) {
+  const value = result[key];
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export function createLocalJsonAutomationRepository(options: LocalJsonRepositoryOptions = {}) {

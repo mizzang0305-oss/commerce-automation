@@ -21,6 +21,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!job) {
     return NextResponse.json({ ok: false, message: "Job was not claimed by this worker." }, { status: 404 });
   }
+  if (job.status !== "completed") {
+    return NextResponse.json({ ok: false, message: job.error_message, job }, { status: 422 });
+  }
 
   return NextResponse.json({ ok: true, job });
 }
