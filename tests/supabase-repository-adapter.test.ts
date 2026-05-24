@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildSupabaseAssetRowsForWorkerJob,
   mapSupabaseWorkerJob,
+  serializeSupabaseWorkerJobForWrite,
   validateSupabaseWorkerJobCompletion
 } from "@/lib/repositories/supabaseAutomationRepository";
 
@@ -74,6 +75,35 @@ describe("supabase repository adapter helpers", () => {
     expect(validation.errorMessage).toContain("video_url");
     expect(validation.status).toBe("retry_wait");
     expect(validation.retryCount).toBe(1);
+  });
+
+  test("serializes optional worker job timestamps as null for Postgres writes", () => {
+    const row = serializeSupabaseWorkerJobForWrite({
+      id: "job-1",
+      job_type: "video_render",
+      status: "pending",
+      product_queue_id: "queue-1",
+      product_candidate_id: "",
+      priority: 1,
+      payload: {},
+      result: {},
+      claimed_by: "",
+      claimed_at: "",
+      heartbeat_at: "",
+      error_message: "",
+      retry_count: 0,
+      max_retries: 3,
+      created_at: "2026-05-24T00:00:00.000Z",
+      started_at: "",
+      finished_at: ""
+    });
+
+    expect(row).toMatchObject({
+      claimed_at: null,
+      heartbeat_at: null,
+      started_at: null,
+      finished_at: null
+    });
   });
 
   test("builds stable asset rows and excludes video when result has no video_url", () => {

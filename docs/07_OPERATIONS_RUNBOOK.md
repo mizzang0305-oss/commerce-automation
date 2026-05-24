@@ -9,6 +9,31 @@ npm run dev
 
 Open `http://localhost:3000` or the configured dev URL.
 
+## PowerShell UTF-8 Console
+
+If Korean text from local API responses appears corrupted in Windows PowerShell, configure the current shell for UTF-8:
+
+```powershell
+.\scripts\dev\powershell-utf8.ps1
+```
+
+Equivalent manual commands:
+
+```powershell
+chcp 65001
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
+When checking JSON endpoints, pipe the response through `ConvertTo-Json`:
+
+```powershell
+Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -Depth 8
+```
+
+If PowerShell still shows mojibake, open the endpoint in a browser and prefer Windows Terminal with PowerShell 7 for smoke runs.
+
 ## Configure Web Service
 
 Create `.env.local` from `.env.example`; do not commit it.
@@ -49,6 +74,12 @@ SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 4. Run `npm run test`, `npm run lint`, and `npm run build`.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase credentials. Supabase Storage is not configured here; generated artifact URLs still come from the worker storage backend.
+
+## Development API Guard
+
+`/api/dev/seed`, `/api/dev/reset-storage`, and `/api/dev/reset-settings` are for local or sandbox testing. In production they return `404` unless `ENABLE_DEV_TOOLS=true` is explicitly set.
+
+Use `ENABLE_DEV_TOOLS=true` only in a controlled sandbox. Do not enable it for normal production deployments, especially when `AUTOMATION_REPOSITORY_ADAPTER=supabase` points at shared state. `/api/dev/diagnostics` remains read-only and should show configured booleans only.
 
 ## OSS Foundation Notes
 
