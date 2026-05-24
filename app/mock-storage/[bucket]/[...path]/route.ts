@@ -14,6 +14,10 @@ const ALLOWED_BUCKETS = new Set([
 ]);
 
 export async function GET(_request: Request, context: { params: Promise<{ bucket: string; path: string[] }> }) {
+  if (!isMockStorageRouteEnabled()) {
+    return NextResponse.json({ ok: false, message: "Not found." }, { status: 404 });
+  }
+
   const { bucket, path } = await context.params;
   if (!ALLOWED_BUCKETS.has(bucket)) {
     return NextResponse.json({ ok: false, message: "Unknown storage bucket." }, { status: 404 });
@@ -46,6 +50,13 @@ export async function GET(_request: Request, context: { params: Promise<{ bucket
   } catch {
     return NextResponse.json({ ok: false, message: "Storage asset not found." }, { status: 404 });
   }
+}
+
+export function isMockStorageRouteEnabled(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV !== "production") {
+    return true;
+  }
+  return env.ENABLE_MOCK_STORAGE_ROUTE === "true";
 }
 
 function getContentType(path: string) {

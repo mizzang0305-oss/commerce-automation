@@ -49,7 +49,9 @@ PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
 
 For S3/R2/Supabase-compatible storage, set endpoint, access key, secret key, region, and public base URL.
 
-For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. The web app reads the same files through `/mock-storage/...`.
+For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. In local/dev smoke runs, the web app reads the same files through `/mock-storage/...`.
+
+`/mock-storage` is local smoke tooling only. In production it returns 404 unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should leave `ENABLE_MOCK_STORAGE_ROUTE` unset and use Supabase Storage, Cloudflare R2, S3, or another real storage URL.
 
 `ffmpeg` is required for real MP4 rendering. If `ffmpeg` is missing, the worker reports failure/retry and the job does not become `completed` or `video_ready`.
 
@@ -99,7 +101,7 @@ If the job is `retry_wait` or `failed`, inspect `error_message`. Missing `ffmpeg
 1. Confirm `/settings`:
    - Python Worker enabled.
    - `video_render` allowed.
-   - `max_daily_videos` has capacity.
+   - `max_daily_videos` has capacity for the Asia/Seoul business date.
    - public upload disabled.
 2. Confirm due queue items have affiliate link, disclosure text, script, and image URL.
 3. Trigger `/api/run/next-batch` or use the dashboard action.

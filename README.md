@@ -22,7 +22,7 @@ Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` 
 - `/jobs`: worker job list and status filters.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.
-- `/settings`: worker enablement, batch size, max daily videos, allowed job types, and upload safety settings.
+- `/settings`: worker enablement, batch size, max daily videos, allowed job types, and upload safety settings. `max_daily_videos` is counted by the Asia/Seoul business date.
 
 ## Worker APIs
 
@@ -83,7 +83,9 @@ Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
 7. Confirm `/jobs` reaches `completed`.
 8. Open `/queue/queue-worker-smoke-001` and verify `video_ready`, `video_url`, thumbnail, SRT, and upload package URLs.
 
-For local storage, worker outputs are written under `python-worker/outputs/storage`. The web app serves those files under `/mock-storage/...`.
+For local storage, worker outputs are written under `python-worker/outputs/storage`. In local/dev smoke runs, the web app serves those files under `/mock-storage/...`.
+
+`/mock-storage` is local smoke tooling. It is disabled in production unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should use Supabase Storage, Cloudflare R2, S3, or another real storage backend and should not set `ENABLE_MOCK_STORAGE_ROUTE`.
 
 If `ffmpeg` is missing, `video_render` fails/retries. That is expected and is not treated as success.
 
