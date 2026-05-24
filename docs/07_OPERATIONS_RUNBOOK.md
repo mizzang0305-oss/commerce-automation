@@ -49,6 +49,51 @@ PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
 
 For S3/R2/Supabase-compatible storage, set endpoint, access key, secret key, region, and public base URL.
 
+For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. The web app reads the same files through `/mock-storage/...`.
+
+`ffmpeg` is required for real MP4 rendering. If `ffmpeg` is missing, the worker reports failure/retry and the job does not become `completed` or `video_ready`.
+
+## Local Worker E2E Smoke Test
+
+1. Start the web app:
+
+```powershell
+npm run dev
+```
+
+2. Seed a renderable smoke item:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{"mode":"worker-smoke"}' http://localhost:3000/api/dev/seed
+```
+
+You can also use `/dev/test-lab` and click **Worker smoke 상품 생성**.
+
+3. Trigger worker dispatch:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
+```
+
+4. Open `/jobs` and confirm a pending `video_render` job for `queue-worker-smoke-001`.
+5. Start the Python Worker:
+
+```powershell
+cd python-worker
+.\.venv\Scripts\python worker.py
+```
+
+6. Open `/workers` and confirm the worker heartbeat.
+7. Open `/jobs` and confirm the job reaches `completed`.
+8. Open `/queue/queue-worker-smoke-001` and confirm:
+   - `queue_status=video_ready`
+   - `video_url` points to `/mock-storage/rendered-videos/...`
+   - thumbnail URL points to `/mock-storage/thumbnails/...`
+   - SRT URL points to `/mock-storage/subtitles/...`
+   - upload package URL points to `/mock-storage/upload-packages/...`
+
+If the job is `retry_wait` or `failed`, inspect `error_message`. Missing `ffmpeg` is the most common local failure.
+
 ## Run Next Batch
 
 1. Confirm `/settings`:

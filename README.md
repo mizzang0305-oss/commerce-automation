@@ -53,7 +53,39 @@ Required worker env:
 - `WORKER_ID`
 - `WORKER_JOB_TYPES=video_render,sheet_sync`
 - `STORAGE_BACKEND=local` or `s3`/`r2`/`supabase`
-- `LOCAL_STORAGE_BASE_DIR` and `PUBLIC_STORAGE_BASE_URL` for local storage, or S3-compatible endpoint/key settings.
+- `LOCAL_STORAGE_BASE_DIR` and `STORAGE_LOCAL_BASE_URL` or `PUBLIC_STORAGE_BASE_URL` for local storage, or S3-compatible endpoint/key settings.
+
+## Local Worker E2E Smoke
+
+This flow verifies WebApp -> `worker_jobs` -> Python Worker -> local storage artifact -> queue `video_ready`.
+
+1. Start the web app:
+
+```powershell
+npm run dev
+```
+
+2. Create a renderable smoke item from `/dev/test-lab` with **Worker smoke 상품 생성**, or call:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{"mode":"worker-smoke"}' http://localhost:3000/api/dev/seed
+```
+
+3. Trigger next batch:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
+```
+
+4. Confirm `/jobs` shows a pending `video_render` job.
+5. Start the Python Worker from `python-worker/`.
+6. Confirm `/workers` shows heartbeat.
+7. Confirm `/jobs` reaches `completed`.
+8. Open `/queue/queue-worker-smoke-001` and verify `video_ready`, `video_url`, thumbnail, SRT, and upload package URLs.
+
+For local storage, worker outputs are written under `python-worker/outputs/storage`. The web app serves those files under `/mock-storage/...`.
+
+If `ffmpeg` is missing, `video_render` fails/retries. That is expected and is not treated as success.
 
 ## Local JSON Tables
 

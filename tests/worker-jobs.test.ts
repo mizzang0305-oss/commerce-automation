@@ -5,6 +5,7 @@ import { POST as completeJob } from "../app/api/worker/jobs/[id]/complete/route"
 import { POST as failJob } from "../app/api/worker/jobs/[id]/fail/route";
 import { GET as workerStatus } from "../app/api/worker/status/route";
 import { POST as nextBatch } from "../app/api/run/next-batch/route";
+import { POST as seedDevQueue } from "../app/api/dev/seed/route";
 import { getAutomationRepository, resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
 import type { GeneratedContent } from "@/types/automation";
 
@@ -123,6 +124,12 @@ describe("worker job api", () => {
     expect(updated?.queue_status).toBe("video_ready");
     expect(updated?.video_url).toBe("https://storage.example/rendered-videos/item.mp4");
     expect(updated?.video_snapshot_url).toBe("https://storage.example/thumbnails/item.jpg");
+    expect((await repository.getProductAssets(item.id)).map((asset) => asset.asset_type)).toEqual([
+      "video",
+      "thumbnail",
+      "subtitle",
+      "upload_package"
+    ]);
   });
 
   test("complete without video_url does not complete job or move queue item to video_ready", async () => {
@@ -216,6 +223,36 @@ describe("next batch worker dispatch", () => {
     expect(jobs.filter((job) => job.job_type === "video_render")).toHaveLength(2);
     expect(processingItems.length).toBeGreaterThanOrEqual(2);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("creates a video_render job for a renderable worker smoke seed item", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const seedResponse = await seedDevQueue(
+      new Request("http://localhost/api/dev/seed", {
+        method: "POST",
+        body: JSON.stringify({ mode: "worker-smoke" })
+      })
+    );
+    const seedPayload = await readJson(seedResponse);
+
+    const response = await nextBatch();
+    const payload = await readJson(response);
+    const jobs = await repository.getWorkerJobs();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({ ok: true, created_jobs: 1 });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      job_type: "video_render",
+      status: "pending",
+      product_queue_id: seedPayload.item_id
+    });
+    expect(jobs[0].payload).toMatchObject({
+      selected_affiliate_url: expect.stringContaining("https://link.coupang.com"),
+      disclosure_text: expect.stringContaining("쿠팡 파트너스"),
+      script: expect.stringContaining("worker smoke")
+    });
   });
 
   test("does not create worker jobs when python worker dispatch is disabled", async () => {

@@ -106,6 +106,14 @@ export function DevScenarioPanel({
           <button
             type="button"
             disabled={Boolean(loading)}
+            onClick={() => runDevAction("worker-smoke", "/api/dev/seed", { mode: "worker-smoke" })}
+            className={buttonClass}
+          >
+            Worker smoke 상품 생성
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(loading)}
             onClick={() => runDevAction("diagnostics", "/api/dev/diagnostics")}
             className="focus-ring rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
           >
