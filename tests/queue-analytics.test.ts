@@ -48,6 +48,23 @@ describe("queue analytics", () => {
     expect(countMissingVideoScript([...contents.values()].filter(Boolean) as GeneratedContent[])).toBe(1);
   });
 
+  test("counts missing disclosure and script for queue items without generated content", () => {
+    const items = [
+      buildItem({ id: "ready" }),
+      buildItem({ id: "missing-content" }),
+      buildItem({ id: "null-content" })
+    ];
+    const contents = new Map<string, GeneratedContent | null>([
+      ["ready", buildContent("ready")],
+      ["null-content", null]
+    ]);
+
+    const summary = summarizeQueueItems(items, contents);
+
+    expect(summary.missingDisclosureTextCount).toBe(2);
+    expect(summary.missingScriptCount).toBe(2);
+  });
+
   test("groups manual review reasons", () => {
     const reasons = getManualReviewReasons([
       buildItem({ id: "a", queue_status: "manual_review", error_message: "제휴 링크가 없습니다." }),

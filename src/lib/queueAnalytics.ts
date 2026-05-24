@@ -21,12 +21,20 @@ export function summarizeQueueItems(
   contents: Map<string, GeneratedContent | null> = new Map()
 ) {
   const byStatus = countQueueByStatus(items);
-  const contentsList = [...contents.values()].filter((content): content is GeneratedContent => Boolean(content));
   let videoReadyWithoutVideoUrlCount = 0;
+  let missingDisclosureTextCount = 0;
+  let missingScriptCount = 0;
 
   for (const item of items) {
     if (item.queue_status === "video_ready" && !item.video_url.trim()) {
       videoReadyWithoutVideoUrlCount += 1;
+    }
+    const content = contents.get(item.id);
+    if (!content?.disclosure_text.trim()) {
+      missingDisclosureTextCount += 1;
+    }
+    if (!content?.video_script.trim()) {
+      missingScriptCount += 1;
     }
   }
 
@@ -36,8 +44,8 @@ export function summarizeQueueItems(
     manualReviewCount: countManualReview(items),
     videoReadyCount: countVideoReady(items),
     missingAffiliateUrlCount: countMissingAffiliateUrl(items),
-    missingDisclosureTextCount: countMissingDisclosureText(contentsList),
-    missingScriptCount: countMissingVideoScript(contentsList),
+    missingDisclosureTextCount,
+    missingScriptCount,
     missingThumbnailUrlCount: countMissingThumbnailUrl(items),
     videoReadyWithoutVideoUrlCount,
     manualReviewReasons: getManualReviewReasonSummary(items)
