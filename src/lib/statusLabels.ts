@@ -1,4 +1,4 @@
-import type { QueueStatus, WorkerJobStatus, WorkerJobType } from "@/types/automation";
+import type { QueueStatus, RunMode, WorkerJobStatus, WorkerJobType } from "@/types/automation";
 
 export const queueStatusLabels: Record<QueueStatus, string> = {
   scheduled: "예약됨",
@@ -31,6 +31,13 @@ export const workerJobTypeLabels: Record<WorkerJobType, string> = {
   sheet_sync: "시트 동기화"
 };
 
+export const runModeLabels: Record<RunMode, string> = {
+  generate_only: "생성 전용",
+  youtube_private: "YouTube 비공개 준비",
+  youtube_unlisted: "YouTube 일부 공개 준비",
+  youtube_public: "위험: YouTube 공개 업로드 모드"
+};
+
 export function getQueueStatusLabel(status: QueueStatus) {
   return queueStatusLabels[status] ?? status;
 }
@@ -41,4 +48,8 @@ export function getWorkerJobStatusLabel(status: WorkerJobStatus) {
 
 export function getWorkerJobTypeLabel(type: WorkerJobType) {
   return workerJobTypeLabels[type] ?? type;
+}
+
+export function getRunModeLabel(mode: RunMode) {
+  return runModeLabels[mode] ?? mode;
 }

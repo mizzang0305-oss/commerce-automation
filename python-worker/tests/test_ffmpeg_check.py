@@ -35,6 +35,17 @@ class FfmpegCheckTest(unittest.TestCase):
         self.assertEqual(status.path, "ffmpeg")
         self.assertEqual(status.version, "ffmpeg version 7.1-full_build")
 
+    def test_ffmpeg_version_failure_returns_safe_message(self):
+        with patch("src.media.ffmpeg_check.shutil.which", return_value="C:/Tools/ffmpeg/bin/ffmpeg.exe"):
+            with patch("src.media.ffmpeg_check.subprocess.run", side_effect=OSError("boom")):
+                status = check_ffmpeg()
+
+        self.assertFalse(status.found)
+        self.assertEqual(status.version, "")
+        self.assertIn("ffmpeg -version", status.safe_message)
+        self.assertNotIn("Authorization", status.safe_message)
+        self.assertNotIn("API key", status.safe_message)
+
 
 if __name__ == "__main__":
     unittest.main()

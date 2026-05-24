@@ -2,6 +2,7 @@ import Link from "next/link";
 import { summarizeWorkerJobs, getStaleWorkerJobs } from "@/lib/workerAnalytics";
 import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 import type { WorkerJobStatus } from "@/types/automation";
 import { StatCard } from "@/components/StatCard";
 
@@ -26,12 +27,15 @@ export default async function JobsPage({
   const params = await searchParams;
   const status = scalar(params.status) as WorkerJobStatus | "all" | undefined;
   const repository = getAutomationRepository();
-  const [jobs, allJobs] = await Promise.all([
+  const [jobs, allJobs, settings] = await Promise.all([
     repository.getWorkerJobs({ status: status || "all" }),
-    repository.getWorkerJobs()
+    repository.getWorkerJobs(),
+    repository.getSettings()
   ]);
   const summary = summarizeWorkerJobs(allJobs);
   const staleJobs = getStaleWorkerJobs(allJobs);
+  const todayVideoJobs = countKstDailyVideoRenderJobs(allJobs);
+  const remainingVideos = Math.max(0, settings.max_daily_videos - todayVideoJobs);
 
   return (
     <div className="space-y-5">
@@ -49,6 +53,8 @@ export default async function JobsPage({
         <StatCard label="재시도 대기" value={summary.byStatus.retry_wait} tone={summary.byStatus.retry_wait > 0 ? "warning" : "default"} />
         <StatCard label="ffmpeg 오류" value={summary.ffmpegFailureCount} tone={summary.ffmpegFailureCount > 0 ? "warning" : "default"} helper="PATH 또는 설치 문제일 수 있습니다." />
         <StatCard label="오래 처리 중" value={staleJobs.length} tone={staleJobs.length > 0 ? "warning" : "default"} />
+        <StatCard label="오늘 생성된 영상 작업" value={todayVideoJobs} helper="KST 운영일 기준 video_render 작업 수" />
+        <StatCard label="오늘 남은 생성 가능 수" value={remainingVideos} tone={remainingVideos === 0 ? "warning" : "success"} helper={`max_daily_videos=${settings.max_daily_videos}`} />
       </section>
 
       {summary.completedVideoRenderMissingVideoUrl.length > 0 ? (
