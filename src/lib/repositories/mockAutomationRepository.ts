@@ -2,10 +2,16 @@ import type {
   AutomationRun,
   AutomationSettings,
   GeneratedContent,
+  ProductAsset,
+  ProductCandidate,
   Platform,
+  ProductionHistory,
   ProductQueueItem,
   QueueStatus,
-  RunMode
+  RunMode,
+  WorkerHeartbeat,
+  WorkerJob,
+  WorkerJobType
 } from "@/types/automation";
 import type {
   MutableMockAutomationRepository,
@@ -66,7 +72,10 @@ export function createDefaultSettings(
     is_paused: true,
     youtube_upload_enabled: false,
     approval_required: true,
+    python_worker_enabled: true,
     max_daily_uploads: 6,
+    max_daily_videos: 69,
+    allowed_worker_job_types: ["video_render", "sheet_sync"],
     category_include: [],
     category_exclude: DEFAULT_EXCLUDED_CATEGORIES,
     updated_at: nowIso(),
@@ -97,6 +106,15 @@ export function validateSettingsInput(
   }
   if (input.max_daily_uploads !== undefined && !isIntBetween(input.max_daily_uploads, 0, 69)) {
     return { ok: false, field: "max_daily_uploads", message: "하루 공개 업로드 제한은 0~69 사이여야 합니다." };
+  }
+  if (input.max_daily_videos !== undefined && !isIntBetween(input.max_daily_videos, 0, 200)) {
+    return { ok: false, field: "max_daily_videos", message: "하루 영상 생성 제한은 0~200 사이여야 합니다." };
+  }
+  if (
+    input.allowed_worker_job_types !== undefined &&
+    input.allowed_worker_job_types.some((jobType) => !["video_render", "sheet_sync"].includes(jobType))
+  ) {
+    return { ok: false, field: "allowed_worker_job_types", message: "지원하지 않는 worker job type입니다." };
   }
   if (input.run_mode !== undefined && !RUN_MODES.includes(input.run_mode)) {
     return { ok: false, field: "run_mode", message: "지원하지 않는 실행 모드입니다." };
@@ -285,12 +303,22 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
   private queue: ProductQueueItem[];
   private contents: GeneratedContent[];
   private runs: AutomationRun[];
+  private workerJobs: WorkerJob[];
+  private workerHeartbeats: WorkerHeartbeat[];
+  private productCandidates: ProductCandidate[];
+  private productAssets: ProductAsset[];
+  private productionHistory: ProductionHistory[];
 
   constructor() {
     this.settings = createDefaultSettings();
     this.queue = createMockQueueItems(this.settings);
     this.contents = createMockGeneratedContents(this.queue);
     this.runs = createMockRuns();
+    this.workerJobs = [];
+    this.workerHeartbeats = [];
+    this.productCandidates = [];
+    this.productAssets = [];
+    this.productionHistory = [];
   }
 
   async getSettings() {
@@ -457,6 +485,203 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(this.contents.find((content) => content.product_queue_id === id) ?? null);
   }
 
+  async upsertGeneratedContent(content: GeneratedContent) {
+    const index = this.contents.findIndex(
+      (item) => item.id === content.id || item.product_queue_id === content.product_queue_id
+    );
+    if (index === -1) {
+      this.contents.push(content);
+      return clone(content);
+    }
+
+    this.contents[index] = { ...this.contents[index], ...content, updated_at: nowIso() };
+    return clone(this.contents[index]);
+  }
+
+  async getWorkerJobs(filters: { status?: WorkerJob["status"] | "all"; job_type?: WorkerJobType | "all" } = {}) {
+    let jobs = [...this.workerJobs];
+    if (filters.status && filters.status !== "all") {
+      jobs = jobs.filter((job) => job.status === filters.status);
+    }
+    if (filters.job_type && filters.job_type !== "all") {
+      jobs = jobs.filter((job) => job.job_type === filters.job_type);
+    }
+    return clone(jobs.sort(sortWorkerJobs));
+  }
+
+  async getWorkerJob(id: string) {
+    return clone(this.workerJobs.find((job) => job.id === id) ?? null);
+  }
+
+  async createWorkerJob(input: {
+    job_type: WorkerJobType;
+    product_queue_id: string;
+    product_candidate_id: string;
+    priority: number;
+    payload: Record<string, unknown>;
+    max_retries: number;
+  }) {
+    const createdAt = nowIso();
+    const job: WorkerJob = {
+      id: `job-${Date.now()}-${this.workerJobs.length + 1}`,
+      job_type: input.job_type,
+      status: "pending",
+      product_queue_id: input.product_queue_id,
+      product_candidate_id: input.product_candidate_id,
+      priority: input.priority,
+      payload: input.payload,
+      result: {},
+      claimed_by: "",
+      claimed_at: "",
+      heartbeat_at: "",
+      error_message: "",
+      retry_count: 0,
+      max_retries: input.max_retries,
+      created_at: createdAt,
+      started_at: "",
+      finished_at: ""
+    };
+    this.workerJobs.push(job);
+    return clone(job);
+  }
+
+  async claimWorkerJob(input: { worker_id: string; job_types: WorkerJobType[] }) {
+    const job = [...this.workerJobs]
+      .filter((candidate) => candidate.status === "pending" || candidate.status === "retry_wait")
+      .filter((candidate) => input.job_types.includes(candidate.job_type))
+      .sort(sortWorkerJobs)[0];
+
+    if (!job) {
+      await this.upsertWorkerHeartbeat({ worker_id: input.worker_id, current_job_id: "", current_job_type: "" });
+      return null;
+    }
+
+    const now = nowIso();
+    const index = this.workerJobs.findIndex((candidate) => candidate.id === job.id);
+    this.workerJobs[index] = {
+      ...this.workerJobs[index],
+      status: "claimed",
+      claimed_by: input.worker_id,
+      claimed_at: now,
+      heartbeat_at: now,
+      started_at: this.workerJobs[index].started_at || now,
+      error_message: ""
+    };
+    await this.upsertWorkerHeartbeat({
+      worker_id: input.worker_id,
+      current_job_id: job.id,
+      current_job_type: job.job_type
+    });
+    return clone(this.workerJobs[index]);
+  }
+
+  async updateWorkerJobHeartbeat(id: string, worker_id: string) {
+    const index = this.workerJobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+
+    this.workerJobs[index] = {
+      ...this.workerJobs[index],
+      status: this.workerJobs[index].status === "claimed" ? "processing" : this.workerJobs[index].status,
+      heartbeat_at: nowIso()
+    };
+    await this.upsertWorkerHeartbeat({
+      worker_id,
+      current_job_id: id,
+      current_job_type: this.workerJobs[index].job_type
+    });
+    return clone(this.workerJobs[index]);
+  }
+
+  async completeWorkerJob(id: string, worker_id: string, result: Record<string, unknown>) {
+    const index = this.workerJobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+
+    const finishedAt = nowIso();
+    this.workerJobs[index] = {
+      ...this.workerJobs[index],
+      status: "completed",
+      result,
+      heartbeat_at: finishedAt,
+      finished_at: finishedAt,
+      error_message: ""
+    };
+    await this.applyWorkerJobResult(this.workerJobs[index]);
+    await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+    return clone(this.workerJobs[index]);
+  }
+
+  async failWorkerJob(id: string, worker_id: string, errorMessage: string) {
+    const index = this.workerJobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+
+    const retryCount = this.workerJobs[index].retry_count + 1;
+    const status = retryCount < this.workerJobs[index].max_retries ? "retry_wait" : "failed";
+    this.workerJobs[index] = {
+      ...this.workerJobs[index],
+      status,
+      retry_count: retryCount,
+      error_message: errorMessage,
+      heartbeat_at: nowIso(),
+      finished_at: status === "failed" ? nowIso() : ""
+    };
+    if (status === "failed" && this.workerJobs[index].product_queue_id) {
+      await this.updateQueueItem(this.workerJobs[index].product_queue_id, {
+        queue_status: "error",
+        error_message: errorMessage
+      });
+    }
+    await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+    return clone(this.workerJobs[index]);
+  }
+
+  async getWorkerHeartbeats() {
+    return clone([...this.workerHeartbeats].sort((a, b) => b.last_heartbeat_at.localeCompare(a.last_heartbeat_at)));
+  }
+
+  async upsertWorkerHeartbeat(input: {
+    worker_id: string;
+    current_job_id: string;
+    current_job_type: WorkerJobType | "";
+  }) {
+    const now = nowIso();
+    const heartbeat: WorkerHeartbeat = {
+      worker_id: input.worker_id,
+      status: "online",
+      current_job_id: input.current_job_id,
+      current_job_type: input.current_job_type,
+      last_heartbeat_at: now,
+      updated_at: now
+    };
+    const index = this.workerHeartbeats.findIndex((item) => item.worker_id === input.worker_id);
+    if (index === -1) {
+      this.workerHeartbeats.push(heartbeat);
+    } else {
+      this.workerHeartbeats[index] = heartbeat;
+    }
+    return clone(heartbeat);
+  }
+
+  async getProductCandidates() {
+    return clone(this.productCandidates);
+  }
+
+  async getProductionHistory() {
+    return clone(this.productionHistory);
+  }
+
+  async getProductAssets(productQueueId?: string) {
+    const assets = productQueueId
+      ? this.productAssets.filter((asset) => asset.product_queue_id === productQueueId)
+      : this.productAssets;
+    return clone(assets);
+  }
+
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {
     if (mode === "simulate-transition") {
       this.queue = this.queue.map((item) => {
@@ -541,6 +766,55 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
 
     return clone(this.queue[index]);
   }
+
+  private async applyWorkerJobResult(job: WorkerJob) {
+    if (job.job_type !== "video_render" || !job.product_queue_id) {
+      return;
+    }
+
+    const result = job.result;
+    const videoUrl = typeof result.video_url === "string" ? result.video_url : "";
+    const thumbnailUrl = typeof result.thumbnail_url === "string" ? result.thumbnail_url : "";
+    const srtUrl = typeof result.srt_url === "string" ? result.srt_url : "";
+    const uploadPackageUrl = typeof result.upload_package_url === "string" ? result.upload_package_url : "";
+
+    await this.updateQueueItem(job.product_queue_id, {
+      queue_status: "video_ready",
+      video_url: videoUrl,
+      video_snapshot_url: thumbnailUrl,
+      error_message: ""
+    });
+
+    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
+      ["video", "rendered-videos", videoUrl],
+      ["thumbnail", "thumbnails", thumbnailUrl],
+      ["subtitle", "subtitles", srtUrl],
+      ["upload_package", "upload-packages", uploadPackageUrl]
+    ];
+    for (const [assetType, bucket, url] of assets) {
+      if (!url) {
+        continue;
+      }
+      this.productAssets.push({
+        id: `asset-${job.id}-${assetType}`,
+        product_queue_id: job.product_queue_id,
+        worker_job_id: job.id,
+        asset_type: assetType,
+        bucket,
+        url,
+        created_at: nowIso()
+      });
+    }
+    this.productionHistory.push({
+      id: `history-${job.id}`,
+      product_queue_id: job.product_queue_id,
+      worker_job_id: job.id,
+      event_type: "worker_job_completed",
+      message: "Worker video render completed.",
+      metadata: result,
+      created_at: nowIso()
+    });
+  }
 }
 
 function priorityWeight(item: ProductQueueItem) {
@@ -554,6 +828,10 @@ function priorityWeight(item: ProductQueueItem) {
     return 2;
   }
   return 3;
+}
+
+function sortWorkerJobs(a: WorkerJob, b: WorkerJob) {
+  return b.priority - a.priority || a.created_at.localeCompare(b.created_at);
 }
 
 export function createMockAutomationRepository(): MutableMockAutomationRepository {

@@ -16,7 +16,10 @@ describe("automation settings", () => {
     expect(settings.is_paused).toBe(true);
     expect(settings.youtube_upload_enabled).toBe(false);
     expect(settings.approval_required).toBe(true);
+    expect(settings.python_worker_enabled).toBe(true);
     expect(settings.max_daily_uploads).toBe(6);
+    expect(settings.max_daily_videos).toBe(69);
+    expect(settings.allowed_worker_job_types).toEqual(["video_render", "sheet_sync"]);
     expect(settings.category_exclude).toEqual([
       "의류",
       "신발",

@@ -6,6 +6,11 @@ export type AutomationStoragePaths = {
   queue: string;
   contents: string;
   runs: string;
+  workerJobs: string;
+  workerHeartbeats: string;
+  productCandidates: string;
+  productionHistory: string;
+  productAssets: string;
 };
 
 export function getAutomationDataDir(input = process.env.AUTOMATION_DATA_DIR): string {
@@ -18,6 +23,11 @@ export function getStoragePaths(dataDir = getAutomationDataDir()): AutomationSto
     settings: resolve(dataDir, "settings.json"),
     queue: resolve(dataDir, "queue.json"),
     contents: resolve(dataDir, "contents.json"),
-    runs: resolve(dataDir, "runs.json")
+    runs: resolve(dataDir, "runs.json"),
+    workerJobs: resolve(dataDir, "worker_jobs.json"),
+    workerHeartbeats: resolve(dataDir, "worker_heartbeats.json"),
+    productCandidates: resolve(dataDir, "product_candidates.json"),
+    productionHistory: resolve(dataDir, "production_history.json"),
+    productAssets: resolve(dataDir, "product_assets.json")
   };
 }

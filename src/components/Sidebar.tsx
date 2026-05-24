@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { Activity, FlaskConical, LayoutDashboard, ListChecks, ScrollText, Settings, Webhook } from "lucide-react";
+import { Activity, BriefcaseBusiness, FlaskConical, LayoutDashboard, ListChecks, ScrollText, Settings, ServerCog, Webhook } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/queue", label: "Queue", icon: ListChecks },
+  { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
+  { href: "/workers", label: "Workers", icon: ServerCog },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/runs", label: "Runs", icon: ScrollText },
   { href: "/dev/test-lab", label: "Test Lab", icon: FlaskConical },

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type { AutomationSettings, GeneratedContent, Platform, ProductQueueItem } from "@/types/automation";
+import type { AutomationSettings, GeneratedContent, Platform, ProductAsset, ProductQueueItem } from "@/types/automation";
 import { canMarkReadyForManualUpload } from "@/lib/guards";
 import { GuardNotice } from "@/components/GuardNotice";
 import { QueueActionButtons } from "@/components/QueueActionButtons";
@@ -11,11 +11,13 @@ import { StatusBadge } from "@/components/StatusBadge";
 export function QueueDetailView({
   item,
   content,
-  settings
+  settings,
+  assets = []
 }: {
   item: ProductQueueItem;
   content: GeneratedContent | null;
   settings: AutomationSettings;
+  assets?: ProductAsset[];
 }) {
   const [message, setMessage] = useState("");
   const readyGuard = canMarkReadyForManualUpload(item, content);
@@ -80,6 +82,8 @@ export function QueueDetailView({
         <LinkBox label="제휴 링크" url={item.selected_affiliate_url} />
         <LinkBox label="영상 URL" url={item.video_url} />
         <LinkBox label="영상 스냅샷" url={item.video_snapshot_url} />
+        <LinkBox label="SRT URL" url={findAssetUrl(assets, "subtitle")} />
+        <LinkBox label="Upload package URL" url={findAssetUrl(assets, "upload_package")} />
         <LinkBox label="블로그 초안 URL" url={item.blog_draft_url} />
       </section>
 
@@ -146,6 +150,10 @@ export function QueueDetailView({
       ) : null}
     </div>
   );
+}
+
+function findAssetUrl(assets: ProductAsset[], assetType: ProductAsset["asset_type"]) {
+  return assets.find((asset) => asset.asset_type === assetType)?.url ?? "";
 }
 
 function Info({ label, value }: { label: string; value: string }) {
