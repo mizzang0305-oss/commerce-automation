@@ -33,7 +33,7 @@ describe("ui smoke", () => {
       />
     );
 
-    expect(screen.getByText("Commerce Automation Control Center")).toBeInTheDocument();
+    expect(screen.getByText("자동화 관제실")).toBeInTheDocument();
   });
 
   test("renders settings form", () => {

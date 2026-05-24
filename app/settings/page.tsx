@@ -1,9 +1,11 @@
 import { SettingsForm } from "@/components/SettingsForm";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const settings = await getAutomationRepository().getSettings();
-  return <SettingsForm initialSettings={settings} />;
+  const repository = getAutomationRepository();
+  const [settings, jobs] = await Promise.all([repository.getSettings(), repository.getWorkerJobs()]);
+  return <SettingsForm initialSettings={settings} todayVideoJobs={countKstDailyVideoRenderJobs(jobs)} />;
 }

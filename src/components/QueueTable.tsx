@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ProductQueueItem, WorkerJob } from "@/types/automation";
 import { formatDateTime } from "@/lib/format";
+import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 import { StatusBadge } from "@/components/StatusBadge";
 import { QueueActionButtons } from "@/components/QueueActionButtons";
 import { EmptyState } from "@/components/EmptyState";
@@ -15,18 +16,18 @@ export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem
       <table className="min-w-[1180px] w-full border-collapse text-left text-sm">
         <thead className="bg-slate-100 text-xs uppercase text-slate-500">
           <tr>
-            <th className="px-4 py-3">Rank</th>
-            <th className="px-4 py-3">Scheduled</th>
-            <th className="px-4 py-3">Keyword</th>
-            <th className="px-4 py-3">Product</th>
-            <th className="px-4 py-3">Score</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Worker Job</th>
+            <th className="px-4 py-3">순위</th>
+            <th className="px-4 py-3">예약 시간</th>
+            <th className="px-4 py-3">키워드</th>
+            <th className="px-4 py-3">상품</th>
+            <th className="px-4 py-3">점수</th>
+            <th className="px-4 py-3">상태</th>
+            <th className="px-4 py-3">워커 작업</th>
             <th className="px-4 py-3">YouTube</th>
             <th className="px-4 py-3">TikTok</th>
             <th className="px-4 py-3">Threads</th>
-            <th className="px-4 py-3">Error</th>
-            <th className="px-4 py-3">Actions</th>
+            <th className="px-4 py-3">오류</th>
+            <th className="px-4 py-3">작업</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -55,11 +56,13 @@ export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem
                   <div className="mt-1 text-xs text-slate-500">{item.category_path}</div>
                 </td>
                 <td className="px-4 py-4 font-bold text-slate-900">{item.product_score}</td>
-                <td className="px-4 py-4"><StatusBadge status={item.queue_status} /></td>
+                <td className="px-4 py-4">
+                  <StatusBadge status={item.queue_status} />
+                </td>
                 <td className="px-4 py-4 text-xs text-slate-600">
                   {job ? (
                     <Link href="/jobs" className="font-semibold text-teal-700">
-                      {job.job_type} / {job.status}
+                      {getWorkerJobTypeLabel(job.job_type)} / {getWorkerJobStatusLabel(job.status)}
                     </Link>
                   ) : (
                     "-"
@@ -69,7 +72,9 @@ export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem
                 <td className="px-4 py-4 text-xs text-slate-600">{item.tiktok_upload_status}</td>
                 <td className="px-4 py-4 text-xs text-slate-600">{item.threads_post_status}</td>
                 <td className="max-w-[220px] px-4 py-4 text-xs text-red-700">{item.error_message || "-"}</td>
-                <td className="px-4 py-4"><QueueActionButtons item={item} compact /></td>
+                <td className="px-4 py-4">
+                  <QueueActionButtons item={item} compact />
+                </td>
               </tr>
             );
           })}
