@@ -40,11 +40,21 @@ Worker APIs are server-to-server only and require `Authorization: Bearer WORKER_
 
 ```powershell
 cd python-worker
-python -m venv .venv
+py -3.12 --version
+py -3.12 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\pip install -r requirements.txt
 Copy-Item .env.example .env
 .\.venv\Scripts\python worker.py
 ```
+
+Supported worker runtime:
+
+- Recommended on Windows: Python 3.12.x.
+- Accepted: Python 3.11.x through Python 3.12.x.
+- Not supported: Python 3.13+ or Python 3.14+.
+
+The worker checks the interpreter version before loading env config or contacting the web API. On Python 3.14+, it exits locally with a setup message such as `py -3.12 -m venv .venv`; it does not report fake job success or failure to the web app.
 
 Required worker env:
 
@@ -78,7 +88,7 @@ Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
 ```
 
 4. Confirm `/jobs` shows a pending `video_render` job.
-5. Start the Python Worker from `python-worker/`.
+5. Start the Python Worker from `python-worker/` using the Python 3.12 venv commands above.
 6. Confirm `/workers` shows heartbeat.
 7. Confirm `/jobs` reaches `completed`.
 8. Open `/queue/queue-worker-smoke-001` and verify `video_ready`, `video_url`, thumbnail, SRT, and upload package URLs.
@@ -87,7 +97,11 @@ For local storage, worker outputs are written under `python-worker/outputs/stora
 
 `/mock-storage` is local smoke tooling. It is disabled in production unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should use Supabase Storage, Cloudflare R2, S3, or another real storage backend and should not set `ENABLE_MOCK_STORAGE_ROUTE`.
 
-If `ffmpeg` is missing, `video_render` fails/retries. That is expected and is not treated as success.
+If `ffmpeg` is missing, `video_render` fails/retries. That is expected and is not treated as success. Check with:
+
+```powershell
+ffmpeg -version
+```
 
 ## Local JSON Tables
 

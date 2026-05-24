@@ -28,11 +28,21 @@ n8n variables are legacy/optional for Nightly Scout/product collection.
 
 ```powershell
 cd python-worker
-python -m venv .venv
+py -3.12 --version
+py -3.12 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\pip install -r requirements.txt
 Copy-Item .env.example .env
 .\.venv\Scripts\python worker.py
 ```
+
+Worker runtime policy:
+
+- Recommended on Windows: Python 3.12.x.
+- Accepted: Python 3.11.x through Python 3.12.x.
+- Not supported: Python 3.13+ or Python 3.14+.
+
+If Python 3.14 is detected, the startup guard exits before loading config or contacting the web API and prints a setup message. This is a local startup failure, not a worker job success/failure.
 
 Worker `.env` must include:
 
@@ -53,7 +63,13 @@ For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR
 
 `/mock-storage` is local smoke tooling only. In production it returns 404 unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should leave `ENABLE_MOCK_STORAGE_ROUTE` unset and use Supabase Storage, Cloudflare R2, S3, or another real storage URL.
 
-`ffmpeg` is required for real MP4 rendering. If `ffmpeg` is missing, the worker reports failure/retry and the job does not become `completed` or `video_ready`.
+`ffmpeg` is required for real MP4 rendering. Check it with:
+
+```powershell
+ffmpeg -version
+```
+
+If `ffmpeg` is missing, worker startup can still succeed, but `video_render` jobs report failure/retry and the job does not become `completed` or `video_ready`.
 
 ## Local Worker E2E Smoke Test
 
@@ -82,6 +98,10 @@ Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
 
 ```powershell
 cd python-worker
+py -3.12 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip
+.\.venv\Scripts\pip install -r requirements.txt
+Copy-Item .env.example .env
 .\.venv\Scripts\python worker.py
 ```
 
