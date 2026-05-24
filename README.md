@@ -1,6 +1,6 @@
 # Commerce Automation Control Center
 
-Current baseline: v1.3 worker architecture.
+Current baseline: v1.4 worker architecture with optional Supabase/Postgres repository adapter.
 
 `commerce-automation` is a Next.js admin web service for Coupang affiliate content operations. The web app is the control room: settings, product queue, worker jobs, run logs, generated result URLs, and manual review all live here. Heavy work is delegated to a separate Python Worker that polls the web API and processes only `video_render` and `sheet_sync` jobs.
 
@@ -11,8 +11,33 @@ Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` 
 - Web Service: Next.js admin app and server API.
 - Python Worker: polls worker APIs, claims jobs, sends heartbeat, reports completion/failure.
 - Local data adapter: JSON files under `data/` for development.
+- Supabase/Postgres adapter: optional shared repository for production, cloud, and multi-PC operation.
 - Storage: local or S3/R2/Supabase-compatible abstraction used by the worker for generated files.
 - n8n: legacy/optional. Nightly scout can still be backed by n8n or another product collector, but `/api/run/next-batch` no longer calls n8n.
+
+## Repository Adapters
+
+The WebApp talks to a repository contract. The Python Worker still polls the WebApp API and does not connect to Supabase directly.
+
+- `local-json`: default development adapter using ignored `data/*.json` files.
+- `supabase`: server-only Supabase/Postgres adapter for shared cloud state.
+
+Select the adapter with either:
+
+```text
+AUTOMATION_REPOSITORY_ADAPTER=local-json
+AUTOMATION_STORAGE_ADAPTER=local-json
+```
+
+For Supabase/Postgres:
+
+```text
+AUTOMATION_REPOSITORY_ADAPTER=supabase
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Supabase Storage is not implemented in this PR and remains a separate storage-adapter milestone.
 
 ## OSS Foundation
 

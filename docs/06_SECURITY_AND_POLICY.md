@@ -6,6 +6,7 @@ Server-only secrets:
 
 - `WORKER_API_SECRET`
 - `COMMERCE_AUTOMATION_API_SECRET`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - n8n webhook secrets, if legacy n8n is used.
 - Coupang, Gemini, OpenAI, Supabase service role, and S3/R2 keys.
 
@@ -20,6 +21,17 @@ Rules:
 ## Worker API Security
 
 Worker endpoints are server-to-server only and require `WORKER_API_SECRET`. Browser UI must never call these endpoints with secrets.
+
+## Supabase/Postgres Security
+
+The Supabase repository adapter is server-only.
+
+- `SUPABASE_SERVICE_ROLE_KEY` must be set only in server runtime env.
+- Do not use `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`.
+- Client components must not import `src/lib/server/supabaseAdmin.ts`.
+- Python Worker must continue to use WebApp worker APIs; it must not receive the service role key.
+- The migration enables RLS and creates no public anon write/read policy. Public writes are prohibited.
+- Supabase Storage is not enabled by this repository adapter.
 
 ## Upload Policy
 
