@@ -1,11 +1,11 @@
 import Link from "next/link";
-import type { ProductQueueItem } from "@/types/automation";
+import type { ProductQueueItem, WorkerJob } from "@/types/automation";
 import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
 import { QueueActionButtons } from "@/components/QueueActionButtons";
 import { EmptyState } from "@/components/EmptyState";
 
-export function QueueTable({ items }: { items: ProductQueueItem[] }) {
+export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem[]; workerJobs?: WorkerJob[] }) {
   if (items.length === 0) {
     return <EmptyState title="큐가 비어 있습니다" message="필터를 변경하거나 개발용 seed를 생성하세요." />;
   }
@@ -21,6 +21,7 @@ export function QueueTable({ items }: { items: ProductQueueItem[] }) {
             <th className="px-4 py-3">Product</th>
             <th className="px-4 py-3">Score</th>
             <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Worker Job</th>
             <th className="px-4 py-3">YouTube</th>
             <th className="px-4 py-3">TikTok</th>
             <th className="px-4 py-3">Threads</th>
@@ -30,6 +31,7 @@ export function QueueTable({ items }: { items: ProductQueueItem[] }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map((item) => {
+            const job = workerJobs.find((workerJob) => workerJob.product_queue_id === item.id);
             const highlight =
               item.queue_status === "error"
                 ? "bg-red-50"
@@ -54,6 +56,15 @@ export function QueueTable({ items }: { items: ProductQueueItem[] }) {
                 </td>
                 <td className="px-4 py-4 font-bold text-slate-900">{item.product_score}</td>
                 <td className="px-4 py-4"><StatusBadge status={item.queue_status} /></td>
+                <td className="px-4 py-4 text-xs text-slate-600">
+                  {job ? (
+                    <Link href="/jobs" className="font-semibold text-teal-700">
+                      {job.job_type} / {job.status}
+                    </Link>
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td className="px-4 py-4 text-xs text-slate-600">{item.youtube_upload_status}</td>
                 <td className="px-4 py-4 text-xs text-slate-600">{item.tiktok_upload_status}</td>
                 <td className="px-4 py-4 text-xs text-slate-600">{item.threads_post_status}</td>

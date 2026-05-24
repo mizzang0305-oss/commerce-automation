@@ -3,8 +3,14 @@ import type {
   AutomationSettings,
   GeneratedContent,
   Platform,
+  ProductAsset,
+  ProductCandidate,
   ProductQueueItem,
-  QueueStatus
+  ProductionHistory,
+  QueueStatus,
+  WorkerHeartbeat,
+  WorkerJob,
+  WorkerJobType
 } from "@/types/automation";
 
 export type QueueFilters = {
@@ -57,6 +63,30 @@ export interface AutomationRepository {
   getRuns(): Promise<AutomationRun[]>;
   appendRun(run: AutomationRun): Promise<AutomationRun>;
   getGeneratedContentByQueueItem(id: string): Promise<GeneratedContent | null>;
+  upsertGeneratedContent(content: GeneratedContent): Promise<GeneratedContent>;
+  getWorkerJobs(filters?: { status?: WorkerJob["status"] | "all"; job_type?: WorkerJobType | "all" }): Promise<WorkerJob[]>;
+  getWorkerJob(id: string): Promise<WorkerJob | null>;
+  createWorkerJob(input: {
+    job_type: WorkerJobType;
+    product_queue_id: string;
+    product_candidate_id: string;
+    priority: number;
+    payload: Record<string, unknown>;
+    max_retries: number;
+  }): Promise<WorkerJob>;
+  claimWorkerJob(input: { worker_id: string; job_types: WorkerJobType[] }): Promise<WorkerJob | null>;
+  updateWorkerJobHeartbeat(id: string, worker_id: string): Promise<WorkerJob | null>;
+  completeWorkerJob(id: string, worker_id: string, result: Record<string, unknown>): Promise<WorkerJob | null>;
+  failWorkerJob(id: string, worker_id: string, errorMessage: string): Promise<WorkerJob | null>;
+  getWorkerHeartbeats(): Promise<WorkerHeartbeat[]>;
+  upsertWorkerHeartbeat(input: {
+    worker_id: string;
+    current_job_id: string;
+    current_job_type: WorkerJobType | "";
+  }): Promise<WorkerHeartbeat>;
+  getProductCandidates(): Promise<ProductCandidate[]>;
+  getProductionHistory(): Promise<ProductionHistory[]>;
+  getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
 }
 
 export interface MutableMockAutomationRepository extends AutomationRepository {

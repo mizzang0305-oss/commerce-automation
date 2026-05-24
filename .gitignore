@@ -7,5 +7,11 @@ out
 coverage
 data/*.json
 data/*.tmp
+python-worker/outputs/**
+!python-worker/outputs/.gitkeep
+python-worker/temp/**
+!python-worker/temp/.gitkeep
+python-worker/logs/**
+!python-worker/logs/.gitkeep
 *.log
 npm-debug.log*

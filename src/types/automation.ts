@@ -77,7 +77,10 @@ export type AutomationSettings = {
   is_paused: boolean;
   youtube_upload_enabled: boolean;
   approval_required: boolean;
+  python_worker_enabled: boolean;
   max_daily_uploads: number;
+  max_daily_videos: number;
+  allowed_worker_job_types: WorkerJobType[];
   category_include: string[];
   category_exclude: string[];
   updated_at: string;
@@ -158,3 +161,75 @@ export type AutomationRun = {
 };
 
 export type Platform = "youtube" | "tiktok" | "threads";
+
+export type WorkerJobType = "video_render" | "sheet_sync";
+
+export type WorkerJobStatus =
+  | "pending"
+  | "claimed"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "retry_wait"
+  | "cancelled";
+
+export type JsonRecord = Record<string, unknown>;
+
+export type WorkerJob = {
+  id: string;
+  job_type: WorkerJobType;
+  status: WorkerJobStatus;
+  product_queue_id: string;
+  product_candidate_id: string;
+  priority: number;
+  payload: JsonRecord;
+  result: JsonRecord;
+  claimed_by: string;
+  claimed_at: string;
+  heartbeat_at: string;
+  error_message: string;
+  retry_count: number;
+  max_retries: number;
+  created_at: string;
+  started_at: string;
+  finished_at: string;
+};
+
+export type WorkerHeartbeat = {
+  worker_id: string;
+  status: "online" | "offline";
+  current_job_id: string;
+  current_job_type: WorkerJobType | "";
+  last_heartbeat_at: string;
+  updated_at: string;
+};
+
+export type ProductCandidate = {
+  id: string;
+  product_name: string;
+  raw_coupang_url: string;
+  selected_affiliate_url: string;
+  payload: JsonRecord;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductAsset = {
+  id: string;
+  product_queue_id: string;
+  worker_job_id: string;
+  asset_type: "video" | "thumbnail" | "subtitle" | "upload_package" | "sheet_export" | "product_image";
+  bucket: string;
+  url: string;
+  created_at: string;
+};
+
+export type ProductionHistory = {
+  id: string;
+  product_queue_id: string;
+  worker_job_id: string;
+  event_type: string;
+  message: string;
+  metadata: JsonRecord;
+  created_at: string;
+};

@@ -116,6 +116,13 @@ export function SettingsForm({ initialSettings }: { initialSettings: AutomationS
           onChange={(value) => update("max_daily_uploads", value)}
         />
         <NumberField
+          label="하루 Worker 영상 생성 제한"
+          value={form.max_daily_videos}
+          min={0}
+          max={200}
+          onChange={(value) => update("max_daily_videos", value)}
+        />
+        <NumberField
           label="시작 시간"
           value={form.start_hour}
           min={0}
@@ -148,6 +155,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: AutomationS
         </label>
         <CheckField label="자동화 일시정지" checked={form.is_paused} onChange={(value) => update("is_paused", value)} />
         <CheckField
+          label="Python Worker 사용"
+          checked={form.python_worker_enabled}
+          onChange={(value) => update("python_worker_enabled", value)}
+        />
+        <CheckField
           label="YouTube 자동 업로드 활성화"
           checked={form.youtube_upload_enabled}
           onChange={(value) => update("youtube_upload_enabled", value)}
@@ -167,6 +179,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: AutomationS
       </section>
 
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2">
+        <CheckField
+          label="video_render job 허용"
+          checked={form.allowed_worker_job_types.includes("video_render")}
+          onChange={(checked) => update("allowed_worker_job_types", toggleJobType(form.allowed_worker_job_types, "video_render", checked))}
+        />
+        <CheckField
+          label="sheet_sync job 허용"
+          checked={form.allowed_worker_job_types.includes("sheet_sync")}
+          onChange={(checked) => update("allowed_worker_job_types", toggleJobType(form.allowed_worker_job_types, "sheet_sync", checked))}
+        />
         <TextAreaField
           label="포함 카테고리"
           value={form.category_include.join(", ")}
@@ -225,6 +247,17 @@ export function SettingsForm({ initialSettings }: { initialSettings: AutomationS
       </section>
     </form>
   );
+}
+
+function toggleJobType(
+  current: AutomationSettings["allowed_worker_job_types"],
+  jobType: AutomationSettings["allowed_worker_job_types"][number],
+  checked: boolean
+) {
+  if (checked) {
+    return current.includes(jobType) ? current : [...current, jobType];
+  }
+  return current.filter((item) => item !== jobType);
 }
 
 function NumberField({

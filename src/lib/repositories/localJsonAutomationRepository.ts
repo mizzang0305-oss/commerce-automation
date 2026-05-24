@@ -5,8 +5,14 @@ import type {
   AutomationRun,
   AutomationSettings,
   GeneratedContent,
+  ProductAsset,
+  ProductCandidate,
   Platform,
-  ProductQueueItem
+  ProductionHistory,
+  ProductQueueItem,
+  WorkerHeartbeat,
+  WorkerJob,
+  WorkerJobType
 } from "@/types/automation";
 import type {
   MutableMockAutomationRepository,
@@ -96,7 +102,8 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
 
   async getSettings() {
     await this.ensureInitialized();
-    return clone(await readJson<AutomationSettings>(this.paths.settings));
+    const settings = await readJson<AutomationSettings>(this.paths.settings);
+    return clone({ ...createDefaultSettings(), ...settings });
   }
 
   async updateSettings(input: Partial<AutomationSettings>) {
@@ -273,6 +280,243 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(contents.find((content) => content.product_queue_id === id) ?? null);
   }
 
+  async upsertGeneratedContent(content: GeneratedContent) {
+    await this.ensureInitialized();
+    const contents = await readJson<GeneratedContent[]>(this.paths.contents);
+    const index = contents.findIndex(
+      (item) => item.id === content.id || item.product_queue_id === content.product_queue_id
+    );
+    if (index === -1) {
+      contents.push(content);
+    } else {
+      contents[index] = { ...contents[index], ...content, updated_at: nowIso() };
+    }
+    await atomicWriteJson(this.paths.contents, contents);
+    return clone(index === -1 ? content : contents[index]);
+  }
+
+  async getWorkerJobs(filters: { status?: WorkerJob["status"] | "all"; job_type?: WorkerJobType | "all" } = {}) {
+    await this.ensureInitialized();
+    let jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    if (filters.status && filters.status !== "all") {
+      jobs = jobs.filter((job) => job.status === filters.status);
+    }
+    if (filters.job_type && filters.job_type !== "all") {
+      jobs = jobs.filter((job) => job.job_type === filters.job_type);
+    }
+    return clone(jobs.sort(sortWorkerJobs));
+  }
+
+  async getWorkerJob(id: string) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    return clone(jobs.find((job) => job.id === id) ?? null);
+  }
+
+  async createWorkerJob(input: {
+    job_type: WorkerJobType;
+    product_queue_id: string;
+    product_candidate_id: string;
+    priority: number;
+    payload: Record<string, unknown>;
+    max_retries: number;
+  }) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    const createdAt = nowIso();
+    const job: WorkerJob = {
+      id: `job-${Date.now()}-${jobs.length + 1}`,
+      job_type: input.job_type,
+      status: "pending",
+      product_queue_id: input.product_queue_id,
+      product_candidate_id: input.product_candidate_id,
+      priority: input.priority,
+      payload: input.payload,
+      result: {},
+      claimed_by: "",
+      claimed_at: "",
+      heartbeat_at: "",
+      error_message: "",
+      retry_count: 0,
+      max_retries: input.max_retries,
+      created_at: createdAt,
+      started_at: "",
+      finished_at: ""
+    };
+    jobs.push(job);
+    await atomicWriteJson(this.paths.workerJobs, jobs);
+    return clone(job);
+  }
+
+  async claimWorkerJob(input: { worker_id: string; job_types: WorkerJobType[] }) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    const job = [...jobs]
+      .filter((candidate) => candidate.status === "pending" || candidate.status === "retry_wait")
+      .filter((candidate) => input.job_types.includes(candidate.job_type))
+      .sort(sortWorkerJobs)[0];
+
+    if (!job) {
+      await this.upsertWorkerHeartbeat({ worker_id: input.worker_id, current_job_id: "", current_job_type: "" });
+      return null;
+    }
+
+    const now = nowIso();
+    const index = jobs.findIndex((candidate) => candidate.id === job.id);
+    jobs[index] = {
+      ...jobs[index],
+      status: "claimed",
+      claimed_by: input.worker_id,
+      claimed_at: now,
+      heartbeat_at: now,
+      started_at: jobs[index].started_at || now,
+      error_message: ""
+    };
+    await atomicWriteJson(this.paths.workerJobs, jobs);
+    await this.upsertWorkerHeartbeat({
+      worker_id: input.worker_id,
+      current_job_id: job.id,
+      current_job_type: job.job_type
+    });
+    return clone(jobs[index]);
+  }
+
+  async updateWorkerJobHeartbeat(id: string, worker_id: string) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    const index = jobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+    jobs[index] = {
+      ...jobs[index],
+      status: jobs[index].status === "claimed" ? "processing" : jobs[index].status,
+      heartbeat_at: nowIso()
+    };
+    await atomicWriteJson(this.paths.workerJobs, jobs);
+    await this.upsertWorkerHeartbeat({ worker_id, current_job_id: id, current_job_type: jobs[index].job_type });
+    return clone(jobs[index]);
+  }
+
+  async completeWorkerJob(id: string, worker_id: string, result: Record<string, unknown>) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    const index = jobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+    if (jobs[index].job_type === "video_render" && !getResultUrl(result, "video_url")) {
+      const retryCount = jobs[index].retry_count + 1;
+      const status = retryCount < jobs[index].max_retries ? "retry_wait" : "failed";
+      const errorMessage = "영상 렌더 결과에 video_url이 없어 완료 처리하지 않았습니다.";
+      jobs[index] = {
+        ...jobs[index],
+        status,
+        result,
+        retry_count: retryCount,
+        heartbeat_at: nowIso(),
+        finished_at: status === "failed" ? nowIso() : "",
+        error_message: errorMessage
+      };
+      await atomicWriteJson(this.paths.workerJobs, jobs);
+      await this.persistWorkerJobAssets(jobs[index], { includeVideo: false });
+      if (jobs[index].product_queue_id) {
+        await this.updateQueueItem(jobs[index].product_queue_id, {
+          queue_status: "error",
+          error_message: errorMessage
+        });
+      }
+      await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+      return clone(jobs[index]);
+    }
+    const finishedAt = nowIso();
+    jobs[index] = {
+      ...jobs[index],
+      status: "completed",
+      result,
+      heartbeat_at: finishedAt,
+      finished_at: finishedAt,
+      error_message: ""
+    };
+    await atomicWriteJson(this.paths.workerJobs, jobs);
+    await this.applyWorkerJobResult(jobs[index]);
+    await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+    return clone(jobs[index]);
+  }
+
+  async failWorkerJob(id: string, worker_id: string, errorMessage: string) {
+    await this.ensureInitialized();
+    const jobs = await readJson<WorkerJob[]>(this.paths.workerJobs);
+    const index = jobs.findIndex((job) => job.id === id && job.claimed_by === worker_id);
+    if (index === -1) {
+      return null;
+    }
+    const retryCount = jobs[index].retry_count + 1;
+    const status = retryCount < jobs[index].max_retries ? "retry_wait" : "failed";
+    jobs[index] = {
+      ...jobs[index],
+      status,
+      retry_count: retryCount,
+      error_message: errorMessage,
+      heartbeat_at: nowIso(),
+      finished_at: status === "failed" ? nowIso() : ""
+    };
+    await atomicWriteJson(this.paths.workerJobs, jobs);
+    if (status === "failed" && jobs[index].product_queue_id) {
+      await this.updateQueueItem(jobs[index].product_queue_id, { queue_status: "error", error_message: errorMessage });
+    }
+    await this.upsertWorkerHeartbeat({ worker_id, current_job_id: "", current_job_type: "" });
+    return clone(jobs[index]);
+  }
+
+  async getWorkerHeartbeats() {
+    await this.ensureInitialized();
+    const heartbeats = await readJson<WorkerHeartbeat[]>(this.paths.workerHeartbeats);
+    return clone(heartbeats.sort((a, b) => b.last_heartbeat_at.localeCompare(a.last_heartbeat_at)));
+  }
+
+  async upsertWorkerHeartbeat(input: {
+    worker_id: string;
+    current_job_id: string;
+    current_job_type: WorkerJobType | "";
+  }) {
+    await this.ensureInitialized();
+    const heartbeats = await readJson<WorkerHeartbeat[]>(this.paths.workerHeartbeats);
+    const now = nowIso();
+    const heartbeat: WorkerHeartbeat = {
+      worker_id: input.worker_id,
+      status: "online",
+      current_job_id: input.current_job_id,
+      current_job_type: input.current_job_type,
+      last_heartbeat_at: now,
+      updated_at: now
+    };
+    const index = heartbeats.findIndex((item) => item.worker_id === input.worker_id);
+    if (index === -1) {
+      heartbeats.push(heartbeat);
+    } else {
+      heartbeats[index] = heartbeat;
+    }
+    await atomicWriteJson(this.paths.workerHeartbeats, heartbeats);
+    return clone(heartbeat);
+  }
+
+  async getProductCandidates() {
+    await this.ensureInitialized();
+    return clone(await readJson<ProductCandidate[]>(this.paths.productCandidates));
+  }
+
+  async getProductionHistory() {
+    await this.ensureInitialized();
+    return clone(await readJson<ProductionHistory[]>(this.paths.productionHistory));
+  }
+
+  async getProductAssets(productQueueId?: string) {
+    await this.ensureInitialized();
+    const assets = await readJson<ProductAsset[]>(this.paths.productAssets);
+    return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
+  }
+
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {
     await this.ensureInitialized();
     const settings = await this.getSettings();
@@ -364,6 +608,11 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     await atomicWriteJson(this.paths.queue, queue);
     await atomicWriteJson(this.paths.contents, createMockGeneratedContents(queue));
     await atomicWriteJson(this.paths.runs, createMockRuns());
+    await atomicWriteJson(this.paths.workerJobs, []);
+    await atomicWriteJson(this.paths.workerHeartbeats, []);
+    await atomicWriteJson(this.paths.productCandidates, []);
+    await atomicWriteJson(this.paths.productionHistory, []);
+    await atomicWriteJson(this.paths.productAssets, []);
   }
 
   private async ensureInitialized() {
@@ -386,8 +635,23 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     const queueExists = await fileExists(this.paths.queue);
     const contentsExists = await fileExists(this.paths.contents);
     const runsExists = await fileExists(this.paths.runs);
+    const workerJobsExists = await fileExists(this.paths.workerJobs);
+    const workerHeartbeatsExists = await fileExists(this.paths.workerHeartbeats);
+    const productCandidatesExists = await fileExists(this.paths.productCandidates);
+    const productionHistoryExists = await fileExists(this.paths.productionHistory);
+    const productAssetsExists = await fileExists(this.paths.productAssets);
 
-    if (settingsExists && queueExists && contentsExists && runsExists) {
+    if (
+      settingsExists &&
+      queueExists &&
+      contentsExists &&
+      runsExists &&
+      workerJobsExists &&
+      workerHeartbeatsExists &&
+      productCandidatesExists &&
+      productionHistoryExists &&
+      productAssetsExists
+    ) {
       return;
     }
 
@@ -412,6 +676,21 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     if (!runsExists) {
       await atomicWriteJson(this.paths.runs, runs);
     }
+    if (!workerJobsExists) {
+      await atomicWriteJson(this.paths.workerJobs, []);
+    }
+    if (!workerHeartbeatsExists) {
+      await atomicWriteJson(this.paths.workerHeartbeats, []);
+    }
+    if (!productCandidatesExists) {
+      await atomicWriteJson(this.paths.productCandidates, []);
+    }
+    if (!productionHistoryExists) {
+      await atomicWriteJson(this.paths.productionHistory, []);
+    }
+    if (!productAssetsExists) {
+      await atomicWriteJson(this.paths.productAssets, []);
+    }
   }
 
   private async readQueue() {
@@ -434,6 +713,76 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     await atomicWriteJson(this.paths.queue, queue);
     return clone(queue[index]);
   }
+
+  private async applyWorkerJobResult(job: WorkerJob) {
+    if (job.job_type !== "video_render" || !job.product_queue_id) {
+      return;
+    }
+
+    const result = job.result;
+    const videoUrl = getResultUrl(result, "video_url");
+    if (!videoUrl) {
+      return;
+    }
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
+
+    await this.updateQueueItem(job.product_queue_id, {
+      queue_status: "video_ready",
+      video_url: videoUrl,
+      video_snapshot_url: thumbnailUrl,
+      error_message: ""
+    });
+
+    await this.persistWorkerJobAssets(job, { includeVideo: true });
+    const productionHistory = await readJson<ProductionHistory[]>(this.paths.productionHistory);
+    const dedupedHistory = productionHistory.filter((item) => item.id !== `history-${job.id}`);
+    dedupedHistory.push({
+      id: `history-${job.id}`,
+      product_queue_id: job.product_queue_id,
+      worker_job_id: job.id,
+      event_type: "worker_job_completed",
+      message: "Worker video render completed.",
+      metadata: result,
+      created_at: nowIso()
+    });
+    await atomicWriteJson(this.paths.productionHistory, dedupedHistory);
+  }
+
+  private async persistWorkerJobAssets(job: WorkerJob, options: { includeVideo: boolean }) {
+    if (!job.product_queue_id) {
+      return;
+    }
+    const result = job.result;
+    const videoUrl = getResultUrl(result, "video_url");
+    const thumbnailUrl = getResultUrl(result, "thumbnail_url");
+    const srtUrl = getResultUrl(result, "srt_url");
+    const uploadPackageUrl = getResultUrl(result, "upload_package_url");
+    const productAssets = await readJson<ProductAsset[]>(this.paths.productAssets);
+    const assets: Array<[ProductAsset["asset_type"], string, string]> = [
+      ["video", "rendered-videos", videoUrl],
+      ["thumbnail", "thumbnails", thumbnailUrl],
+      ["subtitle", "subtitles", srtUrl],
+      ["upload_package", "upload-packages", uploadPackageUrl]
+    ];
+    let updatedAssets = productAssets;
+    for (const [assetType, bucket, url] of assets) {
+      if (!url || (!options.includeVideo && assetType === "video")) {
+        continue;
+      }
+      const id = `asset-${job.id}-${assetType}`;
+      updatedAssets = updatedAssets.filter((asset) => asset.id !== id);
+      updatedAssets.push({
+        id,
+        product_queue_id: job.product_queue_id,
+        worker_job_id: job.id,
+        asset_type: assetType,
+        bucket,
+        url,
+        created_at: nowIso()
+      });
+    }
+    await atomicWriteJson(this.paths.productAssets, updatedAssets);
+  }
 }
 
 function priorityWeight(item: ProductQueueItem) {
@@ -447,6 +796,15 @@ function priorityWeight(item: ProductQueueItem) {
     return 2;
   }
   return 3;
+}
+
+function sortWorkerJobs(a: WorkerJob, b: WorkerJob) {
+  return b.priority - a.priority || a.created_at.localeCompare(b.created_at);
+}
+
+function getResultUrl(result: Record<string, unknown>, key: string) {
+  const value = result[key];
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export function createLocalJsonAutomationRepository(options: LocalJsonRepositoryOptions = {}) {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { GET as getSettings, POST as postSettings } from "../app/api/settings/route";
 import { GET as getQueue } from "../app/api/queue/route";
+import { POST as seedDevQueue } from "../app/api/dev/seed/route";
 import { POST as runNightlyScout } from "../app/api/run/nightly-scout/route";
 import { getAutomationRepository, resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
 
@@ -48,6 +49,31 @@ describe("api routes", () => {
 
     expect(response.status).toBe(200);
     expect(payload.items).toHaveLength(12);
+  });
+
+  test("POST /api/dev/seed creates a renderable worker smoke item", async () => {
+    const response = await seedDevQueue(
+      new Request("http://localhost/api/dev/seed", {
+        method: "POST",
+        body: JSON.stringify({ mode: "worker-smoke" })
+      })
+    );
+    const payload = await readJson(response);
+    const itemId = String(payload.item_id);
+    const item = await getAutomationRepository().getQueueItem(itemId);
+    const content = await getAutomationRepository().getGeneratedContentByQueueItem(itemId);
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({ ok: true, mode: "worker-smoke" });
+    expect(item).toMatchObject({
+      id: itemId,
+      queue_status: "scheduled",
+      selected_affiliate_url: expect.stringContaining("https://link.coupang.com")
+    });
+    expect(new Date(item?.scheduled_at ?? 0).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(item?.thumbnail_url).toMatch(/^https:\/\/picsum\.photos\//);
+    expect(content?.video_script).toContain("worker smoke");
+    expect(content?.disclosure_text).toContain("쿠팡 파트너스");
   });
 
   test("POST /api/run/nightly-scout returns safe error when env is missing", async () => {
