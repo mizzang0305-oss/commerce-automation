@@ -3,6 +3,7 @@ import type { GeneratedContent, ProductQueueItem, WorkerJob } from "@/types/auto
 import { canProcessBatch } from "@/lib/guards";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { createAutomationRun } from "@/lib/server/runLog";
+import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export async function POST() {
     });
   }
 
-  const existingDailyVideoJobs = countTodayVideoJobs(await repository.getWorkerJobs());
+  const existingDailyVideoJobs = countKstDailyVideoRenderJobs(await repository.getWorkerJobs(), now);
   const remainingDailyCapacity = Math.max(0, settings.max_daily_videos - existingDailyVideoJobs);
   if (remainingDailyCapacity === 0) {
     const message = "하루 영상 생성 제한에 도달해 worker job을 생성하지 않았습니다.";
@@ -170,16 +171,4 @@ function validateRenderableItem(
     return { ok: false, message: "상품 이미지 URL이 없어 영상 생성 worker job을 만들지 않았습니다." };
   }
   return { ok: true };
-}
-
-function countTodayVideoJobs(jobs: WorkerJob[]) {
-  const today = new Date().toISOString().slice(0, 10);
-  return jobs.filter((job) => {
-    const createdDate = job.created_at.slice(0, 10);
-    return (
-      job.job_type === "video_render" &&
-      createdDate === today &&
-      !["failed", "cancelled"].includes(job.status)
-    );
-  }).length;
 }
