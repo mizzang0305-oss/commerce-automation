@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { getRepositoryRuntimeInfo } from "@/lib/repositories/repositoryFactory";
 import { getN8nConfigStatus } from "@/lib/server/n8nClient";
+import { getSupabaseConfigStatus } from "@/lib/server/supabaseAdmin";
 import { getDailyCapacity, getDailyCapacityWarning, getNextRunAt } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ export async function GET() {
 
   return NextResponse.json({
     diagnostics,
-    repository: getRepositoryRuntimeInfo(),
+    repository: {
+      ...getRepositoryRuntimeInfo(),
+      ...getSupabaseConfigStatus()
+    },
     nodeEnv: process.env.NODE_ENV,
     scheduler: {
       next_run_at: getNextRunAt(settings).toISOString(),

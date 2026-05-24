@@ -35,10 +35,21 @@ python -m compileall python-worker
 ## Security QA
 
 - Client components do not reference `WORKER_API_SECRET`.
+- Client components do not reference `SUPABASE_SERVICE_ROLE_KEY`.
 - Client components do not reference service role or provider API keys.
 - Logs do not print Authorization headers.
 - `.env.local` is not committed.
 - `data/*.json` is not committed.
+
+## Repository Adapter QA
+
+- Default repository adapter remains `local-json`.
+- `AUTOMATION_REPOSITORY_ADAPTER=supabase` selects the Supabase adapter.
+- `AUTOMATION_STORAGE_ADAPTER=supabase` remains supported for compatibility.
+- Missing `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` returns a safe server error.
+- Supabase worker completion still rejects missing `video_url`.
+- Supabase migration enables RLS and creates no anon/public write policies.
+- Supabase integration tests run only when explicit Supabase env is configured.
 
 ## Upload QA
 

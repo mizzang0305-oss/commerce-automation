@@ -5,7 +5,7 @@
 ```mermaid
 flowchart LR
   Operator["Operator"] --> Web["Next.js Web Service"]
-  Web --> Data["Repository / Local JSON or DB"]
+  Web --> Data["Repository / Local JSON or Supabase Postgres"]
   Web --> StorageView["Storage URLs in UI"]
   Worker["Python Worker"] --> Claim["POST /api/worker/jobs/claim"]
   Worker --> Heartbeat["POST /api/worker/jobs/:id/heartbeat"]
@@ -27,6 +27,16 @@ flowchart LR
 
 The Next.js app is the control plane. It owns settings, queue selection, worker job creation, job status, run logs, and manual review.
 
+### Repository Layer
+
+The Web Service uses a repository adapter behind one TypeScript contract.
+
+- `local-json` remains the default development adapter.
+- `supabase` stores the same control-room data in Supabase/Postgres for shared cloud operation.
+- Select with `AUTOMATION_REPOSITORY_ADAPTER=supabase` or the legacy-compatible `AUTOMATION_STORAGE_ADAPTER=supabase`.
+- The Supabase service role key is used only by server modules and API routes. Client components must never import it or display it.
+- Python Worker continues to poll the WebApp API; it does not read or write Supabase directly.
+
 ### Python Worker
 
 The Python Worker is not a web service. It polls the web service, claims work, sends heartbeats, uploads artifacts, and reports results. It handles only:
@@ -46,6 +56,8 @@ Generated artifacts are uploaded to storage and represented in the web app by UR
 - product images: `product-images`
 
 For local worker runs, use `STORAGE_BACKEND=local`, `LOCAL_STORAGE_BASE_DIR`, and `STORAGE_LOCAL_BASE_URL` or the existing `PUBLIC_STORAGE_BASE_URL` compatibility variable.
+
+Supabase Storage is out of scope for the repository adapter PR. Use local storage for smoke tests or an existing S3/R2-compatible worker storage backend until the dedicated storage adapter ships.
 
 ### Legacy n8n
 

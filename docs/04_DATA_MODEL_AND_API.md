@@ -16,6 +16,30 @@ Development storage uses local JSON files under `data/`.
 
 Do not commit `data/*.json`.
 
+## Supabase/Postgres Tables
+
+Production/shared repository storage can use Supabase/Postgres by applying:
+
+```text
+supabase/migrations/001_automation_core.sql
+```
+
+Tables created by the migration:
+
+- `automation_settings`
+- `product_queue`
+- `generated_contents`
+- `automation_runs`
+- `worker_jobs`
+- `worker_heartbeats`
+- `product_candidates`
+- `product_assets`
+- `production_history`
+
+Primary indexes cover queue status/schedule/rank, worker job status/type/queue/created time, run start time, and product assets by queue id. RLS is enabled on all tables, and no anon/authenticated public read/write policies are created. The WebApp uses the service role key only on the server. Browser clients and the Python Worker do not access Supabase directly.
+
+Supabase Storage is not part of this schema. Generated file URLs still come from the worker storage backend and will be handled by a separate storage adapter milestone.
+
 ## worker_jobs
 
 Fields:

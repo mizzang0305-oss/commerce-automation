@@ -24,6 +24,32 @@ AUTOMATION_DATA_DIR=./data
 
 n8n variables are legacy/optional for Nightly Scout/product collection.
 
+## Repository Adapter Selection
+
+Default local development uses ignored JSON files:
+
+```text
+AUTOMATION_REPOSITORY_ADAPTER=local-json
+AUTOMATION_STORAGE_ADAPTER=local-json
+AUTOMATION_DATA_DIR=./data
+```
+
+For Supabase/Postgres shared state:
+
+1. Create a Supabase project.
+2. Apply `supabase/migrations/001_automation_core.sql`.
+3. Set server-only env values in `.env.local` or the deployment secret store:
+
+```text
+AUTOMATION_REPOSITORY_ADAPTER=supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
+```
+
+4. Run `npm run test`, `npm run lint`, and `npm run build`.
+
+Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase credentials. Supabase Storage is not configured here; generated artifact URLs still come from the worker storage backend.
+
 ## OSS Foundation Notes
 
 - `imageio-ffmpeg` is part of the default Python Worker install and provides a bundled ffmpeg executable fallback.

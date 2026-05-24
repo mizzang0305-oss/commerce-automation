@@ -27,9 +27,27 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 
 ## Roadmap
 
-1. Add production DB adapter and migrations for the documented tables.
-2. Add operator APIs for retry/fail/cancel job actions.
-3. Add real storage configuration for Supabase Storage or S3/R2.
+1. Add Supabase/Postgres repository adapter and migrations for the documented tables.
+2. Add real storage configuration for Supabase Storage or Cloudflare R2/S3.
+3. Add operator APIs for retry/fail/cancel job actions.
 4. Add real Google Sheets credential flow for `sheet_sync`.
 5. Replace or formalize Nightly Scout product collection.
-6. Keep public upload as a separate, explicitly reviewed milestone.
+6. Upgrade `/queue` and `/jobs` with TanStack Table filtering/sorting/pagination.
+7. Keep public upload as a separate, explicitly reviewed milestone.
+
+## v1.4 Repository Adapter Target
+
+The Supabase/Postgres repository adapter moves control-room state beyond local JSON while keeping the existing WebApp API contract.
+
+Included:
+
+- Supabase migration for settings, queue, generated content, runs, worker jobs, heartbeats, candidates, assets, and history.
+- Server-only Supabase admin client.
+- Repository factory selection via `AUTOMATION_REPOSITORY_ADAPTER=supabase`.
+- Local JSON remains the default development adapter.
+
+Not included:
+
+- Supabase Storage.
+- Direct Python Worker database access.
+- Public platform upload.
