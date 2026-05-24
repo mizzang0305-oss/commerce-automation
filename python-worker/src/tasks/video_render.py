@@ -3,6 +3,7 @@ from ..config import WorkerConfig
 from ..storage_client import StorageClient
 from ..utils.files import clean_dir
 from ..media.image_downloader import download_image
+from ..media.ffmpeg_check import require_ffmpeg_for_video_render
 from ..media.subtitle_generator import write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
@@ -10,6 +11,7 @@ from ..media.video_renderer import render_vertical_video
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
+    require_ffmpeg_for_video_render()
     payload = job.get("payload", {})
     product_name = str(payload.get("product_name", "product"))
     image_url = str(payload.get("image_url", ""))

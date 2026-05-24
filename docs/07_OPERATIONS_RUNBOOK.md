@@ -63,13 +63,55 @@ For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR
 
 `/mock-storage` is local smoke tooling only. In production it returns 404 unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should leave `ENABLE_MOCK_STORAGE_ROUTE` unset and use Supabase Storage, Cloudflare R2, S3, or another real storage URL.
 
-`ffmpeg` is required for real MP4 rendering. Check it with:
+### Windows ffmpeg Setup
+
+`ffmpeg` is required for real MP4 rendering. It is checked when a `video_render` job starts; missing `ffmpeg` does not stop the worker process from starting.
+
+Check the current shell:
 
 ```powershell
 ffmpeg -version
+where.exe ffmpeg
 ```
 
-If `ffmpeg` is missing, worker startup can still succeed, but `video_render` jobs report failure/retry and the job does not become `completed` or `video_ready`.
+Install with `winget`:
+
+```powershell
+winget --version
+winget search ffmpeg
+winget install --id Gyan.FFmpeg --source winget --accept-source-agreements --accept-package-agreements
+```
+
+Close every PowerShell window, open a new one, and verify:
+
+```powershell
+ffmpeg -version
+where.exe ffmpeg
+```
+
+Alternative package:
+
+```powershell
+winget install --id BtbN.FFmpeg --source winget --accept-source-agreements --accept-package-agreements
+```
+
+Manual install:
+
+1. Download a Windows build from the official FFmpeg download page via gyan.dev or BtbN.
+2. Extract it so `C:\Tools\ffmpeg\bin\ffmpeg.exe` exists.
+3. Add the bin folder to the user PATH:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  [Environment]::GetEnvironmentVariable("Path", "User") + ";C:\Tools\ffmpeg\bin",
+  "User"
+)
+```
+
+4. Restart PowerShell and run `ffmpeg -version`.
+
+If `ffmpeg` is missing, worker startup can still succeed, but `video_render` jobs report failure/retry and the job does not become `completed` or `video_ready`. `sheet_sync` jobs are not blocked by ffmpeg.
 
 ## Local Worker E2E Smoke Test
 
@@ -85,7 +127,7 @@ npm run dev
 Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{"mode":"worker-smoke"}' http://localhost:3000/api/dev/seed
 ```
 
-You can also use `/dev/test-lab` and click **Worker smoke 상품 생성**.
+You can also use `/dev/test-lab` and click **워커 스모크용 상품 생성**.
 
 3. Trigger worker dispatch:
 
@@ -98,6 +140,9 @@ Invoke-RestMethod -Method Post http://localhost:3000/api/run/next-batch
 
 ```powershell
 cd python-worker
+ffmpeg -version
+py -3.12 --version
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
 py -3.12 -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\pip install -r requirements.txt
@@ -114,7 +159,7 @@ Copy-Item .env.example .env
    - SRT URL points to `/mock-storage/subtitles/...`
    - upload package URL points to `/mock-storage/upload-packages/...`
 
-If the job is `retry_wait` or `failed`, inspect `error_message`. Missing `ffmpeg` is the most common local failure.
+If the job is `retry_wait` or `failed`, inspect `error_message`. Missing `ffmpeg` is the most common local failure. That is expected and is not fake success. `video_ready` without `video_url` is a bug.
 
 ## Run Next Batch
 

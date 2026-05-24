@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 
 export function RunLogTable({ runs }: { runs: AutomationRun[] }) {
   if (runs.length === 0) {
-    return <EmptyState title="실행 로그가 없습니다" message="Webhook 또는 개발용 액션을 실행하면 여기에 기록됩니다." />;
+    return <EmptyState title="실행 로그가 없습니다" message="수동 실행이나 개발용 액션을 실행하면 여기에 기록됩니다." />;
   }
 
   return (
@@ -12,14 +12,14 @@ export function RunLogTable({ runs }: { runs: AutomationRun[] }) {
       <table className="min-w-[900px] w-full border-collapse text-left text-sm">
         <thead className="bg-slate-100 text-xs uppercase text-slate-500">
           <tr>
-            <th className="px-4 py-3">Type</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Processed</th>
-            <th className="px-4 py-3">Errors</th>
-            <th className="px-4 py-3">Started</th>
-            <th className="px-4 py-3">Duration</th>
-            <th className="px-4 py-3">Safe message</th>
-            <th className="px-4 py-3">Log</th>
+            <th className="px-4 py-3">유형</th>
+            <th className="px-4 py-3">상태</th>
+            <th className="px-4 py-3">처리</th>
+            <th className="px-4 py-3">오류</th>
+            <th className="px-4 py-3">시작</th>
+            <th className="px-4 py-3">소요 시간</th>
+            <th className="px-4 py-3">안전 메시지</th>
+            <th className="px-4 py-3">로그</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -27,16 +27,8 @@ export function RunLogTable({ runs }: { runs: AutomationRun[] }) {
             <tr key={run.id} className={run.status === "failed" ? "bg-red-50" : "bg-white"}>
               <td className="px-4 py-4 font-semibold text-slate-900">{run.run_type}</td>
               <td className="px-4 py-4">
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    run.status === "success"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : run.status === "running"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {run.status}
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${run.status === "success" ? "bg-emerald-100 text-emerald-700" : run.status === "running" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
+                  {run.status === "success" ? "성공" : run.status === "running" ? "실행 중" : "실패"}
                 </span>
               </td>
               <td className="px-4 py-4">{run.processed_count}</td>

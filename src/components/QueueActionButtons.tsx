@@ -46,7 +46,7 @@ export function QueueActionButtons({ item, compact = false }: { item: ProductQue
         </button>
         <button type="button" disabled={loading !== null} onClick={() => callAction("skip")} className={buttonClass}>
           <SkipForward size={14} aria-hidden="true" />
-          제외
+          건너뜀
         </button>
         {compact ? (
           <Link href={`/queue/${item.id}`} className={buttonClass}>
