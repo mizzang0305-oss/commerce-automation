@@ -7,16 +7,17 @@ export const dynamic = "force-dynamic";
 export default async function QueueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const repository = getAutomationRepository();
-  const [item, content, settings, assets] = await Promise.all([
+  const [item, content, settings, assets, workerJobs] = await Promise.all([
     repository.getQueueItem(id),
     repository.getGeneratedContentByQueueItem(id),
     repository.getSettings(),
-    repository.getProductAssets(id)
+    repository.getProductAssets(id),
+    repository.getWorkerJobs()
   ]);
 
   if (!item) {
     notFound();
   }
 
-  return <QueueDetailView item={item} content={content} settings={settings} assets={assets} />;
+  return <QueueDetailView item={item} content={content} settings={settings} assets={assets} workerJobs={workerJobs} />;
 }

@@ -1,21 +1,6 @@
 import type { ProductQueueItem, QueueStatus } from "@/types/automation";
 import type { QueueSummary } from "@/lib/repositories/types";
-
-export const queueStatusLabels: Record<QueueStatus, string> = {
-  scheduled: "예약됨",
-  processing: "처리중",
-  content_ready: "콘텐츠 생성됨",
-  video_render_started: "영상 생성중",
-  video_ready: "영상 준비됨",
-  blog_draft_created: "블로그 초안 생성됨",
-  ready_for_manual_upload: "업로드 준비",
-  uploaded: "수동 업로드 표시",
-  posted: "수동 게시 표시",
-  manual_review: "수동 검수",
-  error: "오류",
-  skipped: "제외",
-  hold: "보류"
-};
+export { queueStatusLabels } from "@/lib/statusLabels";
 
 export const queueStatusBadgeClasses: Record<QueueStatus, string> = {
   scheduled: "bg-slate-100 text-slate-700 ring-slate-200",

@@ -1,5 +1,5 @@
 import type { QueueStatus } from "@/types/automation";
-import { queueStatusLabels } from "@/lib/status";
+import { queueStatusLabels } from "@/lib/statusLabels";
 
 const statuses: Array<QueueStatus | "all"> = [
   "all",
@@ -33,20 +33,11 @@ export function QueueFilters({
       <div className="grid gap-3 md:grid-cols-6">
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">날짜</span>
-          <input
-            name="date"
-            type="date"
-            defaultValue={defaults.date}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+          <input name="date" type="date" defaultValue={defaults.date} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">상태</span>
-          <select
-            name="status"
-            defaultValue={defaults.status ?? "all"}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
+          <select name="status" defaultValue={defaults.status ?? "all"} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             {statuses.map((status) => (
               <option key={status} value={status}>
                 {status === "all" ? "전체" : queueStatusLabels[status]}
@@ -56,45 +47,26 @@ export function QueueFilters({
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">업로드 상태</span>
-          <input
-            name="upload_status"
-            defaultValue={defaults.upload_status}
-            placeholder="ready_to_upload"
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+          <input name="upload_status" defaultValue={defaults.upload_status} placeholder="ready_to_upload" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">키워드</span>
-          <input
-            name="keyword"
-            defaultValue={defaults.keyword}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+          <input name="keyword" defaultValue={defaults.keyword} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">테마</span>
-          <input
-            name="theme"
-            defaultValue={defaults.theme}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+          <input name="theme" defaultValue={defaults.theme} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">정렬</span>
-          <select
-            name="priority"
-            defaultValue={defaults.priority ?? ""}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
+          <select name="priority" defaultValue={defaults.priority ?? ""} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">기본 순위</option>
-            <option value="issues-first">error/manual_review 우선</option>
+            <option value="issues-first">오류/수동 검토 우선</option>
           </select>
         </label>
       </div>
       <div className="mt-3 flex justify-end">
-        <button className="focus-ring rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
-          필터 적용
-        </button>
+        <button className="focus-ring rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">필터 적용</button>
       </div>
     </form>
   );
