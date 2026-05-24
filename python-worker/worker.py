@@ -1,15 +1,17 @@
-from src.api_client import WorkerApiClient
-from src.config import load_config
-from src.storage_client import StorageClient
-from src.tasks.sheet_sync import run_sheet_sync
-from src.tasks.video_render import run_video_render
-from src.utils.logger import get_logger
-
-
-logger = get_logger("worker")
+from src.runtime_check import ensure_supported_runtime
 
 
 def main() -> None:
+    ensure_supported_runtime()
+
+    from src.api_client import WorkerApiClient
+    from src.config import load_config
+    from src.storage_client import StorageClient
+    from src.tasks.sheet_sync import run_sheet_sync
+    from src.tasks.video_render import run_video_render
+    from src.utils.logger import get_logger
+
+    logger = get_logger("worker")
     config = load_config()
     api = WorkerApiClient(config)
     storage = StorageClient(config)

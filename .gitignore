@@ -7,6 +7,7 @@ out
 coverage
 data/*.json
 data/*.tmp
+python-worker/.venv/
 python-worker/outputs/**
 !python-worker/outputs/.gitkeep
 python-worker/temp/**
