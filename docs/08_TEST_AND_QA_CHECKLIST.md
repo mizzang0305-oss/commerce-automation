@@ -57,7 +57,9 @@ python -m compileall python-worker
 - `AUTOMATION_STORAGE_ADAPTER=supabase` remains supported for compatibility.
 - Missing `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` returns a safe server error.
 - Supabase worker completion still rejects missing `video_url`.
-- Supabase migration enables RLS and creates no anon/public write policies.
+- `docs/sql/verify_supabase_core.sql` confirms all automation tables have RLS enabled.
+- `docs/sql/verify_supabase_core.sql` confirms there are no broad anon/authenticated read/write policies.
+- Supabase migration creates `automation_settings.id = 'default'`.
 - Supabase integration tests run only when explicit Supabase env is configured.
 
 ## Upload QA
@@ -69,10 +71,12 @@ python -m compileall python-worker
 ## Artifact Storage QA
 
 - Local storage still serves `/mock-storage/...` only for local/dev smoke.
+- Production storage smoke uses Supabase Storage, R2, or another S3-compatible backend; `/mock-storage/...` does not count as live storage.
 - Supabase/R2 storage keys are not exposed to client components.
 - `python-worker/.env` does not contain `SUPABASE_SERVICE_ROLE_KEY`.
 - Unsafe storage keys such as `../video.mp4` are rejected.
 - Missing storage credentials fail/retry the worker job without fake success.
+- Live storage smoke passes only when video, thumbnail, SRT, and upload package URLs return HTTP 200 or valid signed URL responses.
 
 ## Collector QA
 
