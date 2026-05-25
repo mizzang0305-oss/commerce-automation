@@ -3,6 +3,7 @@ import { GET as getDiagnostics } from "../app/api/dev/diagnostics/route";
 import { POST as resetSettings } from "../app/api/dev/reset-settings/route";
 import { POST as resetStorage } from "../app/api/dev/reset-storage/route";
 import { POST as seedDevQueue } from "../app/api/dev/seed/route";
+import { POST as importCollectorCsv } from "../app/api/collectors/import-csv/route";
 import { resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
 import { denyDevRouteIfDisabled, isDevRouteEnabled } from "@/lib/server/devRouteGuard";
 
@@ -32,10 +33,17 @@ describe("dev API production guard", () => {
     );
     const resetStorageResponse = await resetStorage();
     const resetSettingsResponse = await resetSettings();
+    const collectorImportResponse = await importCollectorCsv(
+      new Request("http://localhost/api/collectors/import-csv", {
+        method: "POST",
+        body: JSON.stringify({ csv: "product_name,url\nDeal,https://example.com/deal" })
+      })
+    );
 
     expect(seed.status).toBe(404);
     expect(resetStorageResponse.status).toBe(404);
     expect(resetSettingsResponse.status).toBe(404);
+    expect(collectorImportResponse.status).toBe(404);
     await expect(seed.text()).resolves.toContain("Not found.");
   });
 

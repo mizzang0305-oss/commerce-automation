@@ -73,3 +73,11 @@ python -m compileall python-worker
 - `python-worker/.env` does not contain `SUPABASE_SERVICE_ROLE_KEY`.
 - Unsafe storage keys such as `../video.mp4` are rejected.
 - Missing storage credentials fail/retry the worker job without fake success.
+
+## Collector QA
+
+- `/api/collectors/import-csv` is blocked in production unless `ENABLE_DEV_TOOLS=true`.
+- CSV imports reject empty product names, empty URLs, and non-http(s) URLs.
+- Imported rows are stored as `product_candidates`, not `product_queue`.
+- Collectors do not create `worker_jobs` directly.
+- Crawling/import work does not bypass login, CAPTCHA, bot blocking, terms, or copy protected review text.

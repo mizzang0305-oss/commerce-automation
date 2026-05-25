@@ -83,6 +83,16 @@ In production they return `404` by default. Set `ENABLE_DEV_TOOLS=true` only for
 - `moviepy`: optional video-template dependency in `python-worker/requirements-video.txt`; not part of the default worker install.
 - `crawlee` and `playwright`: optional collector dependencies in `python-worker/requirements-collector.txt`; not part of the default worker install.
 
+## Collector Foundation
+
+Collectors only create `product_candidates`; they do not create worker jobs or mark products ready for upload. The first supported path is a guarded CSV import endpoint:
+
+- `POST /api/collectors/import-csv`
+- body: `{ "source": "manual_csv", "csv": "product_name,url,selected_affiliate_url\n..." }`
+- production behavior: blocked by default through the dev route guard unless `ENABLE_DEV_TOOLS=true`.
+
+CSV rows must include a product name and an `http`/`https` source URL. Non-web schemes such as `javascript:`, `file:`, or empty URLs are rejected. Optional Python collector helpers live under `python-worker/src/collectors/` for CSV/XLSX link import and future public-page/API collectors. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
+
 ## Key Pages
 
 - `/dashboard`: overview and run controls.

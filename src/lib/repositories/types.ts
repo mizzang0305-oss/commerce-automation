@@ -85,6 +85,7 @@ export interface AutomationRepository {
     current_job_type: WorkerJobType | "";
   }): Promise<WorkerHeartbeat>;
   getProductCandidates(): Promise<ProductCandidate[]>;
+  upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
 }
