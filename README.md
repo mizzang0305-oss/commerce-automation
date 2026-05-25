@@ -78,7 +78,7 @@ In production they return `404` by default. Set `ENABLE_DEV_TOOLS=true` only for
 
 - `imageio-ffmpeg`: bundled ffmpeg executable fallback for Python Worker `video_render`.
 - `recharts`: dashboard/jobs operational charts.
-- `@tanstack/react-table`: installed for future high-volume `/queue` and `/jobs` table upgrades; the full table migration is deferred.
+- `@tanstack/react-table`: powers the first high-volume `/queue` and `/jobs` table upgrade with client-side search, filters, sorting, and pagination.
 - `shadcn/ui`: evaluated with `npx shadcn@latest info`. This project has Tailwind v4 without an existing `components.json`, so shadcn `init` is deferred to avoid broad config churn.
 - `moviepy`: optional video-template dependency in `python-worker/requirements-video.txt`; not part of the default worker install.
 - `crawlee` and `playwright`: optional collector dependencies in `python-worker/requirements-collector.txt`; not part of the default worker install.
@@ -98,7 +98,7 @@ CSV rows must include a product name and an `http`/`https` source URL. Non-web s
 - `/dashboard`: overview and run controls.
 - `/queue`: product queue with worker job status.
 - `/queue/[id]`: generated result URLs, assets, and manual review controls.
-- `/jobs`: worker job list and status filters.
+- `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.
 - `/settings`: worker enablement, batch size, max daily videos, allowed job types, and upload safety settings. `max_daily_videos` is counted by the Asia/Seoul business date.
