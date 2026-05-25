@@ -110,3 +110,41 @@ Safety expectations:
 - Missing `ffmpeg` is a `video_render` job failure/retry reason, not a startup failure.
 - Missing `ffmpeg` must not produce fake success.
 - Public upload and YouTube/TikTok/Threads posting are not implemented by this worker.
+
+## Artifact Storage
+
+The worker uploads generated files and reports URLs back to the WebApp. It must not connect to Supabase DB directly.
+
+Local smoke storage:
+
+```text
+STORAGE_BACKEND=local
+LOCAL_STORAGE_BASE_DIR=./outputs/storage
+PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
+```
+
+Supabase Storage uses the S3 protocol endpoint and storage-specific access keys:
+
+```text
+STORAGE_BACKEND=supabase
+SUPABASE_STORAGE_ENDPOINT_URL=https://project-ref.storage.supabase.co/storage/v1/s3
+SUPABASE_STORAGE_ACCESS_KEY_ID=replace-with-storage-access-key
+SUPABASE_STORAGE_SECRET_ACCESS_KEY=replace-with-storage-secret-key
+SUPABASE_STORAGE_REGION=us-east-1
+SUPABASE_STORAGE_PUBLIC_BASE_URL=https://project-ref.supabase.co/storage/v1/object/public
+```
+
+Do not put `SUPABASE_SERVICE_ROLE_KEY` in `python-worker/.env`. The service role key is for the server-side WebApp repository adapter only.
+
+Cloudflare R2 and other S3-compatible storage can use the generic `S3_*` variables or these aliases:
+
+```text
+STORAGE_BACKEND=r2
+R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=replace-with-r2-access-key
+R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
+R2_REGION=auto
+R2_PUBLIC_BASE_URL=https://cdn.example.com
+```
+
+The storage client rejects unsafe object keys such as `../video.mp4` before upload. Missing storage credentials fail the job safely; they must not be reported as successful renders.
