@@ -32,6 +32,16 @@ Python 3.14 is intentionally not supported for this worker. Some binary wheels c
 
 MoviePy and Crawlee are not part of the default worker install. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
 
+## Collector Helpers
+
+`src/collectors/` contains the first safe collector scaffolding:
+
+- `toss_link_importer.py`: loads CSV/XLSX link tables into product candidate records.
+- `musinsa_public_collector.py`: placeholder for public-page collection only.
+- `coupang_api_collector.py`: safe no-op until official Coupang API credentials are configured.
+
+Collectors should only produce candidates. They must not create `video_render` jobs, mark queue items ready, bypass login/CAPTCHA/bot controls, or copy protected review text.
+
 ## ffmpeg
 
 `ffmpeg` is required for real MP4 rendering, but it is not required for worker startup or `sheet_sync`. The worker checks it when a `video_render` job starts.

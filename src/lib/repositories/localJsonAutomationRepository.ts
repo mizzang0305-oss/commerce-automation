@@ -506,6 +506,25 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(await readJson<ProductCandidate[]>(this.paths.productCandidates));
   }
 
+  async upsertProductCandidates(candidates: ProductCandidate[]) {
+    await this.ensureInitialized();
+    const existing = await readJson<ProductCandidate[]>(this.paths.productCandidates);
+    for (const candidate of candidates) {
+      const index = existing.findIndex((item) => item.id === candidate.id);
+      if (index === -1) {
+        existing.push(candidate);
+      } else {
+        existing[index] = {
+          ...existing[index],
+          ...candidate,
+          created_at: existing[index].created_at || candidate.created_at
+        };
+      }
+    }
+    await atomicWriteJson(this.paths.productCandidates, existing);
+    return clone(candidates);
+  }
+
   async getProductionHistory() {
     await this.ensureInitialized();
     return clone(await readJson<ProductionHistory[]>(this.paths.productionHistory));

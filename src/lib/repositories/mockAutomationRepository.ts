@@ -695,6 +695,22 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(this.productCandidates);
   }
 
+  async upsertProductCandidates(candidates: ProductCandidate[]) {
+    for (const candidate of candidates) {
+      const index = this.productCandidates.findIndex((item) => item.id === candidate.id);
+      if (index === -1) {
+        this.productCandidates.push(candidate);
+      } else {
+        this.productCandidates[index] = {
+          ...this.productCandidates[index],
+          ...candidate,
+          created_at: this.productCandidates[index].created_at || candidate.created_at
+        };
+      }
+    }
+    return clone(candidates);
+  }
+
   async getProductionHistory() {
     return clone(this.productionHistory);
   }

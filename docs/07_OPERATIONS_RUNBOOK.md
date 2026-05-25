@@ -268,6 +268,31 @@ Optional worker dependency sets:
 
 Use `requirements-video.txt` only when testing MoviePy-based video templates. Use `requirements-collector.txt` only for future collector work, not for the default worker.
 
+## Collector Foundation
+
+The first collector path is intentionally conservative:
+
+1. Import CSV links through `POST /api/collectors/import-csv` in a sandbox/dev session.
+2. Store rows as `product_candidates`.
+3. Review and promote candidates in a later workflow.
+4. Do not create `video_render` jobs directly from collectors.
+
+Example request:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" `
+  -Body '{"source":"manual_csv","csv":"product_name,url,selected_affiliate_url`nDeal,https://example.com/deal,https://link.coupang.com/a/deal"}' `
+  http://localhost:3000/api/collectors/import-csv
+```
+
+The endpoint is guarded like other development import tools. In production it returns `404` unless `ENABLE_DEV_TOOLS=true` is explicitly set for a controlled sandbox. Collector rules:
+
+- use public pages or official APIs only;
+- do not bypass login, CAPTCHA, bot blocking, or terms;
+- do not copy protected review text;
+- treat missing Coupang API credentials as a safe skip;
+- keep candidates in `product_candidates` until a human or later promotion workflow validates them.
+
 ## Run Next Batch
 
 1. Confirm `/settings`:

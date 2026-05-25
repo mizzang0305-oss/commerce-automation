@@ -850,6 +850,18 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow));
   }
 
+  async upsertProductCandidates(candidates: ProductCandidate[]) {
+    if (candidates.length === 0) {
+      return [];
+    }
+    const { data, error } = await this.client
+      .from("product_candidates")
+      .upsert(candidates, { onConflict: "id" })
+      .select("*");
+    throwIfSupabaseError(error, "upsertProductCandidates");
+    return clone(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow));
+  }
+
   async getProductionHistory() {
     const { data, error } = await this.client
       .from("production_history")
