@@ -85,7 +85,7 @@ Use `ENABLE_DEV_TOOLS=true` only in a controlled sandbox. Do not enable it for n
 
 - `imageio-ffmpeg` is part of the default Python Worker install and provides a bundled ffmpeg executable fallback.
 - Recharts powers the dashboard/jobs analysis charts.
-- TanStack Table is installed for a later queue/jobs table migration; current tables remain in place.
+- TanStack Table powers the first `/queue` and `/jobs` table upgrade: client-side search, status/type/issue filters, sorting, and pagination.
 - shadcn/ui was inspected with the CLI, but `init` is deferred because the project has Tailwind v4 and no existing `components.json`.
 - MoviePy is optional in `python-worker/requirements-video.txt`.
 - Crawlee Python and Playwright are optional in `python-worker/requirements-collector.txt`; collectors must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.

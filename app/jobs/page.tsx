@@ -7,6 +7,7 @@ import type { WorkerJobStatus, WorkerJobType } from "@/types/automation";
 import { StatCard } from "@/components/StatCard";
 import { WorkerJobStatusChart } from "@/components/charts/WorkerJobStatusChart";
 import { WorkerJobTypeChart } from "@/components/charts/WorkerJobTypeChart";
+import { JobsTable } from "@/components/JobsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -126,77 +127,11 @@ export default async function JobsPage({
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-100 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">작업 ID</th>
-              <th className="px-4 py-3">작업 유형</th>
-              <th className="px-4 py-3">상태</th>
-              <th className="px-4 py-3">상품 큐</th>
-              <th className="px-4 py-3">워커</th>
-              <th className="px-4 py-3">재시도</th>
-              <th className="px-4 py-3">오류</th>
-              <th className="px-4 py-3">작업</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {jobs.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                  이 필터에 해당하는 워커 작업이 없습니다.
-                </td>
-              </tr>
-            ) : (
-              jobs.map((job) => (
-                <tr key={job.id}>
-                  <td className="px-4 py-4 font-semibold text-slate-950">{job.id}</td>
-                  <td className="px-4 py-4 text-slate-600">{getWorkerJobTypeLabel(job.job_type)}({job.job_type})</td>
-                  <td className="px-4 py-4">
-                    <JobStatusBadge status={job.status} />
-                  </td>
-                  <td className="px-4 py-4">
-                    {job.product_queue_id ? (
-                      <Link href={`/queue/${job.product_queue_id}`} className="font-semibold text-teal-700">
-                        {job.product_queue_id}
-                      </Link>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-slate-600">{job.claimed_by || "-"}</td>
-                  <td className="px-4 py-4 text-slate-600">
-                    {job.retry_count}/{job.max_retries}
-                  </td>
-                  <td className="max-w-[320px] px-4 py-4 text-xs text-red-700">{job.error_message || "-"}</td>
-                  <td className="px-4 py-4 text-xs text-slate-500">수동 retry/fail/cancel은 후속 PR에서 연결</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <JobsTable jobs={jobs} />
     </div>
   );
 }
 
 function scalar(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function JobStatusBadge({ status }: { status: WorkerJobStatus }) {
-  const className =
-    status === "completed"
-      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-      : status === "failed" || status === "cancelled"
-        ? "bg-red-50 text-red-700 ring-red-200"
-        : status === "retry_wait"
-          ? "bg-amber-50 text-amber-700 ring-amber-200"
-          : "bg-slate-50 text-slate-700 ring-slate-200";
-
-  return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${className}`}>
-      {getWorkerJobStatusLabel(status)}
-    </span>
-  );
 }

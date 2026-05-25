@@ -81,3 +81,10 @@ python -m compileall python-worker
 - Imported rows are stored as `product_candidates`, not `product_queue`.
 - Collectors do not create `worker_jobs` directly.
 - Crawling/import work does not bypass login, CAPTCHA, bot blocking, terms, or copy protected review text.
+
+## Table UX QA
+
+- `/queue` supports product/keyword/error search, status filter, issue filter, sorting, and pagination.
+- `/jobs` supports job/search text, status filter, job type filter, issue filter, sorting, and pagination.
+- Existing server-side query filters still work before the client-side table filters are applied.
+- Large local result sets remain client-side for now; server-side pagination is a later optimization.
