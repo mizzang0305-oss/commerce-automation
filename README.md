@@ -37,7 +37,7 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Supabase Storage is not implemented in this PR and remains a separate storage-adapter milestone.
+Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Artifact storage is configured separately in the Python Worker and should use storage-specific credentials.
 
 ## PowerShell UTF-8 Console
 
@@ -133,6 +133,42 @@ Required worker env:
 - `WORKER_JOB_TYPES=video_render,sheet_sync`
 - `STORAGE_BACKEND=local` or `s3`/`r2`/`supabase`
 - `LOCAL_STORAGE_BASE_DIR` and `STORAGE_LOCAL_BASE_URL` or `PUBLIC_STORAGE_BASE_URL` for local storage, or S3-compatible endpoint/key settings.
+
+### Artifact Storage
+
+Generated MP4, thumbnail, SRT, upload package, and sheet export files are uploaded by the Python Worker. The WebApp stores only the returned URLs in DB fields and `product_assets`.
+
+Local smoke mode:
+
+```text
+STORAGE_BACKEND=local
+LOCAL_STORAGE_BASE_DIR=./outputs/storage
+PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
+```
+
+Supabase Storage uses its S3-compatible endpoint and generated storage access keys. Do not reuse `SUPABASE_SERVICE_ROLE_KEY` as a worker storage secret:
+
+```text
+STORAGE_BACKEND=supabase
+SUPABASE_STORAGE_ENDPOINT_URL=https://project-ref.storage.supabase.co/storage/v1/s3
+SUPABASE_STORAGE_ACCESS_KEY_ID=replace-with-storage-access-key
+SUPABASE_STORAGE_SECRET_ACCESS_KEY=replace-with-storage-secret-key
+SUPABASE_STORAGE_REGION=us-east-1
+SUPABASE_STORAGE_PUBLIC_BASE_URL=https://project-ref.supabase.co/storage/v1/object/public
+```
+
+Cloudflare R2 or another S3-compatible backend can use either the generic `S3_*` values or the `R2_*` aliases:
+
+```text
+STORAGE_BACKEND=r2
+R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=replace-with-r2-access-key
+R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
+R2_REGION=auto
+R2_PUBLIC_BASE_URL=https://cdn.example.com
+```
+
+Supported buckets are `rendered-videos`, `thumbnails`, `subtitles`, `sheet-exports`, `upload-packages`, and `product-images`. Storage object keys are normalized and path traversal keys are rejected before upload.
 
 ## Local Worker E2E Smoke
 

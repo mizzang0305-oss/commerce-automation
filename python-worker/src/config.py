@@ -21,6 +21,14 @@ class WorkerConfig:
     s3_region: str
 
 
+def first_env(*names: str, default: str = "") -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return default
+
+
 def load_config() -> WorkerConfig:
     load_dotenv()
     secret = os.getenv("WORKER_API_SECRET", "")
@@ -33,14 +41,16 @@ def load_config() -> WorkerConfig:
         job_types=[item.strip() for item in os.getenv("WORKER_JOB_TYPES", "video_render,sheet_sync").split(",") if item.strip()],
         poll_interval_seconds=int(os.getenv("POLL_INTERVAL_SECONDS", "10")),
         heartbeat_interval_seconds=int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "15")),
-        storage_backend=os.getenv("STORAGE_BACKEND", "local"),
+        storage_backend=os.getenv("STORAGE_BACKEND", "local").strip().lower(),
         local_storage_base_dir=Path(os.getenv("LOCAL_STORAGE_BASE_DIR", "./outputs/storage")),
-        public_storage_base_url=os.getenv(
+        public_storage_base_url=first_env(
             "PUBLIC_STORAGE_BASE_URL",
-            os.getenv("STORAGE_LOCAL_BASE_URL", ""),
+            "SUPABASE_STORAGE_PUBLIC_BASE_URL",
+            "R2_PUBLIC_BASE_URL",
+            "STORAGE_LOCAL_BASE_URL",
         ).rstrip("/"),
-        s3_endpoint_url=os.getenv("S3_ENDPOINT_URL", ""),
-        s3_access_key_id=os.getenv("S3_ACCESS_KEY_ID", ""),
-        s3_secret_access_key=os.getenv("S3_SECRET_ACCESS_KEY", ""),
-        s3_region=os.getenv("S3_REGION", "auto"),
+        s3_endpoint_url=first_env("S3_ENDPOINT_URL", "SUPABASE_STORAGE_ENDPOINT_URL", "R2_ENDPOINT_URL"),
+        s3_access_key_id=first_env("S3_ACCESS_KEY_ID", "SUPABASE_STORAGE_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID"),
+        s3_secret_access_key=first_env("S3_SECRET_ACCESS_KEY", "SUPABASE_STORAGE_SECRET_ACCESS_KEY", "R2_SECRET_ACCESS_KEY"),
+        s3_region=first_env("S3_REGION", "SUPABASE_STORAGE_REGION", "R2_REGION", default="auto"),
     )

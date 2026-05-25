@@ -73,7 +73,7 @@ SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 
 4. Run `npm run test`, `npm run lint`, and `npm run build`.
 
-Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase credentials. Supabase Storage is not configured here; generated artifact URLs still come from the worker storage backend.
+Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase DB credentials. Artifact storage is configured separately in the Python Worker.
 
 ## Development API Guard
 
@@ -123,7 +123,31 @@ STORAGE_LOCAL_BASE_URL=http://localhost:3000/mock-storage
 PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
 ```
 
-For S3/R2/Supabase-compatible storage, set endpoint, access key, secret key, region, and public base URL.
+For S3/R2/Supabase-compatible storage, set endpoint, access key, secret key, region, and public base URL. The worker uploads artifacts and returns URLs to the WebApp; it does not write directly to Supabase DB.
+
+Supabase Storage via S3 protocol:
+
+```text
+STORAGE_BACKEND=supabase
+SUPABASE_STORAGE_ENDPOINT_URL=https://project-ref.storage.supabase.co/storage/v1/s3
+SUPABASE_STORAGE_ACCESS_KEY_ID=replace-with-storage-access-key
+SUPABASE_STORAGE_SECRET_ACCESS_KEY=replace-with-storage-secret-key
+SUPABASE_STORAGE_REGION=us-east-1
+SUPABASE_STORAGE_PUBLIC_BASE_URL=https://project-ref.supabase.co/storage/v1/object/public
+```
+
+Use Supabase-generated storage access keys. Do not put `SUPABASE_SERVICE_ROLE_KEY` in `python-worker/.env`.
+
+Cloudflare R2:
+
+```text
+STORAGE_BACKEND=r2
+R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=replace-with-r2-access-key
+R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
+R2_REGION=auto
+R2_PUBLIC_BASE_URL=https://cdn.example.com
+```
 
 For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. In local/dev smoke runs, the web app reads the same files through `/mock-storage/...`.
 

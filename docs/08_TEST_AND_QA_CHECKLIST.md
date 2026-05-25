@@ -65,3 +65,11 @@ python -m compileall python-worker
 - `run_mode` default is `generate_only`.
 - `youtube_upload_enabled` default is `false`.
 - No real YouTube/TikTok/Threads upload code path is enabled.
+
+## Artifact Storage QA
+
+- Local storage still serves `/mock-storage/...` only for local/dev smoke.
+- Supabase/R2 storage keys are not exposed to client components.
+- `python-worker/.env` does not contain `SUPABASE_SERVICE_ROLE_KEY`.
+- Unsafe storage keys such as `../video.mp4` are rejected.
+- Missing storage credentials fail/retry the worker job without fake success.

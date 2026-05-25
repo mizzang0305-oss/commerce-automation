@@ -9,6 +9,7 @@ Server-only secrets:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - n8n webhook secrets, if legacy n8n is used.
 - Coupang, Gemini, OpenAI, Supabase service role, and S3/R2 keys.
+- Supabase Storage S3 access keys, if the worker uses Supabase Storage.
 
 Rules:
 
@@ -40,8 +41,9 @@ The Supabase repository adapter is server-only.
 - Do not use `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`.
 - Client components must not import `src/lib/server/supabaseAdmin.ts`.
 - Python Worker must continue to use WebApp worker APIs; it must not receive the service role key.
+- Python Worker storage credentials must be storage-specific keys. Do not put `SUPABASE_SERVICE_ROLE_KEY` in `python-worker/.env`.
 - The migration enables RLS and creates no public anon write/read policy. Public writes are prohibited.
-- Supabase Storage is not enabled by this repository adapter.
+- Supabase Storage is artifact storage only. It does not change the WebApp repository adapter and does not enable public platform uploads.
 
 ## Upload Policy
 
