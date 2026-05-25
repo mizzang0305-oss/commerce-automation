@@ -39,6 +39,41 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Supabase Storage is not implemented in this PR and remains a separate storage-adapter milestone.
 
+## PowerShell UTF-8 Console
+
+If Korean text from `Invoke-RestMethod` looks corrupted in Windows PowerShell, configure the current shell for UTF-8 before running smoke commands:
+
+```powershell
+.\scripts\dev\powershell-utf8.ps1
+```
+
+Equivalent manual commands:
+
+```powershell
+chcp 65001
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
+For JSON API checks, prefer:
+
+```powershell
+Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -Depth 8
+```
+
+If the terminal still displays mojibake, verify the same endpoint in a browser such as `http://localhost:3000/api/dev/diagnostics`. Windows Terminal with PowerShell 7 is recommended for repeated smoke verification.
+
+## Development API Guard
+
+Development mutation routes are local/sandbox tooling:
+
+- `POST /api/dev/seed`
+- `POST /api/dev/reset-storage`
+- `POST /api/dev/reset-settings`
+
+In production they return `404` by default. Set `ENABLE_DEV_TOOLS=true` only for a controlled sandbox test, never for normal production operation. `/api/dev/diagnostics` remains read-only and returns configured booleans only; it must not expose raw Supabase URLs, service role keys, worker secrets, or Authorization headers.
+
 ## OSS Foundation
 
 - `imageio-ffmpeg`: bundled ffmpeg executable fallback for Python Worker `video_render`.

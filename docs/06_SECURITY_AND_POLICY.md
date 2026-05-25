@@ -22,6 +22,16 @@ Rules:
 
 Worker endpoints are server-to-server only and require `WORKER_API_SECRET`. Browser UI must never call these endpoints with secrets.
 
+## Development API Security
+
+Development mutation APIs are disabled in production by default:
+
+- `POST /api/dev/seed`
+- `POST /api/dev/reset-storage`
+- `POST /api/dev/reset-settings`
+
+Only set `ENABLE_DEV_TOOLS=true` in a controlled sandbox where seed/reset operations are expected. Normal production deployments must leave it unset. `/api/dev/diagnostics` is read-only and may be used for configured booleans only; it must not return raw URLs, service role keys, worker secrets, or Authorization headers.
+
 ## Supabase/Postgres Security
 
 The Supabase repository adapter is server-only.

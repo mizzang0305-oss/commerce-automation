@@ -9,6 +9,13 @@ npm run build
 python -m compileall python-worker
 ```
 
+## Local Console QA
+
+- Run `.\scripts\dev\powershell-utf8.ps1` before PowerShell smoke checks.
+- Confirm `Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -Depth 8` displays Korean text without mojibake.
+- If PowerShell output is still corrupted, verify the same endpoint in a browser before treating it as an API failure.
+- Do not print `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or raw Authorization headers while debugging console output.
+
 ## Worker Job QA
 
 - Claim returns one pending job.
@@ -38,6 +45,8 @@ python -m compileall python-worker
 - Client components do not reference `SUPABASE_SERVICE_ROLE_KEY`.
 - Client components do not reference service role or provider API keys.
 - Logs do not print Authorization headers.
+- Production blocks `POST /api/dev/seed`, `/api/dev/reset-storage`, and `/api/dev/reset-settings` unless `ENABLE_DEV_TOOLS=true`.
+- `/api/dev/diagnostics` returns configured booleans only and does not expose raw Supabase URL or service role key.
 - `.env.local` is not committed.
 - `data/*.json` is not committed.
 

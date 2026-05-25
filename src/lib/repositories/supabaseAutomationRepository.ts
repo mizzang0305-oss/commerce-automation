@@ -148,6 +148,20 @@ export function mapSupabaseWorkerJob(row: SupabaseWorkerJobRow): WorkerJob {
   };
 }
 
+function nullableTimestamp(value: string) {
+  return value.trim() ? value : null;
+}
+
+export function serializeSupabaseWorkerJobForWrite(job: WorkerJob): Record<string, unknown> {
+  return {
+    ...job,
+    claimed_at: nullableTimestamp(job.claimed_at),
+    heartbeat_at: nullableTimestamp(job.heartbeat_at),
+    started_at: nullableTimestamp(job.started_at),
+    finished_at: nullableTimestamp(job.finished_at)
+  };
+}
+
 export function validateSupabaseWorkerJobCompletion(job: WorkerJob, result: Record<string, unknown>) {
   if (job.job_type !== "video_render" || getResultUrl(result, "video_url")) {
     return { ok: true as const };
@@ -611,7 +625,7 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       started_at: "",
       finished_at: ""
     };
-    await this.upsertRows("worker_jobs", job);
+    await this.upsertRows("worker_jobs", serializeSupabaseWorkerJobForWrite(job));
     return clone(job);
   }
 
