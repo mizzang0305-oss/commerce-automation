@@ -154,8 +154,15 @@ R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=replace-with-r2-access-key
 R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
 R2_REGION=auto
-R2_PUBLIC_BASE_URL=https://cdn.example.com
+R2_PUBLIC_BASE_URL_RENDERED_VIDEOS=https://pub-video.r2.dev
+R2_PUBLIC_BASE_URL_THUMBNAILS=https://pub-thumb.r2.dev
+R2_PUBLIC_BASE_URL_SUBTITLES=https://pub-subtitle.r2.dev
+R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES=https://pub-package.r2.dev
+# Optional fallback only.
+R2_PUBLIC_BASE_URL=https://fallback.example.com
 ```
+
+Keep the existing four R2 buckets as separate buckets: `rendered-videos`, `thumbnails`, `subtitles`, and `upload-packages`. Enable each bucket's Public Development URL and put that bucket-specific URL in the matching `R2_PUBLIC_BASE_URL_*` variable. The worker uploads to the logical bucket name, but the generated public URL uses the bucket's public host plus the object key only. Example: `rendered-videos` key `job-123/video.mp4` maps to `https://pub-video.r2.dev/job-123/video.mp4`, not `https://pub-video.r2.dev/rendered-videos/job-123/video.mp4`. Use `R2_PUBLIC_BASE_URL` only as fallback. For production, use custom domains when possible.
 
 For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. In local/dev smoke runs, the web app reads the same files through `/mock-storage/...`.
 

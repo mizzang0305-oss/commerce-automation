@@ -19,6 +19,7 @@ class WorkerConfig:
     s3_access_key_id: str
     s3_secret_access_key: str
     s3_region: str
+    r2_public_base_urls: dict[str, str]
 
 
 def first_env(*names: str, default: str = "") -> str:
@@ -53,4 +54,10 @@ def load_config() -> WorkerConfig:
         s3_access_key_id=first_env("S3_ACCESS_KEY_ID", "SUPABASE_STORAGE_ACCESS_KEY_ID", "R2_ACCESS_KEY_ID"),
         s3_secret_access_key=first_env("S3_SECRET_ACCESS_KEY", "SUPABASE_STORAGE_SECRET_ACCESS_KEY", "R2_SECRET_ACCESS_KEY"),
         s3_region=first_env("S3_REGION", "SUPABASE_STORAGE_REGION", "R2_REGION", default="auto"),
+        r2_public_base_urls={
+            "rendered-videos": os.getenv("R2_PUBLIC_BASE_URL_RENDERED_VIDEOS", "").strip().rstrip("/"),
+            "thumbnails": os.getenv("R2_PUBLIC_BASE_URL_THUMBNAILS", "").strip().rstrip("/"),
+            "subtitles": os.getenv("R2_PUBLIC_BASE_URL_SUBTITLES", "").strip().rstrip("/"),
+            "upload-packages": os.getenv("R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES", "").strip().rstrip("/"),
+        },
     )

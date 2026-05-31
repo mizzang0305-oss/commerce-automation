@@ -179,8 +179,15 @@ R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=replace-with-r2-access-key
 R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
 R2_REGION=auto
-R2_PUBLIC_BASE_URL=https://cdn.example.com
+R2_PUBLIC_BASE_URL_RENDERED_VIDEOS=https://pub-video.r2.dev
+R2_PUBLIC_BASE_URL_THUMBNAILS=https://pub-thumb.r2.dev
+R2_PUBLIC_BASE_URL_SUBTITLES=https://pub-subtitle.r2.dev
+R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES=https://pub-package.r2.dev
+# Optional fallback only.
+R2_PUBLIC_BASE_URL=https://fallback.example.com
 ```
+
+For the existing four-bucket R2 setup, keep `rendered-videos`, `thumbnails`, `subtitles`, and `upload-packages` as separate buckets. Turn on each bucket's Public Development URL in Cloudflare R2 and set the matching `R2_PUBLIC_BASE_URL_*` value. A rendered video stored at key `job-123/video.mp4` in `rendered-videos` becomes `https://pub-video.r2.dev/job-123/video.mp4`; the bucket name is not added to the public URL because the `pub-*.r2.dev` host already points to that bucket. Use `R2_PUBLIC_BASE_URL` only as a legacy fallback. For production, prefer custom domains over `r2.dev`.
 
 Supported buckets are `rendered-videos`, `thumbnails`, `subtitles`, `sheet-exports`, `upload-packages`, and `product-images`. Storage object keys are normalized and path traversal keys are rejected before upload.
 
