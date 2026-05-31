@@ -11,7 +11,12 @@ function candidateFixture(overrides: Partial<ProductCandidate> = {}): ProductCan
     product_name: "API 후보 상품",
     raw_coupang_url: "https://www.coupang.com/vp/products/candidate-api-001",
     selected_affiliate_url: "https://link.coupang.com/a/candidate-api-001",
-    payload: { source: "manual_csv", category_path: "생활", keyword: "후보" },
+    payload: {
+      source: "manual_csv",
+      category_path: "생활",
+      keyword: "후보",
+      thumbnail_url: "https://image.example.com/candidate-api-001.jpg"
+    },
     created_at: "2026-05-31T00:00:00.000Z",
     updated_at: "2026-05-31T00:00:00.000Z",
     ...overrides

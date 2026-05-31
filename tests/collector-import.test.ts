@@ -6,8 +6,8 @@ import { getAutomationRepository, resetMockRepositoryForTests } from "@/lib/repo
 describe("collector candidate import", () => {
   test("parses safe CSV rows into deterministic product candidates", () => {
     const csv = [
-      "product_name,url,selected_affiliate_url,category_path",
-      "Spring Deal,https://example.com/deal,https://link.coupang.com/a/spring,seasonal"
+      "product_name,url,selected_affiliate_url,category_path,source_type,thumbnail_url,price,discount_rate,review_count,rating",
+      "Spring Deal,https://example.com/deal,https://link.coupang.com/a/spring,seasonal,event,https://image.example.com/deal.jpg,12900,20,150,4.5"
     ].join("\n");
 
     const result = parseCandidateCsv(csv, { source: "toss_csv" });
@@ -22,8 +22,20 @@ describe("collector candidate import", () => {
     expect(result.candidates[0].id).toMatch(/^candidate-[a-f0-9]{16}$/);
     expect(result.candidates[0].payload).toMatchObject({
       source: "toss_csv",
-      category_path: "seasonal"
+      category_path: "seasonal",
+      source_type: "event",
+      thumbnail_url: "https://image.example.com/deal.jpg"
     });
+    expect(result.candidates[0]).toMatchObject({
+      product_key: expect.stringMatching(/^toss:[a-f0-9]{12}:[a-f0-9]{12}$/),
+      platform: "toss",
+      source_type: "event",
+      category: "seasonal",
+      duplicate_status: "unique",
+      promotion_status: "ready"
+    });
+    expect(result.candidates[0].candidate_score).toBeGreaterThanOrEqual(80);
+    expect(result.candidates[0].score_reason).toContain("제휴 링크 있음");
   });
 
   test("rejects unsafe or incomplete source URLs", () => {

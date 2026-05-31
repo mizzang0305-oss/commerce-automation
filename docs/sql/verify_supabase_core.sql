@@ -48,3 +48,26 @@ select
   updated_at
 from public.automation_settings
 where id = 'default';
+
+select
+  column_name,
+  data_type,
+  is_nullable
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'product_candidates'
+  and column_name in (
+    'product_key',
+    'platform',
+    'source_type',
+    'source_name',
+    'category',
+    'candidate_score',
+    'score_reason',
+    'duplicate_status',
+    'duplicate_reason',
+    'promotion_status',
+    'promoted_queue_id',
+    'updated_at'
+  )
+order by column_name;
