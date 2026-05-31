@@ -154,7 +154,14 @@ R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
 R2_ACCESS_KEY_ID=replace-with-r2-access-key
 R2_SECRET_ACCESS_KEY=replace-with-r2-secret-key
 R2_REGION=auto
-R2_PUBLIC_BASE_URL=https://cdn.example.com
+R2_PUBLIC_BASE_URL_RENDERED_VIDEOS=https://pub-video.r2.dev
+R2_PUBLIC_BASE_URL_THUMBNAILS=https://pub-thumb.r2.dev
+R2_PUBLIC_BASE_URL_SUBTITLES=https://pub-subtitle.r2.dev
+R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES=https://pub-package.r2.dev
+# Optional fallback only.
+R2_PUBLIC_BASE_URL=https://fallback.example.com
 ```
+
+For the four-bucket R2 setup, keep the real bucket names equal to the logical names: `rendered-videos`, `thumbnails`, `subtitles`, and `upload-packages`. Enable each bucket's Public Development URL and set the matching `R2_PUBLIC_BASE_URL_*` value. The returned artifact URL uses that public base URL plus the object key only, so key `job-123/video.mp4` in `rendered-videos` becomes `https://pub-video.r2.dev/job-123/video.mp4`. Do not reuse `SUPABASE_SERVICE_ROLE_KEY` as a worker storage secret, and keep R2 secrets only in `python-worker/.env`.
 
 The storage client rejects unsafe object keys such as `../video.mp4` before upload. Missing storage credentials fail the job safely; they must not be reported as successful renders.

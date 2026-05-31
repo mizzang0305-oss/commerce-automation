@@ -74,6 +74,8 @@ python -m compileall python-worker
 - Production storage smoke uses Supabase Storage, R2, or another S3-compatible backend; `/mock-storage/...` does not count as live storage.
 - Supabase/R2 storage keys are not exposed to client components.
 - `python-worker/.env` does not contain `SUPABASE_SERVICE_ROLE_KEY`.
+- R2 live smoke uses bucket-specific public URL env values for `rendered-videos`, `thumbnails`, `subtitles`, and `upload-packages`; `R2_PUBLIC_BASE_URL` is fallback only.
+- R2 product asset URLs must point at the bucket Public Development URL plus object key, for example `https://pub-video.r2.dev/job-123/video.mp4`, not `https://pub-video.r2.dev/rendered-videos/job-123/video.mp4`.
 - Unsafe storage keys such as `../video.mp4` are rejected.
 - Missing storage credentials fail/retry the worker job without fake success.
 - Live storage smoke passes only when video, thumbnail, SRT, and upload package URLs return HTTP 200 or valid signed URL responses.

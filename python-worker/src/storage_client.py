@@ -49,6 +49,9 @@ class StorageClient:
                 region_name=self.config.s3_region,
             )
             client.upload_file(str(path), bucket, safe_key, ExtraArgs={"ContentType": CONTENT_TYPES[asset_type]})
+            if self.config.storage_backend == "r2":
+                return self._build_r2_public_url(bucket, safe_key)
+
             base = self.config.public_storage_base_url
             return build_public_url(base, bucket, safe_key) if base else f"s3://{bucket}/{safe_key}"
 
@@ -59,6 +62,14 @@ class StorageClient:
             raise RuntimeError("S3-compatible storage requires access key and secret key")
         if self.config.storage_backend in {"r2", "supabase"} and not self.config.s3_endpoint_url:
             raise RuntimeError(f"{self.config.storage_backend} storage requires an endpoint URL")
+
+    def _build_r2_public_url(self, bucket: str, key: str) -> str:
+        base = self.config.r2_public_base_urls.get(bucket, "") or self.config.public_storage_base_url
+        if not base:
+            raise RuntimeError("R2 public base URL is required for artifact URLs")
+        if self.config.r2_public_base_urls.get(bucket):
+            return build_bucket_public_url(base, key)
+        return build_public_url(base, bucket, key)
 
 
 def get_bucket(asset_type: str) -> str:
@@ -79,3 +90,8 @@ def normalize_storage_key(key: str) -> str:
 def build_public_url(base_url: str, bucket: str, key: str) -> str:
     encoded_key = quote(key, safe="/")
     return f"{base_url.rstrip('/')}/{bucket}/{encoded_key}"
+
+
+def build_bucket_public_url(base_url: str, key: str) -> str:
+    encoded_key = quote(key, safe="/")
+    return f"{base_url.rstrip('/')}/{encoded_key}"
