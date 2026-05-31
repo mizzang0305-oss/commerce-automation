@@ -30,6 +30,12 @@ import {
 import { getQueueSummary } from "@/lib/status";
 import { assignSlots } from "@/lib/scheduler";
 import { getAutomationDataDir, getStoragePaths, type AutomationStoragePaths } from "@/lib/repositories/storagePaths";
+import {
+  buildCandidatePromotion,
+  filterProductCandidates,
+  type ProductCandidateFilters,
+  type PromoteCandidateOptions
+} from "@/lib/candidatePromotion";
 
 export class LocalJsonStorageError extends Error {
   constructor(message = "로컬 JSON 저장소를 읽을 수 없습니다.") {
@@ -501,9 +507,63 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(heartbeat);
   }
 
-  async getProductCandidates() {
+  async getProductCandidates(filters: ProductCandidateFilters = {}) {
     await this.ensureInitialized();
-    return clone(await readJson<ProductCandidate[]>(this.paths.productCandidates));
+    return clone(filterProductCandidates(await readJson<ProductCandidate[]>(this.paths.productCandidates), filters));
+  }
+
+  async getProductCandidate(id: string) {
+    await this.ensureInitialized();
+    const candidates = await readJson<ProductCandidate[]>(this.paths.productCandidates);
+    return clone(candidates.find((candidate) => candidate.id === id) ?? null);
+  }
+
+  async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
+    await this.ensureInitialized();
+    const candidates = await readJson<ProductCandidate[]>(this.paths.productCandidates);
+    const index = candidates.findIndex((candidate) => candidate.id === id);
+    if (index === -1) {
+      return null;
+    }
+    candidates[index] = {
+      ...candidates[index],
+      ...patch,
+      id,
+      updated_at: nowIso()
+    };
+    await atomicWriteJson(this.paths.productCandidates, candidates);
+    return clone(candidates[index]);
+  }
+
+  async promoteCandidateToQueue(candidateId: string, options: PromoteCandidateOptions = {}) {
+    await this.ensureInitialized();
+    const candidates = await readJson<ProductCandidate[]>(this.paths.productCandidates);
+    const queue = await this.readQueue();
+    const productionHistory = await readJson<ProductionHistory[]>(this.paths.productionHistory);
+    const candidate = candidates.find((item) => item.id === candidateId) ?? null;
+    const promotion = buildCandidatePromotion({
+      candidate,
+      queueItems: queue,
+      productionHistory,
+      now: options.now,
+      scheduled_at: options.scheduled_at
+    });
+    queue.push(promotion.queue_item);
+    await atomicWriteJson(
+      this.paths.queue,
+      queue.sort((a, b) => a.queue_rank - b.queue_rank)
+    );
+    const contents = await readJson<GeneratedContent[]>(this.paths.contents);
+    const contentIndex = contents.findIndex(
+      (content) => content.id === promotion.content.id || content.product_queue_id === promotion.content.product_queue_id
+    );
+    if (contentIndex === -1) {
+      contents.push(promotion.content);
+    } else {
+      contents[contentIndex] = promotion.content;
+    }
+    await atomicWriteJson(this.paths.contents, contents);
+    return clone(promotion);
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {

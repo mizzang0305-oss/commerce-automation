@@ -31,6 +31,12 @@ import {
 import { getQueueSummary } from "@/lib/status";
 import { assignSlots } from "@/lib/scheduler";
 import { getSupabaseAdminClient } from "@/lib/server/supabaseAdmin";
+import {
+  buildCandidatePromotion,
+  filterProductCandidates,
+  type ProductCandidateFilters,
+  type PromoteCandidateOptions
+} from "@/lib/candidatePromotion";
 
 type JsonMap = Record<string, unknown>;
 
@@ -841,13 +847,52 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     return clone(mapHeartbeatRow(data as Record<string, unknown>));
   }
 
-  async getProductCandidates() {
+  async getProductCandidates(filters: ProductCandidateFilters = {}) {
     const { data, error } = await this.client
       .from("product_candidates")
       .select("*")
       .order("created_at", { ascending: false });
     throwIfSupabaseError(error, "getProductCandidates");
-    return clone(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow));
+    return clone(filterProductCandidates(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow), filters));
+  }
+
+  async getProductCandidate(id: string) {
+    const { data, error } = await this.client
+      .from("product_candidates")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    throwIfSupabaseError(error, "getProductCandidate");
+    return data ? clone(mapCandidateRow(data as Record<string, unknown>)) : null;
+  }
+
+  async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
+    const { data, error } = await this.client
+      .from("product_candidates")
+      .update(stripUndefined({ ...patch, id, updated_at: nowIso() }))
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    throwIfSupabaseError(error, "updateProductCandidate");
+    return data ? clone(mapCandidateRow(data as Record<string, unknown>)) : null;
+  }
+
+  async promoteCandidateToQueue(candidateId: string, options: PromoteCandidateOptions = {}) {
+    const [candidate, queueItems, productionHistory] = await Promise.all([
+      this.getProductCandidate(candidateId),
+      this.getQueue(),
+      this.getProductionHistory()
+    ]);
+    const promotion = buildCandidatePromotion({
+      candidate,
+      queueItems,
+      productionHistory,
+      now: options.now,
+      scheduled_at: options.scheduled_at
+    });
+    await this.upsertRows("product_queue", promotion.queue_item);
+    await this.upsertRows("generated_contents", promotion.content);
+    return clone(promotion);
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {

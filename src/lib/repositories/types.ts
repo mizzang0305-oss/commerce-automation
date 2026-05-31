@@ -12,6 +12,11 @@ import type {
   WorkerJob,
   WorkerJobType
 } from "@/types/automation";
+import type {
+  PromoteCandidateOptions,
+  PromoteCandidateResult,
+  ProductCandidateFilters
+} from "@/lib/candidatePromotion";
 
 export type QueueFilters = {
   date?: string;
@@ -84,7 +89,10 @@ export interface AutomationRepository {
     current_job_id: string;
     current_job_type: WorkerJobType | "";
   }): Promise<WorkerHeartbeat>;
-  getProductCandidates(): Promise<ProductCandidate[]>;
+  getProductCandidates(filters?: ProductCandidateFilters): Promise<ProductCandidate[]>;
+  getProductCandidate(id: string): Promise<ProductCandidate | null>;
+  updateProductCandidate(id: string, patch: Partial<ProductCandidate>): Promise<ProductCandidate | null>;
+  promoteCandidateToQueue(candidateId: string, options?: PromoteCandidateOptions): Promise<PromoteCandidateResult>;
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;

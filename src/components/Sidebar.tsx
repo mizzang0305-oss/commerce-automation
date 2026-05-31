@@ -1,9 +1,21 @@
 import Link from "next/link";
-import { Activity, BriefcaseBusiness, FlaskConical, LayoutDashboard, ListChecks, ScrollText, Settings, ServerCog, Webhook } from "lucide-react";
+import {
+  Activity,
+  BriefcaseBusiness,
+  ClipboardCheck,
+  FlaskConical,
+  LayoutDashboard,
+  ListChecks,
+  ScrollText,
+  Settings,
+  ServerCog,
+  Webhook
+} from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/queue", label: "상품 큐", icon: ListChecks },
+  { href: "/candidates", label: "후보 검수", icon: ClipboardCheck },
   { href: "/jobs", label: "작업 목록", icon: BriefcaseBusiness },
   { href: "/workers", label: "워커 상태", icon: ServerCog },
   { href: "/settings", label: "설정", icon: Settings },
