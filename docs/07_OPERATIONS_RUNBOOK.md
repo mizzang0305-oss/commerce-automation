@@ -69,7 +69,8 @@ For Supabase/Postgres shared state:
 
 1. Create a Supabase project.
 2. Apply `supabase/migrations/001_automation_core.sql`.
-3. Set server-only env values in `.env.local` or the deployment secret store:
+3. Apply `supabase/migrations/002_candidate_scoring_fields.sql` for candidate `product_key`, dedupe, scoring, and promotion readiness fields.
+4. Set server-only env values in `.env.local` or the deployment secret store:
 
 ```text
 AUTOMATION_REPOSITORY_ADAPTER=supabase
@@ -77,7 +78,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 ```
 
-4. Run `npm run test`, `npm run lint`, and `npm run build`.
+5. Run `npm run test`, `npm run lint`, and `npm run build`.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase DB credentials. Artifact storage is configured separately in the Python Worker.
 
@@ -307,6 +308,21 @@ The endpoint is guarded like other development import tools. In production it re
 - do not copy protected review text;
 - treat missing Coupang API credentials as a safe skip;
 - keep candidates in `product_candidates` until a human or later promotion workflow validates them.
+
+Candidate review fields:
+
+- `product_key` is used for deterministic dedupe. Coupang identifiers are preferred, Musinsa goods IDs are used when available, and generic sources fall back to normalized URL/name hashes.
+- `candidate_score` is an operational priority score from 0 to 100. Higher scores usually mean affiliate link, image, pricing, event/ranking, review/rating, and known-platform signals are present.
+- `duplicate_status` explains whether the row is unique, duplicated against another candidate, already queued, already produced, or not yet known.
+- `promotion_status` decides whether the row can be promoted. Missing affiliate link, missing product name, or duplicate rows are blocked. Low score or missing image becomes `needs_review`.
+
+Promotion rules:
+
+1. `/candidates` can promote only ready rows.
+2. Promotion creates `product_queue` with `queue_status=scheduled`.
+3. Promotion creates a generated-content scaffold with the required affiliate disclosure.
+4. Promotion records `promotion_status=promoted` and `promoted_queue_id` on the candidate.
+5. Promotion does not create `worker_jobs`; run `/api/run/next-batch` after review to create eligible worker jobs.
 
 ## Run Next Batch
 

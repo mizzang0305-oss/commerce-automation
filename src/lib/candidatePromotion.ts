@@ -1,5 +1,14 @@
-import type { GeneratedContent, ProductCandidate, ProductQueueItem, ProductionHistory } from "@/types/automation";
+import type {
+  CandidateDuplicateStatus,
+  CandidatePromotionStatus,
+  GeneratedContent,
+  ProductCandidate,
+  ProductQueueItem,
+  ProductionHistory
+} from "@/types/automation";
 import { getKstDateKey } from "@/lib/workerDailyLimit";
+import { analyzeCandidateDedupe, resolvePromotionStatus } from "@/lib/candidates/candidateDedupe";
+import { enrichProductCandidate } from "@/lib/candidates/candidateNormalizer";
 
 export const AFFILIATE_DISCLOSURE_TEXT =
   "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급됩니다.";
@@ -19,6 +28,9 @@ export type ProductCandidateFilters = {
   has_affiliate_url?: "all" | "yes" | "no";
   source?: string;
   category?: string;
+  duplicate_status?: "all" | CandidateDuplicateStatus;
+  promotion_status?: "all" | CandidatePromotionStatus;
+  min_score?: number;
   limit?: number;
 };
 
@@ -36,9 +48,14 @@ export type PromoteCandidateResult = {
 
 export type CandidateReadiness = {
   can_promote: boolean;
-  status: "ready" | "missing_affiliate" | "missing_name" | "duplicate";
+  status: CandidatePromotionStatus;
   label: string;
   reasons: string[];
+  product_key: string;
+  candidate_score: number;
+  score_reason: string;
+  duplicate_status: CandidateDuplicateStatus;
+  duplicate_reason: string;
   duplicate_queue_id: string;
   duplicate_source: "queue" | "production_history" | "";
 };
@@ -65,7 +82,11 @@ export function filterProductCandidates(candidates: ProductCandidate[], filters:
         candidate.id,
         candidate.product_name,
         candidate.raw_coupang_url,
-        candidate.selected_affiliate_url
+        candidate.selected_affiliate_url,
+        candidate.product_key ?? "",
+        candidate.platform ?? "",
+        candidate.source_type ?? "",
+        candidate.category ?? ""
       ].some((value) => value.toLowerCase().includes(query));
     })
     .filter((candidate) => {
@@ -79,13 +100,33 @@ export function filterProductCandidates(candidates: ProductCandidate[], filters:
       if (!source) {
         return true;
       }
-      return getPayloadString(candidate, "source").toLowerCase() === source;
+      return [candidate.platform, candidate.source_name, getPayloadString(candidate, "source")]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase() === source);
     })
     .filter((candidate) => {
       if (!category) {
         return true;
       }
-      return getPayloadString(candidate, "category_path").toLowerCase().includes(category);
+      return (candidate.category || getPayloadString(candidate, "category_path")).toLowerCase().includes(category);
+    })
+    .filter((candidate) => {
+      if (!filters.duplicate_status || filters.duplicate_status === "all") {
+        return true;
+      }
+      return candidate.duplicate_status === filters.duplicate_status;
+    })
+    .filter((candidate) => {
+      if (!filters.promotion_status || filters.promotion_status === "all") {
+        return true;
+      }
+      return candidate.promotion_status === filters.promotion_status;
+    })
+    .filter((candidate) => {
+      if (filters.min_score === undefined) {
+        return true;
+      }
+      return (candidate.candidate_score ?? 0) >= filters.min_score;
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
@@ -101,6 +142,20 @@ export function getCandidateReadiness(
   queueItems: ProductQueueItem[],
   productionHistory: ProductionHistory[]
 ): CandidateReadiness {
+  const enriched = enrichProductCandidate(candidate, { candidates: [], queueItems, productionHistory });
+  const dedupe = analyzeCandidateDedupe(enriched, {
+    candidates: [],
+    queueItems,
+    productionHistory
+  });
+  const persistedDuplicate = candidate.duplicate_status && candidate.duplicate_status !== "unique"
+    ? candidate.duplicate_status
+    : dedupe.duplicate_status;
+  const duplicateReason = candidate.duplicate_reason || dedupe.duplicate_reason;
+  const promotionStatus =
+    candidate.promotion_status && candidate.promotion_status !== "ready"
+      ? candidate.promotion_status
+      : resolvePromotionStatus(enriched, persistedDuplicate, enriched.candidate_score ?? 0);
   const reasons: string[] = [];
   if (!candidate.product_name.trim()) {
     reasons.push("상품명이 없어 승격할 수 없습니다.");
@@ -109,57 +164,39 @@ export function getCandidateReadiness(
     reasons.push("제휴 링크가 없어 승격할 수 없습니다.");
   }
 
-  const duplicate = findCandidateDuplicate(candidate, queueItems, productionHistory);
-  if (duplicate) {
-    reasons.push("이미 상품 큐 또는 제작 이력에 같은 URL이 있습니다.");
+  if (persistedDuplicate !== "unique" && persistedDuplicate !== "unknown") {
+    reasons.push(duplicateReason || "이미 상품 큐 또는 제작 이력에 같은 상품이 있습니다.");
   }
-
-  if (!candidate.product_name.trim()) {
-    return {
-      can_promote: false,
-      status: "missing_name",
-      label: "상품명 누락",
-      reasons,
-      duplicate_queue_id: duplicate?.queue_item.id ?? "",
-      duplicate_source: duplicate?.source ?? ""
-    };
+  if (promotionStatus === "needs_review") {
+    reasons.push("이미지 또는 점수가 부족해 검수 후 승격해야 합니다.");
   }
-
-  if (!candidate.selected_affiliate_url.trim()) {
-    return {
-      can_promote: false,
-      status: "missing_affiliate",
-      label: "링크 누락",
-      reasons,
-      duplicate_queue_id: duplicate?.queue_item.id ?? "",
-      duplicate_source: duplicate?.source ?? ""
-    };
-  }
-
-  if (duplicate) {
-    return {
-      can_promote: false,
-      status: "duplicate",
-      label: "중복 의심",
-      reasons,
-      duplicate_queue_id: duplicate.queue_item.id,
-      duplicate_source: duplicate.source
-    };
+  if (promotionStatus === "ready") {
+    reasons.push("다음 배치 실행 전까지 작업은 생성되지 않습니다.");
   }
 
   return {
-    can_promote: true,
-    status: "ready",
-    label: "승격 가능",
-    reasons: ["다음 배치 실행 전까지 작업은 생성되지 않습니다."],
-    duplicate_queue_id: "",
-    duplicate_source: ""
+    can_promote: promotionStatus === "ready",
+    status: promotionStatus,
+    label: getPromotionStatusLabel(promotionStatus),
+    reasons,
+    product_key: enriched.product_key ?? "",
+    candidate_score: enriched.candidate_score ?? 0,
+    score_reason: enriched.score_reason ?? "",
+    duplicate_status: persistedDuplicate,
+    duplicate_reason: duplicateReason,
+    duplicate_queue_id: dedupe.duplicate_queue_id,
+    duplicate_source: persistedDuplicate === "already_produced" ? "production_history" : persistedDuplicate === "already_queued" ? "queue" : ""
   };
 }
 
 export function buildCandidatePromotion(input: BuildPromotionInput): PromoteCandidateResult {
   const candidate = input.candidate;
   assertCandidatePromotable(candidate, input.queueItems, input.productionHistory);
+  const enrichedCandidate = enrichProductCandidate(candidate, {
+    candidates: [],
+    queueItems: input.queueItems,
+    productionHistory: input.productionHistory
+  });
 
   const now = input.now ?? new Date().toISOString();
   const queueRank = Math.max(0, ...input.queueItems.map((item) => item.queue_rank || 0)) + 1;
@@ -170,16 +207,18 @@ export function buildCandidatePromotion(input: BuildPromotionInput): PromoteCand
     queue_rank: queueRank,
     upload_slot: uploadSlot,
     scheduled_at: input.scheduled_at || now,
-    keyword: getPayloadString(candidate, "keyword") || candidate.product_name.trim(),
-    theme: getPayloadString(candidate, "source") || "candidate_review",
-    product_name: candidate.product_name.trim(),
-    category_path: getPayloadString(candidate, "category_path"),
-    price_now_text: getPayloadString(candidate, "price_now_text"),
-    thumbnail_url: getPayloadString(candidate, "thumbnail_url") || getPayloadString(candidate, "image_url"),
-    raw_coupang_url: candidate.raw_coupang_url.trim(),
-    selected_affiliate_url: candidate.selected_affiliate_url.trim(),
-    product_score: getPayloadNumber(candidate, "score") || getPayloadNumber(candidate, "product_score"),
-    score_reason: getPayloadString(candidate, "score_reason"),
+    keyword: getPayloadString(enrichedCandidate, "keyword") || enrichedCandidate.product_name.trim(),
+    theme: enrichedCandidate.source_name || getPayloadString(enrichedCandidate, "source") || "candidate_review",
+    product_name: enrichedCandidate.product_name.trim(),
+    category_path: enrichedCandidate.category || getPayloadString(enrichedCandidate, "category_path"),
+    price_now_text: getPayloadString(enrichedCandidate, "price_now_text"),
+    thumbnail_url: getPayloadString(enrichedCandidate, "thumbnail_url") || getPayloadString(enrichedCandidate, "image_url"),
+    raw_coupang_url: enrichedCandidate.raw_coupang_url.trim(),
+    selected_affiliate_url: enrichedCandidate.selected_affiliate_url.trim(),
+    product_score:
+      enrichedCandidate.candidate_score ??
+      (getPayloadNumber(enrichedCandidate, "score") || getPayloadNumber(enrichedCandidate, "product_score")),
+    score_reason: enrichedCandidate.score_reason ?? getPayloadString(enrichedCandidate, "score_reason"),
     video_angle: getPayloadString(candidate, "video_angle"),
     queue_status: "scheduled",
     video_url: "",
@@ -195,7 +234,7 @@ export function buildCandidatePromotion(input: BuildPromotionInput): PromoteCand
   };
 
   return {
-    candidate,
+    candidate: enrichedCandidate,
     queue_item: queueItem,
     content: buildGeneratedContentScaffold(candidate, queueItem, now),
     warnings: ["승격 후 바로 영상 생성되지 않습니다. 다음 배치 실행 시 조건을 통과한 항목만 worker job으로 생성됩니다."]
@@ -218,6 +257,12 @@ export function assertCandidatePromotable(
   }
   if (findCandidateDuplicate(candidate, queueItems, productionHistory)) {
     throw new CandidatePromotionError("이미 상품 큐에 있는 후보입니다.", 409);
+  }
+  if (
+    candidate.promotion_status === "blocked_duplicate" ||
+    (candidate.duplicate_status && candidate.duplicate_status !== "unique" && candidate.duplicate_status !== "unknown")
+  ) {
+    throw new CandidatePromotionError("중복 후보는 상품 큐로 승격할 수 없습니다.", 409);
   }
 }
 
@@ -250,6 +295,18 @@ function buildGeneratedContentScaffold(candidate: ProductCandidate, queueItem: P
     created_at: candidate.created_at || now,
     updated_at: now
   };
+}
+
+function getPromotionStatusLabel(status: CandidatePromotionStatus) {
+  const labels: Record<CandidatePromotionStatus, string> = {
+    ready: "승격 가능",
+    blocked_missing_affiliate: "제휴 링크 누락",
+    blocked_missing_name: "상품명 누락",
+    blocked_duplicate: "중복 차단",
+    needs_review: "검수 필요",
+    promoted: "승격 완료"
+  };
+  return labels[status];
 }
 
 function findCandidateDuplicate(

@@ -36,6 +36,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 export class LocalJsonStorageError extends Error {
   constructor(message = "로컬 JSON 저장소를 읽을 수 없습니다.") {
@@ -509,13 +510,23 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
 
   async getProductCandidates(filters: ProductCandidateFilters = {}) {
     await this.ensureInitialized();
-    return clone(filterProductCandidates(await readJson<ProductCandidate[]>(this.paths.productCandidates), filters));
+    const [candidates, queue, productionHistory] = await Promise.all([
+      readJson<ProductCandidate[]>(this.paths.productCandidates),
+      this.readQueue(),
+      readJson<ProductionHistory[]>(this.paths.productionHistory)
+    ]);
+    return clone(filterProductCandidates(enrichProductCandidates(candidates, { queueItems: queue, productionHistory }), filters));
   }
 
   async getProductCandidate(id: string) {
     await this.ensureInitialized();
-    const candidates = await readJson<ProductCandidate[]>(this.paths.productCandidates);
-    return clone(candidates.find((candidate) => candidate.id === id) ?? null);
+    const [candidates, queue, productionHistory] = await Promise.all([
+      readJson<ProductCandidate[]>(this.paths.productCandidates),
+      this.readQueue(),
+      readJson<ProductionHistory[]>(this.paths.productionHistory)
+    ]);
+    const candidate = candidates.find((item) => item.id === id);
+    return clone(candidate ? enrichProductCandidate(candidate, { candidates, queueItems: queue, productionHistory }) : null);
   }
 
   async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
@@ -563,13 +574,35 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       contents[contentIndex] = promotion.content;
     }
     await atomicWriteJson(this.paths.contents, contents);
+    const candidateIndex = candidates.findIndex((item) => item.id === candidateId);
+    if (candidateIndex !== -1) {
+      candidates[candidateIndex] = {
+        ...candidates[candidateIndex],
+        ...promotion.candidate,
+        promotion_status: "promoted",
+        promoted_queue_id: promotion.queue_item.id,
+        updated_at: nowIso()
+      };
+      await atomicWriteJson(this.paths.productCandidates, candidates);
+    }
     return clone(promotion);
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {
     await this.ensureInitialized();
     const existing = await readJson<ProductCandidate[]>(this.paths.productCandidates);
-    for (const candidate of candidates) {
+    const [queue, productionHistory] = await Promise.all([
+      this.readQueue(),
+      readJson<ProductionHistory[]>(this.paths.productionHistory)
+    ]);
+    const normalized = candidates.map((candidate) =>
+      enrichProductCandidate(candidate, {
+        candidates: [...existing, ...candidates],
+        queueItems: queue,
+        productionHistory
+      })
+    );
+    for (const candidate of normalized) {
       const index = existing.findIndex((item) => item.id === candidate.id);
       if (index === -1) {
         existing.push(candidate);
@@ -582,7 +615,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       }
     }
     await atomicWriteJson(this.paths.productCandidates, existing);
-    return clone(candidates);
+    return clone(normalized);
   }
 
   async getProductionHistory() {

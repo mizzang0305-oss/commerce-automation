@@ -19,8 +19,9 @@ export default async function CandidatesPage() {
     ])
   );
   const readyCount = Object.values(readiness).filter((item) => item.can_promote).length;
-  const missingAffiliateCount = Object.values(readiness).filter((item) => item.status === "missing_affiliate").length;
-  const duplicateCount = Object.values(readiness).filter((item) => item.status === "duplicate").length;
+  const missingAffiliateCount = Object.values(readiness).filter((item) => item.status === "blocked_missing_affiliate").length;
+  const duplicateCount = Object.values(readiness).filter((item) => item.duplicate_status !== "unique").length;
+  const needsReviewCount = Object.values(readiness).filter((item) => item.status === "needs_review").length;
 
   return (
     <div className="space-y-5">
@@ -35,7 +36,8 @@ export default async function CandidatesPage() {
         <StatCard label="전체 후보" value={candidates.length} />
         <StatCard label="승격 가능" value={readyCount} tone={readyCount > 0 ? "success" : "default"} />
         <StatCard label="제휴 링크 누락" value={missingAffiliateCount} tone={missingAffiliateCount > 0 ? "warning" : "default"} />
-        <StatCard label="중복 의심" value={duplicateCount} tone={duplicateCount > 0 ? "warning" : "default"} />
+        <StatCard label="중복 차단" value={duplicateCount} tone={duplicateCount > 0 ? "warning" : "default"} />
+        <StatCard label="검수 필요" value={needsReviewCount} tone={needsReviewCount > 0 ? "warning" : "default"} />
       </section>
 
       <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">

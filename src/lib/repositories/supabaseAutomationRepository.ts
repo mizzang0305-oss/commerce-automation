@@ -37,6 +37,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 type JsonMap = Record<string, unknown>;
 
@@ -97,7 +98,14 @@ function emptyString(value: unknown): string {
 }
 
 function numberOrDefault(value: unknown, defaultValue: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : defaultValue;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+  }
+  return defaultValue;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -318,6 +326,17 @@ function mapCandidateRow(row: Record<string, unknown>): ProductCandidate {
     product_name: emptyString(row.product_name),
     raw_coupang_url: emptyString(row.raw_coupang_url),
     selected_affiliate_url: emptyString(row.selected_affiliate_url),
+    product_key: emptyString(row.product_key),
+    platform: emptyString(row.platform),
+    source_type: emptyString(row.source_type),
+    source_name: emptyString(row.source_name),
+    category: emptyString(row.category),
+    candidate_score: numberOrDefault(row.candidate_score, 0),
+    score_reason: emptyString(row.score_reason),
+    duplicate_status: (emptyString(row.duplicate_status) || "unknown") as ProductCandidate["duplicate_status"],
+    duplicate_reason: emptyString(row.duplicate_reason),
+    promotion_status: (emptyString(row.promotion_status) || "needs_review") as ProductCandidate["promotion_status"],
+    promoted_queue_id: emptyString(row.promoted_queue_id),
     payload: ensureRecord(row.payload),
     created_at: emptyString(row.created_at),
     updated_at: emptyString(row.updated_at)
@@ -853,7 +872,16 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       .select("*")
       .order("created_at", { ascending: false });
     throwIfSupabaseError(error, "getProductCandidates");
-    return clone(filterProductCandidates(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow), filters));
+    const [queueItems, productionHistory] = await Promise.all([this.getQueue(), this.getProductionHistory()]);
+    return clone(
+      filterProductCandidates(
+        enrichProductCandidates(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow), {
+          queueItems,
+          productionHistory
+        }),
+        filters
+      )
+    );
   }
 
   async getProductCandidate(id: string) {
@@ -863,7 +891,19 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       .eq("id", id)
       .maybeSingle();
     throwIfSupabaseError(error, "getProductCandidate");
-    return data ? clone(mapCandidateRow(data as Record<string, unknown>)) : null;
+    if (!data) {
+      return null;
+    }
+    const [candidates, queueItems, productionHistory] = await Promise.all([
+      this.getProductCandidates(),
+      this.getQueue(),
+      this.getProductionHistory()
+    ]);
+    return clone(enrichProductCandidate(mapCandidateRow(data as Record<string, unknown>), {
+      candidates,
+      queueItems,
+      productionHistory
+    }));
   }
 
   async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
@@ -892,6 +932,11 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     });
     await this.upsertRows("product_queue", promotion.queue_item);
     await this.upsertRows("generated_contents", promotion.content);
+    await this.updateProductCandidate(candidateId, {
+      ...promotion.candidate,
+      promotion_status: "promoted",
+      promoted_queue_id: promotion.queue_item.id
+    });
     return clone(promotion);
   }
 
@@ -899,9 +944,21 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     if (candidates.length === 0) {
       return [];
     }
+    const [existing, queueItems, productionHistory] = await Promise.all([
+      this.getProductCandidates(),
+      this.getQueue(),
+      this.getProductionHistory()
+    ]);
+    const normalized = candidates.map((candidate) =>
+      enrichProductCandidate(candidate, {
+        candidates: [...existing, ...candidates],
+        queueItems,
+        productionHistory
+      })
+    );
     const { data, error } = await this.client
       .from("product_candidates")
-      .upsert(candidates, { onConflict: "id" })
+      .upsert(normalized, { onConflict: "id" })
       .select("*");
     throwIfSupabaseError(error, "upsertProductCandidates");
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapCandidateRow));
