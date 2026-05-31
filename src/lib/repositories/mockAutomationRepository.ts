@@ -22,6 +22,12 @@ import type {
 import { assignSlots } from "@/lib/scheduler";
 import { getQueueSummary } from "@/lib/status";
 import { toDateInputValue } from "@/lib/format";
+import {
+  buildCandidatePromotion,
+  filterProductCandidates,
+  type ProductCandidateFilters,
+  type PromoteCandidateOptions
+} from "@/lib/candidatePromotion";
 
 const DEFAULT_EXCLUDED_CATEGORIES = [
   "의류",
@@ -691,8 +697,48 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(heartbeat);
   }
 
-  async getProductCandidates() {
-    return clone(this.productCandidates);
+  async getProductCandidates(filters: ProductCandidateFilters = {}) {
+    return clone(filterProductCandidates(this.productCandidates, filters));
+  }
+
+  async getProductCandidate(id: string) {
+    return clone(this.productCandidates.find((candidate) => candidate.id === id) ?? null);
+  }
+
+  async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
+    const index = this.productCandidates.findIndex((candidate) => candidate.id === id);
+    if (index === -1) {
+      return null;
+    }
+    this.productCandidates[index] = {
+      ...this.productCandidates[index],
+      ...patch,
+      id,
+      updated_at: nowIso()
+    };
+    return clone(this.productCandidates[index]);
+  }
+
+  async promoteCandidateToQueue(candidateId: string, options: PromoteCandidateOptions = {}) {
+    const candidate = this.productCandidates.find((item) => item.id === candidateId) ?? null;
+    const promotion = buildCandidatePromotion({
+      candidate,
+      queueItems: this.queue,
+      productionHistory: this.productionHistory,
+      now: options.now,
+      scheduled_at: options.scheduled_at
+    });
+    this.queue.push(promotion.queue_item);
+    this.queue = this.queue.sort((a, b) => a.queue_rank - b.queue_rank);
+    const contentIndex = this.contents.findIndex(
+      (content) => content.id === promotion.content.id || content.product_queue_id === promotion.content.product_queue_id
+    );
+    if (contentIndex === -1) {
+      this.contents.push(promotion.content);
+    } else {
+      this.contents[contentIndex] = promotion.content;
+    }
+    return clone(promotion);
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {
