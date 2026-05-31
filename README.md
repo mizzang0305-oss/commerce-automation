@@ -39,6 +39,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Artifact storage is configured separately in the Python Worker and should use storage-specific credentials.
 
+Use `docs/SUPABASE_VERIFICATION.md` and `docs/sql/verify_supabase_core.sql` to verify table creation, Row Level Security, public policies, default settings, Supabase worker smoke, and live artifact storage before treating a sandbox as production-ready.
+
 ## PowerShell UTF-8 Console
 
 If Korean text from `Invoke-RestMethod` looks corrupted in Windows PowerShell, configure the current shell for UTF-8 before running smoke commands:
@@ -63,6 +65,8 @@ Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -De
 ```
 
 If the terminal still displays mojibake, verify the same endpoint in a browser such as `http://localhost:3000/api/dev/diagnostics`. Windows Terminal with PowerShell 7 is recommended for repeated smoke verification.
+
+To distinguish a console rendering problem from a corrupted source string, inspect files with Python using `encoding="utf-8"` and `repr(...)`. If Python shows valid Korean but PowerShell displays mojibake, fix the console/session rather than changing source text.
 
 ## Development API Guard
 

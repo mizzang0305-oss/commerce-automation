@@ -34,6 +34,12 @@ Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -De
 
 If PowerShell still shows mojibake, open the endpoint in a browser and prefer Windows Terminal with PowerShell 7 for smoke runs.
 
+If you need to prove the source string itself is valid UTF-8, inspect it with Python instead of relying on the terminal renderer:
+
+```powershell
+python -c "from pathlib import Path; print(repr(Path('app/api/dev/seed/route.ts').read_text(encoding='utf-8')[0:500]))"
+```
+
 ## Configure Web Service
 
 Create `.env.local` from `.env.example`; do not commit it.
@@ -74,6 +80,8 @@ SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 4. Run `npm run test`, `npm run lint`, and `npm run build`.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase DB credentials. Artifact storage is configured separately in the Python Worker.
+
+Before calling the Supabase adapter production-ready, complete `docs/SUPABASE_VERIFICATION.md`. It includes Dashboard checks, `pg_tables`/`pg_policies` SQL, worker smoke checks, and live artifact storage smoke criteria.
 
 ## Development API Guard
 
