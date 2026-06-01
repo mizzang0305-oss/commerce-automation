@@ -190,7 +190,7 @@ export function CandidateReviewClient({ candidates, readiness }: CandidateReview
     }
     setPromoteState({
       status: "success",
-      message: "후보를 상품 큐로 승격했습니다. worker job은 다음 배치 실행 시 생성됩니다."
+      message: "큐로 승격되었습니다. 콘텐츠 초안 생성 후 다음 배치를 실행하세요. worker job은 다음 배치 실행 시 생성됩니다."
     });
     router.refresh();
   }

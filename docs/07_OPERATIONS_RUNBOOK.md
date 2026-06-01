@@ -324,6 +324,24 @@ Promotion rules:
 4. Promotion records `promotion_status=promoted` and `promoted_queue_id` on the candidate.
 5. Promotion does not create `worker_jobs`; run `/api/run/next-batch` after review to create eligible worker jobs.
 
+## Generate Content Drafts
+
+Use content drafts after a candidate has been promoted to the queue but before `/api/run/next-batch` creates worker jobs.
+
+1. Open `/queue/[id]`.
+2. Confirm the item has `product_name`, `selected_affiliate_url`, and `thumbnail_url`.
+3. Click `콘텐츠 초안 생성`, or call `POST /api/queue/[id]/generate-content`.
+4. Review `video_title`, `video_script`, captions, hashtags, YouTube/TikTok text, and affiliate disclosure.
+5. Run `/api/run/next-batch` only after the render checklist is complete.
+
+Safety rules:
+
+- Content generation never creates `worker_jobs`; next-batch remains the only worker job creation path.
+- Missing affiliate link, missing product name, or missing thumbnail blocks draft generation.
+- Existing manually written content is preserved when present.
+- Template drafts must avoid lowest-price guarantees, outcome guarantees, medical/health efficacy claims, and copied review text.
+- Public upload remains disabled; generated content is for review and video render preparation only.
+
 ## Run Next Batch
 
 1. Confirm `/settings`:

@@ -24,9 +24,12 @@ export function QueueDetailView({
   workerJobs?: WorkerJob[];
 }) {
   const [message, setMessage] = useState("");
-  const readyGuard = canMarkReadyForManualUpload(item, content);
+  const [draftContent, setDraftContent] = useState<GeneratedContent | null>(content);
+  const [contentMessage, setContentMessage] = useState("");
+  const [contentGenerationStatus, setContentGenerationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const readyGuard = canMarkReadyForManualUpload(item, draftContent);
   const relatedJobs = workerJobs.filter((job) => job.product_queue_id === item.id);
-  const checklist = getRenderableChecklist(item, content, assets, relatedJobs);
+  const checklist = getRenderableChecklist(item, draftContent, assets, relatedJobs);
 
   async function markManual(platform: Platform) {
     setMessage("");
@@ -43,6 +46,32 @@ export function QueueDetailView({
       }
     } catch {
       setMessage("상태 변경 요청에 실패했습니다.");
+    }
+  }
+
+  async function generateContentDraft() {
+    setContentMessage("");
+    setContentGenerationStatus("loading");
+    try {
+      const response = await fetch(`/api/queue/${item.id}/generate-content`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restore_scheduled: item.queue_status === "manual_review" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        setContentGenerationStatus("error");
+        setContentMessage(typeof payload.message === "string" ? payload.message : "콘텐츠 초안 생성에 실패했습니다.");
+        return;
+      }
+      if (isGeneratedContent(payload.content)) {
+        setDraftContent(payload.content);
+      }
+      setContentGenerationStatus("success");
+      setContentMessage(typeof payload.message === "string" ? payload.message : "콘텐츠 초안을 생성했습니다.");
+    } catch {
+      setContentGenerationStatus("error");
+      setContentMessage("콘텐츠 초안 생성 요청에 실패했습니다.");
     }
   }
 
@@ -121,15 +150,46 @@ export function QueueDetailView({
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-base font-bold text-slate-950">생성 콘텐츠 검수</h2>
-        {content ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-950">생성 콘텐츠 검수</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              콘텐츠 초안 생성은 worker job을 만들지 않습니다. 다음 배치 실행 시 조건을 통과한 항목만 영상 생성 작업으로 전달됩니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={generateContentDraft}
+            disabled={contentGenerationStatus === "loading"}
+            className="focus-ring rounded-lg bg-teal-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {contentGenerationStatus === "loading" ? "생성 중" : "콘텐츠 초안 생성"}
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ContentPresence label="영상 대본" ok={Boolean(draftContent?.video_script?.trim())} />
+          <ContentPresence label="제휴 고지" ok={Boolean(draftContent?.disclosure_text?.trim())} />
+          <ContentPresence label="YouTube 설명" ok={Boolean(draftContent?.youtube_description?.trim())} />
+          <ContentPresence label="해시태그" ok={Boolean(draftContent?.hashtags?.trim())} />
+        </div>
+        {contentMessage ? (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${
+            contentGenerationStatus === "error" ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"
+          }`}>
+            {contentMessage}
+          </p>
+        ) : null}
+
+        {draftContent ? (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <TextBlock label="영상 대본" value={content.video_script} />
-            <TextBlock label="제휴 고지 문구" value={content.disclosure_text} />
-            <TextBlock label="YouTube 설명" value={content.youtube_description} />
-            <TextBlock label="해시태그" value={content.hashtags} />
-            <TextBlock label="블로그 제목" value={content.blog_title} />
-            <TextBlock label="Threads 문구" value={content.threads_text} />
+            <TextBlock label="영상 대본" value={draftContent.video_script} />
+            <TextBlock label="제휴 고지 문구" value={draftContent.disclosure_text} />
+            <TextBlock label="YouTube 설명" value={draftContent.youtube_description} />
+            <TextBlock label="TikTok 캡션" value={draftContent.tiktok_caption} />
+            <TextBlock label="해시태그" value={draftContent.hashtags} />
+            <TextBlock label="블로그 제목" value={draftContent.blog_title} />
+            <TextBlock label="Threads 문구" value={draftContent.threads_text} />
           </div>
         ) : (
           <p className="mt-3 text-sm text-slate-500">생성 콘텐츠가 아직 없습니다.</p>
@@ -204,5 +264,25 @@ function TextBlock({ label, value }: { label: string; value: string }) {
       <h3 className="text-sm font-bold text-slate-900">{label}</h3>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value || "-"}</p>
     </div>
+  );
+}
+
+function ContentPresence({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${
+      ok ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-yellow-50 text-yellow-800 ring-yellow-200"
+    }`}>
+      {label} {ok ? "있음" : "없음"}
+    </span>
+  );
+}
+
+function isGeneratedContent(value: unknown): value is GeneratedContent {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "product_queue_id" in value &&
+      "video_script" in value &&
+      "disclosure_text" in value
   );
 }

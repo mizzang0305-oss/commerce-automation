@@ -106,11 +106,20 @@ Imported candidates now receive quality-control fields before they are promoted:
 
 The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
 
+Promoted queue items can receive a safe template draft before worker dispatch:
+
+- `POST /api/queue/[id]/generate-content`
+- requires `product_name`, `selected_affiliate_url`, and `thumbnail_url`.
+- fills `video_title`, `video_script`, captions, hashtags, YouTube/TikTok text, and affiliate disclosure when missing.
+- preserves existing manual content fields instead of overwriting them.
+- does not create `worker_jobs`; run `/api/run/next-batch` after content review.
+- avoids hard claims such as guaranteed results, lowest-price assertions, medical/health efficacy claims, and copied review text.
+
 ## Key Pages
 
 - `/dashboard`: overview and run controls.
 - `/queue`: product queue with worker job status.
-- `/queue/[id]`: generated result URLs, assets, and manual review controls.
+- `/queue/[id]`: generated result URLs, assets, content draft action, and manual review controls.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.
