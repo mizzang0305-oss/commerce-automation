@@ -12,8 +12,34 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const requestedMode = getRequestedMode(body);
+
+  try {
+    return await createDevSeedResponse(requestedMode);
+  } catch (error) {
+    const safeError = summarizeDevSeedError(error);
+    console.error("Dev seed failed", {
+      mode: requestedMode,
+      safe_error: safeError,
+      stack: sanitizeSecretText(error instanceof Error ? error.stack ?? error.message : String(error))
+    });
+
+    return NextResponse.json(
+      {
+        ok: false,
+        mode: requestedMode,
+        message: "개발용 seed 생성 중 오류가 발생했습니다.",
+        error_code: "DEV_SEED_FAILED",
+        safe_error: safeError
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function createDevSeedResponse(requestedMode: string) {
   const repository = getAutomationRepository();
-  if (body.mode === "worker-smoke") {
+  if (requestedMode === "worker-smoke") {
     const { item, content } = createWorkerSmokeSeed();
     await repository.updateSettings({
       is_paused: false,
@@ -35,7 +61,7 @@ export async function POST(request: Request) {
     });
   }
 
-  if (body.mode === "candidate-video-smoke") {
+  if (requestedMode === "candidate-video-smoke") {
     const candidate = createCandidateVideoSmokeSeed();
     await repository.updateSettings({
       is_paused: false,
@@ -67,7 +93,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const mode = body.mode === "error-sample" || body.mode === "simulate-transition" ? body.mode : "default";
+  const mode = requestedMode === "error-sample" || requestedMode === "simulate-transition" ? requestedMode : "default";
   const items = await repository.seedQueue(mode);
 
   return NextResponse.json({
@@ -75,6 +101,40 @@ export async function POST(request: Request) {
     message: "개발용 샘플 데이터가 갱신되었습니다.",
     count: items.length
   });
+}
+
+function getRequestedMode(body: unknown) {
+  if (!body || typeof body !== "object" || !("mode" in body)) {
+    return "default";
+  }
+  const mode = (body as { mode?: unknown }).mode;
+  return typeof mode === "string" && mode.trim() ? mode.trim() : "default";
+}
+
+function summarizeDevSeedError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/upsertProductCandidates|product_candidates/i.test(message)) {
+    return "product_candidates 저장 중 오류가 발생했습니다. Supabase migration 002 적용 여부와 PostgREST schema cache를 확인하세요.";
+  }
+  if (/updateSettings/i.test(message)) {
+    return "automation_settings 갱신 중 오류가 발생했습니다. Supabase migration 적용 상태를 확인하세요.";
+  }
+  if (/upsertQueueItems|upsertGeneratedContent/i.test(message)) {
+    return "상품 큐 seed 저장 중 오류가 발생했습니다. Supabase migration 적용 상태를 확인하세요.";
+  }
+  return "seed 저장 단계에서 오류가 발생했습니다. dev server 로그에서 server-only stack trace를 확인하세요.";
+}
+
+function sanitizeSecretText(value: string) {
+  return value
+    .replace(/SUPABASE_SERVICE_ROLE_KEY/gi, "[redacted-secret-name]")
+    .replace(/WORKER_API_SECRET/gi, "[redacted-secret-name]")
+    .replace(/R2_SECRET_ACCESS_KEY/gi, "[redacted-secret-name]")
+    .replace(/R2_SECRET/gi, "[redacted-secret-name]")
+    .replace(/YOUTUBE_CLIENT_SECRET/gi, "[redacted-secret-name]")
+    .replace(/Authorization/gi, "[redacted-header]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]")
+    .replace(/raw-secret/gi, "[redacted]");
 }
 
 function createWorkerSmokeSeed(): { item: ProductQueueItem; content: GeneratedContent } {
