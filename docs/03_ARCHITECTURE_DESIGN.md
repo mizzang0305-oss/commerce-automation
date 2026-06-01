@@ -37,6 +37,18 @@ The Web Service uses a repository adapter behind one TypeScript contract.
 - The Supabase service role key is used only by server modules and API routes. Client components must never import it or display it.
 - Python Worker continues to poll the WebApp API; it does not read or write Supabase directly.
 
+### Production Planner
+
+The planner is a WebApp-side planning layer that reads `product_candidates`, static event seeds, channel profiles, and production history to produce a daily shortlist. It never creates worker jobs. The expected path remains:
+
+1. Collector/import creates `product_candidates`.
+2. Operator reviews and promotes a candidate to `product_queue`.
+3. Operator generates a content draft for the queue item.
+4. `/api/run/next-batch` creates `worker_jobs` only for items that pass guards.
+5. Python Worker renders video and uploads artifacts.
+
+Event calendar and channel profile tables are provided by `supabase/migrations/003_event_calendar_and_planner.sql` for future persisted planner state. The first implementation uses static event/channel foundations and computed daily plans.
+
 ### Python Worker
 
 The Python Worker is not a web service. It polls the web service, claims work, sends heartbeats, uploads artifacts, and reports results. It handles only:

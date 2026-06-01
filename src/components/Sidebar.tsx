@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Activity,
   BriefcaseBusiness,
+  CalendarClock,
   ClipboardCheck,
   FlaskConical,
   LayoutDashboard,
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/queue", label: "상품 큐", icon: ListChecks },
   { href: "/candidates", label: "후보 검수", icon: ClipboardCheck },
+  { href: "/planner", label: "제작 플래너", icon: CalendarClock },
   { href: "/jobs", label: "작업 목록", icon: BriefcaseBusiness },
   { href: "/workers", label: "워커 상태", icon: ServerCog },
   { href: "/settings", label: "설정", icon: Settings },

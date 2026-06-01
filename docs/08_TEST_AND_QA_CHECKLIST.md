@@ -103,6 +103,18 @@ python -m compileall python-worker
 - A queue item with generated `video_script`, disclosure text, affiliate link, and thumbnail can later pass next-batch render guards.
 - `/queue/[id]` shows content readiness and the `콘텐츠 초안 생성` action without exposing secrets.
 
+## Event Planner QA
+
+- `GET /api/events` returns active event seeds without secrets.
+- Upcoming event logic includes only active events inside the 7-30 day window.
+- Event matching excludes duplicate candidates, missing affiliate URLs, and excluded keywords.
+- Daily planner prefers `promotion_status=ready`, `duplicate_status=unique`, high candidate score, and higher event priority.
+- Planner excludes product keys already produced on the same plan date.
+- Channel profiles default to `upload_enabled=false` and `manual_upload_only=true`.
+- `GET /api/planner/daily` reports YouTube readiness booleans only and does not expose OAuth secrets.
+- `candidate-video-smoke` seed creates a candidate only; it must not create a queue row or worker job.
+- `/planner` is read-only planning UI; it must not create worker jobs.
+
 ## Table UX QA
 
 - `/queue` supports product/keyword/error search, status filter, issue filter, sorting, and pagination.

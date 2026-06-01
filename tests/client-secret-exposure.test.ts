@@ -27,6 +27,8 @@ describe("client secret exposure", () => {
     expect(combined).not.toContain("COUPANG");
     expect(combined).not.toContain("OPENAI_API_KEY");
     expect(combined).not.toContain("GEMINI_API_KEY");
+    expect(combined).not.toContain("YOUTUBE_CLIENT_SECRET");
+    expect(combined).not.toContain("R2_SECRET");
     expect(combined).not.toContain("Authorization");
   });
 });

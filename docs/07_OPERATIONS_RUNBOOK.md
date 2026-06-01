@@ -70,7 +70,8 @@ For Supabase/Postgres shared state:
 1. Create a Supabase project.
 2. Apply `supabase/migrations/001_automation_core.sql`.
 3. Apply `supabase/migrations/002_candidate_scoring_fields.sql` for candidate `product_key`, dedupe, scoring, and promotion readiness fields.
-4. Set server-only env values in `.env.local` or the deployment secret store:
+4. Apply `supabase/migrations/003_event_calendar_and_planner.sql` for event calendar, daily planner, and channel profile tables.
+5. Set server-only env values in `.env.local` or the deployment secret store:
 
 ```text
 AUTOMATION_REPOSITORY_ADAPTER=supabase
@@ -78,11 +79,45 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 ```
 
-5. Run `npm run test`, `npm run lint`, and `npm run build`.
+6. Run `npm run test`, `npm run lint`, and `npm run build`.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase DB credentials. Artifact storage is configured separately in the Python Worker.
 
 Before calling the Supabase adapter production-ready, complete `docs/SUPABASE_VERIFICATION.md`. It includes Dashboard checks, `pg_tables`/`pg_policies` SQL, worker smoke checks, and live artifact storage smoke criteria.
+
+## Candidate-To-Video Smoke
+
+Use this when validating the full operator path from a collected candidate to a rendered artifact:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" -Body '{"mode":"candidate-video-smoke"}' http://localhost:3000/api/dev/seed | ConvertTo-Json -Depth 8
+```
+
+Then:
+
+1. Open `/candidates` and promote `candidate-video-smoke-001`.
+2. Open the created queue item and run `콘텐츠 초안 생성`.
+3. Run `POST /api/run/next-batch`.
+4. Confirm exactly one `video_render` worker job is created.
+5. Run the Python Worker.
+6. Confirm `queue_status=video_ready`, `video_url` exists, and the artifact URL is a real storage URL for live storage smoke.
+
+Safety expectations:
+
+- Candidate seed, promotion, and content draft generation create zero worker jobs.
+- `next-batch` is the only path that creates worker jobs.
+- `video_ready` without `video_url` is a bug.
+- Public upload and YouTube/TikTok/Threads posting remain disabled.
+
+## Event Planner Smoke
+
+Open `/planner` or call:
+
+```powershell
+Invoke-RestMethod http://localhost:3000/api/planner/daily | ConvertTo-Json -Depth 8
+```
+
+The planner should show active events in the 7-30 day window, candidate matches, and channel routing. Channel profiles are manual-only by default. The planner does not create queue rows or worker jobs.
 
 ## Development API Guard
 

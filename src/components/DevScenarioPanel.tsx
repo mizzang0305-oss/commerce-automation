@@ -74,6 +74,9 @@ export function DevScenarioPanel({
           <button type="button" disabled={Boolean(loading)} onClick={() => runDevAction("worker-smoke", "/api/dev/seed", { mode: "worker-smoke" })} className={buttonClass}>
             워커 스모크용 상품 생성
           </button>
+          <button type="button" disabled={Boolean(loading)} onClick={() => runDevAction("candidate-video-smoke", "/api/dev/seed", { mode: "candidate-video-smoke" })} className={buttonClass}>
+            후보→영상 스모크 후보 생성
+          </button>
           <button type="button" disabled={Boolean(loading)} onClick={() => runDevAction("diagnostics", "/api/dev/diagnostics")} className="focus-ring rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
             Webhook dry-run
           </button>
@@ -93,6 +96,20 @@ export function DevScenarioPanel({
         </ol>
         <p className="mt-3 rounded-lg bg-yellow-50 px-3 py-2 text-sm font-semibold text-yellow-800">
           ffmpeg가 없으면 video_render job은 retry_wait 또는 failed가 될 수 있습니다. 이때 video_ready가 되면 버그입니다.
+        </p>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-base font-bold text-slate-950">후보→영상 E2E 스모크 순서</h2>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-600">
+          <li>후보→영상 스모크 후보 생성</li>
+          <li>/candidates에서 후보를 상품 큐로 승격</li>
+          <li>/queue 상세에서 콘텐츠 초안 생성</li>
+          <li>다음 배치 실행으로 worker job 생성 확인</li>
+          <li>Python Worker 실행 후 R2 artifact와 video_ready 확인</li>
+        </ol>
+        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+          후보 생성, 승격, 콘텐츠 초안 생성 단계는 worker job을 만들지 않습니다. worker job은 next-batch에서만 생성됩니다.
         </p>
       </section>
 

@@ -115,11 +115,28 @@ Promoted queue items can receive a safe template draft before worker dispatch:
 - does not create `worker_jobs`; run `/api/run/next-batch` after content review.
 - avoids hard claims such as guaranteed results, lowest-price assertions, medical/health efficacy claims, and copied review text.
 
+## Event-Driven Production Planner
+
+The planner foundation turns collected candidates into a daily production shortlist before queue promotion and worker dispatch.
+
+- `/planner`: shows the current daily plan, upcoming 7-30 day event window, and channel routing.
+- `GET /api/events`: returns the static event calendar seed for the selected year.
+- `GET /api/channels`: returns manual-only YouTube channel profiles.
+- `GET /api/planner/daily`: computes a safe daily plan from `product_candidates`, upcoming events, and channel profiles.
+- `POST /api/dev/seed` with `{ "mode": "candidate-video-smoke" }`: creates a repeatable candidate-to-video smoke candidate.
+
+The planner does not create `worker_jobs`. Candidate promotion creates a scheduled queue row and generated-content scaffold, content draft generation fills script/copy fields, and `/api/run/next-batch` remains the only route that creates worker jobs.
+
+Channel profiles are routing metadata only. Defaults use `upload_enabled=false` and `manual_upload_only=true`; YouTube OAuth readiness may be displayed as configured booleans, but no upload flow or `videos.insert` call is implemented.
+
+Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. RLS is enabled and no public anon/authenticated policies are created.
+
 ## Key Pages
 
 - `/dashboard`: overview and run controls.
 - `/queue`: product queue with worker job status.
 - `/queue/[id]`: generated result URLs, assets, content draft action, and manual review controls.
+- `/planner`: event-driven daily production plan and manual-only channel routing.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.

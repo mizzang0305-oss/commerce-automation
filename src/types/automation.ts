@@ -259,3 +259,88 @@ export type ProductionHistory = {
   metadata: JsonRecord;
   created_at: string;
 };
+
+export type EventType =
+  | "holiday"
+  | "season"
+  | "sale"
+  | "weather"
+  | "school"
+  | "family"
+  | "food"
+  | "fashion"
+  | "custom";
+
+export type EventCalendarStatus = "active" | "paused" | "archived";
+
+export type EventCalendarItem = {
+  id: string;
+  event_key: string;
+  event_name: string;
+  event_type: EventType;
+  starts_at: string;
+  ends_at: string;
+  lead_days_min: number;
+  lead_days_max: number;
+  target_categories: string[];
+  target_keywords: string[];
+  excluded_keywords: string[];
+  platforms: string[];
+  priority: number;
+  seasonality_score: number;
+  status: EventCalendarStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyProductionPlanStatus = "draft" | "confirmed" | "completed" | "cancelled";
+
+export type DailyProductionPlanItemStatus =
+  | "planned"
+  | "promoted"
+  | "content_ready"
+  | "video_ready"
+  | "skipped";
+
+export type DailyProductionPlan = {
+  id: string;
+  plan_date: string;
+  status: DailyProductionPlanStatus;
+  target_video_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyProductionPlanItem = {
+  id: string;
+  plan_id: string;
+  product_candidate_id: string;
+  product_queue_id: string;
+  event_key: string;
+  target_channel_id: string;
+  rank: number;
+  status: DailyProductionPlanItemStatus;
+  reason: string;
+  created_at: string;
+};
+
+export type ChannelProfileStatus = "active" | "paused" | "archived";
+
+export type ChannelProfile = {
+  id: string;
+  channel_key: string;
+  channel_name: string;
+  platform: Platform;
+  youtube_channel_id: string;
+  youtube_handle: string;
+  niche: string;
+  allowed_categories: string[];
+  excluded_categories: string[];
+  default_hashtags: string[];
+  upload_window: JsonRecord;
+  status: ChannelProfileStatus;
+  upload_enabled: boolean;
+  manual_upload_only: boolean;
+  created_at: string;
+  updated_at: string;
+};

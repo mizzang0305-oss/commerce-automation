@@ -51,3 +51,31 @@ Not included:
 - Supabase Storage.
 - Direct Python Worker database access.
 - Public platform upload.
+
+## v1.5 Planner Foundation Target
+
+The event-driven planner moves the system from raw candidate review toward production prioritization.
+
+Included:
+
+- Static event calendar foundation for 7-30 day production windows.
+- Candidate-to-event matching and ranking.
+- Daily production plan computation.
+- Manual-only YouTube channel profile routing.
+- Candidate-to-video smoke seed.
+- `/planner`, `/api/events`, `/api/channels`, and `/api/planner/daily`.
+
+Not included:
+
+- Persisted planner editing UI.
+- YouTube OAuth flow.
+- YouTube/TikTok/Threads upload calls.
+- Automatic public publishing.
+
+Next milestones:
+
+1. Persist event/channel/plan edits in Supabase.
+2. Add candidates review filters for event matches.
+3. Add queue promotion from a selected planner item.
+4. Add signed/manual upload package review.
+5. Keep public upload as a separate, explicitly reviewed milestone.
