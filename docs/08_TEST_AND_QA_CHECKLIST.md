@@ -94,6 +94,15 @@ python -m compileall python-worker
 - Candidate promotion creates `product_queue` and generated-content scaffold only; `worker_jobs` must remain empty until `next-batch`.
 - `/candidates` shows score, product key, duplicate status, promotion status, and keeps secret-like payload keys redacted.
 
+## Content Draft QA
+
+- `POST /api/queue/[id]/generate-content` blocks missing `selected_affiliate_url`, missing `product_name`, and missing `thumbnail_url`.
+- Generated drafts include `video_title`, `video_script`, captions, hashtags, YouTube/TikTok text, and `disclosure_text`.
+- Existing manually written generated-content fields are preserved.
+- Content draft generation creates no `worker_jobs`.
+- A queue item with generated `video_script`, disclosure text, affiliate link, and thumbnail can later pass next-batch render guards.
+- `/queue/[id]` shows content readiness and the `콘텐츠 초안 생성` action without exposing secrets.
+
 ## Table UX QA
 
 - `/queue` supports product/keyword/error search, status filter, issue filter, sorting, and pagination.
