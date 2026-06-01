@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { GeneratedContent, ProductQueueItem } from "@/types/automation";
+import type { GeneratedContent, ProductCandidate, ProductQueueItem } from "@/types/automation";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { denyDevRouteIfDisabled } from "@/lib/server/devRouteGuard";
 
@@ -32,6 +32,38 @@ export async function POST(request: Request) {
       message: "Worker smoke용 렌더 가능 상품을 생성했습니다.",
       item_id: item.id,
       item
+    });
+  }
+
+  if (body.mode === "candidate-video-smoke") {
+    const candidate = createCandidateVideoSmokeSeed();
+    await repository.updateSettings({
+      is_paused: false,
+      python_worker_enabled: true,
+      batch_size: 1,
+      run_mode: "generate_only",
+      youtube_upload_enabled: false,
+      approval_required: true,
+      allowed_worker_job_types: ["video_render", "sheet_sync"]
+    });
+    await repository.upsertProductCandidates([candidate]);
+
+    return NextResponse.json({
+      ok: true,
+      mode: "candidate-video-smoke",
+      message: "candidate-to-video smoke 검증용 후보를 생성했습니다.",
+      candidate_id: candidate.id,
+      next_steps: [
+        "후보 검수 화면에서 큐로 승격합니다.",
+        "큐 상세에서 콘텐츠 초안을 생성합니다.",
+        "다음 배치를 실행해 worker job을 생성합니다.",
+        "Python Worker를 실행해 R2 artifact와 video_ready를 확인합니다."
+      ],
+      safety: {
+        worker_jobs_created: 0,
+        public_upload_enabled: false,
+        youtube_upload_enabled: false
+      }
     });
   }
 
@@ -116,4 +148,36 @@ function createWorkerSmokeSeed(): { item: ProductQueueItem; content: GeneratedCo
   };
 
   return { item, content };
+}
+
+function createCandidateVideoSmokeSeed(): ProductCandidate {
+  const nowIso = new Date().toISOString();
+  return {
+    id: "candidate-video-smoke-001",
+    product_name: "Candidate Video Smoke Event Product",
+    raw_coupang_url: "https://www.coupang.com/vp/products/candidate-video-smoke-001",
+    selected_affiliate_url: "https://link.coupang.com/a/candidate-video-smoke-001",
+    product_key: "test:candidate-video-smoke-001",
+    platform: "test",
+    source_type: "event",
+    source_name: "Worker Smoke Event",
+    category: "선물",
+    candidate_score: 91,
+    score_reason: "candidate-to-video E2E smoke 검증용 이벤트 후보입니다.",
+    duplicate_status: "unique",
+    duplicate_reason: "",
+    promotion_status: "ready",
+    promoted_queue_id: "",
+    payload: {
+      event_key: "year-end-gift",
+      event_name: "Worker Smoke Event",
+      category_path: "선물/생활",
+      keywords: ["연말", "선물", "추천"],
+      thumbnail_url: "https://picsum.photos/seed/candidate-video-smoke/1080/1920",
+      price_now_text: "12,900원",
+      source: "dev_seed"
+    },
+    created_at: nowIso,
+    updated_at: nowIso
+  };
 }

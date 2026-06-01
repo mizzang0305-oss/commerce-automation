@@ -22,6 +22,8 @@ Production/shared repository storage can use Supabase/Postgres by applying:
 
 ```text
 supabase/migrations/001_automation_core.sql
+supabase/migrations/002_candidate_scoring_fields.sql
+supabase/migrations/003_event_calendar_and_planner.sql
 ```
 
 Tables created by the migration:
@@ -35,10 +37,46 @@ Tables created by the migration:
 - `product_candidates`
 - `product_assets`
 - `production_history`
+- `event_calendar`
+- `daily_production_plans`
+- `daily_production_plan_items`
+- `channel_profiles`
 
 Primary indexes cover queue status/schedule/rank, worker job status/type/queue/created time, run start time, and product assets by queue id. RLS is enabled on all tables, and no anon/authenticated public read/write policies are created. The WebApp uses the service role key only on the server. Browser clients and the Python Worker do not access Supabase directly.
 
 Supabase Storage is not part of this schema. Generated file URLs still come from the worker storage backend and will be handled by a separate storage adapter milestone.
+
+## Planner Tables
+
+`event_calendar` stores event windows and matching hints:
+
+- `event_key`, `event_name`, `event_type`
+- `starts_at`, `ends_at`
+- `lead_days_min`, `lead_days_max`
+- `target_categories`, `target_keywords`, `excluded_keywords`, `platforms`
+- `priority`, `seasonality_score`, `status`
+
+`daily_production_plans` and `daily_production_plan_items` store future persisted daily plan output. Planner items reference candidates, optional queue rows, event keys, target channels, rank, status, and reason text.
+
+`channel_profiles` stores manual-only routing metadata. Defaults must keep `upload_enabled=false` and `manual_upload_only=true`. This table does not authorize platform uploads and does not store OAuth tokens.
+
+## Planner APIs
+
+### GET /api/events
+
+Returns static event calendar seeds for the requested year.
+
+### GET /api/channels
+
+Returns channel profiles with upload disabled and manual upload only.
+
+### GET /api/planner/daily
+
+Builds a computed daily plan from product candidates, upcoming 7-30 day events, channel profiles, and production history. The endpoint returns YouTube readiness booleans only and does not expose OAuth secrets. It creates no worker jobs.
+
+### POST /api/dev/seed mode=candidate-video-smoke
+
+Creates a single event-sourced candidate with affiliate URL, product key, thumbnail, score, and ready promotion status. This smoke seed creates no queue row and no worker job; promotion, content draft generation, and next-batch remain separate steps.
 
 ## worker_jobs
 
