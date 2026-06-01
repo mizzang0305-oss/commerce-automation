@@ -250,6 +250,31 @@ export type ProductAsset = {
   created_at: string;
 };
 
+export type ChannelUploadPackageStatus =
+  | "manual_ready"
+  | "manual_uploaded"
+  | "cancelled";
+
+export type ChannelUploadPackage = {
+  id: string;
+  product_queue_id: string;
+  channel_profile_id: string;
+  platform: Platform;
+  title: string;
+  description: string;
+  hashtags: string;
+  disclosure_text: string;
+  video_url: string;
+  thumbnail_url: string;
+  subtitle_url: string;
+  upload_package_url: string;
+  status: ChannelUploadPackageStatus;
+  upload_enabled: boolean;
+  manual_upload_only: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ProductionHistory = {
   id: string;
   product_queue_id: string;

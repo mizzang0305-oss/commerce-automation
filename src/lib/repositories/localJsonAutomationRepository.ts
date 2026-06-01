@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelUploadPackage,
   GeneratedContent,
   ProductAsset,
   ProductCandidate,
@@ -629,6 +630,32 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
   }
 
+  async getChannelUploadPackages(productQueueId?: string) {
+    await this.ensureInitialized();
+    const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
+    return clone(productQueueId ? packages.filter((item) => item.product_queue_id === productQueueId) : packages);
+  }
+
+  async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+    await this.ensureInitialized();
+    const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
+    const index = packages.findIndex((item) => item.id === input.id);
+    if (index === -1) {
+      packages.push(input);
+      await atomicWriteJson(this.paths.channelUploadPackages, packages);
+      return clone(input);
+    }
+
+    packages[index] = {
+      ...packages[index],
+      ...input,
+      created_at: packages[index].created_at || input.created_at,
+      updated_at: nowIso()
+    };
+    await atomicWriteJson(this.paths.channelUploadPackages, packages);
+    return clone(packages[index]);
+  }
+
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {
     await this.ensureInitialized();
     const settings = await this.getSettings();
@@ -725,6 +752,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     await atomicWriteJson(this.paths.productCandidates, []);
     await atomicWriteJson(this.paths.productionHistory, []);
     await atomicWriteJson(this.paths.productAssets, []);
+    await atomicWriteJson(this.paths.channelUploadPackages, []);
   }
 
   private async ensureInitialized() {
@@ -752,6 +780,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     const productCandidatesExists = await fileExists(this.paths.productCandidates);
     const productionHistoryExists = await fileExists(this.paths.productionHistory);
     const productAssetsExists = await fileExists(this.paths.productAssets);
+    const channelUploadPackagesExists = await fileExists(this.paths.channelUploadPackages);
 
     if (
       settingsExists &&
@@ -762,7 +791,8 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       workerHeartbeatsExists &&
       productCandidatesExists &&
       productionHistoryExists &&
-      productAssetsExists
+      productAssetsExists &&
+      channelUploadPackagesExists
     ) {
       return;
     }
@@ -802,6 +832,9 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     }
     if (!productAssetsExists) {
       await atomicWriteJson(this.paths.productAssets, []);
+    }
+    if (!channelUploadPackagesExists) {
+      await atomicWriteJson(this.paths.channelUploadPackages, []);
     }
   }
 

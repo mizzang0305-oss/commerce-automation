@@ -13,7 +13,8 @@ where schemaname = 'public'
     'worker_heartbeats',
     'product_candidates',
     'product_assets',
-    'production_history'
+    'production_history',
+    'channel_upload_packages'
   )
 order by tablename;
 
@@ -35,7 +36,8 @@ where schemaname = 'public'
     'worker_heartbeats',
     'product_candidates',
     'product_assets',
-    'production_history'
+    'production_history',
+    'channel_upload_packages'
   )
 order by tablename, policyname;
 

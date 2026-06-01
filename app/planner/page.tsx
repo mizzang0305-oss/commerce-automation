@@ -12,14 +12,21 @@ export default async function PlannerPage() {
   const repository = getAutomationRepository();
   const today = new Date();
   const todayText = today.toISOString().slice(0, 10);
-  const [settings, candidates, productionHistory] = await Promise.all([
+  const [settings, candidates, productionHistory, channelPackages] = await Promise.all([
     repository.getSettings(),
     repository.getProductCandidates(),
-    repository.getProductionHistory()
+    repository.getProductionHistory(),
+    repository.getChannelUploadPackages()
   ]);
   const events = getDefaultEventCalendar(today.getUTCFullYear());
   const channels = getDefaultChannelProfiles();
   const upcomingEvents = getUpcomingEvents(events, today, 30);
+  const manualReadyByChannel = new Map<string, number>();
+  channelPackages
+    .filter((entry) => entry.status === "manual_ready")
+    .forEach((entry) => {
+      manualReadyByChannel.set(entry.channel_profile_id, (manualReadyByChannel.get(entry.channel_profile_id) ?? 0) + 1);
+    });
   const plan = buildDailyProductionPlan({
     date: todayText,
     candidates,
@@ -116,6 +123,19 @@ export default async function PlannerPage() {
                 worker job 생성은 기존 next-batch 경로만 사용합니다.
               </li>
             </ul>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-bold text-slate-900">채널별 수동 업로드 준비 패키지</h3>
+              <div className="mt-3 space-y-2">
+                {channels.map((channel) => (
+                  <div key={channel.id} className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className="font-semibold text-slate-700">{channel.channel_name}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-teal-700 ring-1 ring-teal-100">
+                      {manualReadyByChannel.get(channel.id) ?? 0}개
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-4">

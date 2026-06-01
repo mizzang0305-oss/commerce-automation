@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelUploadPackage,
   GeneratedContent,
   Platform,
   ProductAsset,
@@ -96,6 +97,8 @@ export interface AutomationRepository {
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
+  getChannelUploadPackages(productQueueId?: string): Promise<ChannelUploadPackage[]>;
+  upsertChannelUploadPackage(input: ChannelUploadPackage): Promise<ChannelUploadPackage>;
 }
 
 export interface MutableMockAutomationRepository extends AutomationRepository {

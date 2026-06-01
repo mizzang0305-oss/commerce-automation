@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelUploadPackage,
   GeneratedContent,
   ProductAsset,
   ProductCandidate,
@@ -315,6 +316,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
   private productCandidates: ProductCandidate[];
   private productAssets: ProductAsset[];
   private productionHistory: ProductionHistory[];
+  private channelUploadPackages: ChannelUploadPackage[];
 
   constructor() {
     this.settings = createDefaultSettings();
@@ -326,6 +328,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     this.productCandidates = [];
     this.productAssets = [];
     this.productionHistory = [];
+    this.channelUploadPackages = [];
   }
 
   async getSettings() {
@@ -801,6 +804,29 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       ? this.productAssets.filter((asset) => asset.product_queue_id === productQueueId)
       : this.productAssets;
     return clone(assets);
+  }
+
+  async getChannelUploadPackages(productQueueId?: string) {
+    const packages = productQueueId
+      ? this.channelUploadPackages.filter((item) => item.product_queue_id === productQueueId)
+      : this.channelUploadPackages;
+    return clone(packages);
+  }
+
+  async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+    const index = this.channelUploadPackages.findIndex((item) => item.id === input.id);
+    if (index === -1) {
+      this.channelUploadPackages.push(input);
+      return clone(input);
+    }
+
+    this.channelUploadPackages[index] = {
+      ...this.channelUploadPackages[index],
+      ...input,
+      created_at: this.channelUploadPackages[index].created_at || input.created_at,
+      updated_at: nowIso()
+    };
+    return clone(this.channelUploadPackages[index]);
   }
 
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {
