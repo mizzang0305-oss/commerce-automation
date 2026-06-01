@@ -37,7 +37,7 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Apply `supabase/migrations/001_automation_core.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Artifact storage is configured separately in the Python Worker and should use storage-specific credentials.
+Apply `supabase/migrations/001_automation_core.sql` and `supabase/migrations/002_candidate_scoring_fields.sql` to the Supabase project before switching the adapter. `SUPABASE_SERVICE_ROLE_KEY` is server-only; never add a `NEXT_PUBLIC_` prefix and never expose it to client components. Artifact storage is configured separately in the Python Worker and should use storage-specific credentials.
 
 Use `docs/SUPABASE_VERIFICATION.md` and `docs/sql/verify_supabase_core.sql` to verify table creation, Row Level Security, public policies, default settings, Supabase worker smoke, and live artifact storage before treating a sandbox as production-ready.
 
@@ -96,6 +96,15 @@ Collectors only create `product_candidates`; they do not create worker jobs or m
 - production behavior: blocked by default through the dev route guard unless `ENABLE_DEV_TOOLS=true`.
 
 CSV rows must include a product name and an `http`/`https` source URL. Non-web schemes such as `javascript:`, `file:`, or empty URLs are rejected. Optional Python collector helpers live under `python-worker/src/collectors/` for CSV/XLSX link import and future public-page/API collectors. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
+
+Imported candidates now receive quality-control fields before they are promoted:
+
+- `product_key`: deterministic dedupe key. Coupang uses product/item/vendor identifiers when present, Musinsa uses `goods_no` or URL IDs, and other sources use normalized URL/name hashes.
+- `candidate_score`: 0-100 score based on affiliate link, product name, image, price, discount, review/rating, source type, and known platform signals.
+- `duplicate_status`: `unique`, `duplicate_candidate`, `already_queued`, `already_produced`, or `unknown`.
+- `promotion_status`: `ready`, `blocked_missing_affiliate`, `blocked_missing_name`, `blocked_duplicate`, `needs_review`, or `promoted`.
+
+The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
 
 ## Key Pages
 

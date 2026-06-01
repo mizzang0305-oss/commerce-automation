@@ -28,6 +28,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 const DEFAULT_EXCLUDED_CATEGORIES = [
   "의류",
@@ -698,11 +699,28 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
   }
 
   async getProductCandidates(filters: ProductCandidateFilters = {}) {
-    return clone(filterProductCandidates(this.productCandidates, filters));
+    return clone(
+      filterProductCandidates(
+        enrichProductCandidates(this.productCandidates, {
+          queueItems: this.queue,
+          productionHistory: this.productionHistory
+        }),
+        filters
+      )
+    );
   }
 
   async getProductCandidate(id: string) {
-    return clone(this.productCandidates.find((candidate) => candidate.id === id) ?? null);
+    const candidate = this.productCandidates.find((item) => item.id === id);
+    return clone(
+      candidate
+        ? enrichProductCandidate(candidate, {
+            candidates: this.productCandidates,
+            queueItems: this.queue,
+            productionHistory: this.productionHistory
+          })
+        : null
+    );
   }
 
   async updateProductCandidate(id: string, patch: Partial<ProductCandidate>) {
@@ -738,11 +756,28 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     } else {
       this.contents[contentIndex] = promotion.content;
     }
+    const candidateIndex = this.productCandidates.findIndex((item) => item.id === candidateId);
+    if (candidateIndex !== -1) {
+      this.productCandidates[candidateIndex] = {
+        ...this.productCandidates[candidateIndex],
+        ...promotion.candidate,
+        promotion_status: "promoted",
+        promoted_queue_id: promotion.queue_item.id,
+        updated_at: nowIso()
+      };
+    }
     return clone(promotion);
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {
-    for (const candidate of candidates) {
+    const normalized = candidates.map((candidate) =>
+      enrichProductCandidate(candidate, {
+        candidates: [...this.productCandidates, ...candidates],
+        queueItems: this.queue,
+        productionHistory: this.productionHistory
+      })
+    );
+    for (const candidate of normalized) {
       const index = this.productCandidates.findIndex((item) => item.id === candidate.id);
       if (index === -1) {
         this.productCandidates.push(candidate);
@@ -754,7 +789,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
         };
       }
     }
-    return clone(candidates);
+    return clone(normalized);
   }
 
   async getProductionHistory() {

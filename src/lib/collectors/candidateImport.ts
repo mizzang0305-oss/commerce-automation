@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ProductCandidate } from "@/types/automation";
+import { enrichProductCandidate } from "@/lib/candidates/candidateNormalizer";
 
 export type CandidateImportOptions = {
   source: string;
@@ -48,19 +49,30 @@ export function parseCandidateCsv(csv: string, options: CandidateImportOptions):
     }
 
     candidates.set(id, {
-      id,
-      product_name: productName,
-      raw_coupang_url: normalizedSourceUrl,
-      selected_affiliate_url: affiliateUrl ? stripTrailingSlash(affiliateUrl) : "",
-      payload: {
-        source: options.source,
-        source_url: normalizedSourceUrl,
-        category_path: pick(row, ["category_path", "category", "카테고리"]),
-        keyword: pick(row, ["keyword", "키워드"]),
-        price_now_text: pick(row, ["price_now_text", "price", "가격"])
-      },
-      created_at: now,
-      updated_at: now
+      ...enrichProductCandidate({
+        id,
+        product_name: productName,
+        raw_coupang_url: normalizedSourceUrl,
+        selected_affiliate_url: affiliateUrl ? stripTrailingSlash(affiliateUrl) : "",
+        payload: {
+          source: options.source,
+          source_url: normalizedSourceUrl,
+          category_path: pick(row, ["category_path", "category", "카테고리"]),
+          keyword: pick(row, ["keyword", "키워드"]),
+          price_now_text: pick(row, ["price_now_text", "price", "가격"]),
+          source_type: pick(row, ["source_type", "type", "유형"]),
+          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "image", "썸네일"]),
+          discount_rate: pick(row, ["discount_rate", "discount", "할인율"]),
+          review_count: pick(row, ["review_count", "reviews", "리뷰수"]),
+          rating: pick(row, ["rating", "평점"]),
+          productId: pick(row, ["productId", "product_id"]),
+          itemId: pick(row, ["itemId", "item_id"]),
+          vendorItemId: pick(row, ["vendorItemId", "vendor_item_id"]),
+          goods_no: pick(row, ["goods_no", "goodsNo"])
+        },
+        created_at: now,
+        updated_at: now
+      })
     });
   });
 

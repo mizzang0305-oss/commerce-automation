@@ -73,6 +73,7 @@ describe("candidate to queue promotion", () => {
     });
     const queueItem = await repository.getQueueItem(result.queue_item.id);
     const content = await repository.getGeneratedContentByQueueItem(result.queue_item.id);
+    const candidate = await repository.getProductCandidate("candidate-safe-001");
     const jobs = await repository.getWorkerJobs();
 
     expect(result.queue_item).toMatchObject({
@@ -81,7 +82,7 @@ describe("candidate to queue promotion", () => {
       raw_coupang_url: "https://www.coupang.com/vp/products/candidate-safe-001",
       selected_affiliate_url: "https://link.coupang.com/a/candidate-safe-001",
       thumbnail_url: "https://image.example.com/candidate-safe-001.jpg",
-      product_score: 88
+      product_score: 55
     });
     expect(queueItem?.id).toBe(result.queue_item.id);
     expect(content).toMatchObject({
@@ -92,6 +93,30 @@ describe("candidate to queue promotion", () => {
       disclosure_text:
         "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급됩니다."
     });
+    expect(candidate).toMatchObject({
+      promotion_status: "promoted",
+      promoted_queue_id: result.queue_item.id
+    });
     expect(jobs).toHaveLength(0);
+  });
+
+  test("blocks promotion when candidate readiness is duplicate", async () => {
+    const repository = resetMockRepositoryForTests();
+    await repository.upsertProductCandidates([
+      candidateFixture({
+        id: "candidate-original",
+        product_key: "coupang:duplicate:1:1",
+        raw_coupang_url: "https://www.coupang.com/vp/products/original"
+      }),
+      candidateFixture({
+        id: "candidate-blocked-duplicate",
+        product_key: "coupang:duplicate:1:1",
+        raw_coupang_url: "https://www.coupang.com/vp/products/duplicate"
+      })
+    ]);
+
+    await expect(repository.promoteCandidateToQueue("candidate-blocked-duplicate")).rejects.toThrow(
+      "중복 후보는 상품 큐로 승격할 수 없습니다."
+    );
   });
 });

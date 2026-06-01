@@ -34,10 +34,11 @@ In the Supabase dashboard for the sandbox or target project:
    - `product_candidates`
    - `product_assets`
    - `production_history`
-2. Confirm the migration from `supabase/migrations/001_automation_core.sql` has been applied.
+2. Confirm the migrations from `supabase/migrations/001_automation_core.sql` and `supabase/migrations/002_candidate_scoring_fields.sql` have been applied.
 3. Confirm `automation_settings` contains one row where `id = 'default'`.
 4. Confirm Row Level Security is enabled on every table above.
 5. Confirm there are no wide-open `anon` or `authenticated` public read/write policies.
+6. Confirm `product_candidates` has the candidate quality fields from `002_candidate_scoring_fields.sql`: `product_key`, `candidate_score`, `duplicate_status`, `promotion_status`, and `promoted_queue_id`.
 
 Expected result:
 

@@ -175,6 +175,21 @@ export type WorkerJobStatus =
 
 export type JsonRecord = Record<string, unknown>;
 
+export type CandidateDuplicateStatus =
+  | "unique"
+  | "duplicate_candidate"
+  | "already_queued"
+  | "already_produced"
+  | "unknown";
+
+export type CandidatePromotionStatus =
+  | "ready"
+  | "blocked_missing_affiliate"
+  | "blocked_missing_name"
+  | "blocked_duplicate"
+  | "needs_review"
+  | "promoted";
+
 export type WorkerJob = {
   id: string;
   job_type: WorkerJobType;
@@ -209,6 +224,17 @@ export type ProductCandidate = {
   product_name: string;
   raw_coupang_url: string;
   selected_affiliate_url: string;
+  product_key?: string;
+  platform?: string;
+  source_type?: string;
+  source_name?: string;
+  category?: string;
+  candidate_score?: number;
+  score_reason?: string;
+  duplicate_status?: CandidateDuplicateStatus;
+  duplicate_reason?: string;
+  promotion_status?: CandidatePromotionStatus;
+  promoted_queue_id?: string;
   payload: JsonRecord;
   created_at: string;
   updated_at: string;
