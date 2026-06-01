@@ -67,4 +67,32 @@ describe("event planner APIs", () => {
     });
     expect(jobs).toHaveLength(0);
   });
+
+  test("candidate-video-smoke seed returns a safe JSON error when candidate storage fails", async () => {
+    const repository = getAutomationRepository();
+    repository.upsertProductCandidates = async () => {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY raw-secret R2_SECRET WORKER_API_SECRET failed");
+    };
+
+    const response = await seedDevQueue(
+      new Request("http://localhost/api/dev/seed", {
+        method: "POST",
+        body: JSON.stringify({ mode: "candidate-video-smoke" })
+      })
+    );
+    const payload = await readJson(response);
+    const serialized = JSON.stringify(payload);
+
+    expect(response.status).toBe(500);
+    expect(payload).toMatchObject({
+      ok: false,
+      mode: "candidate-video-smoke",
+      error_code: "DEV_SEED_FAILED",
+      message: "개발용 seed 생성 중 오류가 발생했습니다."
+    });
+    expect(serialized).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(serialized).not.toContain("R2_SECRET");
+    expect(serialized).not.toContain("WORKER_API_SECRET");
+    expect(serialized).not.toContain("raw-secret");
+  });
 });
