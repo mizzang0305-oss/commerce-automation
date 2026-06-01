@@ -6,12 +6,28 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.modules.setdefault("dotenv", SimpleNamespace(load_dotenv=lambda: None))
+sys.modules.setdefault("dotenv", SimpleNamespace(load_dotenv=lambda **_kwargs: None))
 
 from src.config import load_config
+from src.config import WORKER_DOTENV_PATH
 
 
 class WorkerConfigStorageTest(unittest.TestCase):
+    def test_loads_worker_dotenv_from_explicit_utf8_sig_path(self):
+        calls = []
+
+        def fake_load_dotenv(**kwargs):
+            calls.append(kwargs)
+            os.environ["WEB_APP_BASE_URL"] = "http://localhost:3001"
+            os.environ["WORKER_API_SECRET"] = "worker-secret"
+            return True
+
+        with patch.dict(os.environ, {}, clear=True), patch("src.config.load_dotenv", side_effect=fake_load_dotenv):
+            config = load_config()
+
+        self.assertEqual(config.web_app_base_url, "http://localhost:3001")
+        self.assertEqual(calls, [{"dotenv_path": WORKER_DOTENV_PATH, "override": False, "encoding": "utf-8-sig"}])
+
     def test_supabase_storage_env_aliases_are_supported(self):
         env = {
             "WORKER_API_SECRET": "worker-secret",

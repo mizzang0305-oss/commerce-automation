@@ -167,6 +167,22 @@ STORAGE_LOCAL_BASE_URL=http://localhost:3000/mock-storage
 PUBLIC_STORAGE_BASE_URL=http://localhost:3000/mock-storage
 ```
 
+When the WebApp runs on a non-default port, update both WebApp-facing URLs. For example, with `npm run dev -- -p 3001`:
+
+```text
+WEB_APP_BASE_URL=http://localhost:3001
+PUBLIC_STORAGE_BASE_URL=http://localhost:3001/mock-storage
+```
+
+Before starting `worker.py`, verify the config that the worker actually loaded:
+
+```powershell
+cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
+.\.venv\Scripts\python -c "from src.config import load_config; c=load_config(); print(c.web_app_base_url, c.worker_id, c.job_types, c.storage_backend)"
+```
+
+If the printed URL is not the active WebApp URL, check `python-worker/.env`, close stale PowerShell sessions, and verify no shell-level `WEB_APP_BASE_URL` overrides the file. The worker reads `python-worker/.env` using UTF-8 BOM tolerant loading, but saving the file as UTF-8 without BOM is still recommended.
+
 For S3/R2/Supabase-compatible storage, set endpoint, access key, secret key, region, and public base URL. The worker uploads artifacts and returns URLs to the WebApp; it does not write directly to Supabase DB.
 
 Supabase Storage via S3 protocol:
