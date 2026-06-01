@@ -23,6 +23,7 @@ import type {
 import { assignSlots } from "@/lib/scheduler";
 import { getQueueSummary } from "@/lib/status";
 import { toDateInputValue } from "@/lib/format";
+import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
 import {
   buildCandidatePromotion,
   filterProductCandidates,
@@ -810,23 +811,29 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     const packages = productQueueId
       ? this.channelUploadPackages.filter((item) => item.product_queue_id === productQueueId)
       : this.channelUploadPackages;
-    return clone(packages);
+    return clone(packages.map(normalizeChannelUploadPackage));
+  }
+
+  async getChannelUploadPackage(id: string) {
+    const packageItem = this.channelUploadPackages.find((item) => item.id === id);
+    return packageItem ? clone(normalizeChannelUploadPackage(packageItem)) : null;
   }
 
   async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+    const normalized = normalizeChannelUploadPackage(input);
     const index = this.channelUploadPackages.findIndex((item) => item.id === input.id);
     if (index === -1) {
-      this.channelUploadPackages.push(input);
-      return clone(input);
+      this.channelUploadPackages.push(normalized);
+      return clone(normalized);
     }
 
     this.channelUploadPackages[index] = {
       ...this.channelUploadPackages[index],
-      ...input,
-      created_at: this.channelUploadPackages[index].created_at || input.created_at,
+      ...normalized,
+      created_at: this.channelUploadPackages[index].created_at || normalized.created_at,
       updated_at: nowIso()
     };
-    return clone(this.channelUploadPackages[index]);
+    return clone(normalizeChannelUploadPackage(this.channelUploadPackages[index]));
   }
 
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {

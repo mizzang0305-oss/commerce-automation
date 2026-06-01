@@ -26,6 +26,7 @@ supabase/migrations/001_automation_core.sql
 supabase/migrations/002_candidate_scoring_fields.sql
 supabase/migrations/003_event_calendar_and_planner.sql
 supabase/migrations/004_channel_upload_packages.sql
+supabase/migrations/005_channel_upload_package_results.sql
 ```
 
 Tables created by the migration:
@@ -63,7 +64,7 @@ Supabase Storage is not part of this schema. Generated file URLs still come from
 
 `channel_profiles` stores manual-only routing metadata. Defaults must keep `upload_enabled=false` and `manual_upload_only=true`. This table does not authorize platform uploads and does not store OAuth tokens.
 
-`channel_upload_packages` stores prepared copy and artifact links for human-operated channel uploads. Rows must keep `upload_enabled=false` and `manual_upload_only=true`; they do not trigger YouTube, TikTok, or Threads API calls.
+`channel_upload_packages` stores prepared copy, artifact links, and operator-recorded manual upload outcomes for human-operated channel uploads. Rows must keep `upload_enabled=false` and `manual_upload_only=true`; they do not trigger YouTube, TikTok, or Threads API calls. Result tracking fields such as `uploaded_url`, `uploaded_at`, `uploaded_by`, `upload_notes`, and `platform_upload_status` are manually maintained audit metadata only.
 
 ## Planner APIs
 

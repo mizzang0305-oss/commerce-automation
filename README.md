@@ -129,7 +129,7 @@ The planner does not create `worker_jobs`. Candidate promotion creates a schedul
 
 Channel profiles are routing metadata only. Defaults use `upload_enabled=false` and `manual_upload_only=true`; YouTube OAuth readiness may be displayed as configured booleans, but no upload flow or `videos.insert` call is implemented.
 
-Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` to store channel-specific manual upload packages. RLS is enabled and no public anon/authenticated policies are created.
+Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` and `supabase/migrations/005_channel_upload_package_results.sql` to store channel-specific manual upload packages and manual upload result tracking. RLS is enabled and no public anon/authenticated policies are created.
 
 ## Key Pages
 

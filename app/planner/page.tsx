@@ -21,12 +21,18 @@ export default async function PlannerPage() {
   const events = getDefaultEventCalendar(today.getUTCFullYear());
   const channels = getDefaultChannelProfiles();
   const upcomingEvents = getUpcomingEvents(events, today, 30);
-  const manualReadyByChannel = new Map<string, number>();
-  channelPackages
-    .filter((entry) => entry.status === "manual_ready")
-    .forEach((entry) => {
-      manualReadyByChannel.set(entry.channel_profile_id, (manualReadyByChannel.get(entry.channel_profile_id) ?? 0) + 1);
-    });
+  const uploadPackageCountsByChannel = new Map<string, { manual_ready: number; uploaded: number; needs_fix: number }>();
+  channelPackages.forEach((entry) => {
+    const current = uploadPackageCountsByChannel.get(entry.channel_profile_id) ?? {
+      manual_ready: 0,
+      uploaded: 0,
+      needs_fix: 0
+    };
+    if (entry.status === "manual_ready" || entry.status === "uploaded" || entry.status === "needs_fix") {
+      current[entry.status] += 1;
+    }
+    uploadPackageCountsByChannel.set(entry.channel_profile_id, current);
+  });
   const plan = buildDailyProductionPlan({
     date: todayText,
     candidates,
@@ -129,9 +135,11 @@ export default async function PlannerPage() {
                 {channels.map((channel) => (
                   <div key={channel.id} className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
                     <span className="font-semibold text-slate-700">{channel.channel_name}</span>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-teal-700 ring-1 ring-teal-100">
-                      {manualReadyByChannel.get(channel.id) ?? 0}개
-                    </span>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <PackageCountBadge label="준비" value={uploadPackageCountsByChannel.get(channel.id)?.manual_ready ?? 0} />
+                      <PackageCountBadge label="완료" value={uploadPackageCountsByChannel.get(channel.id)?.uploaded ?? 0} />
+                      <PackageCountBadge label="수정" value={uploadPackageCountsByChannel.get(channel.id)?.needs_fix ?? 0} tone="warning" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -158,5 +166,23 @@ export default async function PlannerPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function PackageCountBadge({
+  label,
+  value,
+  tone = "default"
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "warning";
+}) {
+  return (
+    <span className={`rounded-full bg-white px-2 py-0.5 text-xs font-bold ring-1 ${
+      tone === "warning" ? "text-yellow-800 ring-yellow-200" : "text-teal-700 ring-teal-100"
+    }`}>
+      {label} {value}개
+    </span>
   );
 }

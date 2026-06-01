@@ -36,7 +36,7 @@ In the Supabase dashboard for the sandbox or target project:
    - `product_assets`
    - `production_history`
    - `channel_upload_packages`
-2. Confirm the migrations from `supabase/migrations/001_automation_core.sql`, `supabase/migrations/002_candidate_scoring_fields.sql`, `supabase/migrations/003_event_calendar_and_planner.sql`, and `supabase/migrations/004_channel_upload_packages.sql` have been applied.
+2. Confirm the migrations from `supabase/migrations/001_automation_core.sql`, `supabase/migrations/002_candidate_scoring_fields.sql`, `supabase/migrations/003_event_calendar_and_planner.sql`, `supabase/migrations/004_channel_upload_packages.sql`, and `supabase/migrations/005_channel_upload_package_results.sql` have been applied.
 3. Confirm `automation_settings` contains one row where `id = 'default'`.
 4. Confirm Row Level Security is enabled on every table above.
 5. Confirm there are no wide-open `anon` or `authenticated` public read/write policies.

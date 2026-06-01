@@ -20,6 +20,7 @@ import type {
   QueueFilters,
   QueueSummary
 } from "@/lib/repositories/types";
+import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
 import {
   createDefaultSettings,
   createMockGeneratedContents,
@@ -633,27 +634,36 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
   async getChannelUploadPackages(productQueueId?: string) {
     await this.ensureInitialized();
     const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
-    return clone(productQueueId ? packages.filter((item) => item.product_queue_id === productQueueId) : packages);
+    const filteredPackages = productQueueId ? packages.filter((item) => item.product_queue_id === productQueueId) : packages;
+    return clone(filteredPackages.map(normalizeChannelUploadPackage));
+  }
+
+  async getChannelUploadPackage(id: string) {
+    await this.ensureInitialized();
+    const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
+    const packageItem = packages.find((item) => item.id === id);
+    return packageItem ? clone(normalizeChannelUploadPackage(packageItem)) : null;
   }
 
   async upsertChannelUploadPackage(input: ChannelUploadPackage) {
     await this.ensureInitialized();
+    const normalized = normalizeChannelUploadPackage(input);
     const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
-    const index = packages.findIndex((item) => item.id === input.id);
+    const index = packages.findIndex((item) => item.id === normalized.id);
     if (index === -1) {
-      packages.push(input);
+      packages.push(normalized);
       await atomicWriteJson(this.paths.channelUploadPackages, packages);
-      return clone(input);
+      return clone(normalized);
     }
 
     packages[index] = {
       ...packages[index],
-      ...input,
-      created_at: packages[index].created_at || input.created_at,
+      ...normalized,
+      created_at: packages[index].created_at || normalized.created_at,
       updated_at: nowIso()
     };
     await atomicWriteJson(this.paths.channelUploadPackages, packages);
-    return clone(packages[index]);
+    return clone(normalizeChannelUploadPackage(packages[index]));
   }
 
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {

@@ -98,6 +98,7 @@ export interface AutomationRepository {
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
   getChannelUploadPackages(productQueueId?: string): Promise<ChannelUploadPackage[]>;
+  getChannelUploadPackage(id: string): Promise<ChannelUploadPackage | null>;
   upsertChannelUploadPackage(input: ChannelUploadPackage): Promise<ChannelUploadPackage>;
 }
 
