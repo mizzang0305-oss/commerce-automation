@@ -252,8 +252,9 @@ export type ProductAsset = {
 
 export type ChannelUploadPackageStatus =
   | "manual_ready"
-  | "manual_uploaded"
-  | "cancelled";
+  | "uploaded"
+  | "skipped"
+  | "needs_fix";
 
 export type ChannelUploadPackage = {
   id: string;
@@ -269,6 +270,11 @@ export type ChannelUploadPackage = {
   subtitle_url: string;
   upload_package_url: string;
   status: ChannelUploadPackageStatus;
+  uploaded_url: string;
+  uploaded_at: string;
+  uploaded_by: string;
+  upload_notes: string;
+  platform_upload_status: string;
   upload_enabled: boolean;
   manual_upload_only: boolean;
   created_at: string;

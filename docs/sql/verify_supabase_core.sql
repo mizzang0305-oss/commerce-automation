@@ -73,3 +73,22 @@ where table_schema = 'public'
     'updated_at'
   )
 order by column_name;
+
+select
+  column_name,
+  data_type,
+  is_nullable
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'channel_upload_packages'
+  and column_name in (
+    'uploaded_url',
+    'uploaded_at',
+    'uploaded_by',
+    'upload_notes',
+    'platform_upload_status',
+    'upload_enabled',
+    'manual_upload_only',
+    'updated_at'
+  )
+order by column_name;

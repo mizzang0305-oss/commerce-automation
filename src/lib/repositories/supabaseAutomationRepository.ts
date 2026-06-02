@@ -32,6 +32,7 @@ import {
 import { getQueueSummary } from "@/lib/status";
 import { assignSlots } from "@/lib/scheduler";
 import { getSupabaseAdminClient } from "@/lib/server/supabaseAdmin";
+import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
 import {
   buildCandidatePromotion,
   filterProductCandidates,
@@ -375,6 +376,11 @@ function mapChannelUploadPackageRow(row: Record<string, unknown>): ChannelUpload
     subtitle_url: emptyString(row.subtitle_url),
     upload_package_url: emptyString(row.upload_package_url),
     status: (emptyString(row.status) || "manual_ready") as ChannelUploadPackage["status"],
+    uploaded_url: emptyString(row.uploaded_url),
+    uploaded_at: emptyString(row.uploaded_at),
+    uploaded_by: emptyString(row.uploaded_by),
+    upload_notes: emptyString(row.upload_notes),
+    platform_upload_status: emptyString(row.platform_upload_status) || "manual_ready",
     upload_enabled: booleanOrDefault(row.upload_enabled, false),
     manual_upload_only: booleanOrDefault(row.manual_upload_only, true),
     created_at: emptyString(row.created_at),
@@ -1020,10 +1026,21 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapChannelUploadPackageRow));
   }
 
-  async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+  async getChannelUploadPackage(id: string) {
     const { data, error } = await this.client
       .from("channel_upload_packages")
-      .upsert(input, { onConflict: "id" })
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    throwIfSupabaseError(error, "getChannelUploadPackage");
+    return data ? clone(mapChannelUploadPackageRow(data as Record<string, unknown>)) : null;
+  }
+
+  async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+    const normalized = normalizeChannelUploadPackage(input);
+    const { data, error } = await this.client
+      .from("channel_upload_packages")
+      .upsert(normalized, { onConflict: "id" })
       .select("*")
       .single();
     throwIfSupabaseError(error, "upsertChannelUploadPackage");

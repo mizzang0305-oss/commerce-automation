@@ -44,6 +44,9 @@ export function QueueDetailView({
   const [uploadPackages, setUploadPackages] = useState<ChannelUploadPackage[]>(channelPackages);
   const [uploadPackageMessage, setUploadPackageMessage] = useState("");
   const [uploadPackageStatus, setUploadPackageStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [uploadedUrl, setUploadedUrl] = useState(channelPackages[0]?.uploaded_url ?? "");
+  const [uploadedBy, setUploadedBy] = useState("");
+  const [uploadNotes, setUploadNotes] = useState("");
   const readyGuard = canMarkReadyForManualUpload(item, draftContent);
   const relatedJobs = workerJobs.filter((job) => job.product_queue_id === item.id);
   const checklist = getRenderableChecklist(item, draftContent, assets, relatedJobs);
@@ -110,12 +113,54 @@ export function QueueDetailView({
       }
       if (isChannelUploadPackage(payload.package)) {
         setUploadPackages((current) => [payload.package, ...current.filter((entry) => entry.id !== payload.package.id)]);
+        setUploadedUrl(payload.package.uploaded_url);
       }
       setUploadPackageStatus("success");
       setUploadPackageMessage(typeof payload.message === "string" ? payload.message : "채널 업로드 패키지를 생성했습니다.");
     } catch {
       setUploadPackageStatus("error");
       setUploadPackageMessage("채널 업로드 패키지 생성 요청에 실패했습니다.");
+    }
+  }
+
+  async function updateManualUploadResult(action: "uploaded" | "skipped" | "needs_fix") {
+    if (!latestUploadPackage) {
+      return;
+    }
+
+    setUploadPackageMessage("");
+    setUploadPackageStatus("loading");
+    const routeByAction = {
+      uploaded: "mark-uploaded",
+      skipped: "mark-skipped",
+      needs_fix: "mark-needs-fix"
+    } as const;
+
+    try {
+      const response = await fetch(`/api/upload-packages/${latestUploadPackage.id}/${routeByAction[action]}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploaded_url: uploadedUrl,
+          uploaded_by: uploadedBy,
+          upload_notes: uploadNotes
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        setUploadPackageStatus("error");
+        setUploadPackageMessage(typeof payload.message === "string" ? payload.message : "업로드 결과 저장에 실패했습니다.");
+        return;
+      }
+      if (isChannelUploadPackage(payload.package)) {
+        setUploadPackages((current) => [payload.package, ...current.filter((entry) => entry.id !== payload.package.id)]);
+        setUploadedUrl(payload.package.uploaded_url);
+      }
+      setUploadPackageStatus("success");
+      setUploadPackageMessage(typeof payload.message === "string" ? payload.message : "업로드 결과를 저장했습니다.");
+    } catch {
+      setUploadPackageStatus("error");
+      setUploadPackageMessage("업로드 결과 저장 요청에 실패했습니다.");
     }
   }
 
@@ -311,6 +356,68 @@ export function QueueDetailView({
               <LinkBox label="썸네일" url={latestUploadPackage.thumbnail_url} />
               <LinkBox label="자막(SRT)" url={latestUploadPackage.subtitle_url} />
               <LinkBox label="Worker upload package" url={latestUploadPackage.upload_package_url} />
+              <LinkBox label="업로드 결과 URL" url={latestUploadPackage.uploaded_url} />
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+              <h3 className="text-sm font-bold text-slate-900">수동 업로드 결과 기록</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                운영자가 플랫폼에 직접 업로드한 뒤 결과 URL과 메모만 기록합니다. 실제 업로드 API는 호출하지 않습니다.
+              </p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1.4fr_0.8fr]">
+                <label className="text-sm font-semibold text-slate-700">
+                  업로드 결과 URL
+                  <input
+                    value={uploadedUrl}
+                    onChange={(event) => setUploadedUrl(event.target.value)}
+                    placeholder="https://..."
+                    className="focus-ring mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  작업자
+                  <input
+                    value={uploadedBy}
+                    onChange={(event) => setUploadedBy(event.target.value)}
+                    placeholder="operator"
+                    className="focus-ring mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900"
+                  />
+                </label>
+              </div>
+              <label className="mt-3 block text-sm font-semibold text-slate-700">
+                메모
+                <textarea
+                  value={uploadNotes}
+                  onChange={(event) => setUploadNotes(event.target.value)}
+                  rows={3}
+                  className="focus-ring mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900"
+                />
+              </label>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateManualUploadResult("uploaded")}
+                  disabled={uploadPackageStatus === "loading"}
+                  className="focus-ring rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  업로드 완료 기록
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateManualUploadResult("skipped")}
+                  disabled={uploadPackageStatus === "loading"}
+                  className="focus-ring rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  스킵 처리
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateManualUploadResult("needs_fix")}
+                  disabled={uploadPackageStatus === "loading"}
+                  className="focus-ring rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-bold text-yellow-800 disabled:cursor-not-allowed disabled:bg-slate-100"
+                >
+                  수정 필요
+                </button>
+              </div>
             </div>
           </div>
         ) : (
