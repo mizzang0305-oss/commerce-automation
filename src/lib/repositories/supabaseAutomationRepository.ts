@@ -43,9 +43,25 @@ import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidate
 
 type JsonMap = Record<string, unknown>;
 
-type SupabaseQueryError = {
+export type SupabaseQueryError = {
+  code?: string;
   message: string;
+  details?: string | null;
+  detail?: string | null;
+  hint?: string | null;
 };
+
+export class SupabaseRepositoryError extends Error {
+  action: string;
+  supabaseError: SupabaseQueryError;
+
+  constructor(action: string, supabaseError: SupabaseQueryError) {
+    super(`Supabase repository ${action} failed.`);
+    this.name = "SupabaseRepositoryError";
+    this.action = action;
+    this.supabaseError = supabaseError;
+  }
+}
 
 export type SupabaseWorkerJobRow = {
   id: string;
@@ -123,9 +139,30 @@ function getResultUrl(result: Record<string, unknown>, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sanitizeSupabaseDiagnostic(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/SUPABASE_SERVICE_ROLE_KEY/gi, "[redacted-secret-name]")
+    .replace(/WORKER_API_SECRET/gi, "[redacted-secret-name]")
+    .replace(/R2_SECRET/gi, "[redacted-secret-name]")
+    .replace(/S3_SECRET_ACCESS_KEY/gi, "[redacted-secret-name]")
+    .replace(/Authorization/gi, "[redacted-header]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]");
+}
+
 function throwIfSupabaseError(error: SupabaseQueryError | null | undefined, action: string) {
   if (error) {
-    throw new Error(`Supabase repository ${action} failed.`);
+    console.error("[supabase-repository] query failed", {
+      action,
+      code: error.code ?? "",
+      message: sanitizeSupabaseDiagnostic(error.message),
+      detail: sanitizeSupabaseDiagnostic(error.detail ?? error.details),
+      hint: sanitizeSupabaseDiagnostic(error.hint)
+    });
+    throw new SupabaseRepositoryError(action, error);
   }
 }
 
