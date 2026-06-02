@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { ProductQueueItem } from "@/types/automation";
+import type { GeneratedContent, ProductQueueItem } from "@/types/automation";
 import { buildDraftGeneratedContent } from "@/lib/content/contentTemplate";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 
@@ -10,8 +10,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  const body = await request.json().catch(() => ({}));
-  const restoreScheduled = Boolean((body as { restore_scheduled?: unknown }).restore_scheduled);
+  await request.json().catch(() => ({}));
   const repository = getAutomationRepository();
   const item = await repository.getQueueItem(id);
 
@@ -24,7 +23,10 @@ export async function POST(
 
   const guard = validateContentGenerationItem(item);
   if (!guard.ok) {
-    return NextResponse.json({ ok: false, message: guard.message, created_worker_jobs: 0 }, { status: guard.status });
+    return NextResponse.json(
+      { ok: false, message: guard.message, missing_reasons: [guard.message], created_worker_jobs: 0 },
+      { status: guard.status }
+    );
   }
 
   const now = new Date().toISOString();
@@ -32,11 +34,12 @@ export async function POST(
   const content = await repository.upsertGeneratedContent(
     buildDraftGeneratedContent(item, existingContent, now)
   );
-  const restoredScheduled =
-    restoreScheduled && item.queue_status === "manual_review" && canRestoreScheduledAfterDraft(item.error_message);
+  const restoreReadiness = evaluateScheduledRestoreReadiness(item, content);
+  const restoredScheduled = restoreReadiness.canRestore;
   const updatedItem = restoredScheduled
     ? await repository.updateQueueItemById(item.id, {
         queue_status: "scheduled",
+        manual_review_status: "not_ready",
         error_message: "",
         updated_at: now
       })
@@ -50,6 +53,7 @@ export async function POST(
     item: updatedItem ?? item,
     content,
     restored_scheduled: restoredScheduled,
+    missing_reasons: restoreReadiness.missingReasons,
     created_worker_jobs: 0
   });
 }
@@ -69,6 +73,39 @@ function validateContentGenerationItem(
   return { ok: true };
 }
 
-function canRestoreScheduledAfterDraft(errorMessage: string) {
-  return /대본|script|콘텐츠|content|제휴 고지|disclosure/i.test(errorMessage);
+export function evaluateScheduledRestoreReadiness(item: ProductQueueItem, content: GeneratedContent) {
+  const missingReasons: string[] = [];
+
+  if (!["manual_review", "error"].includes(item.queue_status)) {
+    return { canRestore: false, missingReasons };
+  }
+
+  if (!isRecoverableContentReviewReason(item.error_message)) {
+    missingReasons.push("manual_review 사유가 콘텐츠 초안 생성으로 해결 가능한 항목이 아닙니다.");
+  }
+  if (!item.selected_affiliate_url.trim()) {
+    missingReasons.push("제휴 링크가 없어 예약 상태로 복구할 수 없습니다.");
+  }
+  if (!item.thumbnail_url.trim()) {
+    missingReasons.push("썸네일 URL이 없어 예약 상태로 복구할 수 없습니다.");
+  }
+  if (!content.disclosure_text.trim()) {
+    missingReasons.push("제휴 고지 문구가 없어 예약 상태로 복구할 수 없습니다.");
+  }
+  if (!content.video_script.trim()) {
+    missingReasons.push("영상 대본이 없어 예약 상태로 복구할 수 없습니다.");
+  }
+
+  return { canRestore: missingReasons.length === 0, missingReasons };
+}
+
+function isRecoverableContentReviewReason(errorMessage: string) {
+  const normalized = errorMessage.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (/제휴\s*링크|affiliate|selected_affiliate_url|썸네일|thumbnail|상품\s*이미지|image_url/i.test(normalized)) {
+    return false;
+  }
+  return /영상\s*대본|대본|video_script|script|콘텐츠|content|제휴\s*고지|disclosure/i.test(normalized);
 }
