@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelUploadPackage,
   GeneratedContent,
   Platform,
   ProductAsset,
@@ -106,6 +107,10 @@ function numberOrDefault(value: unknown, defaultValue: number) {
     return Number.isFinite(parsed) ? parsed : defaultValue;
   }
   return defaultValue;
+}
+
+function booleanOrDefault(value: unknown, defaultValue: boolean) {
+  return typeof value === "boolean" ? value : defaultValue;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -352,6 +357,28 @@ function mapAssetRow(row: Record<string, unknown>): ProductAsset {
     bucket: emptyString(row.bucket),
     url: emptyString(row.url),
     created_at: emptyString(row.created_at)
+  };
+}
+
+function mapChannelUploadPackageRow(row: Record<string, unknown>): ChannelUploadPackage {
+  return {
+    id: emptyString(row.id),
+    product_queue_id: emptyString(row.product_queue_id),
+    channel_profile_id: emptyString(row.channel_profile_id),
+    platform: (emptyString(row.platform) || "youtube") as ChannelUploadPackage["platform"],
+    title: emptyString(row.title),
+    description: emptyString(row.description),
+    hashtags: emptyString(row.hashtags),
+    disclosure_text: emptyString(row.disclosure_text),
+    video_url: emptyString(row.video_url),
+    thumbnail_url: emptyString(row.thumbnail_url),
+    subtitle_url: emptyString(row.subtitle_url),
+    upload_package_url: emptyString(row.upload_package_url),
+    status: (emptyString(row.status) || "manual_ready") as ChannelUploadPackage["status"],
+    upload_enabled: booleanOrDefault(row.upload_enabled, false),
+    manual_upload_only: booleanOrDefault(row.manual_upload_only, true),
+    created_at: emptyString(row.created_at),
+    updated_at: emptyString(row.updated_at)
   };
 }
 
@@ -981,6 +1008,26 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     const { data, error } = await query.order("created_at", { ascending: true });
     throwIfSupabaseError(error, "getProductAssets");
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapAssetRow));
+  }
+
+  async getChannelUploadPackages(productQueueId?: string) {
+    let query = this.client.from("channel_upload_packages").select("*");
+    if (productQueueId) {
+      query = query.eq("product_queue_id", productQueueId);
+    }
+    const { data, error } = await query.order("created_at", { ascending: false });
+    throwIfSupabaseError(error, "getChannelUploadPackages");
+    return clone(((data ?? []) as Record<string, unknown>[]).map(mapChannelUploadPackageRow));
+  }
+
+  async upsertChannelUploadPackage(input: ChannelUploadPackage) {
+    const { data, error } = await this.client
+      .from("channel_upload_packages")
+      .upsert(input, { onConflict: "id" })
+      .select("*")
+      .single();
+    throwIfSupabaseError(error, "upsertChannelUploadPackage");
+    return clone(mapChannelUploadPackageRow(data as Record<string, unknown>));
   }
 
   async seedQueue(mode: "default" | "error-sample" | "simulate-transition" = "default") {

@@ -13,6 +13,7 @@ Development storage uses local JSON files under `data/`.
 - `product_candidates.json`: candidate product records.
 - `production_history.json`: production events.
 - `product_assets.json`: generated artifact URLs.
+- `channel_upload_packages.json`: channel-specific manual upload package metadata.
 
 Do not commit `data/*.json`.
 
@@ -24,6 +25,7 @@ Production/shared repository storage can use Supabase/Postgres by applying:
 supabase/migrations/001_automation_core.sql
 supabase/migrations/002_candidate_scoring_fields.sql
 supabase/migrations/003_event_calendar_and_planner.sql
+supabase/migrations/004_channel_upload_packages.sql
 ```
 
 Tables created by the migration:
@@ -37,12 +39,13 @@ Tables created by the migration:
 - `product_candidates`
 - `product_assets`
 - `production_history`
+- `channel_upload_packages`
 - `event_calendar`
 - `daily_production_plans`
 - `daily_production_plan_items`
 - `channel_profiles`
 
-Primary indexes cover queue status/schedule/rank, worker job status/type/queue/created time, run start time, and product assets by queue id. RLS is enabled on all tables, and no anon/authenticated public read/write policies are created. The WebApp uses the service role key only on the server. Browser clients and the Python Worker do not access Supabase directly.
+Primary indexes cover queue status/schedule/rank, worker job status/type/queue/created time, run start time, product assets by queue id, and channel upload packages by queue/channel/status. RLS is enabled on all tables, and no anon/authenticated public read/write policies are created. The WebApp uses the service role key only on the server. Browser clients and the Python Worker do not access Supabase directly.
 
 Supabase Storage is not part of this schema. Generated file URLs still come from the worker storage backend and will be handled by a separate storage adapter milestone.
 
@@ -59,6 +62,8 @@ Supabase Storage is not part of this schema. Generated file URLs still come from
 `daily_production_plans` and `daily_production_plan_items` store future persisted daily plan output. Planner items reference candidates, optional queue rows, event keys, target channels, rank, status, and reason text.
 
 `channel_profiles` stores manual-only routing metadata. Defaults must keep `upload_enabled=false` and `manual_upload_only=true`. This table does not authorize platform uploads and does not store OAuth tokens.
+
+`channel_upload_packages` stores prepared copy and artifact links for human-operated channel uploads. Rows must keep `upload_enabled=false` and `manual_upload_only=true`; they do not trigger YouTube, TikTok, or Threads API calls.
 
 ## Planner APIs
 

@@ -15,6 +15,7 @@ This verifies the WebApp repository database only:
 - product candidates
 - product assets
 - production history
+- channel upload packages
 
 The Python Worker must still poll the WebApp API. It must not connect directly to Supabase Postgres.
 
@@ -34,7 +35,8 @@ In the Supabase dashboard for the sandbox or target project:
    - `product_candidates`
    - `product_assets`
    - `production_history`
-2. Confirm the migrations from `supabase/migrations/001_automation_core.sql` and `supabase/migrations/002_candidate_scoring_fields.sql` have been applied.
+   - `channel_upload_packages`
+2. Confirm the migrations from `supabase/migrations/001_automation_core.sql`, `supabase/migrations/002_candidate_scoring_fields.sql`, `supabase/migrations/003_event_calendar_and_planner.sql`, and `supabase/migrations/004_channel_upload_packages.sql` have been applied.
 3. Confirm `automation_settings` contains one row where `id = 'default'`.
 4. Confirm Row Level Security is enabled on every table above.
 5. Confirm there are no wide-open `anon` or `authenticated` public read/write policies.
@@ -42,7 +44,7 @@ In the Supabase dashboard for the sandbox or target project:
 
 Expected result:
 
-- `rowsecurity = true` for all nine tables.
+- `rowsecurity = true` for all repository tables.
 - `pg_policies` returns no policy rows, or only intentionally reviewed server-side policies.
 - No policy grants broad `anon` or `authenticated` read/write access.
 
@@ -76,7 +78,8 @@ where schemaname = 'public'
     'worker_heartbeats',
     'product_candidates',
     'product_assets',
-    'production_history'
+    'production_history',
+    'channel_upload_packages'
   )
 order by tablename;
 ```
@@ -99,7 +102,8 @@ where schemaname = 'public'
     'worker_heartbeats',
     'product_candidates',
     'product_assets',
-    'production_history'
+    'production_history',
+    'channel_upload_packages'
   )
 order by tablename, policyname;
 ```

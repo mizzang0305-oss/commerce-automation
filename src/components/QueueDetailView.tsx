@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import type { AutomationSettings, GeneratedContent, Platform, ProductAsset, ProductQueueItem, WorkerJob } from "@/types/automation";
+import type {
+  AutomationSettings,
+  ChannelProfile,
+  ChannelUploadPackage,
+  GeneratedContent,
+  Platform,
+  ProductAsset,
+  ProductQueueItem,
+  WorkerJob
+} from "@/types/automation";
 import { canMarkReadyForManualUpload } from "@/lib/guards";
 import { getRenderableChecklist } from "@/lib/queueAnalytics";
 import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
@@ -15,21 +24,30 @@ export function QueueDetailView({
   content,
   settings,
   assets = [],
-  workerJobs = []
+  workerJobs = [],
+  channels = [],
+  channelPackages = []
 }: {
   item: ProductQueueItem;
   content: GeneratedContent | null;
   settings: AutomationSettings;
   assets?: ProductAsset[];
   workerJobs?: WorkerJob[];
+  channels?: ChannelProfile[];
+  channelPackages?: ChannelUploadPackage[];
 }) {
   const [message, setMessage] = useState("");
   const [draftContent, setDraftContent] = useState<GeneratedContent | null>(content);
   const [contentMessage, setContentMessage] = useState("");
   const [contentGenerationStatus, setContentGenerationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [selectedChannelId, setSelectedChannelId] = useState(channels[0]?.id ?? "");
+  const [uploadPackages, setUploadPackages] = useState<ChannelUploadPackage[]>(channelPackages);
+  const [uploadPackageMessage, setUploadPackageMessage] = useState("");
+  const [uploadPackageStatus, setUploadPackageStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const readyGuard = canMarkReadyForManualUpload(item, draftContent);
   const relatedJobs = workerJobs.filter((job) => job.product_queue_id === item.id);
   const checklist = getRenderableChecklist(item, draftContent, assets, relatedJobs);
+  const latestUploadPackage = uploadPackages[0];
 
   async function markManual(platform: Platform) {
     setMessage("");
@@ -75,6 +93,32 @@ export function QueueDetailView({
     }
   }
 
+  async function buildUploadPackage() {
+    setUploadPackageMessage("");
+    setUploadPackageStatus("loading");
+    try {
+      const response = await fetch(`/api/queue/${item.id}/build-upload-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel_profile_id: selectedChannelId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        setUploadPackageStatus("error");
+        setUploadPackageMessage(typeof payload.message === "string" ? payload.message : "채널 업로드 패키지 생성에 실패했습니다.");
+        return;
+      }
+      if (isChannelUploadPackage(payload.package)) {
+        setUploadPackages((current) => [payload.package, ...current.filter((entry) => entry.id !== payload.package.id)]);
+      }
+      setUploadPackageStatus("success");
+      setUploadPackageMessage(typeof payload.message === "string" ? payload.message : "채널 업로드 패키지를 생성했습니다.");
+    } catch {
+      setUploadPackageStatus("error");
+      setUploadPackageMessage("채널 업로드 패키지 생성 요청에 실패했습니다.");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -107,12 +151,14 @@ export function QueueDetailView({
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-bold text-slate-950">worker job 전달 가능 체크리스트</h2>
-        <p className="mt-2 text-sm text-slate-500">누락 항목을 보완해야 video_render job과 수동 검수가 안전하게 진행됩니다.</p>
+        <p className="mt-2 text-sm text-slate-500">
+          누락 항목을 보완해야 video_render job과 수동 검수가 안전하게 진행됩니다.
+        </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {checklist.items.map((entry) => (
             <div key={entry.label} className={`rounded-lg border p-3 ${entry.ok ? "border-emerald-200 bg-emerald-50" : "border-yellow-200 bg-yellow-50"}`}>
               <p className={`text-sm font-bold ${entry.ok ? "text-emerald-800" : "text-yellow-800"}`}>
-                {entry.ok ? "확인됨" : "누락"}: {entry.label}
+                {entry.ok ? "확인" : "누락"}: {entry.label}
               </p>
               <p className="mt-1 text-xs text-slate-600">{entry.help}</p>
             </div>
@@ -126,7 +172,7 @@ export function QueueDetailView({
         <LinkBox label="영상 URL" url={item.video_url} />
         <LinkBox label="썸네일 URL" url={item.video_snapshot_url || findAssetUrl(assets, "thumbnail")} />
         <LinkBox label="자막(SRT) URL" url={findAssetUrl(assets, "subtitle")} />
-        <LinkBox label="업로드 패키지 URL" url={findAssetUrl(assets, "upload_package")} />
+        <LinkBox label="Worker upload package URL" url={findAssetUrl(assets, "upload_package")} />
         <LinkBox label="블로그 초안 URL" url={item.blog_draft_url} />
       </section>
 
@@ -197,6 +243,82 @@ export function QueueDetailView({
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-950">채널 업로드 패키지</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              video_ready 항목을 채널별 수동 업로드 자료로 정리합니다. 실제 YouTube/TikTok/Threads API는 호출하지 않습니다.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={selectedChannelId}
+              onChange={(event) => setSelectedChannelId(event.target.value)}
+              className="focus-ring rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+            >
+              {channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.channel_name} ({channel.platform})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={buildUploadPackage}
+              disabled={uploadPackageStatus === "loading" || channels.length === 0}
+              className="focus-ring rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {uploadPackageStatus === "loading" ? "생성 중" : "채널 업로드 패키지 생성"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ChecklistBadge label="영상 파일 열림" ok={Boolean(item.video_url)} />
+          <ChecklistBadge label="고지 문구 확인" ok={Boolean(draftContent?.disclosure_text?.trim())} />
+          <ChecklistBadge label="제휴 링크 확인" ok={Boolean(item.selected_affiliate_url)} />
+          <ChecklistBadge label="자동 업로드 비활성" ok />
+        </div>
+
+        {uploadPackageMessage ? (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${
+            uploadPackageStatus === "error" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+          }`}>
+            {uploadPackageMessage}
+          </p>
+        ) : null}
+
+        {latestUploadPackage ? (
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+            <div className="rounded-lg bg-slate-50 p-4">
+              <div className="mb-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                  {latestUploadPackage.status}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                  upload_enabled=false
+                </span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                  manual_upload_only=true
+                </span>
+              </div>
+              <TextBlock label="제목" value={latestUploadPackage.title} />
+              <TextBlock label="설명/고지" value={latestUploadPackage.description} />
+              <TextBlock label="해시태그" value={latestUploadPackage.hashtags} />
+            </div>
+            <div className="grid gap-3">
+              <LinkBox label="영상 파일" url={latestUploadPackage.video_url} />
+              <LinkBox label="썸네일" url={latestUploadPackage.thumbnail_url} />
+              <LinkBox label="자막(SRT)" url={latestUploadPackage.subtitle_url} />
+              <LinkBox label="Worker upload package" url={latestUploadPackage.upload_package_url} />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-500">아직 생성된 채널 업로드 패키지가 없습니다.</p>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-bold text-slate-950">상태 변경</h2>
         <p className="mt-2 text-sm text-slate-500">{readyGuard.message}</p>
         <div className="mt-4">
@@ -223,7 +345,7 @@ export function QueueDetailView({
         <section className="rounded-lg border border-red-200 bg-red-50 p-5">
           <h2 className="text-base font-bold text-red-800">오류 로그와 해결 가이드</h2>
           <p className="mt-2 text-sm text-red-700">{item.error_message}</p>
-          <p className="mt-2 text-sm text-red-700">ffmpeg 오류라면 PC에 ffmpeg를 설치하고 새 PowerShell에서 worker를 다시 실행하세요.</p>
+          <p className="mt-2 text-sm text-red-700">ffmpeg 오류라면 PC의 ffmpeg 또는 imageio-ffmpeg 설정을 확인하고 Python Worker를 다시 실행하세요.</p>
         </section>
       ) : null}
     </div>
@@ -277,6 +399,16 @@ function ContentPresence({ label, ok }: { label: string; ok: boolean }) {
   );
 }
 
+function ChecklistBadge({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+      ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-yellow-200 bg-yellow-50 text-yellow-800"
+    }`}>
+      {ok ? "확인" : "확인 필요"}: {label}
+    </div>
+  );
+}
+
 function isGeneratedContent(value: unknown): value is GeneratedContent {
   return Boolean(
     value &&
@@ -284,5 +416,16 @@ function isGeneratedContent(value: unknown): value is GeneratedContent {
       "product_queue_id" in value &&
       "video_script" in value &&
       "disclosure_text" in value
+  );
+}
+
+function isChannelUploadPackage(value: unknown): value is ChannelUploadPackage {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "product_queue_id" in value &&
+      "channel_profile_id" in value &&
+      "manual_upload_only" in value &&
+      "upload_enabled" in value
   );
 }
