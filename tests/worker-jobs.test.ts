@@ -253,7 +253,30 @@ describe("next batch worker dispatch", () => {
       thumbnail_url: expect.stringContaining("https://picsum.photos"),
       selected_affiliate_url: expect.stringContaining("https://link.coupang.com"),
       disclosure_text: expect.stringContaining("쿠팡 파트너스"),
-      script: expect.stringContaining("worker smoke")
+      script: expect.stringContaining("worker smoke"),
+      render_plan: {
+        version: "1",
+        source: "storyboard_template",
+        render_target: {
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          aspect_ratio: "9:16"
+        },
+        safety: {
+          external_api_call: false,
+          platform_upload: false,
+          vimax_dependency: false,
+          worker_jobs_created: false
+        },
+        shots: expect.arrayContaining([
+          expect.objectContaining({
+            shot_id: "hook",
+            image_url: expect.stringContaining("https://picsum.photos"),
+            voice_text: expect.stringContaining("worker smoke")
+          })
+        ])
+      }
     });
   });
 
