@@ -7,6 +7,7 @@
 - [ ] `npm run lint`
 - [ ] `npm run build`
 - [ ] `python -m compileall python-worker`
+- [ ] `npm run check:production-env`
 - [ ] `git diff --check`
 - [ ] `git diff --cached --check`
 - [ ] `.env.local` is not staged.

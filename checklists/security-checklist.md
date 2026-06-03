@@ -46,6 +46,7 @@
 - [ ] Artifact storage smoke uses real R2/S3/Supabase Storage URLs, not `/mock-storage`.
 - [ ] WebApp does not launch Python Worker.
 - [ ] Worker jobs are created only by `/api/run/next-batch`.
+- [ ] `npm run check:production-env` output contains no raw secret or URL values.
 
 ## Manual Upload Only
 

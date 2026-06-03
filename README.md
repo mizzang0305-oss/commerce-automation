@@ -31,6 +31,14 @@ The WebApp must not launch Python Worker. Worker jobs are created only by `/api/
 
 Use [checklists/deployment-checklist.md](checklists/deployment-checklist.md) before deploying and [checklists/security-checklist.md](checklists/security-checklist.md) before opening a sandbox or production instance.
 
+For a safe local production-env readiness summary that prints booleans and warnings only:
+
+```powershell
+npm run check:production-env
+```
+
+The helper does not contact Supabase or R2 and does not print raw secret values.
+
 ## Repository Adapters
 
 The WebApp talks to a repository contract. The Python Worker still polls the WebApp API and does not connect to Supabase directly.
