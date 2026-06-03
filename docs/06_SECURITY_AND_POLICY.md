@@ -58,6 +58,20 @@ Defaults:
 - `run_mode=generate_only`
 - `youtube_upload_enabled=false`
 - public upload disabled
+- Channel profiles and upload packages use `upload_enabled=false` and `manual_upload_only=true`.
+- Manual upload result tracking records operator-entered URLs/status only. It must not call YouTube, TikTok, or Threads APIs.
+
+## Production Deployment Guardrails
+
+Normal production deployments must use server-only Supabase repository credentials and storage-specific worker credentials:
+
+- WebApp: `AUTOMATION_REPOSITORY_ADAPTER=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WORKER_API_SECRET`.
+- Python Worker: `WEB_APP_BASE_URL`, `WORKER_API_SECRET`, `WORKER_ID`, `WORKER_JOB_TYPES`, and R2/S3/Supabase Storage credentials.
+- Content AI: `CONTENT_AI_PROVIDER=template` by default; `OPENAI_API_KEY` and `GEMINI_API_KEY` are optional server-only readiness values.
+
+Production must leave `ENABLE_DEV_TOOLS` unset or false. Enable it only in a controlled sandbox where dev seed/reset routes are expected.
+
+Do not commit or stage `.env.local`, `python-worker/.env`, `data/*.json`, `data/*.tmp`, `python-worker/.venv`, `python-worker/outputs`, `python-worker/temp`, or worker log files.
 
 ## Affiliate And Disclosure Policy
 
