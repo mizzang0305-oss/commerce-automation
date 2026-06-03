@@ -134,3 +134,12 @@ python -m compileall python-worker
 - `/jobs` supports job/search text, status filter, job type filter, issue filter, sorting, and pagination.
 - Existing server-side query filters still work before the client-side table filters are applied.
 - Large local result sets remain client-side for now; server-side pagination is a later optimization.
+
+## Content AI Provider QA
+
+- `CONTENT_AI_PROVIDER=template` produces renderable draft content.
+- `CONTENT_AI_PROVIDER=openai` without `OPENAI_API_KEY` falls back to template.
+- Provider metadata exposes booleans only and no raw keys.
+- Safety guard blocks guarantee, lowest-price, medical/health efficacy, and review-copy patterns.
+- `generate-content` creates zero `worker_jobs`.
+- `/api/run/next-batch` remains the only worker-job creation path.

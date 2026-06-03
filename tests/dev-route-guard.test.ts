@@ -11,6 +11,9 @@ const originalNodeEnv = process.env.NODE_ENV;
 const originalEnableDevTools = process.env.ENABLE_DEV_TOOLS;
 const originalSupabaseUrl = process.env.SUPABASE_URL;
 const originalSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const originalContentProvider = process.env.CONTENT_AI_PROVIDER;
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
+const originalGeminiKey = process.env.GEMINI_API_KEY;
 
 describe("dev API production guard", () => {
   afterEach(() => {
@@ -18,6 +21,9 @@ describe("dev API production guard", () => {
     restoreEnv("ENABLE_DEV_TOOLS", originalEnableDevTools);
     restoreEnv("SUPABASE_URL", originalSupabaseUrl);
     restoreEnv("SUPABASE_SERVICE_ROLE_KEY", originalSupabaseServiceRoleKey);
+    restoreEnv("CONTENT_AI_PROVIDER", originalContentProvider);
+    restoreEnv("OPENAI_API_KEY", originalOpenAiKey);
+    restoreEnv("GEMINI_API_KEY", originalGeminiKey);
     resetMockRepositoryForTests();
   });
 
@@ -78,6 +84,26 @@ describe("dev API production guard", () => {
     expect(payload.repository.supabase_service_role_configured).toBe(true);
     expect(serialized).not.toContain("https://project.supabase.co");
     expect(serialized).not.toContain("test-service-role-secret");
+  });
+
+  test("keeps content AI diagnostics to safe booleans", async () => {
+    process.env.CONTENT_AI_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "openai-secret-value";
+    process.env.GEMINI_API_KEY = "gemini-secret-value";
+
+    const response = await getDiagnostics();
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    expect(response.status).toBe(200);
+    expect(payload.content_ai).toMatchObject({
+      provider: "openai",
+      openai_configured: true,
+      gemini_configured: true,
+      enabled: true
+    });
+    expect(serialized).not.toContain("openai-secret-value");
+    expect(serialized).not.toContain("gemini-secret-value");
   });
 });
 

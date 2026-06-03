@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { POST as generateContent } from "../app/api/queue/[id]/generate-content/route";
 import { POST as nextBatch } from "../app/api/run/next-batch/route";
 import { getAutomationRepository, resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
@@ -19,10 +19,23 @@ function generateRequest(body: Record<string, unknown> = {}) {
   });
 }
 
+const originalProvider = process.env.CONTENT_AI_PROVIDER;
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
+const originalGeminiKey = process.env.GEMINI_API_KEY;
+
 describe("queue content generation api", () => {
   beforeEach(() => {
     resetMockRepositoryForTests();
     process.env.WORKER_API_SECRET = "worker-secret";
+    delete process.env.CONTENT_AI_PROVIDER;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+  });
+
+  afterEach(() => {
+    restoreEnv("CONTENT_AI_PROVIDER", originalProvider);
+    restoreEnv("OPENAI_API_KEY", originalOpenAiKey);
+    restoreEnv("GEMINI_API_KEY", originalGeminiKey);
   });
 
   test("blocks content generation when affiliate url is missing", async () => {
@@ -34,7 +47,7 @@ describe("queue content generation api", () => {
     const payload = await readJson(response);
 
     expect(response.status).toBe(400);
-    expect(payload.message).toContain("제휴 링크");
+    expect(String(payload.message)).toContain("제휴 링크");
     expect(await repository.getWorkerJobs()).toHaveLength(0);
   });
 
@@ -51,11 +64,11 @@ describe("queue content generation api", () => {
     const payload = await readJson(response);
 
     expect(response.status).toBe(400);
-    expect(payload.message).toContain("상품명");
+    expect(String(payload.message)).toContain("상품명");
     expect(await repository.getWorkerJobs()).toHaveLength(0);
   });
 
-  test("creates generated content draft without creating worker jobs", async () => {
+  test("creates template generated content draft without creating worker jobs", async () => {
     const repository = getAutomationRepository();
     const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
     await repository.updateQueueItemById(item.id, {
@@ -83,7 +96,15 @@ describe("queue content generation api", () => {
     const content = await repository.getGeneratedContentByQueueItem(item.id);
 
     expect(response.status).toBe(200);
-    expect(payload).toMatchObject({ ok: true, created_worker_jobs: 0 });
+    expect(payload).toMatchObject({
+      ok: true,
+      created_worker_jobs: 0,
+      content_provider: "template",
+      requested_provider: "template",
+      used_fallback: false,
+      provider_configured: false
+    });
+    expect(payload.safety_warnings).toEqual(expect.any(Array));
     expect(content?.video_title).toContain("콘텐츠 초안 상품");
     expect(content?.video_script).toContain("콘텐츠 초안 상품");
     expect(content?.video_script).toContain("구매 전");
@@ -91,6 +112,34 @@ describe("queue content generation api", () => {
     expect(content?.youtube_description).toContain("구매 전");
     expect(content?.tiktok_caption).toContain("구매 전");
     expect(content?.hashtags).toContain("#");
+    expect(await repository.getWorkerJobs()).toHaveLength(0);
+  });
+
+  test("falls back to template when openai is selected without a key", async () => {
+    process.env.CONTENT_AI_PROVIDER = "openai";
+    delete process.env.OPENAI_API_KEY;
+    const repository = getAutomationRepository();
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      product_name: "AI 폴백 상품",
+      selected_affiliate_url: "https://link.coupang.com/a/ai-fallback",
+      thumbnail_url: "https://picsum.photos/seed/ai-fallback/360/240"
+    });
+
+    const response = await generateContent(generateRequest(), routeContext(item.id));
+    const payload = await readJson(response);
+    const serialized = JSON.stringify(payload);
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      requested_provider: "openai",
+      content_provider: "template",
+      used_fallback: true,
+      provider_configured: false,
+      created_worker_jobs: 0
+    });
+    expect(serialized).not.toContain("OPENAI_API_KEY");
     expect(await repository.getWorkerJobs()).toHaveLength(0);
   });
 
@@ -124,3 +173,11 @@ describe("queue content generation api", () => {
     });
   });
 });
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}

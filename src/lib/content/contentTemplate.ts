@@ -1,4 +1,4 @@
-import type { GeneratedContent, ProductQueueItem } from "@/types/automation";
+import type { ContentSource, GeneratedContent, ProductQueueItem } from "@/types/automation";
 
 export const DEFAULT_DISCLOSURE_TEXT =
   "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급됩니다.";
@@ -33,10 +33,14 @@ export function buildVideoScript(item: ProductQueueItem, content?: GeneratedCont
   const context = [category, theme, keyword].filter(Boolean).join(" / ");
 
   return [
-    `${keyword || category || "일상용품"}을 고를 때 무엇을 먼저 봐야 할지 고민이라면 이 상품을 체크해 보세요.`,
-    `${productName}은 ${context || "사용 목적"}에 맞춰 비교해 볼 만한 후보입니다.`,
-    angle ? `영상에서는 ${angle} 관점으로 실제 구매 전 확인할 포인트를 짚어봅니다.` : "영상에서는 사용 목적, 구성, 가격 정보를 차례로 확인합니다.",
-    price ? `현재 표시된 가격은 ${price}이며, 가격과 혜택은 시점에 따라 달라질 수 있습니다.` : "가격과 혜택은 시점에 따라 달라질 수 있습니다.",
+    `${keyword || category || "상품"}을 고를 때 무엇을 먼저 확인해야 할지 고민된다면 ${productName}을 체크해 보세요.`,
+    `${productName}은 ${context || "사용 목적"}에 맞춰 비교해 볼 수 있는 후보입니다.`,
+    angle
+      ? `영상에서는 ${angle} 관점으로 구매 전에 확인할 포인트를 정리합니다.`
+      : "영상에서는 사용 목적, 구성, 가격 정보를 차례로 확인합니다.",
+    price
+      ? `현재 표시된 가격은 ${price}이며, 가격과 혜택은 시점에 따라 달라질 수 있습니다.`
+      : "가격과 혜택은 시점에 따라 달라질 수 있습니다.",
     "구매 전에는 상품 페이지에서 옵션, 배송, 반품 조건, 최신 리뷰를 직접 확인하세요.",
     disclosure
   ].join("\n");
@@ -86,14 +90,15 @@ export function buildHashtags(item: ProductQueueItem) {
 export function buildDraftGeneratedContent(
   item: ProductQueueItem,
   content?: GeneratedContent | null,
-  now = new Date().toISOString()
+  now = new Date().toISOString(),
+  overrides: Partial<GeneratedContent> = {}
 ): GeneratedContent {
-  const title = buildVideoTitle(item, content);
-  const script = buildVideoScript(item, content);
-  const disclosure = content?.disclosure_text?.trim() || buildDisclosureText();
-  const hashtags = content?.hashtags?.trim() || buildHashtags(item);
-  const youtubeDescription = buildYoutubeDescription(item, content);
-  const tiktokCaption = buildTiktokCaption(item, content);
+  const title = overrides.video_title?.trim() || buildVideoTitle(item, content);
+  const script = overrides.video_script?.trim() || buildVideoScript(item, content);
+  const disclosure = overrides.disclosure_text?.trim() || content?.disclosure_text?.trim() || buildDisclosureText();
+  const hashtags = overrides.hashtags?.trim() || content?.hashtags?.trim() || buildHashtags(item);
+  const youtubeDescription = overrides.youtube_description?.trim() || buildYoutubeDescription(item, content);
+  const tiktokCaption = overrides.tiktok_caption?.trim() || buildTiktokCaption(item, content);
   const shortCaption = clipText(`${item.product_name.trim()} 구매 전 체크 포인트`, 80);
 
   return {
@@ -104,17 +109,17 @@ export function buildDraftGeneratedContent(
     selected_affiliate_url: item.selected_affiliate_url,
     video_title: title,
     video_script: script,
-    caption_1: content?.caption_1?.trim() || shortCaption,
-    caption_2: content?.caption_2?.trim() || "가격, 옵션, 배송 조건은 구매 전 다시 확인하세요.",
-    caption_3: content?.caption_3?.trim() || "제휴 링크가 포함된 콘텐츠입니다.",
-    threads_text: content?.threads_text?.trim() || `${shortCaption}\n${buildDisclosureText()}`,
-    blog_title: content?.blog_title?.trim() || title,
-    blog_body: content?.blog_body?.trim() || `${script}\n\n${youtubeDescription}`,
+    caption_1: overrides.caption_1?.trim() || content?.caption_1?.trim() || shortCaption,
+    caption_2: overrides.caption_2?.trim() || content?.caption_2?.trim() || "가격, 옵션, 배송 조건은 구매 전 다시 확인하세요.",
+    caption_3: overrides.caption_3?.trim() || content?.caption_3?.trim() || "제휴 링크가 포함된 콘텐츠입니다.",
+    threads_text: overrides.threads_text?.trim() || content?.threads_text?.trim() || `${shortCaption}\n${disclosure}`,
+    blog_title: overrides.blog_title?.trim() || content?.blog_title?.trim() || title,
+    blog_body: overrides.blog_body?.trim() || content?.blog_body?.trim() || `${script}\n\n${youtubeDescription}`,
     hashtags,
     youtube_description: youtubeDescription,
     tiktok_caption: tiktokCaption,
     disclosure_text: disclosure,
-    content_source: content?.content_source || "fallback",
+    content_source: overrides.content_source || content?.content_source || "fallback",
     creatomate_render_id: content?.creatomate_render_id || "",
     video_url: content?.video_url || "",
     video_snapshot_url: content?.video_snapshot_url || "",
@@ -124,6 +129,13 @@ export function buildDraftGeneratedContent(
     created_at: content?.created_at || now,
     updated_at: now
   };
+}
+
+export function contentSourceForProvider(provider: string): ContentSource {
+  if (provider === "openai" || provider === "gemini") {
+    return provider;
+  }
+  return "fallback";
 }
 
 function toHashtag(value: string) {

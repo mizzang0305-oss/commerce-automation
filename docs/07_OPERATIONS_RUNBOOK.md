@@ -468,3 +468,15 @@ Safe error behavior:
 ## Legacy n8n
 
 Nightly Scout can still be connected to n8n callbacks. Next-batch video rendering must use worker jobs.
+
+## Content AI Provider Checks
+
+Default content generation uses:
+
+```text
+CONTENT_AI_PROVIDER=template
+```
+
+For readiness checks, `CONTENT_AI_PROVIDER=openai` or `gemini` may be set with a matching server-only key. If the key is absent or the provider is unavailable, `generate-content` should return `content_provider=template`, `used_fallback=true`, and `created_worker_jobs=0`.
+
+Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`, `gemini_configured`, and `enabled`. Raw API keys must never appear in diagnostics, logs intended for operators, or client UI.

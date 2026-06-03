@@ -173,6 +173,19 @@ Stores a safe error message and moves the job to `retry_wait` while retries rema
 
 Returns worker heartbeats and worker job counts for the `/workers` UI.
 
+## Content Generation API
+
+`POST /api/queue/[id]/generate-content` returns generated content plus safe provider metadata:
+
+- `content_provider`
+- `requested_provider`
+- `used_fallback`
+- `provider_configured`
+- `safety_warnings`
+- `created_worker_jobs`
+
+`created_worker_jobs` must remain `0`. Missing provider keys, provider errors, or blocked safety checks use template fallback instead of reporting fake AI success.
+
 ## Run API
 
 ### POST /api/run/next-batch

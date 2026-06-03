@@ -118,6 +118,33 @@ The `/candidates` page shows these fields so operators can sort by score, filter
 
 Promoted queue items can receive a safe template draft before worker dispatch:
 
+## Content AI Provider Scaffold
+
+Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The template provider creates `video_title`, `video_script`, captions, descriptions, hashtags, and disclosure text without external API calls. `POST /api/queue/[id]/generate-content` still creates zero `worker_jobs`; worker jobs are created only by `/api/run/next-batch`.
+
+Optional provider selection is server-only:
+
+```text
+CONTENT_AI_PROVIDER=template
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+```
+
+`CONTENT_AI_PROVIDER=openai` or `gemini` is accepted as a readiness setting, but this scaffold keeps live external calls disabled in this PR. Missing keys, provider errors, empty AI drafts, or blocked safety checks fall back to the template provider. Diagnostics expose only safe booleans:
+
+```json
+{
+  "content_ai": {
+    "provider": "template",
+    "openai_configured": false,
+    "gemini_configured": false,
+    "enabled": false
+  }
+}
+```
+
+AI and template drafts pass a safety guard that blocks guarantee language, lowest-price claims, medical/health efficacy claims, missing disclosure text, and suspicious review-copy patterns. `OPENAI_API_KEY` and `GEMINI_API_KEY` must never use a `NEXT_PUBLIC_` prefix and must never be referenced by client components.
+
 - `POST /api/queue/[id]/generate-content`
 - requires `product_name`, `selected_affiliate_url`, and `thumbnail_url`.
 - fills `video_title`, `video_script`, captions, hashtags, YouTube/TikTok text, and affiliate disclosure when missing.
