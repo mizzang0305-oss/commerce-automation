@@ -303,6 +303,41 @@ For local storage, worker outputs are written under `python-worker/outputs/stora
 
 `/mock-storage` is local smoke tooling. It is disabled in production unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should use Supabase Storage, Cloudflare R2, S3, or another real storage backend and should not set `ENABLE_MOCK_STORAGE_ROUTE`.
 
+## Coupang Product-To-Video Smoke
+
+Use `/dev/test-lab` for the current MVP smoke path from one Coupang product candidate to `video_ready`, R2 artifact URLs, and a manual upload package.
+
+Start the web app with sandbox/dev tools enabled:
+
+```powershell
+.\scripts\dev\powershell-utf8.ps1
+$env:WORKER_API_SECRET="local-worker-secret"
+$env:PUBLIC_APP_BASE_URL="http://localhost:3001"
+$env:AUTOMATION_REPOSITORY_ADAPTER="supabase"
+$env:ENABLE_DEV_TOOLS="true"
+$env:CONTENT_AI_PROVIDER="template"
+npm run dev -- -p 3001
+```
+
+Open `http://localhost:3001/dev/test-lab` and run:
+
+1. `샘플 쿠팡 후보 생성`
+2. `후보를 큐로 승격`
+3. `콘텐츠 초안 생성`
+4. `다음 배치 실행`
+5. Run the Python Worker manually from a separate PowerShell:
+
+```powershell
+cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
+.\.venv\Scripts\python worker.py
+```
+
+6. Click `상태 새로고침` until the queue reaches `video_ready`.
+7. Confirm video, thumbnail, subtitle, and upload package URLs are real storage URLs and return HTTP 200.
+8. Click `채널 업로드 패키지 생성` and confirm the package is `manual_ready`.
+
+The WebApp never launches Python Worker itself. Candidate import, promotion, and content draft generation create zero `worker_jobs`; `/api/run/next-batch` remains the only worker-job creation path. YouTube/TikTok/Threads upload APIs remain unimplemented and disabled.
+
 ## Windows ffmpeg Setup
 
 `ffmpeg` is required only when a `video_render` job actually renders an MP4. Missing `ffmpeg` does not stop worker startup, but the `video_render` job must fail/retry safely and must not become `video_ready`.
