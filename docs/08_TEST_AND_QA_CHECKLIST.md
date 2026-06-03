@@ -171,3 +171,4 @@ python -m compileall python-worker
 - `/api/dev/*` mutation routes are available only in a controlled sandbox with `ENABLE_DEV_TOOLS=true`.
 - Production smoke includes diagnostics, import-coupang, promote, generate-content, next-batch, external Python Worker, R2 artifact HTTP 200, build-upload-package, and manual result tracking.
 - PowerShell Korean output issues are treated as console rendering problems unless browser/API-client output or UTF-8 source inspection proves a source string is corrupted.
+- `npm run check:production-env` reports only configured booleans and warning codes; it must not print raw Supabase, R2, Worker, Coupang, OpenAI, or Gemini values.

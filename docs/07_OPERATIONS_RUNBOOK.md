@@ -136,6 +136,20 @@ Production safety baseline:
 - YouTube/TikTok/Threads upload APIs are not implemented.
 - Channel upload packages remain `upload_enabled=false` and `manual_upload_only=true`.
 
+Run the safe local readiness helper before production smoke:
+
+```powershell
+npm run check:production-env
+```
+
+For CI-style fail-fast behavior:
+
+```powershell
+node scripts/check-production-env.mjs --strict
+```
+
+The helper checks required env presence and risky flags but prints only env names, configured booleans, and warning codes. It does not print raw Supabase, R2, Worker, Coupang, OpenAI, or Gemini values and does not make network calls.
+
 ## Candidate-To-Video Smoke
 
 Use this when validating the full operator path from a collected candidate to a rendered artifact:

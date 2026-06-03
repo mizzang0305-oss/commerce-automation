@@ -139,9 +139,10 @@ Production release gates:
 1. Run the full validation command set on `main`.
 2. Verify Supabase migrations, RLS, and absence of public anon/authenticated write policies.
 3. Verify diagnostics expose configured booleans only.
-4. Run the Coupang product-to-video smoke through R2 artifact HTTP 200.
-5. Build a manual channel upload package and verify `upload_enabled=false` plus `manual_upload_only=true`.
-6. Confirm `.env.local`, `python-worker/.env`, local JSON data, worker outputs, temp files, logs, and virtualenv files are not staged.
+4. Run `npm run check:production-env` for safe env presence/warning output.
+5. Run the Coupang product-to-video smoke through R2 artifact HTTP 200.
+6. Build a manual channel upload package and verify `upload_enabled=false` plus `manual_upload_only=true`.
+7. Confirm `.env.local`, `python-worker/.env`, local JSON data, worker outputs, temp files, logs, and virtualenv files are not staged.
 
 Not included:
 
