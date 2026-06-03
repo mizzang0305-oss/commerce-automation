@@ -100,6 +100,51 @@ describe("candidate to queue promotion", () => {
     expect(jobs).toHaveLength(0);
   });
 
+  test("uses payload image_url and images fallbacks when creating queue thumbnail", async () => {
+    const repository = resetMockRepositoryForTests();
+    await repository.upsertProductCandidates([
+      candidateFixture({
+        id: "candidate-image-url-fallback",
+        payload: {
+          source: "manual_csv",
+          image_url: "https://image.example.com/fallback-image.webp",
+          images: ["https://image.example.com/unused-array-image.jpg"]
+        }
+      }),
+      candidateFixture({
+        id: "candidate-images-array-fallback",
+        raw_coupang_url: "https://www.coupang.com/vp/products/candidate-images-array-fallback",
+        selected_affiliate_url: "https://link.coupang.com/a/candidate-images-array-fallback",
+        payload: {
+          source: "manual_csv",
+          images: ["https://image.example.com/array-image.png"]
+        }
+      })
+    ]);
+
+    const imageUrlResult = await repository.promoteCandidateToQueue("candidate-image-url-fallback");
+    const arrayResult = await repository.promoteCandidateToQueue("candidate-images-array-fallback");
+
+    expect(imageUrlResult.queue_item.thumbnail_url).toBe("https://image.example.com/fallback-image.webp");
+    expect(arrayResult.queue_item.thumbnail_url).toBe("https://image.example.com/array-image.png");
+  });
+
+  test("blocks promotion when no usable product image URL is present", async () => {
+    const repository = resetMockRepositoryForTests();
+    await repository.upsertProductCandidates([
+      candidateFixture({
+        id: "candidate-no-image",
+        raw_coupang_url: "https://www.coupang.com/vp/products/candidate-no-image",
+        selected_affiliate_url: "https://link.coupang.com/a/candidate-no-image",
+        payload: { source: "manual_csv" }
+      })
+    ]);
+
+    await expect(repository.promoteCandidateToQueue("candidate-no-image")).rejects.toThrow(
+      "상품 이미지 URL이 없어 후보를 상품 큐로 승격할 수 없습니다."
+    );
+  });
+
   test("blocks promotion when candidate readiness is duplicate", async () => {
     const repository = resetMockRepositoryForTests();
     await repository.upsertProductCandidates([

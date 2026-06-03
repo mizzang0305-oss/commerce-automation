@@ -42,14 +42,14 @@ The Web Service uses a repository adapter behind one TypeScript contract.
 The planner is a WebApp-side planning layer that reads `product_candidates`, static event seeds, channel profiles, and production history to produce a daily shortlist. It never creates worker jobs. The expected path remains:
 
 1. Manual Coupang input or collector/CSV import creates `product_candidates`.
-2. Operator reviews and promotes a candidate to `product_queue`.
+2. Operator reviews image, affiliate, duplicate, and score readiness and promotes a candidate to `product_queue`.
 3. Operator generates a content draft for the queue item.
 4. `/api/run/next-batch` creates `worker_jobs` only for items that pass guards.
 5. Python Worker renders video and uploads artifacts.
 
 Event calendar and channel profile tables are provided by `supabase/migrations/003_event_calendar_and_planner.sql` for future persisted planner state. The first implementation uses static event/channel foundations and computed daily plans.
 
-The MVP product input path is intentionally in-house and WebApp-driven. `/api/candidates/import-coupang` normalizes a manually pasted Coupang product URL, validates the optional affiliate short link, and upserts a candidate only. It does not expand n8n, Creatomate, Google Docs, platform uploads, queue rows, or worker jobs.
+The MVP product input path is intentionally in-house and WebApp-driven. `/api/candidates/import-coupang` normalizes a manually pasted Coupang product URL, validates the optional affiliate short link, validates product image readiness, and upserts a candidate only. It does not expand n8n, Creatomate, Google Docs, platform uploads, queue rows, or worker jobs.
 
 ### Python Worker
 
@@ -57,6 +57,8 @@ The Python Worker is not a web service. It polls the web service, claims work, s
 
 - `video_render`
 - `sheet_sync`
+
+`video_render` requires a real product image URL in the job payload. The worker downloads the image with bounded network checks and fails or retries safely if the image is missing, not an image, empty, or not reachable. It must not complete the job, upload fake artifacts, or move a queue item to `video_ready` when image download or ffmpeg rendering fails.
 
 ### Storage
 
@@ -71,7 +73,7 @@ Generated artifacts are uploaded to storage and represented in the web app by UR
 
 For local worker runs, use `STORAGE_BACKEND=local`, `LOCAL_STORAGE_BASE_DIR`, and `STORAGE_LOCAL_BASE_URL` or the existing `PUBLIC_STORAGE_BASE_URL` compatibility variable.
 
-Supabase Storage is out of scope for the repository adapter PR. Use local storage for smoke tests or an existing S3/R2-compatible worker storage backend until the dedicated storage adapter ships.
+Repository storage and artifact storage remain separate concerns. The WebApp stores artifact URLs in queue fields and `product_assets`; the Python Worker uploads files through local, Supabase Storage, R2, or another S3-compatible backend and reports the returned URLs through WebApp APIs.
 
 ### Legacy n8n
 

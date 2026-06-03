@@ -48,7 +48,7 @@ Tables created by the migration:
 
 Primary indexes cover queue status/schedule/rank, worker job status/type/queue/created time, run start time, product assets by queue id, and channel upload packages by queue/channel/status. RLS is enabled on all tables, and no anon/authenticated public read/write policies are created. The WebApp uses the service role key only on the server. Browser clients and the Python Worker do not access Supabase directly.
 
-Supabase Storage is not part of this schema. Generated file URLs still come from the worker storage backend and will be handled by a separate storage adapter milestone.
+Supabase Storage and R2 object storage are not part of the repository schema. Generated file URLs come from the worker storage backend and are stored in queue fields, `product_assets`, and manual upload package records.
 
 ## Planner Tables
 
@@ -99,9 +99,11 @@ Behavior:
 
 1. Normalize the product URL and remove tracking parameters.
 2. Build a deterministic `product_key` from product, item, and vendor identifiers when available.
-3. Validate the affiliate link and mark missing links as `blocked_missing_affiliate`.
-4. Upsert only `product_candidates`.
-5. Return `queue_items_created=0` and `worker_jobs_created=0`.
+3. Normalize and validate the candidate product image URL when present.
+4. Validate the affiliate link and mark missing links as `blocked_missing_affiliate`.
+5. Mark missing or invalid product images as review conditions rather than render-ready conditions.
+6. Upsert only `product_candidates`.
+7. Return `queue_items_created=0` and `worker_jobs_created=0`.
 
 This endpoint does not create `product_queue` rows, does not create `worker_jobs`, and does not call any upload platform API.
 
@@ -187,7 +189,7 @@ Behavior:
 6. Validate affiliate link, disclosure text, script, and image URL.
 7. Invalid items become `manual_review`.
 8. Valid items become `processing`.
-9. Create `video_render` rows in `worker_jobs`.
+9. Create `video_render` rows in `worker_jobs` with both `image_url` and `thumbnail_url` populated from the queue image URL.
 10. Record `AutomationRun`.
 
 No due items returns:

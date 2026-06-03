@@ -1,5 +1,6 @@
 import type { ProductCandidate } from "@/types/automation";
 import { detectCandidatePlatform } from "@/lib/candidates/productKey";
+import { pickBestCandidateImage } from "@/lib/coupang/coupangImage";
 
 export type CandidateScoreResult = {
   candidate_score: number;
@@ -78,7 +79,7 @@ export function scoreProductCandidate(candidate: ProductCandidate): CandidateSco
 }
 
 export function getImageUrl(candidate: ProductCandidate): string {
-  return getPayloadString(candidate, ["thumbnail_url", "image_url", "image", "thumbnail"]);
+  return pickBestCandidateImage(candidate);
 }
 
 function getPayloadString(candidate: ProductCandidate, keys: string[]) {

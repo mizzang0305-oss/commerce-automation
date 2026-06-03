@@ -90,6 +90,41 @@ describe("Coupang candidate import API", () => {
     );
   });
 
+  test("normalizes thumbnail URL and marks missing image candidates for review", async () => {
+    resetMockRepositoryForTests();
+
+    const withImage = await importCoupangCandidate(
+      request({
+        product_name: "Image ready product",
+        raw_coupang_url: "https://www.coupang.com/vp/products/13579",
+        selected_affiliate_url: "https://link.coupang.com/a/image-ready",
+        thumbnail_url: "  https://image.example.com/product.webp?size=1080  "
+      })
+    );
+    const withoutImage = await importCoupangCandidate(
+      request({
+        product_name: "Missing image product",
+        raw_coupang_url: "https://www.coupang.com/vp/products/24680",
+        selected_affiliate_url: "https://link.coupang.com/a/missing-image"
+      })
+    );
+    const withImagePayload = await withImage.json();
+    const withoutImagePayload = await withoutImage.json();
+
+    expect(withImage.status).toBe(200);
+    expect(withImagePayload.candidate.payload.thumbnail_url).toBe("https://image.example.com/product.webp?size=1080");
+    expect(withImagePayload.readiness).toMatchObject({
+      image_readiness_status: "ready",
+      promotion_status: "ready"
+    });
+    expect(withoutImage.status).toBe(200);
+    expect(withoutImagePayload.readiness).toMatchObject({
+      image_readiness_status: "missing_image",
+      promotion_status: "needs_review"
+    });
+    expect(withImagePayload.readiness.candidate_score).toBeGreaterThan(withoutImagePayload.readiness.candidate_score);
+  });
+
   test("rejects missing product name and non-product Coupang URLs", async () => {
     resetMockRepositoryForTests();
 

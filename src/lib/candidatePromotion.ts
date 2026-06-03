@@ -9,6 +9,7 @@ import type {
 import { getKstDateKey } from "@/lib/workerDailyLimit";
 import { analyzeCandidateDedupe, resolvePromotionStatus } from "@/lib/candidates/candidateDedupe";
 import { enrichProductCandidate } from "@/lib/candidates/candidateNormalizer";
+import { buildImageReadiness, pickBestCandidateImage } from "@/lib/coupang/coupangImage";
 
 export const AFFILIATE_DISCLOSURE_TEXT =
   "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급됩니다.";
@@ -170,6 +171,10 @@ export function getCandidateReadiness(
   if (promotionStatus === "needs_review") {
     reasons.push("이미지 또는 점수가 부족해 검수 후 승격해야 합니다.");
   }
+  const imageReadiness = buildImageReadiness(candidate);
+  if (!imageReadiness.ready) {
+    reasons.push(...imageReadiness.reasons);
+  }
   if (promotionStatus === "ready") {
     reasons.push("다음 배치 실행 전까지 작업은 생성되지 않습니다.");
   }
@@ -212,7 +217,7 @@ export function buildCandidatePromotion(input: BuildPromotionInput): PromoteCand
     product_name: enrichedCandidate.product_name.trim(),
     category_path: enrichedCandidate.category || getPayloadString(enrichedCandidate, "category_path"),
     price_now_text: getPayloadString(enrichedCandidate, "price_now_text"),
-    thumbnail_url: getPayloadString(enrichedCandidate, "thumbnail_url") || getPayloadString(enrichedCandidate, "image_url"),
+    thumbnail_url: pickBestCandidateImage(enrichedCandidate),
     raw_coupang_url: enrichedCandidate.raw_coupang_url.trim(),
     selected_affiliate_url: enrichedCandidate.selected_affiliate_url.trim(),
     product_score:
@@ -263,6 +268,9 @@ export function assertCandidatePromotable(
     (candidate.duplicate_status && candidate.duplicate_status !== "unique" && candidate.duplicate_status !== "unknown")
   ) {
     throw new CandidatePromotionError("중복 후보는 상품 큐로 승격할 수 없습니다.", 409);
+  }
+  if (!buildImageReadiness(candidate).ready) {
+    throw new CandidatePromotionError("상품 이미지 URL이 없어 후보를 상품 큐로 승격할 수 없습니다.");
   }
 }
 
