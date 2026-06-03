@@ -17,6 +17,7 @@ import { getRenderableChecklist } from "@/lib/queueAnalytics";
 import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 import { GuardNotice } from "@/components/GuardNotice";
 import { QueueActionButtons } from "@/components/QueueActionButtons";
+import { RenderPlanPreview } from "@/components/RenderPlanPreview";
 import { StatusBadge } from "@/components/StatusBadge";
 
 export function QueueDetailView({
@@ -201,6 +202,8 @@ export function QueueDetailView({
       </section>
 
       <GuardNotice settings={settings} item={item} />
+
+      <RenderPlanPreview item={item} content={draftContent} />
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-bold text-slate-950">worker job 전달 가능 체크리스트</h2>

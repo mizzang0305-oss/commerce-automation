@@ -176,6 +176,19 @@ AI and template drafts pass a safety guard that blocks guarantee language, lowes
 - does not create `worker_jobs`; run `/api/run/next-batch` after content review.
 - avoids hard claims such as guaranteed results, lowest-price assertions, medical/health efficacy claims, and copied review text.
 
+## Render Plan Preview
+
+`/api/run/next-batch` can attach a deterministic `render_plan` to `video_render` worker job payloads when product name, affiliate link, product image URL, video script, and disclosure text are all ready. The plan is not a new render engine and is not persisted as a separate table.
+
+The `/queue/[id]` page previews this plan before dispatch:
+
+- `render_plan_attached=true/false`
+- shot count and total duration
+- per-shot layout, caption, image URL, voice text, and readiness gaps
+- legacy fallback copy when a plan cannot be built
+
+The preview is read-only. It creates zero `worker_jobs`, does not launch Python Worker, does not install ViMax, and does not call external video/image APIs.
+
 ## Event-Driven Production Planner
 
 The planner foundation turns collected candidates into a daily production shortlist before queue promotion and worker dispatch.
@@ -197,7 +210,7 @@ Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supaba
 
 - `/dashboard`: overview and run controls.
 - `/queue`: product queue with worker job status.
-- `/queue/[id]`: generated result URLs, assets, content draft action, channel upload package action, and manual review controls.
+- `/queue/[id]`: generated result URLs, assets, render plan preview, content draft action, channel upload package action, and manual review controls.
 - `/planner`: event-driven daily production plan and manual-only channel routing.
 - `/channels`: manual-only channel profile readiness and upload package template admin.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.

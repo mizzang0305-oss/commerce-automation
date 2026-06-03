@@ -37,6 +37,8 @@ export type CoupangSmokeStatus = {
   video_url: string;
   product_assets_count: number;
   product_asset_types: string[];
+  render_plan_attached: boolean;
+  render_plan_shot_count: number;
   upload_package_id: string;
   upload_package_status: string;
   created_worker_jobs: number;
@@ -168,6 +170,7 @@ export async function getCoupangProductToVideoSmokeStatus(
   const queueJobs = queue ? jobs.filter((job) => job.product_queue_id === queue.id) : [];
   const latestJob = queueJobs.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
   const latestPackage = packages.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
+  const renderPlanShotCount = getRenderPlanShotCount(latestJob?.payload);
   const blockingReasons = buildBlockingReasons({ candidate, queue, content, latestJob, assets, latestPackage });
   const stage = inferStage({ candidate, queue, content, latestJob, assets, latestPackage, blockingReasons });
 
@@ -182,6 +185,8 @@ export async function getCoupangProductToVideoSmokeStatus(
     video_url: queue?.video_url ?? "",
     product_assets_count: assets.filter((asset) => asset.url.trim()).length,
     product_asset_types: assets.filter((asset) => asset.url.trim()).map((asset) => asset.asset_type).sort(),
+    render_plan_attached: renderPlanShotCount > 0,
+    render_plan_shot_count: renderPlanShotCount,
     upload_package_id: latestPackage?.id ?? "",
     upload_package_status: latestPackage?.status ?? "",
     created_worker_jobs: queueJobs.length,
@@ -189,6 +194,18 @@ export async function getCoupangProductToVideoSmokeStatus(
     worker_command: WORKER_COMMAND,
     worker_execution_note: "WebApp은 Python Worker를 직접 실행하지 않습니다. 별도 PowerShell에서 실행하세요."
   };
+}
+
+function getRenderPlanShotCount(payload: unknown) {
+  if (!payload || typeof payload !== "object" || !("render_plan" in payload)) {
+    return 0;
+  }
+  const renderPlan = (payload as { render_plan?: unknown }).render_plan;
+  if (!renderPlan || typeof renderPlan !== "object" || !("shots" in renderPlan)) {
+    return 0;
+  }
+  const shots = (renderPlan as { shots?: unknown }).shots;
+  return Array.isArray(shots) ? shots.length : 0;
 }
 
 async function resolveCandidate(repository: AutomationRepository, input: { candidate_id?: string; queue_id?: string }) {

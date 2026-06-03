@@ -148,6 +148,13 @@ python -m compileall python-worker
 - `generate-content` creates zero `worker_jobs`.
 - `/api/run/next-batch` remains the only worker-job creation path.
 
+## Render Plan Preview QA
+
+- `/queue/[id]` shows a render plan preview when product name, affiliate link, thumbnail, video script, and disclosure text are ready.
+- The preview shows `render_plan_attached=true`, shot count, total duration, per-shot captions, image URLs, voice text, and readiness status.
+- `/queue/[id]` shows legacy fallback copy and missing inputs when a render plan cannot be built.
+- The preview creates zero `worker_jobs` and does not change Python Worker render behavior.
+
 ## Coupang Product-To-Video Smoke QA
 
 - `/dev/test-lab` shows the `쿠팡 상품 → 쇼츠 영상 E2E Smoke` panel.
@@ -155,6 +162,7 @@ python -m compileall python-worker
 - Promote creates a scheduled `product_queue` row and generated-content scaffold, not a worker job.
 - Content draft generation fills `video_script` and creates zero worker jobs.
 - Next-batch creates the `video_render` worker job and includes `image_url` or `thumbnail_url`.
+- The status panel reports `render_plan_attached` and `render_plan_shot_count` for the latest worker job payload.
 - The WebApp displays the Python Worker command but does not execute it.
 - After the Worker runs externally, status reaches `video_ready` only when `video_url` exists.
 - R2 or real storage artifact URLs for video, thumbnail, subtitle, and upload package return HTTP 200.

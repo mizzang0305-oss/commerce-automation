@@ -215,6 +215,8 @@ Current scaffold:
 
 The template planner requires product name, affiliate URL, product image URL, video script, and disclosure text. Missing inputs return readiness reasons instead of generating a fake render plan. The Python Worker validates `render_plan.shots` before ffmpeg diagnostics, uses the first shot image as the current render image, and joins shot captions/voice text into the render script. The legacy payload path remains the fallback when no plan is present.
 
+The `/queue/[id]` page shows a read-only render plan preview when the template planner can build one. The preview displays shot count, total duration, shot captions, image URLs, voice text, and readiness gaps. If required inputs are missing, the page shows legacy fallback copy and the missing fields instead of claiming a ready render plan.
+
 The scaffold adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
 
 ## Run API
