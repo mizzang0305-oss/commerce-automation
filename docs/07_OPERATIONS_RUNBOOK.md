@@ -72,6 +72,9 @@ For Supabase/Postgres shared state:
 3. Apply `supabase/migrations/002_candidate_scoring_fields.sql` for candidate `product_key`, dedupe, scoring, and promotion readiness fields.
 4. Apply `supabase/migrations/003_event_calendar_and_planner.sql` for event calendar, daily planner, and channel profile tables.
 5. Apply `supabase/migrations/004_channel_upload_packages.sql`, `005_channel_upload_package_results.sql`, and `006_channel_profile_admin_readiness.sql` for manual upload package and channel template tracking.
+6. Apply `supabase/migrations/007_generated_content_render_plan_override.sql` before saving render plan overrides.
+7. Reload PostgREST schema after additive migrations when using Supabase:
+   `notify pgrst, 'reload schema';`
 6. Set server-only env values in `.env.local` or the deployment secret store:
 
 ```text
@@ -561,6 +564,28 @@ Use `buildStoryboardRenderPlan` only after a queue item has:
 The planner returns readiness gaps instead of producing a fake plan when required fields are missing. A valid plan contains four deterministic template shots: hook, product focus, check points, and manual CTA. The default target is 1080x1920 at 30fps.
 
 Open `/queue/[id]` to inspect the render plan preview before running `next-batch`. The page shows `render_plan_attached`, shot count, total duration, per-shot caption/image/voice text, and readiness gaps. If a plan cannot be built, the page displays legacy fallback copy and the missing inputs.
+
+### Lightweight Render Plan Overrides
+
+Use the override editor on `/queue/[id]` only for operator-level shot text and duration adjustments. The base render plan remains deterministic; the override is stored separately on `generated_contents.render_plan_override`, and the UI/API compute the effective render plan for preview and dispatch.
+
+Allowed edits:
+
+- shot caption;
+- shot voice text;
+- shot duration between 2 and 8 seconds;
+- optional `updated_by` operator label.
+
+Not allowed:
+
+- replacing image URLs;
+- editing affiliate links or disclosure text;
+- changing upload flags;
+- creating or claiming worker jobs;
+- calling external video/image APIs;
+- enabling platform upload.
+
+If the override contains unsafe claim language, forbidden fields, unknown shot IDs, or invalid durations, the save returns a safe JSON error and creates zero `worker_jobs`. `next-batch` revalidates any persisted override; invalid overrides move the queue item to manual review instead of creating a worker job. The `/dev/test-lab` status panel reports whether an override is present and the effective render plan shot count.
 
 Safety expectations:
 

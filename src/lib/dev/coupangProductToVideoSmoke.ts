@@ -6,6 +6,8 @@ import {
   type CoupangCandidateReadiness
 } from "@/lib/coupang/coupangCandidateImport";
 import type { AutomationRepository } from "@/lib/repositories/types";
+import { getEffectiveRenderPlan } from "@/lib/video/renderPlanOverride";
+import { buildStoryboardRenderPlan } from "@/lib/video/storyboardTemplatePlanner";
 import type {
   ChannelUploadPackage,
   GeneratedContent,
@@ -39,6 +41,8 @@ export type CoupangSmokeStatus = {
   product_asset_types: string[];
   render_plan_attached: boolean;
   render_plan_shot_count: number;
+  render_plan_override_present: boolean;
+  effective_render_plan_shot_count: number;
   upload_package_id: string;
   upload_package_status: string;
   created_worker_jobs: number;
@@ -171,6 +175,7 @@ export async function getCoupangProductToVideoSmokeStatus(
   const latestJob = queueJobs.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
   const latestPackage = packages.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
   const renderPlanShotCount = getRenderPlanShotCount(latestJob?.payload);
+  const effectiveRenderPlanShotCount = getEffectiveRenderPlanShotCount(queue, content) || renderPlanShotCount;
   const blockingReasons = buildBlockingReasons({ candidate, queue, content, latestJob, assets, latestPackage });
   const stage = inferStage({ candidate, queue, content, latestJob, assets, latestPackage, blockingReasons });
 
@@ -187,6 +192,8 @@ export async function getCoupangProductToVideoSmokeStatus(
     product_asset_types: assets.filter((asset) => asset.url.trim()).map((asset) => asset.asset_type).sort(),
     render_plan_attached: renderPlanShotCount > 0,
     render_plan_shot_count: renderPlanShotCount,
+    render_plan_override_present: Boolean(content?.render_plan_override?.shots?.length),
+    effective_render_plan_shot_count: effectiveRenderPlanShotCount,
     upload_package_id: latestPackage?.id ?? "",
     upload_package_status: latestPackage?.status ?? "",
     created_worker_jobs: queueJobs.length,
@@ -194,6 +201,18 @@ export async function getCoupangProductToVideoSmokeStatus(
     worker_command: WORKER_COMMAND,
     worker_execution_note: "WebApp은 Python Worker를 직접 실행하지 않습니다. 별도 PowerShell에서 실행하세요."
   };
+}
+
+function getEffectiveRenderPlanShotCount(queue: ProductQueueItem | null, content: GeneratedContent | null) {
+  if (!queue || !content) {
+    return 0;
+  }
+  const baseResult = buildStoryboardRenderPlan(queue, content);
+  if (!baseResult.ok) {
+    return 0;
+  }
+  const effectiveResult = getEffectiveRenderPlan(baseResult.render_plan, content.render_plan_override);
+  return effectiveResult.ok ? effectiveResult.render_plan.shots.length : 0;
 }
 
 function getRenderPlanShotCount(payload: unknown) {

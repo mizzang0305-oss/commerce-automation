@@ -1,5 +1,6 @@
 import type { GeneratedContent, ProductQueueItem } from "@/types/automation";
 import type { RenderPlan, RenderPlanShot } from "@/lib/video/renderPlanTypes";
+import { getEffectiveRenderPlan } from "@/lib/video/renderPlanOverride";
 
 export type RenderPlanPreviewGap =
   | "no_render_plan"
@@ -13,6 +14,7 @@ export type RenderPlanPreviewGap =
   | "missing_caption"
   | "missing_voice_text"
   | "too_long_caption"
+  | "invalid_override"
   | "unsafe_claim_warning";
 
 export type RenderPlanPreviewRow = {
@@ -31,6 +33,9 @@ export type RenderPlanPreviewRow = {
 export type RenderPlanPreviewSummary = {
   mode: "render_plan" | "legacy_fallback";
   ready: boolean;
+  override_present: boolean;
+  override_valid: boolean;
+  override_error: string;
   shot_count: number;
   total_duration_sec: number;
   gaps: RenderPlanPreviewGap[];
@@ -61,6 +66,9 @@ export function summarizeRenderPlanPreview(
     return {
       mode: "legacy_fallback",
       ready: false,
+      override_present: Boolean(content?.render_plan_override?.shots?.length),
+      override_valid: false,
+      override_error: "",
       shot_count: 0,
       total_duration_sec: 0,
       gaps: uniqueGaps(["no_render_plan", ...inputGaps]),
@@ -68,15 +76,23 @@ export function summarizeRenderPlanPreview(
     };
   }
 
-  const rows = buildRows(renderPlan.shots);
+  const effectiveResult = getEffectiveRenderPlan(renderPlan, content?.render_plan_override);
+  const effectiveRenderPlan = effectiveResult.ok ? effectiveResult.render_plan : renderPlan;
+  const rows = buildRows(effectiveRenderPlan.shots);
   const shotGaps = rows.flatMap((row) => row.missing_reasons);
-  const planGaps: RenderPlanPreviewGap[] = renderPlan.shots.length === 0 ? ["empty_shots"] : [];
+  const planGaps: RenderPlanPreviewGap[] = effectiveRenderPlan.shots.length === 0 ? ["empty_shots"] : [];
+  if (!effectiveResult.ok) {
+    planGaps.push("invalid_override");
+  }
   const gaps = uniqueGaps([...inputGaps, ...planGaps, ...shotGaps]);
 
   return {
     mode: "render_plan",
     ready: gaps.length === 0,
-    shot_count: renderPlan.shots.length,
+    override_present: Boolean(content?.render_plan_override?.shots?.length),
+    override_valid: effectiveResult.ok,
+    override_error: effectiveResult.ok ? "" : effectiveResult.message,
+    shot_count: effectiveRenderPlan.shots.length,
     total_duration_sec: rows.reduce((sum, row) => sum + Math.max(0, row.duration_sec), 0),
     gaps,
     rows

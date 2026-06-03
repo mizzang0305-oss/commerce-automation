@@ -4,6 +4,7 @@ import { canProcessBatch } from "@/lib/guards";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { createAutomationRun } from "@/lib/server/runLog";
 import { buildStoryboardRenderPlan } from "@/lib/video/storyboardTemplatePlanner";
+import { getEffectiveRenderPlan } from "@/lib/video/renderPlanOverride";
 import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 
 export const dynamic = "force-dynamic";
@@ -93,11 +94,23 @@ export async function POST() {
       continue;
     }
 
+    const renderPlan = buildStoryboardRenderPlan(item, content);
+    const effectiveRenderPlan = renderPlan.ok
+      ? getEffectiveRenderPlan(renderPlan.render_plan, content?.render_plan_override)
+      : null;
+    if (effectiveRenderPlan && !effectiveRenderPlan.ok) {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: `render_plan override is invalid: ${effectiveRenderPlan.message}`
+      });
+      continue;
+    }
+
     await repository.updateQueueItemById(item.id, {
       queue_status: "processing",
       error_message: ""
     });
-    const renderPlan = buildStoryboardRenderPlan(item, content);
     jobs.push(
       await repository.createWorkerJob({
         job_type: "video_render",
@@ -118,7 +131,7 @@ export async function POST() {
             description: content?.youtube_description ?? "",
             hashtags: content?.hashtags ?? ""
           },
-          ...(renderPlan.ok ? { render_plan: renderPlan.render_plan } : {})
+          ...(effectiveRenderPlan?.ok ? { render_plan: effectiveRenderPlan.render_plan } : {})
         }
       })
     );

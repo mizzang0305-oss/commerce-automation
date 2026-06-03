@@ -153,7 +153,13 @@ python -m compileall python-worker
 - `/queue/[id]` shows a render plan preview when product name, affiliate link, thumbnail, video script, and disclosure text are ready.
 - The preview shows `render_plan_attached=true`, shot count, total duration, per-shot captions, image URLs, voice text, and readiness status.
 - `/queue/[id]` shows legacy fallback copy and missing inputs when a render plan cannot be built.
-- The preview creates zero `worker_jobs` and does not change Python Worker render behavior.
+- The preview and lightweight override editor create zero `worker_jobs` and do not launch Python Worker.
+- `POST /api/queue/[id]/render-plan-override` accepts only shot caption, voice text, duration, and operator metadata.
+- Render plan override validation rejects unknown shot IDs, unsafe claim language, forbidden fields, image URL replacement, upload flags, and invalid durations.
+- Saving an override stores `generated_contents.render_plan_override` separately from the deterministic base plan.
+- `/api/run/next-batch` uses the effective render plan when a valid override exists.
+- Invalid persisted overrides move the queue item to manual review instead of creating a worker job.
+- The override workflow adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
 
 ## Coupang Product-To-Video Smoke QA
 
@@ -162,7 +168,7 @@ python -m compileall python-worker
 - Promote creates a scheduled `product_queue` row and generated-content scaffold, not a worker job.
 - Content draft generation fills `video_script` and creates zero worker jobs.
 - Next-batch creates the `video_render` worker job and includes `image_url` or `thumbnail_url`.
-- The status panel reports `render_plan_attached` and `render_plan_shot_count` for the latest worker job payload.
+- The status panel reports `render_plan_attached`, `render_plan_shot_count`, `render_plan_override_present`, and `effective_render_plan_shot_count`.
 - The WebApp displays the Python Worker command but does not execute it.
 - After the Worker runs externally, status reaches `video_ready` only when `video_url` exists.
 - R2 or real storage artifact URLs for video, thumbnail, subtitle, and upload package return HTTP 200.

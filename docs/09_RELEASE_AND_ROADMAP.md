@@ -152,3 +152,23 @@ Not included:
 - WebApp-controlled Python Worker process launching.
 - Live OpenAI/Gemini content generation.
 - ViMax or other agentic video engine integration.
+
+## v2.0 Render Plan Operator Overrides
+
+The next video-control layer keeps the deterministic storyboard template but lets an operator make lightweight shot edits before dispatch.
+
+Included:
+
+- `generated_contents.render_plan_override` for shot-level text and duration overrides.
+- `/queue/[id]` render plan override editor.
+- `POST /api/queue/[id]/render-plan-override` with safe validation and zero worker-job creation.
+- Effective render plan preview that merges the base plan with a valid override.
+- `/api/run/next-batch` revalidation so invalid overrides go to manual review instead of creating worker jobs.
+
+Not included:
+
+- image URL replacement inside overrides;
+- worker job creation from override saves;
+- Python Worker process launch from WebApp;
+- ViMax dependency or external video/image API calls;
+- YouTube/TikTok/Threads upload APIs or public upload enablement.

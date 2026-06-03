@@ -280,6 +280,79 @@ describe("next batch worker dispatch", () => {
     });
   });
 
+  test("passes effective render_plan with operator override to worker payload", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      selected_affiliate_url: "https://link.coupang.com/a/render-plan-override",
+      thumbnail_url: "https://picsum.photos/seed/render-plan-override/1080/1920"
+    });
+    await repository.upsertGeneratedContent(
+      buildGeneratedContent(item.id, {
+        disclosure_text: "This content contains affiliate links.",
+        video_script: "Start with the product. Show key details. Ask viewers to confirm options before buying.",
+        render_plan_override: {
+          shots: [
+            {
+              shot_id: "hook",
+              caption: "Operator approved hook",
+              voice_text: "This operator approved hook is safe for rendering.",
+              duration_seconds: 4
+            }
+          ],
+          updated_by: "operator"
+        }
+      })
+    );
+
+    const response = await nextBatch();
+    const payload = await readJson(response);
+    const jobs = await repository.getWorkerJobs();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({ ok: true, created_jobs: 1 });
+    expect(jobs[0].payload.render_plan).toMatchObject({
+      shots: expect.arrayContaining([
+        expect.objectContaining({
+          shot_id: "hook",
+          caption: "Operator approved hook",
+          voice_text: "This operator approved hook is safe for rendering.",
+          duration_sec: 4
+        })
+      ])
+    });
+  });
+
+  test("moves item with invalid render_plan override to manual review instead of creating a job", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      selected_affiliate_url: "https://link.coupang.com/a/render-plan-invalid-override",
+      thumbnail_url: "https://picsum.photos/seed/render-plan-invalid-override/1080/1920"
+    });
+    await repository.upsertGeneratedContent(
+      buildGeneratedContent(item.id, {
+        disclosure_text: "This content contains affiliate links.",
+        video_script: "Start with the product. Show key details. Ask viewers to confirm options before buying.",
+        render_plan_override: {
+          shots: [{ shot_id: "hook", caption: "100% lowest price guaranteed" }],
+          updated_by: "operator"
+        }
+      })
+    );
+
+    const response = await nextBatch();
+    const updated = await repository.getQueueItem(item.id);
+
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).created_jobs).toBe(0);
+    expect(updated?.queue_status).toBe("manual_review");
+    expect(updated?.error_message).toContain("render_plan override");
+    expect(await repository.getWorkerJobs()).toHaveLength(0);
+  });
+
   test("does not create worker jobs when python worker dispatch is disabled", async () => {
     const repository = getAutomationRepository();
     await repository.updateSettings({ is_paused: false, python_worker_enabled: false });

@@ -333,9 +333,18 @@ function mapGeneratedContentRow(row: Record<string, unknown>): GeneratedContent 
     video_status: emptyString(row.video_status),
     blog_draft_url: emptyString(row.blog_draft_url),
     blog_draft_status: emptyString(row.blog_draft_status),
+    render_plan_override: normalizeRenderPlanOverrideRow(row.render_plan_override),
+    render_plan_override_updated_at: emptyString(row.render_plan_override_updated_at),
+    render_plan_override_updated_by: emptyString(row.render_plan_override_updated_by),
     created_at: emptyString(row.created_at),
     updated_at: emptyString(row.updated_at)
   };
+}
+
+function normalizeRenderPlanOverrideRow(value: unknown): GeneratedContent["render_plan_override"] {
+  return value && typeof value === "object" && !Array.isArray(value) && Array.isArray((value as { shots?: unknown }).shots)
+    ? value as GeneratedContent["render_plan_override"]
+    : null;
 }
 
 function mapRunRow(row: Record<string, unknown>): AutomationRun {

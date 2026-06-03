@@ -20,6 +20,8 @@ type SmokeStatus = {
   product_asset_types: string[];
   render_plan_attached: boolean;
   render_plan_shot_count: number;
+  render_plan_override_present: boolean;
+  effective_render_plan_shot_count: number;
   upload_package_id: string;
   upload_package_status: string;
   created_worker_jobs: number;
@@ -185,6 +187,8 @@ export function DevScenarioPanel({
           <SmokeField label="product_assets" value={smokeStatus ? `${smokeStatus.product_assets_count} (${smokeStatus.product_asset_types.join(", ")})` : ""} />
           <SmokeField label="render_plan_attached" value={smokeStatus ? String(smokeStatus.render_plan_attached === true) : ""} />
           <SmokeField label="render_plan_shots" value={smokeStatus ? String(smokeStatus.render_plan_shot_count ?? 0) : ""} />
+          <SmokeField label="render_plan_override_present" value={smokeStatus ? String(smokeStatus.render_plan_override_present === true) : ""} />
+          <SmokeField label="effective_render_plan_shots" value={smokeStatus ? String(smokeStatus.effective_render_plan_shot_count ?? 0) : ""} />
           <SmokeField label="upload_package_id" value={uploadPackageId} />
         </div>
         {smokeStatus?.blocking_reasons?.length ? (
