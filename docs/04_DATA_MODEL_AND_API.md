@@ -84,6 +84,31 @@ Builds a computed daily plan from product candidates, upcoming 7-30 day events, 
 
 Creates a single event-sourced candidate with affiliate URL, product key, thumbnail, score, and ready promotion status. This smoke seed creates no queue row and no worker job; promotion, content draft generation, and next-batch remain separate steps.
 
+### POST /api/candidates/import-coupang
+
+Creates or updates one `product_candidates` row from a manually pasted Coupang product URL.
+
+Request fields:
+
+- `product_name` (required)
+- `raw_coupang_url` (required, `coupang.com` product detail URL)
+- `selected_affiliate_url` (optional, must be a Coupang short affiliate URL when present)
+- `thumbnail_url`, `price_now_text`, `category_path` (optional)
+
+Behavior:
+
+1. Normalize the product URL and remove tracking parameters.
+2. Build a deterministic `product_key` from product, item, and vendor identifiers when available.
+3. Validate the affiliate link and mark missing links as `blocked_missing_affiliate`.
+4. Upsert only `product_candidates`.
+5. Return `queue_items_created=0` and `worker_jobs_created=0`.
+
+This endpoint does not create `product_queue` rows, does not create `worker_jobs`, and does not call any upload platform API.
+
+### POST /api/collectors/import-csv
+
+Imports CSV rows into `product_candidates`. When the source or URL is Coupang-specific, the import path uses the same URL normalization, affiliate validation, product key, scoring, dedupe, and promotion readiness logic as `POST /api/candidates/import-coupang`.
+
 ## worker_jobs
 
 Fields:

@@ -89,6 +89,8 @@ python -m compileall python-worker
 - Crawling/import work does not bypass login, CAPTCHA, bot blocking, terms, or copy protected review text.
 - Imported candidates get `product_key`, `candidate_score`, `duplicate_status`, and `promotion_status`.
 - `product_key` generation must not include secret-like payload keys or token values.
+- `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns `queue_items_created=0` plus `worker_jobs_created=0`.
+- Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.
 - Missing `selected_affiliate_url` maps to `blocked_missing_affiliate`; missing `product_name` maps to `blocked_missing_name`.
 - Duplicate candidate, queued, or produced rows map to `blocked_duplicate`.
 - Candidate promotion creates `product_queue` and generated-content scaffold only; `worker_jobs` must remain empty until `next-batch`.

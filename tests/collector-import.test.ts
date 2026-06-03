@@ -101,4 +101,40 @@ describe("collector candidate import", () => {
       expect.arrayContaining([expect.objectContaining({ product_name: "Deal" })])
     );
   });
+
+  test("enriches Coupang CSV rows with product key and affiliate readiness", () => {
+    const csv = [
+      "product_name,raw_coupang_url,selected_affiliate_url,thumbnail_url,price_now_text,category_path,source_type,itemId,vendorItemId",
+      "Coupang CSV Product,https://www.coupang.com/vp/products/123456789?utm_source=ad,https://link.coupang.com/a/test-csv,https://picsum.photos/seed/csv/1080/1920,12900원,생활/수납,manual_url,111,222",
+      "Missing Affiliate,https://www.coupang.com/vp/products/987654321,,https://picsum.photos/seed/csv-missing/1080/1920,9900,생활,manual_url,,"
+    ].join("\n");
+
+    const result = parseCandidateCsv(csv, { source: "coupang_csv" });
+
+    expect(result.errors).toEqual([]);
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates[0]).toMatchObject({
+      product_name: "Coupang CSV Product",
+      raw_coupang_url: "https://www.coupang.com/vp/products/123456789?itemId=111&vendorItemId=222",
+      selected_affiliate_url: "https://link.coupang.com/a/test-csv",
+      product_key: "coupang:product:123456789:item:111:vendor:222",
+      platform: "coupang",
+      source_type: "manual_url",
+      category: "생활/수납",
+      promotion_status: "ready"
+    });
+    expect(result.candidates[0].payload).toMatchObject({
+      source: "coupang_csv",
+      source_platform: "coupang",
+      affiliate_validation_status: "valid",
+      affiliate_validation_reason: "affiliate link validated"
+    });
+    expect(result.candidates[1]).toMatchObject({
+      product_key: "coupang:product:987654321",
+      promotion_status: "blocked_missing_affiliate"
+    });
+    expect(result.candidates[1].payload).toMatchObject({
+      affiliate_validation_status: "missing"
+    });
+  });
 });

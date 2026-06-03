@@ -41,13 +41,15 @@ The Web Service uses a repository adapter behind one TypeScript contract.
 
 The planner is a WebApp-side planning layer that reads `product_candidates`, static event seeds, channel profiles, and production history to produce a daily shortlist. It never creates worker jobs. The expected path remains:
 
-1. Collector/import creates `product_candidates`.
+1. Manual Coupang input or collector/CSV import creates `product_candidates`.
 2. Operator reviews and promotes a candidate to `product_queue`.
 3. Operator generates a content draft for the queue item.
 4. `/api/run/next-batch` creates `worker_jobs` only for items that pass guards.
 5. Python Worker renders video and uploads artifacts.
 
 Event calendar and channel profile tables are provided by `supabase/migrations/003_event_calendar_and_planner.sql` for future persisted planner state. The first implementation uses static event/channel foundations and computed daily plans.
+
+The MVP product input path is intentionally in-house and WebApp-driven. `/api/candidates/import-coupang` normalizes a manually pasted Coupang product URL, validates the optional affiliate short link, and upserts a candidate only. It does not expand n8n, Creatomate, Google Docs, platform uploads, queue rows, or worker jobs.
 
 ### Python Worker
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   flexRender,
@@ -84,6 +84,18 @@ export function CandidateReviewClient({ candidates, readiness }: CandidateReview
     status: "idle",
     message: ""
   });
+  const [manualForm, setManualForm] = useState({
+    product_name: "",
+    raw_coupang_url: "",
+    selected_affiliate_url: "",
+    thumbnail_url: "",
+    price_now_text: "",
+    category_path: ""
+  });
+  const [manualState, setManualState] = useState<{
+    status: "idle" | "loading" | "success" | "error";
+    message: string;
+  }>({ status: "idle", message: "" });
   const columns = useMemo<ColumnDef<CandidateRow>[]>(
     () => [
       {
@@ -195,9 +207,130 @@ export function CandidateReviewClient({ candidates, readiness }: CandidateReview
     router.refresh();
   }
 
+  async function submitManualCandidate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setManualState({ status: "loading", message: "후보를 생성하는 중입니다." });
+    const response = await fetch("/api/candidates/import-coupang", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(manualForm)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      setManualState({
+        status: "error",
+        message: typeof payload.message === "string" ? payload.message : "후보 생성 중 오류가 발생했습니다."
+      });
+      return;
+    }
+    setManualState({
+      status: "success",
+      message:
+        payload.readiness?.promotion_status === "ready"
+          ? "승격 가능한 후보를 생성했습니다."
+          : "후보를 생성했습니다. 승격 전 누락값을 확인하세요."
+    });
+    setManualForm({
+      product_name: "",
+      raw_coupang_url: "",
+      selected_affiliate_url: "",
+      thumbnail_url: "",
+      price_now_text: "",
+      category_path: ""
+    });
+    router.refresh();
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
       <section className="space-y-3">
+        <form
+          onSubmit={submitManualCandidate}
+          className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <div>
+            <h2 className="text-base font-bold text-slate-950">쿠팡 상품 수동 추가</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              제휴 링크가 없는 후보는 큐로 승격할 수 없습니다.
+            </p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <label className="text-sm font-semibold text-slate-700">
+              상품명
+              <input
+                value={manualForm.product_name}
+                onChange={(event) => setManualForm((form) => ({ ...form, product_name: event.target.value }))}
+                required
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              쿠팡 원본 URL
+              <input
+                value={manualForm.raw_coupang_url}
+                onChange={(event) => setManualForm((form) => ({ ...form, raw_coupang_url: event.target.value }))}
+                required
+                placeholder="https://www.coupang.com/vp/products/..."
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              제휴 링크
+              <input
+                value={manualForm.selected_affiliate_url}
+                onChange={(event) =>
+                  setManualForm((form) => ({ ...form, selected_affiliate_url: event.target.value }))
+                }
+                placeholder="https://link.coupang.com/a/..."
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              썸네일 URL
+              <input
+                value={manualForm.thumbnail_url}
+                onChange={(event) => setManualForm((form) => ({ ...form, thumbnail_url: event.target.value }))}
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              현재가
+              <input
+                value={manualForm.price_now_text}
+                onChange={(event) => setManualForm((form) => ({ ...form, price_now_text: event.target.value }))}
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              카테고리
+              <input
+                value={manualForm.category_path}
+                onChange={(event) => setManualForm((form) => ({ ...form, category_path: event.target.value }))}
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-teal-600"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={manualState.status === "loading"}
+              className="rounded-md bg-teal-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              후보 생성
+            </button>
+            {manualState.message ? (
+              <span
+                className={
+                  manualState.status === "error"
+                    ? "text-sm font-semibold text-red-700"
+                    : "text-sm font-semibold text-slate-600"
+                }
+              >
+                {manualState.message}
+              </span>
+            ) : null}
+          </div>
+        </form>
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm lg:grid-cols-[1fr_160px_180px_180px]">
           <label className="text-sm font-semibold text-slate-700">
             검색
@@ -209,7 +342,7 @@ export function CandidateReviewClient({ candidates, readiness }: CandidateReview
             />
           </label>
           <label className="text-sm font-semibold text-slate-700">
-            제휴 링크
+            제휴 링크 필터
             <select
               value={affiliateFilter}
               onChange={(event) => setAffiliateFilter(event.target.value as typeof affiliateFilter)}
