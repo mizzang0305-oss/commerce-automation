@@ -10,6 +10,7 @@ import {
   validateAffiliateUrl,
   type AffiliateValidationStatus
 } from "@/lib/coupang/coupangUrl";
+import { buildImageReadiness, normalizeImageUrl, type ImageReadinessStatus } from "@/lib/coupang/coupangImage";
 
 export type CoupangCandidateInput = {
   product_name?: unknown;
@@ -30,6 +31,8 @@ export type CoupangCandidateReadiness = {
   product_key: string;
   affiliate_validation_status: AffiliateValidationStatus;
   affiliate_validation_reason: string;
+  image_readiness_status: ImageReadinessStatus;
+  image_url: string;
   duplicate_status: ProductCandidate["duplicate_status"];
   promotion_status: ProductCandidate["promotion_status"];
   candidate_score: number;
@@ -84,7 +87,7 @@ export function buildCoupangCandidate(
   const now = new Date().toISOString();
   const categoryPath = text(input.category_path);
   const sourceType = text(input.source_type) || "manual_url";
-  const thumbnailUrl = text(input.thumbnail_url);
+  const thumbnailUrl = normalizeImageUrl(text(input.thumbnail_url));
   const priceNowText = text(input.price_now_text);
 
   const candidate = enrichProductCandidate(
@@ -117,6 +120,7 @@ export function buildCoupangCandidate(
     },
     context
   );
+  const imageReadiness = buildImageReadiness(candidate);
 
   return {
     candidate,
@@ -124,6 +128,8 @@ export function buildCoupangCandidate(
       product_key: candidate.product_key ?? productKey,
       affiliate_validation_status: affiliate.status,
       affiliate_validation_reason: affiliate.reason,
+      image_readiness_status: imageReadiness.status,
+      image_url: imageReadiness.image_url,
       duplicate_status: candidate.duplicate_status,
       promotion_status: candidate.promotion_status,
       candidate_score: candidate.candidate_score ?? 0

@@ -37,6 +37,7 @@ python -m compileall python-worker
 - Missing disclosure text moves item to `manual_review`.
 - Missing script moves item to `manual_review`.
 - Missing thumbnail/image URL moves item to `manual_review`.
+- Valid worker job payload includes `image_url` or `thumbnail_url` for product image download.
 - n8n webhook is not called by `/api/run/next-batch`.
 
 ## Security QA
@@ -91,7 +92,9 @@ python -m compileall python-worker
 - `product_key` generation must not include secret-like payload keys or token values.
 - `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns `queue_items_created=0` plus `worker_jobs_created=0`.
 - Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.
+- Coupang candidate image URLs accept only usable `http`/`https` image sources; empty, `file:`, `javascript:`, and other unsafe schemes are blocked from render readiness.
 - Missing `selected_affiliate_url` maps to `blocked_missing_affiliate`; missing `product_name` maps to `blocked_missing_name`.
+- Missing or invalid product image maps to review/blocking behavior and cannot become a renderable queue row.
 - Duplicate candidate, queued, or produced rows map to `blocked_duplicate`.
 - Candidate promotion creates `product_queue` and generated-content scaffold only; `worker_jobs` must remain empty until `next-batch`.
 - `/candidates` shows score, product key, duplicate status, promotion status, and keeps secret-like payload keys redacted.
@@ -104,6 +107,14 @@ python -m compileall python-worker
 - Content draft generation creates no `worker_jobs`.
 - A queue item with generated `video_script`, disclosure text, affiliate link, and thumbnail can later pass next-batch render guards.
 - `/queue/[id]` shows content readiness and the `콘텐츠 초안 생성` action without exposing secrets.
+
+## Render Quality QA
+
+- Python Worker image download uses a bounded timeout and requires HTTP 200.
+- Non-image `Content-Type`, empty image bodies, and unreachable product image URLs fail/retry safely.
+- Image download failure does not upload placeholder video/thumbnail/SRT/upload package artifacts.
+- The vertical render layout stays 1080x1920 and uses scale/pad before burning subtitles.
+- Generated thumbnails are 1080x1920 and wrap long product titles instead of overflowing.
 
 ## Event Planner QA
 

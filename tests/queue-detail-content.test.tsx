@@ -53,4 +53,31 @@ describe("queue detail content draft UI", () => {
     });
     expect(screen.getByText(/worker job은 생성하지 않았습니다/)).toBeInTheDocument();
   });
+
+  test("renders product image readiness in the worker checklist", () => {
+    const item = createQueueItemFixture({
+      id: "queue-image-readiness-ui",
+      queue_status: "scheduled",
+      selected_affiliate_url: "https://link.coupang.com/a/image-readiness",
+      thumbnail_url: ""
+    });
+    const content = createGeneratedContentFixture({
+      product_queue_id: item.id,
+      video_script: "영상 대본입니다.",
+      disclosure_text: "제휴 고지 문구입니다."
+    });
+
+    render(
+      <QueueDetailView
+        item={item}
+        content={content}
+        settings={createDefaultSettings()}
+        assets={[]}
+        workerJobs={[]}
+      />
+    );
+
+    expect(screen.getAllByText(/상품 이미지 URL/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/상품 이미지 URL이 없어 영상 생성이 차단됩니다/)).toBeInTheDocument();
+  });
 });

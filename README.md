@@ -98,9 +98,10 @@ Collectors only create `product_candidates`; they do not create worker jobs or m
 The MVP operator path also supports direct Coupang candidate input from `/candidates`:
 
 - `POST /api/candidates/import-coupang`
-- body fields: `product_name`, `raw_coupang_url`, optional `selected_affiliate_url`, `thumbnail_url`, `price_now_text`, and `category_path`.
+- body fields: `product_name`, `raw_coupang_url`, optional `selected_affiliate_url`, `thumbnail_url` or payload image URL, `price_now_text`, and `category_path`.
 - `raw_coupang_url` must be a `coupang.com` product detail URL. Tracking parameters are removed while product/item/vendor identifiers are retained for deterministic `product_key` creation.
 - `selected_affiliate_url` is validated as a Coupang short affiliate link. Missing affiliate links are stored as candidates but remain blocked from queue promotion.
+- product image URLs must be `http`/`https` and look usable for worker download. Non-web schemes and missing image URLs keep the candidate in review instead of letting it become renderable.
 - This endpoint creates zero `product_queue` rows and zero `worker_jobs`.
 
 CSV rows must include a product name and an `http`/`https` source URL. Non-web schemes such as `javascript:`, `file:`, or empty URLs are rejected. Optional Python collector helpers live under `python-worker/src/collectors/` for CSV/XLSX link import and future public-page/API collectors. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
@@ -109,10 +110,11 @@ Imported candidates now receive quality-control fields before they are promoted:
 
 - `product_key`: deterministic dedupe key. Coupang uses product/item/vendor identifiers when present, Musinsa uses `goods_no` or URL IDs, and other sources use normalized URL/name hashes.
 - `candidate_score`: 0-100 score based on affiliate link, product name, image, price, discount, review/rating, source type, and known platform signals.
+- `image_readiness_status`: `ready`, `missing_image`, or `invalid_image_url`; candidates without a usable image cannot be promoted to a renderable queue item.
 - `duplicate_status`: `unique`, `duplicate_candidate`, `already_queued`, `already_produced`, or `unknown`.
 - `promotion_status`: `ready`, `blocked_missing_affiliate`, `blocked_missing_name`, `blocked_duplicate`, `needs_review`, or `promoted`.
 
-The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
+The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold, and propagates the selected candidate image into `product_queue.thumbnail_url`; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
 
 Promoted queue items can receive a safe template draft before worker dispatch:
 
@@ -162,6 +164,8 @@ Worker APIs are server-to-server only and require `Authorization: Bearer WORKER_
 
 `video_render` completion must include a non-empty `result.video_url`. Without it, the job is not completed and the queue item is not moved to `video_ready`.
 
+`video_render` job payloads must include a downloadable product image through `image_url` or `thumbnail_url`. `/api/run/next-batch` blocks queue items without a product image and moves them to manual review rather than creating a worker job.
+
 ## Python Worker
 
 ```powershell
@@ -181,6 +185,12 @@ Supported worker runtime:
 - Not supported: Python 3.13+ or Python 3.14+.
 
 The worker checks the interpreter version before loading env config or contacting the web API. On Python 3.14+, it exits locally with a setup message such as `py -3.12 -m venv .venv`; it does not report fake job success or failure to the web app.
+
+### Product Image Render Safety
+
+For `video_render`, the worker accepts `payload.image_url` first and falls back to `payload.thumbnail_url`. It downloads the image with a bounded timeout, requires a successful HTTP 200 response, requires an `image/*` content type, and rejects empty image bodies. Image download failures become worker job fail/retry results; they must not upload placeholder artifacts, complete the job, or mark the queue item `video_ready`.
+
+Rendered videos use a fixed 1080x1920 vertical layout. The renderer scales and pads product imagery into that frame and burns generated SRT captions into the output. Thumbnail generation also targets 1080x1920 and wraps long product titles so the preview remains usable for manual upload package review.
 
 Required worker env:
 

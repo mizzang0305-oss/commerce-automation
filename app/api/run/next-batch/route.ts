@@ -107,6 +107,7 @@ export async function POST() {
           product_queue_id: item.id,
           product_name: item.product_name,
           image_url: item.thumbnail_url,
+          thumbnail_url: item.thumbnail_url,
           script: content?.video_script?.trim() ?? "",
           selected_affiliate_url: item.selected_affiliate_url,
           disclosure_text: content?.disclosure_text?.trim() ?? "",

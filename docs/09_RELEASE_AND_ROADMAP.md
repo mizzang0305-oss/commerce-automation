@@ -88,6 +88,8 @@ Included:
 - Coupang product URL normalization with tracking parameter removal.
 - Deterministic `product_key` from product, item, and vendor identifiers.
 - Affiliate short-link validation and `blocked_missing_affiliate` readiness for missing links.
+- Product image URL readiness checks and image propagation from candidate to queue to worker payload.
+- Python Worker product image download hardening and 1080x1920 render/thumbnail quality checks.
 - CSV import enrichment for Coupang rows.
 
 Not included:
@@ -96,3 +98,21 @@ Not included:
 - Worker job creation from import.
 - n8n, Creatomate, or Google Docs expansion.
 - YouTube/TikTok/Threads upload calls.
+
+## v1.7 Candidate-To-Render Quality Target
+
+The next quality layer keeps the MVP in-house while making rendered output less brittle.
+
+Included:
+
+- Candidate image readiness labels for missing or invalid image URLs.
+- Promotion guard that prevents renderable queue rows without a usable product image.
+- `/api/run/next-batch` payloads that pass both `image_url` and `thumbnail_url` to `video_render`.
+- Worker download checks for status code, content type, empty bodies, and safe timeout handling.
+- Vertical render layout and thumbnail title wrapping checks.
+
+Not included:
+
+- n8n, Creatomate, or Google Docs generation.
+- Public platform upload.
+- Login, CAPTCHA, block bypass, or protected review copying.

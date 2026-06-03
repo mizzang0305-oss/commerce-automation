@@ -13,7 +13,7 @@ from ..media.video_renderer import render_vertical_video
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
     payload = job.get("payload", {})
     product_name = str(payload.get("product_name", "product")).strip() or "product"
-    image_url = str(payload.get("image_url", "")).strip()
+    image_url = str(payload.get("image_url") or payload.get("thumbnail_url") or "").strip()
     script = str(payload.get("script", "")).strip()
     affiliate_url = str(payload.get("selected_affiliate_url", "")).strip()
     disclosure_text = str(payload.get("disclosure_text", "")).strip()
@@ -24,7 +24,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     if not script:
         raise ValueError("script is required for video_render")
     if not image_url:
-        raise ValueError("image_url is required for video_render")
+        raise ValueError("image_url or thumbnail_url is required for video_render")
 
     ffmpeg_exe = require_ffmpeg_for_video_render()
 

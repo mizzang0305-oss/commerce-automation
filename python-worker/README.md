@@ -100,6 +100,20 @@ Manual install:
 
 If `ffmpeg` is missing, startup can still succeed, but `video_render` jobs fail or retry without marking the queue item as `video_ready`. `video_ready` without `video_url` is a bug.
 
+## Product Image Render Safety
+
+`video_render` requires a product image URL in `payload.image_url` or `payload.thumbnail_url`. The worker downloads that image before TTS, subtitles, or ffmpeg rendering. Download checks require:
+
+- non-empty URL
+- HTTP 200 response
+- `image/*` response content type
+- non-empty response body
+- bounded network timeout
+
+Failures raise safe worker errors and use the normal fail/retry path. The worker must not upload placeholder artifacts, complete `video_render`, or mark a queue item `video_ready` after image download failure.
+
+Rendered videos and thumbnails target a 1080x1920 vertical format. The ffmpeg filter scales and pads product imagery into the vertical frame, burns generated subtitles, and the thumbnail generator wraps long product names so text stays inside the output.
+
 ## Local Smoke Rerun
 
 After installing Python 3.12 and ffmpeg:

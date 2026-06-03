@@ -101,11 +101,13 @@ Then:
 4. Confirm exactly one `video_render` worker job is created.
 5. Run the Python Worker.
 6. Confirm `queue_status=video_ready`, `video_url` exists, and the artifact URL is a real storage URL for live storage smoke.
+7. Confirm the queue item has a product image URL and the worker job payload includes `image_url` or `thumbnail_url`.
 
 Safety expectations:
 
 - Candidate seed, promotion, and content draft generation create zero worker jobs.
 - `next-batch` is the only path that creates worker jobs.
+- Missing product image URL blocks worker job creation and keeps the item in manual review.
 - `video_ready` without `video_url` is a bug.
 - Public upload and YouTube/TikTok/Threads posting remain disabled.
 
@@ -203,6 +205,18 @@ Keep the existing four R2 buckets as separate buckets: `rendered-videos`, `thumb
 For local storage, run the worker from `python-worker/`. `LOCAL_STORAGE_BASE_DIR=./outputs/storage` then maps to `C:\Users\LOVE\MyProjects\commerce-automation\python-worker\outputs\storage`. In local/dev smoke runs, the web app reads the same files through `/mock-storage/...`.
 
 `/mock-storage` is local smoke tooling only. In production it returns 404 unless `ENABLE_MOCK_STORAGE_ROUTE=true` is explicitly set for a controlled test environment. Normal production deployments should leave `ENABLE_MOCK_STORAGE_ROUTE` unset and use Supabase Storage, Cloudflare R2, S3, or another real storage URL.
+
+### Product Image Intake And Render Checks
+
+The Coupang MVP path needs a real product image before an item can become renderable:
+
+1. `/api/candidates/import-coupang` accepts `thumbnail_url` or an equivalent payload image URL.
+2. Candidate review shows whether the image is ready, missing, or invalid.
+3. Candidate promotion copies the selected image into `product_queue.thumbnail_url`.
+4. Content draft generation and `/api/run/next-batch` require the queue image URL.
+5. The Python Worker receives the image as `image_url` and `thumbnail_url`, downloads it, and fails/retries safely if it is unreachable, empty, or not an image.
+
+Worker image download failures are normal job failures, not successful renders. They must not create placeholder artifacts, complete `video_render`, or move the queue item to `video_ready`.
 
 ### Windows ffmpeg Setup
 
@@ -342,7 +356,7 @@ Optional:
 - `price_now_text`
 - `category_path`
 
-The API removes tracking parameters, preserves product/item/vendor identifiers for `product_key`, validates the affiliate short link, and upserts only `product_candidates`. It must report `queue_items_created=0` and `worker_jobs_created=0`.
+The API removes tracking parameters, preserves product/item/vendor identifiers for `product_key`, validates the affiliate short link, validates product image readiness, and upserts only `product_candidates`. It must report `queue_items_created=0` and `worker_jobs_created=0`.
 
 Example request:
 
@@ -372,6 +386,7 @@ Candidate review fields:
 
 - `product_key` is used for deterministic dedupe. Coupang identifiers are preferred, Musinsa goods IDs are used when available, and generic sources fall back to normalized URL/name hashes.
 - `candidate_score` is an operational priority score from 0 to 100. Higher scores usually mean affiliate link, image, pricing, event/ranking, review/rating, and known-platform signals are present.
+- `image_readiness_status` explains whether a usable product image URL is ready, missing, or invalid.
 - `duplicate_status` explains whether the row is unique, duplicated against another candidate, already queued, already produced, or not yet known.
 - `promotion_status` decides whether the row can be promoted. Missing affiliate link, missing product name, or duplicate rows are blocked. Low score or missing image becomes `needs_review`.
 
@@ -381,7 +396,8 @@ Promotion rules:
 2. Promotion creates `product_queue` with `queue_status=scheduled`.
 3. Promotion creates a generated-content scaffold with the required affiliate disclosure.
 4. Promotion records `promotion_status=promoted` and `promoted_queue_id` on the candidate.
-5. Promotion does not create `worker_jobs`; run `/api/run/next-batch` after review to create eligible worker jobs.
+5. Promotion requires a usable product image and copies it to `product_queue.thumbnail_url`.
+6. Promotion does not create `worker_jobs`; run `/api/run/next-batch` after review to create eligible worker jobs.
 
 ## Generate Content Drafts
 

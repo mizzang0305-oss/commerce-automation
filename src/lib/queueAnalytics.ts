@@ -141,9 +141,11 @@ export function getRenderableChecklist(
       help: "video_render payload에 전달할 대본이 필요합니다."
     },
     {
-      label: "썸네일 이미지",
+      label: "상품 이미지 URL",
       ok: Boolean(item.thumbnail_url.trim()),
-      help: "worker가 다운로드할 상품 이미지 URL이 필요합니다."
+      help: item.thumbnail_url.trim()
+        ? "Python Worker가 다운로드할 상품 이미지 URL이 준비되었습니다."
+        : "상품 이미지 URL이 없어 영상 생성이 차단됩니다."
     },
     {
       label: "워커 작업",

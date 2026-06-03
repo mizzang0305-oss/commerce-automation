@@ -249,6 +249,8 @@ describe("next batch worker dispatch", () => {
       product_queue_id: seedPayload.item_id
     });
     expect(jobs[0].payload).toMatchObject({
+      image_url: expect.stringContaining("https://picsum.photos"),
+      thumbnail_url: expect.stringContaining("https://picsum.photos"),
       selected_affiliate_url: expect.stringContaining("https://link.coupang.com"),
       disclosure_text: expect.stringContaining("쿠팡 파트너스"),
       script: expect.stringContaining("worker smoke")
@@ -314,6 +316,29 @@ describe("next batch worker dispatch", () => {
     expect((await readJson(response)).created_jobs).toBe(0);
     expect(updated?.queue_status).toBe("manual_review");
     expect(updated?.error_message).toContain("제휴 고지");
+    expect(await repository.getWorkerJobs()).toHaveLength(0);
+  });
+
+  test("moves item without product image URL to manual review instead of creating a job", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      selected_affiliate_url: "https://link.coupang.com/a/renderable",
+      thumbnail_url: ""
+    });
+    await repository.upsertGeneratedContent(buildGeneratedContent(item.id, {
+      disclosure_text: "제휴 고지 문구",
+      video_script: "영상 대본입니다."
+    }));
+
+    const response = await nextBatch();
+    const updated = await repository.getQueueItem(item.id);
+
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).created_jobs).toBe(0);
+    expect(updated?.queue_status).toBe("manual_review");
+    expect(updated?.error_message).toContain("상품 이미지 URL");
     expect(await repository.getWorkerJobs()).toHaveLength(0);
   });
 
