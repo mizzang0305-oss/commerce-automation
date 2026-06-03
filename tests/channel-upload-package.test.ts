@@ -254,6 +254,7 @@ describe("channel upload package api", () => {
       status: "manual_ready",
       upload_enabled: false,
       manual_upload_only: true,
+      title: "Channel package product 핵심 체크",
       video_url: "https://storage.example/rendered-videos/item.mp4",
       thumbnail_url: "https://storage.example/thumbnails/item.jpg",
       subtitle_url: "https://storage.example/subtitles/item.srt",

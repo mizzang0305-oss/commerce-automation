@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
   ProductAsset,
@@ -21,6 +22,8 @@ import type {
   QueueSummary
 } from "@/lib/repositories/types";
 import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
+import { getDefaultChannelProfiles } from "@/lib/channels/defaultChannels";
+import { normalizeChannelProfile } from "@/lib/channels/channelProfileAdmin";
 import {
   createDefaultSettings,
   createMockGeneratedContents,
@@ -631,6 +634,36 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
   }
 
+  async getChannelProfiles() {
+    await this.ensureInitialized();
+    const profiles = await readJson<ChannelProfile[]>(this.paths.channelProfiles);
+    return clone(profiles.map(normalizeChannelProfile));
+  }
+
+  async getChannelProfile(id: string) {
+    const profiles = await this.getChannelProfiles();
+    return clone(profiles.find((profile) => profile.id === id) ?? null);
+  }
+
+  async updateChannelProfile(id: string, patch: Partial<ChannelProfile>) {
+    await this.ensureInitialized();
+    const profiles = await readJson<ChannelProfile[]>(this.paths.channelProfiles);
+    const index = profiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    profiles[index] = normalizeChannelProfile({
+      ...profiles[index],
+      ...patch,
+      id,
+      upload_enabled: false,
+      manual_upload_only: true,
+      updated_at: nowIso()
+    });
+    await atomicWriteJson(this.paths.channelProfiles, profiles);
+    return clone(profiles[index]);
+  }
+
   async getChannelUploadPackages(productQueueId?: string) {
     await this.ensureInitialized();
     const packages = await readJson<ChannelUploadPackage[]>(this.paths.channelUploadPackages);
@@ -762,6 +795,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     await atomicWriteJson(this.paths.productCandidates, []);
     await atomicWriteJson(this.paths.productionHistory, []);
     await atomicWriteJson(this.paths.productAssets, []);
+    await atomicWriteJson(this.paths.channelProfiles, getDefaultChannelProfiles().map(normalizeChannelProfile));
     await atomicWriteJson(this.paths.channelUploadPackages, []);
   }
 
@@ -790,6 +824,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     const productCandidatesExists = await fileExists(this.paths.productCandidates);
     const productionHistoryExists = await fileExists(this.paths.productionHistory);
     const productAssetsExists = await fileExists(this.paths.productAssets);
+    const channelProfilesExists = await fileExists(this.paths.channelProfiles);
     const channelUploadPackagesExists = await fileExists(this.paths.channelUploadPackages);
 
     if (
@@ -802,6 +837,7 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
       productCandidatesExists &&
       productionHistoryExists &&
       productAssetsExists &&
+      channelProfilesExists &&
       channelUploadPackagesExists
     ) {
       return;
@@ -842,6 +878,9 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     }
     if (!productAssetsExists) {
       await atomicWriteJson(this.paths.productAssets, []);
+    }
+    if (!channelProfilesExists) {
+      await atomicWriteJson(this.paths.channelProfiles, getDefaultChannelProfiles().map(normalizeChannelProfile));
     }
     if (!channelUploadPackagesExists) {
       await atomicWriteJson(this.paths.channelUploadPackages, []);

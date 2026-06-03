@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getDefaultChannelProfiles } from "@/lib/channels/defaultChannels";
 import { buildChannelUploadPackage } from "@/lib/channels/uploadPackage";
 import { routeQueueItemToChannel } from "@/lib/channels/channelRouting";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
@@ -95,7 +94,7 @@ async function buildUploadPackageResponse(request: Request, context: RouteContex
     ]);
   }
 
-  const channels = getDefaultChannelProfiles();
+  const channels = await repository.getChannelProfiles();
   const channel = routeQueueItemToChannel(item, channels, preferredChannelId);
   if (!channel) {
     return errorResponse(

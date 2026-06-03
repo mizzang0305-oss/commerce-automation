@@ -59,6 +59,8 @@ Defaults:
 - `youtube_upload_enabled=false`
 - public upload disabled
 - Channel profiles and upload packages use `upload_enabled=false` and `manual_upload_only=true`.
+- `/channels` may store channel display metadata and manual upload templates, but it must not store OAuth tokens or enable platform upload automation.
+- YouTube OAuth readiness can be shown as configured booleans only. Do not expose client secrets, access tokens, refresh tokens, service role keys, or storage secrets to client components.
 - Manual upload result tracking records operator-entered URLs/status only. It must not call YouTube, TikTok, or Threads APIs.
 
 ## Production Deployment Guardrails

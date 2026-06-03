@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
   ProductAsset,
@@ -24,6 +25,8 @@ import { assignSlots } from "@/lib/scheduler";
 import { getQueueSummary } from "@/lib/status";
 import { toDateInputValue } from "@/lib/format";
 import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
+import { getDefaultChannelProfiles } from "@/lib/channels/defaultChannels";
+import { normalizeChannelProfile } from "@/lib/channels/channelProfileAdmin";
 import {
   buildCandidatePromotion,
   filterProductCandidates,
@@ -317,6 +320,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
   private productCandidates: ProductCandidate[];
   private productAssets: ProductAsset[];
   private productionHistory: ProductionHistory[];
+  private channelProfiles: ChannelProfile[];
   private channelUploadPackages: ChannelUploadPackage[];
 
   constructor() {
@@ -329,6 +333,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     this.productCandidates = [];
     this.productAssets = [];
     this.productionHistory = [];
+    this.channelProfiles = getDefaultChannelProfiles().map(normalizeChannelProfile);
     this.channelUploadPackages = [];
   }
 
@@ -805,6 +810,30 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       ? this.productAssets.filter((asset) => asset.product_queue_id === productQueueId)
       : this.productAssets;
     return clone(assets);
+  }
+
+  async getChannelProfiles() {
+    return clone(this.channelProfiles.map(normalizeChannelProfile));
+  }
+
+  async getChannelProfile(id: string) {
+    return clone(this.channelProfiles.find((profile) => profile.id === id) ?? null);
+  }
+
+  async updateChannelProfile(id: string, patch: Partial<ChannelProfile>) {
+    const index = this.channelProfiles.findIndex((profile) => profile.id === id);
+    if (index === -1) {
+      return null;
+    }
+    this.channelProfiles[index] = normalizeChannelProfile({
+      ...this.channelProfiles[index],
+      ...patch,
+      id,
+      upload_enabled: false,
+      manual_upload_only: true,
+      updated_at: nowIso()
+    });
+    return clone(this.channelProfiles[index]);
   }
 
   async getChannelUploadPackages(productQueueId?: string) {

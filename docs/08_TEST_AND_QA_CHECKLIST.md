@@ -126,6 +126,8 @@ python -m compileall python-worker
 - Daily planner prefers `promotion_status=ready`, `duplicate_status=unique`, high candidate score, and higher event priority.
 - Planner excludes product keys already produced on the same plan date.
 - Channel profiles default to `upload_enabled=false` and `manual_upload_only=true`.
+- `/channels` profile updates cannot enable upload automation and cannot disable manual-only mode.
+- `/channels` responses and UI show OAuth readiness booleans only; they do not expose OAuth secrets or tokens.
 - `GET /api/planner/daily` reports YouTube readiness booleans only and does not expose OAuth secrets.
 - `candidate-video-smoke` seed creates a candidate only; it must not create a queue row or worker job.
 - `/planner` is read-only planning UI; it must not create worker jobs.

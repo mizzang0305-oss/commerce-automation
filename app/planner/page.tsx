@@ -1,5 +1,4 @@
 import { CalendarClock, CheckCircle2, ShieldCheck } from "lucide-react";
-import { getDefaultChannelProfiles } from "@/lib/channels/defaultChannels";
 import { getDefaultEventCalendar } from "@/lib/events/defaultEvents";
 import { getUpcomingEvents } from "@/lib/events/eventMatching";
 import { buildDailyProductionPlan } from "@/lib/planner/dailyProductionPlanner";
@@ -12,14 +11,14 @@ export default async function PlannerPage() {
   const repository = getAutomationRepository();
   const today = new Date();
   const todayText = today.toISOString().slice(0, 10);
-  const [settings, candidates, productionHistory, channelPackages] = await Promise.all([
+  const [settings, candidates, productionHistory, channelPackages, channels] = await Promise.all([
     repository.getSettings(),
     repository.getProductCandidates(),
     repository.getProductionHistory(),
-    repository.getChannelUploadPackages()
+    repository.getChannelUploadPackages(),
+    repository.getChannelProfiles()
   ]);
   const events = getDefaultEventCalendar(today.getUTCFullYear());
-  const channels = getDefaultChannelProfiles();
   const upcomingEvents = getUpcomingEvents(events, today, 30);
   const uploadPackageCountsByChannel = new Map<string, { manual_ready: number; uploaded: number; needs_fix: number }>();
   channelPackages.forEach((entry) => {
