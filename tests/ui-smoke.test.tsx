@@ -69,7 +69,7 @@ describe("ui smoke", () => {
     expect(screen.getByText("Mock 큐 69개 생성")).toBeInTheDocument();
     expect(screen.getByText("현재 저장소 어댑터")).toBeInTheDocument();
     expect(screen.getByText("local-json")).toBeInTheDocument();
-    expect(screen.getByText(/서버 재시작 후 유지/)).toBeInTheDocument();
+    expect(screen.getByText(/서버 API route에서만 service role을 사용합니다/)).toBeInTheDocument();
   });
 
   test("shows disabled public upload UI when YouTube upload is disabled", () => {

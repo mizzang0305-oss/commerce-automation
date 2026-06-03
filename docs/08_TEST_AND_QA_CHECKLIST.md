@@ -143,3 +143,16 @@ python -m compileall python-worker
 - Safety guard blocks guarantee, lowest-price, medical/health efficacy, and review-copy patterns.
 - `generate-content` creates zero `worker_jobs`.
 - `/api/run/next-batch` remains the only worker-job creation path.
+
+## Coupang Product-To-Video Smoke QA
+
+- `/dev/test-lab` shows the `쿠팡 상품 → 쇼츠 영상 E2E Smoke` panel.
+- Start creates only a `product_candidates` row.
+- Promote creates a scheduled `product_queue` row and generated-content scaffold, not a worker job.
+- Content draft generation fills `video_script` and creates zero worker jobs.
+- Next-batch creates the `video_render` worker job and includes `image_url` or `thumbnail_url`.
+- The WebApp displays the Python Worker command but does not execute it.
+- After the Worker runs externally, status reaches `video_ready` only when `video_url` exists.
+- R2 or real storage artifact URLs for video, thumbnail, subtitle, and upload package return HTTP 200.
+- Channel upload package creation returns `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
+- YouTube/TikTok/Threads upload APIs remain absent and public upload stays disabled.

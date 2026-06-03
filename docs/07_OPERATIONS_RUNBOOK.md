@@ -111,6 +111,41 @@ Safety expectations:
 - `video_ready` without `video_url` is a bug.
 - Public upload and YouTube/TikTok/Threads posting remain disabled.
 
+## Coupang Product-To-Video Test Lab Smoke
+
+Use this after the Supabase/R2 sandbox is configured and `ENABLE_DEV_TOOLS=true` is set for a controlled local run.
+
+Start the web app:
+
+```powershell
+.\scripts\dev\powershell-utf8.ps1
+$env:WORKER_API_SECRET="local-worker-secret"
+$env:PUBLIC_APP_BASE_URL="http://localhost:3001"
+$env:AUTOMATION_REPOSITORY_ADAPTER="supabase"
+$env:ENABLE_DEV_TOOLS="true"
+$env:CONTENT_AI_PROVIDER="template"
+npm run dev -- -p 3001
+```
+
+Open `/dev/test-lab` and use the `쿠팡 상품 → 쇼츠 영상 E2E Smoke` panel:
+
+1. Create a sample Coupang candidate.
+2. Promote the candidate to a scheduled queue item.
+3. Generate a template content draft.
+4. Run next-batch and confirm a `video_render` job was created.
+5. Start Python Worker manually in a separate shell:
+
+```powershell
+cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
+.\.venv\Scripts\python worker.py
+```
+
+6. Refresh status until the worker job completes and the queue item is `video_ready`.
+7. Verify the video, thumbnail, subtitle, and upload package URLs are R2 or another real storage backend, not `/mock-storage`.
+8. Build the channel upload package and confirm `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
+
+The WebApp only reports pre/post Worker status and prints the Worker command. It must not spawn Python Worker, call platform upload APIs, or create worker jobs outside `/api/run/next-batch`.
+
 ## Event Planner Smoke
 
 Open `/planner` or call:
