@@ -92,6 +92,49 @@ If the terminal still displays mojibake, verify the same endpoint in a browser s
 
 To distinguish a console rendering problem from a corrupted source string, inspect files with Python using `encoding="utf-8"` and `repr(...)`. If Python shows valid Korean but PowerShell displays mojibake, fix the console/session rather than changing source text.
 
+PowerShell console rendering can still corrupt inline Korean JSON even when the API is healthy. For Korean smoke payloads, prefer a UTF-8 body file:
+
+```powershell
+@'
+{
+  "product_name": "쿠팡 테스트 상품",
+  "raw_coupang_url": "https://www.coupang.com/vp/products/123456789",
+  "selected_affiliate_url": "https://link.coupang.com/a/test",
+  "thumbnail_url": "https://picsum.photos/seed/test/1080/1920",
+  "price_now_text": "12,900원",
+  "category_path": "선물/생활",
+  "source_type": "manual_url"
+}
+'@ | Out-File -Encoding utf8 .\tmp-coupang-import-body.json
+
+Invoke-RestMethod `
+  -Method Post `
+  -ContentType "application/json; charset=utf-8" `
+  -InFile .\tmp-coupang-import-body.json `
+  "http://localhost:3001/api/candidates/import-coupang" |
+  ConvertTo-Json -Depth 10
+```
+
+To save and inspect API output as UTF-8:
+
+```powershell
+Invoke-RestMethod http://localhost:3001/api/dev/diagnostics |
+  ConvertTo-Json -Depth 8 |
+  Out-File -Encoding utf8 .\tmp-diagnostics.json
+
+Get-Content .\tmp-diagnostics.json -Encoding utf8
+```
+
+Use the source scanner when deciding whether a string is actually corrupted in the repository:
+
+```powershell
+node scripts/check-mojibake.mjs --paths README.md,docs/07_OPERATIONS_RUNBOOK.md,src/components/DevScenarioPanel.tsx
+```
+
+If `scripts/check-mojibake.mjs` reports `mojibake_matches=0`, but PowerShell still displays corrupted Korean, treat it as a PowerShell console rendering problem until a browser or UTF-8 file output proves otherwise.
+
+Current scope guard: n8n, Creatomate, and Google Docs are not the current production path. Naver BrandConnect is deferred. multi-user SaaS is deferred.
+
 ## Development API Guard
 
 Development mutation routes are local/sandbox tooling:

@@ -51,6 +51,8 @@ Event calendar and channel profile tables are provided by `supabase/migrations/0
 
 The MVP product input path is intentionally in-house and WebApp-driven. `/api/candidates/import-coupang` normalizes a manually pasted Coupang product URL, validates the optional affiliate short link, validates product image readiness, and upserts a candidate only. It does not expand n8n, Creatomate, Google Docs, platform uploads, queue rows, or worker jobs.
 
+n8n, Creatomate, and Google Docs are not the current production path. Naver BrandConnect is deferred. multi-user SaaS is deferred. Keep those items as roadmap/design work until the in-house Coupang MVP path is stable in production.
+
 ### Python Worker
 
 The Python Worker is not a web service. It polls the web service, claims work, sends heartbeats, uploads artifacts, and reports results. It handles only:

@@ -81,3 +81,5 @@
 - [ ] No actual YouTube/TikTok/Threads upload integration is deployed.
 - [ ] Worker complete without `video_url` has been tested.
 - [ ] PowerShell Korean mojibake is checked with `.\scripts\dev\powershell-utf8.ps1`, browser output, or an API client before treating it as a source/API failure.
+- [ ] Korean PowerShell smoke payloads use a UTF-8 body file such as `tmp-coupang-import-body.json` with `application/json; charset=utf-8`.
+- [ ] `node scripts/check-mojibake.mjs` reports no unexpected source-level mojibake before release notes are finalized.

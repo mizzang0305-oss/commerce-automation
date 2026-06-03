@@ -57,3 +57,5 @@
 - [ ] Channel profile `upload_enabled=false`.
 - [ ] Channel upload package `manual_upload_only=true`.
 - [ ] Manual result tracking records operator state only and does not call platform upload APIs.
+- [ ] UTF-8 smoke/debug files such as `tmp-diagnostics.json` and `tmp-coupang-import-body.json` are removed and not staged.
+- [ ] Mojibake checks do not read or print `.env.local`, `python-worker/.env`, worker outputs, temp files, logs, or virtualenv contents.

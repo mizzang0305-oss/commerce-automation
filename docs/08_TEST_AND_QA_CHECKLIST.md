@@ -14,6 +14,9 @@ python -m compileall python-worker
 - Run `.\scripts\dev\powershell-utf8.ps1` before PowerShell smoke checks.
 - Confirm `Invoke-RestMethod http://localhost:3000/api/dev/diagnostics | ConvertTo-Json -Depth 8` displays Korean text without mojibake.
 - If PowerShell output is still corrupted, verify the same endpoint in a browser before treating it as an API failure.
+- For Korean request payloads, prefer a UTF-8 body file such as `tmp-coupang-import-body.json` and send it with `-ContentType "application/json; charset=utf-8"` plus `-InFile`.
+- For response inspection, write diagnostics to `tmp-diagnostics.json` with `Out-File -Encoding utf8`, then read it with `Get-Content -Encoding utf8`.
+- Run `node scripts/check-mojibake.mjs --paths README.md,docs/07_OPERATIONS_RUNBOOK.md,src/components/DevScenarioPanel.tsx` when you need to distinguish source corruption from PowerShell console rendering.
 - Do not print `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or raw Authorization headers while debugging console output.
 
 ## Worker Job QA
@@ -188,3 +191,12 @@ python -m compileall python-worker
 - Production smoke includes diagnostics, import-coupang, promote, generate-content, next-batch, external Python Worker, R2 artifact HTTP 200, build-upload-package, and manual result tracking.
 - PowerShell Korean output issues are treated as console rendering problems unless browser/API-client output or UTF-8 source inspection proves a source string is corrupted.
 - `npm run check:production-env` reports only configured booleans and warning codes; it must not print raw Supabase, R2, Worker, Coupang, OpenAI, or Gemini values.
+
+## Verification Error-Triage Routine
+
+- Record the failed phase first: request, repository adapter, migration, PostgREST schema cache, environment variable, Python Worker, image download, ffmpeg render, R2/S3 upload, browser rendering, or PowerShell console rendering.
+- Capture evidence without secrets: request URL, HTTP status, safe response body, dev server stack trace, Supabase SQL result, worker log, `candidate_id`, `queue_id`, `worker_job_id`, branch, and commit.
+- Identify the root cause before editing. Add a RED regression test first for empty 500s, schema failures, fake success risks, and `video_ready` without `video_url`.
+- Keep fixes minimal. Do not change the worker job creation path, public upload defaults, manual-only channel package semantics, or secret handling.
+- Verify GREEN with targeted tests, full `npm run test`, Python unittest, lint, build, compileall, `git diff --check`, secret grep, and forbidden-path staging scan.
+- Report unavailable sandbox/live checks as NOT RUN, not PASS.
