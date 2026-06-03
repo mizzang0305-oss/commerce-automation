@@ -390,6 +390,34 @@ Safety rules:
 5. Watch `/workers` for heartbeat.
 6. Check `/queue/[id]` for `video_url`, thumbnail, SRT, and upload package URLs.
 
+## Build Channel Upload Packages
+
+Use `POST /api/queue/[id]/build-upload-package` only after the item is `video_ready`.
+
+Required conditions:
+
+- `queue_status = video_ready`
+- `video_url` exists
+- `selected_affiliate_url` exists
+- `channel_profile_id` is provided in the request body
+- `generated_contents.disclosure_text` exists
+- `product_assets` contains all four manual package artifacts: `video`, `thumbnail`, `subtitle`, and `upload_package`
+
+If the API returns `CHANNEL_UPLOAD_PACKAGE_SCHEMA_ERROR`, verify the Supabase schema before retrying:
+
+1. Confirm migration `004_channel_upload_packages.sql` was applied and `channel_upload_packages` exists.
+2. Confirm migration `005_channel_upload_package_results.sql` was applied if manual result tracking fields are expected.
+3. Confirm `channel_upload_packages.id` is a primary key or unique column. Supabase upsert with `onConflict: "id"` requires a matching unique/exclusion constraint.
+4. If the table/columns were just added, reload the PostgREST schema cache from the Supabase dashboard or restart the API layer if applicable.
+5. Confirm the table has RLS enabled and no anon/authenticated public write policy. WebApp server routes should use the server-only service role client.
+
+Safe error behavior:
+
+- Server logs may include redacted Supabase diagnostic fields: code, message, detail, and hint.
+- API responses return only `error_code`, a generic Korean message, and `safe_error`.
+- Package generation never creates `worker_jobs`; `/api/run/next-batch` remains the only worker job creation path.
+- YouTube/TikTok/Threads upload APIs remain unimplemented and disabled.
+
 ## Failure Handling
 
 - `retry_wait`: worker can reclaim later.

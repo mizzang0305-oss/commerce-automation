@@ -35,11 +35,53 @@ describe("channel upload package api", () => {
     });
     await repository.upsertGeneratedContent(buildContent(item));
 
-    const response = await buildUploadPackage(request(), routeContext(item.id));
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
     const payload = await readJson(response);
 
     expect(response.status).toBe(400);
     expect(payload.missing_reasons).toContain("video_url");
+    expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+  });
+
+  test("returns a safe 404 when the queue item is missing", async () => {
+    const response = await buildUploadPackage(request(), routeContext("queue-missing"));
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(404);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "QUEUE_ITEM_NOT_FOUND",
+      created_worker_jobs: 0
+    });
+  });
+
+  test("blocks package creation when queue item is not video_ready", async () => {
+    const repository = getAutomationRepository();
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      queue_status: "scheduled",
+      selected_affiliate_url: "https://link.coupang.com/a/manual-package",
+      video_url: "https://storage.example/rendered-videos/item.mp4",
+      thumbnail_url: "https://storage.example/thumb.jpg"
+    });
+    await repository.upsertGeneratedContent(buildContent(item));
+
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "QUEUE_NOT_VIDEO_READY",
+      created_worker_jobs: 0
+    });
+    expect(payload.missing_reasons).toContain("queue_status_video_ready");
     expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
   });
 
@@ -54,7 +96,10 @@ describe("channel upload package api", () => {
     });
     await repository.upsertGeneratedContent(buildContent(item, { disclosure_text: "" }));
 
-    const response = await buildUploadPackage(request(), routeContext(item.id));
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
     const payload = await readJson(response);
 
     expect(response.status).toBe(400);
@@ -75,6 +120,113 @@ describe("channel upload package api", () => {
     expect(response.status).toBe(404);
     expect(payload.missing_reasons).toContain("channel_profile");
     expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+  });
+
+  test("blocks package creation when channel_profile_id is missing", async () => {
+    const repository = getAutomationRepository();
+    const { item } = await prepareVideoReadyItem();
+
+    const response = await buildUploadPackage(request(), routeContext(item.id));
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "MISSING_CHANNEL_PROFILE_ID",
+      created_worker_jobs: 0
+    });
+    expect(payload.missing_reasons).toContain("channel_profile_id");
+    expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+  });
+
+  test("blocks package creation when generated content is missing", async () => {
+    const repository = getAutomationRepository();
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      queue_status: "video_ready",
+      selected_affiliate_url: "https://link.coupang.com/a/manual-package",
+      video_url: "https://storage.example/rendered-videos/item.mp4",
+      thumbnail_url: "https://storage.example/thumb.jpg"
+    });
+
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "GENERATED_CONTENT_NOT_FOUND",
+      created_worker_jobs: 0
+    });
+    expect(payload.missing_reasons).toContain("generated_contents");
+    expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+  });
+
+  test("blocks package creation when required product assets are missing", async () => {
+    const repository = getAutomationRepository();
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await repository.updateQueueItemById(item.id, {
+      queue_status: "video_ready",
+      selected_affiliate_url: "https://link.coupang.com/a/manual-package",
+      video_url: "https://storage.example/rendered-videos/item.mp4",
+      thumbnail_url: "https://storage.example/thumb.jpg"
+    });
+    await repository.upsertGeneratedContent(buildContent(item));
+
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "MISSING_PRODUCT_ASSETS",
+      created_worker_jobs: 0
+    });
+    expect(payload.missing_reasons).toContain("product_assets");
+    expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+  });
+
+  test("returns sanitized JSON when repository upsert fails with a Supabase schema error", async () => {
+    const repository = getAutomationRepository();
+    const { item, initialJobCount } = await prepareVideoReadyItem();
+    repository.upsertChannelUploadPackage = async () => {
+      throw Object.assign(new Error("Supabase repository upsertChannelUploadPackage failed."), {
+        name: "SupabaseRepositoryError",
+        action: "upsertChannelUploadPackage",
+        supabaseError: {
+          code: "PGRST204",
+          message: "Could not find the uploaded_url column",
+          detail: "SUPABASE_SERVICE_ROLE_KEY=secret must not leak",
+          hint: "Reload the PostgREST schema cache"
+        }
+      });
+    };
+
+    const response = await buildUploadPackage(
+      request({ channel_profile_id: "channel-coupang-daily" }),
+      routeContext(item.id)
+    );
+    const payload = await readJson(response);
+    const responseText = JSON.stringify(payload);
+
+    expect(response.status).toBe(500);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "CHANNEL_UPLOAD_PACKAGE_SCHEMA_ERROR",
+      message: "채널 업로드 패키지 생성 중 오류가 발생했습니다.",
+      safe_error: "channel_upload_packages 스키마 또는 PostgREST schema cache를 확인하세요.",
+      created_worker_jobs: 0
+    });
+    expect(responseText).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(responseText).not.toContain("secret");
+    expect(await repository.getChannelUploadPackages(item.id)).toHaveLength(0);
+    expect(await repository.getWorkerJobs()).toHaveLength(initialJobCount);
   });
 
   test("creates a manual-only channel package without creating worker jobs", async () => {
