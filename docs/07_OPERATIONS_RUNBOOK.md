@@ -85,6 +85,57 @@ Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker stil
 
 Before calling the Supabase adapter production-ready, complete `docs/SUPABASE_VERIFICATION.md`. It includes Dashboard checks, `pg_tables`/`pg_policies` SQL, worker smoke checks, and live artifact storage smoke criteria.
 
+## Production Deployment Baseline
+
+Use this baseline for production or production-like sandbox verification. The primary path is in-house Python Worker based Coupang MVP operation, not n8n, Creatomate, or Google Docs generation.
+
+Required web service env:
+
+```text
+AUTOMATION_REPOSITORY_ADAPTER=supabase
+SUPABASE_URL=replace-with-project-url
+SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
+WORKER_API_SECRET=replace-with-worker-secret
+PUBLIC_APP_BASE_URL=https://your-web-app.example.com
+CONTENT_AI_PROVIDER=template
+# Leave unset or false for normal production.
+ENABLE_DEV_TOOLS=
+```
+
+Required Python Worker env for R2 smoke:
+
+```text
+WEB_APP_BASE_URL=https://your-web-app.example.com
+WORKER_API_SECRET=replace-with-worker-secret
+WORKER_ID=production-worker-1
+WORKER_JOB_TYPES=video_render,sheet_sync
+STORAGE_BACKEND=r2
+R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=replace-with-storage-access-key
+R2_SECRET_ACCESS_KEY=replace-with-storage-secret-key
+R2_REGION=auto
+R2_PUBLIC_BASE_URL_RENDERED_VIDEOS=https://pub-video.example.com
+R2_PUBLIC_BASE_URL_THUMBNAILS=https://pub-thumbnail.example.com
+R2_PUBLIC_BASE_URL_SUBTITLES=https://pub-subtitle.example.com
+R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES=https://pub-package.example.com
+```
+
+Optional AI keys are server-only. Keep `CONTENT_AI_PROVIDER=template` unless a later reviewed PR enables live provider calls:
+
+```text
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+```
+
+Production safety baseline:
+
+- `/api/dev/*` mutation routes are blocked unless `ENABLE_DEV_TOOLS=true` is deliberately set for a sandbox.
+- `SUPABASE_SERVICE_ROLE_KEY` stays in the WebApp server runtime only.
+- R2/S3 storage keys stay in Python Worker runtime only.
+- Python Worker does not connect to Supabase DB directly.
+- YouTube/TikTok/Threads upload APIs are not implemented.
+- Channel upload packages remain `upload_enabled=false` and `manual_upload_only=true`.
+
 ## Candidate-To-Video Smoke
 
 Use this when validating the full operator path from a collected candidate to a rendered artifact:
@@ -145,6 +196,21 @@ cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
 8. Build the channel upload package and confirm `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
 
 The WebApp only reports pre/post Worker status and prints the Worker command. It must not spawn Python Worker, call platform upload APIs, or create worker jobs outside `/api/run/next-batch`.
+
+## Production Smoke Checklist
+
+Run this sequence in a sandbox before production rollout:
+
+1. `GET /api/dev/diagnostics`: confirm `repository.adapter=supabase`, Supabase configured booleans are true, `content_ai.provider=template`, and no raw secrets or raw URLs are returned.
+2. `POST /api/candidates/import-coupang`: confirm one `product_candidates` row is created, with no queue row and no worker job.
+3. `POST /api/candidates/[id]/promote`: confirm one scheduled `product_queue` row and generated-content scaffold, with no worker job.
+4. `POST /api/queue/[id]/generate-content`: confirm `video_script` and `disclosure_text`, with `created_worker_jobs=0`.
+5. `POST /api/run/next-batch`: confirm exactly one `video_render` worker job and a payload with `image_url` or `thumbnail_url`.
+6. Run Python Worker externally from PowerShell; do not launch it from WebApp.
+7. Confirm `worker_jobs.status=completed`, `product_queue.queue_status=video_ready`, and `product_queue.video_url` exists.
+8. Confirm video, thumbnail, subtitle, and upload package URLs are real R2/S3/Supabase Storage URLs and return HTTP 200 or valid signed URL responses.
+9. Build a channel upload package and confirm `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
+10. Exercise manual result tracking: `uploaded`, `skipped`, or `needs_fix` as applicable. This records operator outcome only and does not call platform upload APIs.
 
 ## Event Planner Smoke
 

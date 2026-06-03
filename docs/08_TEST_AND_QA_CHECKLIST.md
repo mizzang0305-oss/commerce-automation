@@ -44,12 +44,14 @@ python -m compileall python-worker
 
 - Client components do not reference `WORKER_API_SECRET`.
 - Client components do not reference `SUPABASE_SERVICE_ROLE_KEY`.
-- Client components do not reference service role or provider API keys.
+- Client components do not reference service role, R2/S3, Coupang, OpenAI, Gemini, or provider API keys.
 - Logs do not print Authorization headers.
 - Production blocks `POST /api/dev/seed`, `/api/dev/reset-storage`, and `/api/dev/reset-settings` unless `ENABLE_DEV_TOOLS=true`.
 - `/api/dev/diagnostics` returns configured booleans only and does not expose raw Supabase URL or service role key.
 - `.env.local` is not committed.
 - `data/*.json` is not committed.
+- `python-worker/.env` is not committed.
+- `python-worker/.venv`, `python-worker/outputs`, `python-worker/temp`, and worker logs are not committed.
 
 ## Repository Adapter QA
 
@@ -156,3 +158,16 @@ python -m compileall python-worker
 - R2 or real storage artifact URLs for video, thumbnail, subtitle, and upload package return HTTP 200.
 - Channel upload package creation returns `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
 - YouTube/TikTok/Threads upload APIs remain absent and public upload stays disabled.
+
+## Production Deployment QA
+
+- Current production path is Coupang candidate import, candidate review, content draft, next-batch, Python Worker render, R2/S3 artifact upload, and manual channel upload package.
+- n8n, Creatomate, and Google Docs generation are legacy/optional and not the primary production path.
+- Web service env uses `AUTOMATION_REPOSITORY_ADAPTER=supabase`, `SUPABASE_URL`, and server-only `SUPABASE_SERVICE_ROLE_KEY`.
+- Python Worker env uses `WEB_APP_BASE_URL`, `WORKER_API_SECRET`, `WORKER_ID`, `WORKER_JOB_TYPES`, and storage-specific R2/S3/Supabase Storage credentials.
+- R2 live smoke uses `STORAGE_BACKEND=r2`, `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_REGION=auto`, and four bucket-specific public base URLs.
+- `CONTENT_AI_PROVIDER=template` remains the default production-safe content provider. `OPENAI_API_KEY` and `GEMINI_API_KEY` are optional server-only readiness values.
+- `ENABLE_DEV_TOOLS` is unset or false for normal production.
+- `/api/dev/*` mutation routes are available only in a controlled sandbox with `ENABLE_DEV_TOOLS=true`.
+- Production smoke includes diagnostics, import-coupang, promote, generate-content, next-batch, external Python Worker, R2 artifact HTTP 200, build-upload-package, and manual result tracking.
+- PowerShell Korean output issues are treated as console rendering problems unless browser/API-client output or UTF-8 source inspection proves a source string is corrupted.

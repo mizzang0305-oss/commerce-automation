@@ -120,3 +120,32 @@ Not included:
 ## v1.8 Content AI Provider Scaffold
 
 The next content layer adds provider abstractions and diagnostics while retaining template fallback as the default. Live OpenAI/Gemini calls remain a later PR. Any future live provider must keep server-only secrets, template fallback, safety validation, manual review behavior, and upload-disabled defaults intact.
+
+## v1.9 Production Deployment Checklist
+
+The deployment checklist locks the current MVP into an auditable production path:
+
+- Supabase/Postgres is the shared repository adapter.
+- Cloudflare R2 or another S3-compatible backend stores rendered artifacts.
+- Python Worker remains external to the WebApp and polls WebApp APIs.
+- Coupang product import creates candidates only.
+- Candidate promotion creates queue/content scaffold only.
+- Content draft generation creates no worker jobs.
+- `/api/run/next-batch` remains the only worker job creation path.
+- Channel upload packages and upload result tracking remain manual-only.
+
+Production release gates:
+
+1. Run the full validation command set on `main`.
+2. Verify Supabase migrations, RLS, and absence of public anon/authenticated write policies.
+3. Verify diagnostics expose configured booleans only.
+4. Run the Coupang product-to-video smoke through R2 artifact HTTP 200.
+5. Build a manual channel upload package and verify `upload_enabled=false` plus `manual_upload_only=true`.
+6. Confirm `.env.local`, `python-worker/.env`, local JSON data, worker outputs, temp files, logs, and virtualenv files are not staged.
+
+Not included:
+
+- YouTube/TikTok/Threads upload API calls.
+- Public upload enablement.
+- WebApp-controlled Python Worker process launching.
+- Live OpenAI/Gemini content generation.

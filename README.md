@@ -1,6 +1,6 @@
 # Commerce Automation Control Center
 
-Current baseline: v1.4 worker architecture with optional Supabase/Postgres repository adapter.
+Current baseline: in-house Coupang MVP with Supabase/Postgres repository state, Cloudflare R2 or compatible artifact storage, Python Worker rendering, template content drafts, and manual upload packages.
 
 `commerce-automation` is a Next.js admin web service for Coupang affiliate content operations. The web app is the control room: settings, product queue, worker jobs, run logs, generated result URLs, and manual review all live here. Heavy work is delegated to a separate Python Worker that polls the web API and processes only `video_render` and `sheet_sync` jobs.
 
@@ -14,6 +14,22 @@ Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` 
 - Supabase/Postgres adapter: optional shared repository for production, cloud, and multi-PC operation.
 - Storage: local or S3/R2/Supabase-compatible abstraction used by the worker for generated files.
 - n8n: legacy/optional. Nightly scout can still be backed by n8n or another product collector, but `/api/run/next-batch` no longer calls n8n.
+
+## Production Deployment Baseline
+
+The current production-ready path is the in-house Coupang product-to-video flow:
+
+1. Import a Coupang product candidate.
+2. Review and promote the candidate into `product_queue`.
+3. Generate a template content draft.
+4. Run `/api/run/next-batch` to create the `video_render` worker job.
+5. Run Python Worker separately so it renders and uploads artifacts.
+6. Confirm real storage URLs for video, thumbnail, subtitle, and upload package.
+7. Build a channel upload package for manual upload review.
+
+The WebApp must not launch Python Worker. Worker jobs are created only by `/api/run/next-batch`. Platform uploads remain manual-only; YouTube/TikTok/Threads upload APIs are not implemented.
+
+Use [checklists/deployment-checklist.md](checklists/deployment-checklist.md) before deploying and [checklists/security-checklist.md](checklists/security-checklist.md) before opening a sandbox or production instance.
 
 ## Repository Adapters
 
