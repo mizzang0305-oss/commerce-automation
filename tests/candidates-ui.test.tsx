@@ -59,4 +59,15 @@ describe("candidate review UI", () => {
     expect(screen.getByRole("button", { name: "상품 큐로 승격" })).toBeEnabled();
     expect(screen.queryByText("must-not-render")).not.toBeInTheDocument();
   });
+
+  test("renders manual Coupang candidate input controls", () => {
+    render(<CandidateReviewClient candidates={[candidate]} readiness={{ [candidate.id]: ready }} />);
+
+    expect(screen.getByRole("heading", { name: "쿠팡 상품 수동 추가" })).toBeInTheDocument();
+    expect(screen.getByLabelText("상품명")).toBeInTheDocument();
+    expect(screen.getByLabelText("쿠팡 원본 URL")).toBeInTheDocument();
+    expect(screen.getByLabelText("제휴 링크")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "후보 생성" })).toBeInTheDocument();
+    expect(screen.getByText("제휴 링크가 없는 후보는 큐로 승격할 수 없습니다.")).toBeInTheDocument();
+  });
 });

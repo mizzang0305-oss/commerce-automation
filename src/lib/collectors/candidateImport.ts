@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import type { ProductCandidate } from "@/types/automation";
 import { enrichProductCandidate } from "@/lib/candidates/candidateNormalizer";
+import { buildCoupangCandidate, CoupangCandidateImportError } from "@/lib/coupang/coupangCandidateImport";
+import { isLikelyCoupangProductUrl } from "@/lib/coupang/coupangUrl";
 
 export type CandidateImportOptions = {
   source: string;
@@ -13,9 +15,9 @@ export type CandidateImportResult = {
 
 type CandidateRow = Record<string, string>;
 
-const NAME_HEADERS = ["product_name", "name", "title", "상품명"];
-const URL_HEADERS = ["url", "product_url", "raw_coupang_url", "source_url", "링크"];
-const AFFILIATE_HEADERS = ["selected_affiliate_url", "affiliate_url", "제휴링크"];
+const NAME_HEADERS = ["product_name", "name", "title"];
+const URL_HEADERS = ["url", "product_url", "raw_coupang_url", "source_url"];
+const AFFILIATE_HEADERS = ["selected_affiliate_url", "affiliate_url"];
 
 export function parseCandidateCsv(csv: string, options: CandidateImportOptions): CandidateImportResult {
   const rows = parseCsv(csv);
@@ -42,6 +44,31 @@ export function parseCandidateCsv(csv: string, options: CandidateImportOptions):
       return;
     }
 
+    if (isCoupangImport(options.source, sourceUrl)) {
+      try {
+        const { candidate } = buildCoupangCandidate({
+          product_name: productName,
+          raw_coupang_url: sourceUrl,
+          selected_affiliate_url: affiliateUrl,
+          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "image"]),
+          price_now_text: pick(row, ["price_now_text", "price"]),
+          category_path: pick(row, ["category_path", "category"]),
+          source_type: pick(row, ["source_type", "type"]),
+          itemId: pick(row, ["itemId", "item_id"]),
+          vendorItemId: pick(row, ["vendorItemId", "vendor_item_id"]),
+          source: options.source
+        });
+        if (!candidates.has(candidate.id)) {
+          candidates.set(candidate.id, candidate);
+        }
+      } catch (error) {
+        const message =
+          error instanceof CoupangCandidateImportError ? error.message : "Coupang candidate conversion failed.";
+        errors.push(`${lineNumber}행: ${message}`);
+      }
+      return;
+    }
+
     const normalizedSourceUrl = stripTrailingSlash(sourceUrl);
     const id = createCandidateId(normalizedSourceUrl);
     if (candidates.has(id)) {
@@ -57,14 +84,14 @@ export function parseCandidateCsv(csv: string, options: CandidateImportOptions):
         payload: {
           source: options.source,
           source_url: normalizedSourceUrl,
-          category_path: pick(row, ["category_path", "category", "카테고리"]),
-          keyword: pick(row, ["keyword", "키워드"]),
-          price_now_text: pick(row, ["price_now_text", "price", "가격"]),
-          source_type: pick(row, ["source_type", "type", "유형"]),
-          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "image", "썸네일"]),
-          discount_rate: pick(row, ["discount_rate", "discount", "할인율"]),
-          review_count: pick(row, ["review_count", "reviews", "리뷰수"]),
-          rating: pick(row, ["rating", "평점"]),
+          category_path: pick(row, ["category_path", "category"]),
+          keyword: pick(row, ["keyword"]),
+          price_now_text: pick(row, ["price_now_text", "price"]),
+          source_type: pick(row, ["source_type", "type"]),
+          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "image"]),
+          discount_rate: pick(row, ["discount_rate", "discount"]),
+          review_count: pick(row, ["review_count", "reviews"]),
+          rating: pick(row, ["rating"]),
           productId: pick(row, ["productId", "product_id"]),
           itemId: pick(row, ["itemId", "item_id"]),
           vendorItemId: pick(row, ["vendorItemId", "vendor_item_id"]),
@@ -77,6 +104,10 @@ export function parseCandidateCsv(csv: string, options: CandidateImportOptions):
   });
 
   return { candidates: [...candidates.values()], errors };
+}
+
+function isCoupangImport(source: string, sourceUrl: string) {
+  return source.toLowerCase().includes("coupang") || isLikelyCoupangProductUrl(sourceUrl);
 }
 
 function parseCsv(csv: string): CandidateRow[] {
@@ -99,12 +130,12 @@ function splitCsvLine(line: string): string[] {
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index];
     const next = line[index + 1];
-    if (char === '"' && quoted && next === '"') {
-      current += '"';
+    if (char === "\"" && quoted && next === "\"") {
+      current += "\"";
       index += 1;
       continue;
     }
-    if (char === '"') {
+    if (char === "\"") {
       quoted = !quoted;
       continue;
     }

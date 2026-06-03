@@ -328,6 +328,30 @@ The first collector path is intentionally conservative:
 3. Review and promote candidates in a later workflow.
 4. Do not create `video_render` jobs directly from collectors.
 
+For the Coupang MVP, operators can also paste one product directly from `/candidates` or call `POST /api/candidates/import-coupang`.
+
+Required:
+
+- `product_name`
+- `raw_coupang_url` from `coupang.com/vp/products/...`
+
+Optional:
+
+- `selected_affiliate_url` from `https://link.coupang.com/a/...`
+- `thumbnail_url`
+- `price_now_text`
+- `category_path`
+
+The API removes tracking parameters, preserves product/item/vendor identifiers for `product_key`, validates the affiliate short link, and upserts only `product_candidates`. It must report `queue_items_created=0` and `worker_jobs_created=0`.
+
+Example request:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" `
+  -Body '{"product_name":"Coupang MVP product","raw_coupang_url":"https://www.coupang.com/vp/products/123456789?utm_source=ad","selected_affiliate_url":"https://link.coupang.com/a/example","thumbnail_url":"https://example.com/thumb.jpg"}' `
+  http://localhost:3000/api/candidates/import-coupang | ConvertTo-Json -Depth 8
+```
+
 Example request:
 
 ```powershell

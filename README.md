@@ -95,6 +95,14 @@ Collectors only create `product_candidates`; they do not create worker jobs or m
 - body: `{ "source": "manual_csv", "csv": "product_name,url,selected_affiliate_url\n..." }`
 - production behavior: blocked by default through the dev route guard unless `ENABLE_DEV_TOOLS=true`.
 
+The MVP operator path also supports direct Coupang candidate input from `/candidates`:
+
+- `POST /api/candidates/import-coupang`
+- body fields: `product_name`, `raw_coupang_url`, optional `selected_affiliate_url`, `thumbnail_url`, `price_now_text`, and `category_path`.
+- `raw_coupang_url` must be a `coupang.com` product detail URL. Tracking parameters are removed while product/item/vendor identifiers are retained for deterministic `product_key` creation.
+- `selected_affiliate_url` is validated as a Coupang short affiliate link. Missing affiliate links are stored as candidates but remain blocked from queue promotion.
+- This endpoint creates zero `product_queue` rows and zero `worker_jobs`.
+
 CSV rows must include a product name and an `http`/`https` source URL. Non-web schemes such as `javascript:`, `file:`, or empty URLs are rejected. Optional Python collector helpers live under `python-worker/src/collectors/` for CSV/XLSX link import and future public-page/API collectors. Collector work must not bypass login, CAPTCHA, blocking, terms, or copy protected review text.
 
 Imported candidates now receive quality-control fields before they are promoted:

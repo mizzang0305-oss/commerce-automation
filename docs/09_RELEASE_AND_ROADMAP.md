@@ -27,13 +27,12 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 
 ## Roadmap
 
-1. Add Supabase/Postgres repository adapter and migrations for the documented tables.
-2. Add real storage configuration for Supabase Storage or Cloudflare R2/S3.
-3. Add operator APIs for retry/fail/cancel job actions.
-4. Add real Google Sheets credential flow for `sheet_sync`.
-5. Replace or formalize Nightly Scout product collection.
-6. Upgrade `/queue` and `/jobs` with TanStack Table filtering/sorting/pagination.
-7. Keep public upload as a separate, explicitly reviewed milestone.
+1. Keep the in-house Coupang MVP path focused on manual product input, candidate review, content draft generation, worker rendering, R2 artifacts, and manual upload packages.
+2. Add operator APIs for retry/fail/cancel job actions.
+3. Add real Google Sheets credential flow for `sheet_sync`.
+4. Replace or formalize Nightly Scout product collection.
+5. Persist planner/channel edits in Supabase.
+6. Keep public upload as a separate, explicitly reviewed milestone.
 
 ## v1.4 Repository Adapter Target
 
@@ -77,5 +76,23 @@ Next milestones:
 1. Persist event/channel/plan edits in Supabase.
 2. Add candidates review filters for event matches.
 3. Add queue promotion from a selected planner item.
-4. Add signed/manual upload package review.
+4. Expand Coupang candidate input with optional official API enrichment when credentials exist.
 5. Keep public upload as a separate, explicitly reviewed milestone.
+
+## v1.6 Coupang MVP Product Input
+
+Included:
+
+- `/candidates` manual Coupang product input form.
+- `POST /api/candidates/import-coupang` for one candidate at a time.
+- Coupang product URL normalization with tracking parameter removal.
+- Deterministic `product_key` from product, item, and vendor identifiers.
+- Affiliate short-link validation and `blocked_missing_affiliate` readiness for missing links.
+- CSV import enrichment for Coupang rows.
+
+Not included:
+
+- Queue creation from import.
+- Worker job creation from import.
+- n8n, Creatomate, or Google Docs expansion.
+- YouTube/TikTok/Threads upload calls.
