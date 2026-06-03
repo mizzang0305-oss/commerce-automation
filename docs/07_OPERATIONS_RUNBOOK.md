@@ -545,6 +545,28 @@ Safety rules:
 - Template drafts must avoid lowest-price guarantees, outcome guarantees, medical/health efficacy claims, and copied review text.
 - Public upload remains disabled; generated content is for review and video render preparation only.
 
+## Render Plan / Storyboard Scaffold
+
+The render plan scaffold is a planning-only layer for future shot-plan based rendering. It does not change the current `next-batch -> Python Worker -> R2 artifact` path.
+
+Use `buildStoryboardRenderPlan` only after a queue item has:
+
+- `product_name`
+- `selected_affiliate_url`
+- `thumbnail_url`
+- `generated_contents.video_script`
+- `generated_contents.disclosure_text`
+
+The planner returns readiness gaps instead of producing a fake plan when required fields are missing. A valid plan contains four deterministic template shots: hook, product focus, check points, and manual CTA. The default target is 1080x1920 at 30fps.
+
+Safety expectations:
+
+- No ViMax package is installed or imported.
+- No OpenRouter, Veo, Google image generator, OpenAI, or Gemini API call is made.
+- No worker job is created by the planner.
+- No YouTube, TikTok, Threads, or public upload action is enabled.
+- Python Worker rendering still uses the existing worker job payload until a later reviewed PR explicitly adds shot-plan rendering.
+
 ## Run Next Batch
 
 1. Confirm `/settings`:

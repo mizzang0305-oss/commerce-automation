@@ -195,6 +195,26 @@ Returns worker heartbeats and worker job counts for the `/workers` UI.
 
 `created_worker_jobs` must remain `0`. Missing provider keys, provider errors, or blocked safety checks use template fallback instead of reporting fake AI success.
 
+## Render Plan Scaffold
+
+`render_plan` is an internal planning shape for future shot-plan based rendering. It is not persisted in the database yet and does not replace the current Python Worker render path.
+
+Current scaffold:
+
+- `version = "1"`
+- `queue_id`
+- `product_name`
+- `source = "storyboard_template"`
+- `shots[]` with `shot_id`, `duration_sec`, `layout`, `image_role`, `image_url`, `caption`, `voice_text`, and `safe_area`
+- `disclosure_text`
+- `render_target = 1080x1920, 30fps, 9:16`
+- `safety.external_api_call = false`
+- `safety.platform_upload = false`
+- `safety.vimax_dependency = false`
+- `safety.worker_jobs_created = false`
+
+The template planner requires product name, affiliate URL, product image URL, video script, and disclosure text. Missing inputs return readiness reasons instead of generating a fake render plan. The scaffold adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
+
 ## Run API
 
 ### POST /api/run/next-batch
