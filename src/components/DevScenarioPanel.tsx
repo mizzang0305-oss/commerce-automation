@@ -5,6 +5,7 @@ import type { AutomationSettings } from "@/types/automation";
 import type { N8nConfigStatus } from "@/lib/server/env";
 import type { RepositoryRuntimeInfo } from "@/lib/repositories/repositoryFactory";
 import { getDailyCapacity, getDailyCapacityWarning, getNextRunAt } from "@/lib/scheduler";
+import { formatDateTime } from "@/lib/format";
 import { WebhookStatusCard } from "@/components/WebhookStatusCard";
 
 type SmokeStatus = {
@@ -234,7 +235,7 @@ export function DevScenarioPanel({
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-950">다음 실행 시간</h2>
-          <p className="mt-3 text-2xl font-bold text-slate-900">{getNextRunAt(settings).toLocaleString("ko-KR")}</p>
+          <p className="mt-3 text-2xl font-bold text-slate-900">{formatDateTime(getNextRunAt(settings))}</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-950">하루 처리 가능량</h2>
