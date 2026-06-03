@@ -79,3 +79,9 @@ For `video_render`:
 - Missing `video_url` does not complete the job.
 - Missing `video_url` does not set `queue_status=video_ready`.
 - Partial assets may be stored for debugging/review, but completion is rejected.
+
+## Content AI Safety
+
+`OPENAI_API_KEY` and `GEMINI_API_KEY` are optional server-only secrets. They must not use a `NEXT_PUBLIC_` prefix and must not be referenced by client components.
+
+Content drafts are checked for missing disclosure text, missing affiliate URL, lowest-price claims, guarantee language, medical/health efficacy claims, suspicious review-copy wording, and unusably short scripts. Blocked AI drafts fall back to template output or stay in manual review; they must not be treated as successful AI output.

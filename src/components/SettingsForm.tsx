@@ -16,10 +16,17 @@ const runModes: Array<{ value: RunMode; label: string }> = [
 
 export function SettingsForm({
   initialSettings,
-  todayVideoJobs = 0
+  todayVideoJobs = 0,
+  contentAiStatus
 }: {
   initialSettings: AutomationSettings;
   todayVideoJobs?: number;
+  contentAiStatus?: {
+    provider: string;
+    openai_configured: boolean;
+    gemini_configured: boolean;
+    enabled: boolean;
+  };
 }) {
   const [form, setForm] = useState(initialSettings);
   const [saving, setSaving] = useState(false);
@@ -93,6 +100,14 @@ export function SettingsForm({
         <StatCard label="video_render 허용" value={form.allowed_worker_job_types.includes("video_render") ? "예" : "아니오"} tone={form.allowed_worker_job_types.includes("video_render") ? "success" : "warning"} />
         <StatCard label="오늘 사용량 / 제한" value={`${todayVideoJobs}/${form.max_daily_videos}`} helper={`${remainingVideos}개 남음`} />
         <StatCard label="공개 업로드" value={form.youtube_upload_enabled ? "위험: 활성화" : "비활성화"} tone={form.youtube_upload_enabled ? "danger" : "default"} />
+        {contentAiStatus ? (
+          <StatCard
+            label="콘텐츠 생성 방식"
+            value={contentAiStatus.provider}
+            helper={`OpenAI ${contentAiStatus.openai_configured ? "configured" : "not configured"} / Gemini ${contentAiStatus.gemini_configured ? "configured" : "not configured"}`}
+            tone={contentAiStatus.enabled ? "success" : "default"}
+          />
+        ) : null}
       </section>
 
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2">

@@ -116,3 +116,7 @@ Not included:
 - n8n, Creatomate, or Google Docs generation.
 - Public platform upload.
 - Login, CAPTCHA, block bypass, or protected review copying.
+
+## v1.8 Content AI Provider Scaffold
+
+The next content layer adds provider abstractions and diagnostics while retaining template fallback as the default. Live OpenAI/Gemini calls remain a later PR. Any future live provider must keep server-only secrets, template fallback, safety validation, manual review behavior, and upload-disabled defaults intact.

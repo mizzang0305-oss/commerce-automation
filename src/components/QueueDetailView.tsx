@@ -40,6 +40,13 @@ export function QueueDetailView({
   const [draftContent, setDraftContent] = useState<GeneratedContent | null>(content);
   const [contentMessage, setContentMessage] = useState("");
   const [contentGenerationStatus, setContentGenerationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [contentProviderMeta, setContentProviderMeta] = useState<{
+    provider: string;
+    requestedProvider: string;
+    usedFallback: boolean;
+    providerConfigured: boolean;
+    safetyWarnings: string[];
+  } | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState(channels[0]?.id ?? "");
   const [uploadPackages, setUploadPackages] = useState<ChannelUploadPackage[]>(channelPackages);
   const [uploadPackageMessage, setUploadPackageMessage] = useState("");
@@ -88,6 +95,7 @@ export function QueueDetailView({
       if (isGeneratedContent(payload.content)) {
         setDraftContent(payload.content);
       }
+      setContentProviderMeta(readContentProviderMeta(payload));
       setContentGenerationStatus("success");
       setContentMessage(typeof payload.message === "string" ? payload.message : "콘텐츠 초안을 생성했습니다.");
     } catch {
@@ -270,6 +278,17 @@ export function QueueDetailView({
           }`}>
             {contentMessage}
           </p>
+        ) : null}
+        {contentProviderMeta ? (
+          <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <p className="font-semibold">
+              Provider: {contentProviderMeta.provider}
+              {contentProviderMeta.usedFallback ? ` (fallback from ${contentProviderMeta.requestedProvider})` : ""}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Configured: {contentProviderMeta.providerConfigured ? "yes" : "no"} / Safety warnings: {contentProviderMeta.safetyWarnings.length}
+            </p>
+          </div>
         ) : null}
 
         {draftContent ? (
@@ -524,6 +543,19 @@ function isGeneratedContent(value: unknown): value is GeneratedContent {
       "video_script" in value &&
       "disclosure_text" in value
   );
+}
+
+function readContentProviderMeta(value: Record<string, unknown>) {
+  const safetyWarnings = Array.isArray(value.safety_warnings)
+    ? value.safety_warnings.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  return {
+    provider: typeof value.content_provider === "string" ? value.content_provider : "template",
+    requestedProvider: typeof value.requested_provider === "string" ? value.requested_provider : "template",
+    usedFallback: Boolean(value.used_fallback),
+    providerConfigured: Boolean(value.provider_configured),
+    safetyWarnings
+  };
 }
 
 function isChannelUploadPackage(value: unknown): value is ChannelUploadPackage {

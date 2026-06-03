@@ -82,3 +82,9 @@ n8n workflow files remain for legacy/reference use. Nightly Scout may still use 
 ## Failure Philosophy
 
 Completion means usable output exists. A worker that cannot produce `video_url` must fail or retry, not report success.
+
+## Content AI Provider Scaffold
+
+Content generation now routes through a provider interface with `template`, `openai`, `gemini`, and `disabled` provider names. The safe default is `template`. OpenAI/Gemini are readiness scaffolds in this PR; live external calls remain disabled and missing keys or provider failures fall back to template output.
+
+The WebApp generates content drafts through `POST /api/queue/[id]/generate-content`. That route never creates `worker_jobs`. `/api/run/next-batch` remains the only path that creates worker jobs.
