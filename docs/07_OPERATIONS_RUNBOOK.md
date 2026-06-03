@@ -199,6 +199,7 @@ Open `/dev/test-lab` and use the `쿠팡 상품 → 쇼츠 영상 E2E Smoke` pan
 2. Promote the candidate to a scheduled queue item.
 3. Generate a template content draft.
 4. Run next-batch and confirm a `video_render` job was created.
+   - Confirm the status panel shows whether `render_plan_attached` is true and how many shots are in the latest worker job payload.
 5. Start Python Worker manually in a separate shell:
 
 ```powershell
@@ -558,6 +559,8 @@ Use `buildStoryboardRenderPlan` only after a queue item has:
 - `generated_contents.disclosure_text`
 
 The planner returns readiness gaps instead of producing a fake plan when required fields are missing. A valid plan contains four deterministic template shots: hook, product focus, check points, and manual CTA. The default target is 1080x1920 at 30fps.
+
+Open `/queue/[id]` to inspect the render plan preview before running `next-batch`. The page shows `render_plan_attached`, shot count, total duration, per-shot caption/image/voice text, and readiness gaps. If a plan cannot be built, the page displays legacy fallback copy and the missing inputs.
 
 Safety expectations:
 

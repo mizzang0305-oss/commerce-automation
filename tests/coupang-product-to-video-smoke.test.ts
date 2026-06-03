@@ -150,7 +150,11 @@ describe("Coupang product-to-video smoke workflow", () => {
     expect(payload).toMatchObject({
       ok: true,
       step: "next-batch",
-      created_jobs: 1
+      created_jobs: 1,
+      status: {
+        render_plan_attached: true,
+        render_plan_shot_count: 4
+      }
     });
     expect(jobs).toEqual([
       expect.objectContaining({

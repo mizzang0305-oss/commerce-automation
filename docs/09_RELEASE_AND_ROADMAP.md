@@ -133,6 +133,7 @@ The deployment checklist locks the current MVP into an auditable production path
 - Content draft generation creates no worker jobs.
 - `/api/run/next-batch` remains the only worker job creation path.
 - Channel upload packages and upload result tracking remain manual-only.
+- Queue detail pages show render plan preview/readiness without changing the Python Worker render engine.
 
 Production release gates:
 
@@ -150,3 +151,4 @@ Not included:
 - Public upload enablement.
 - WebApp-controlled Python Worker process launching.
 - Live OpenAI/Gemini content generation.
+- ViMax or other agentic video engine integration.

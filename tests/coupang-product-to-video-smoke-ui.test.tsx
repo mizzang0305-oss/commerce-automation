@@ -33,6 +33,8 @@ describe("Coupang product-to-video smoke UI", () => {
     expect(screen.getByRole("button", { name: "채널 업로드 패키지 생성" })).toBeInTheDocument();
     expect(screen.getByText("WebApp은 Python Worker를 직접 실행하지 않습니다.")).toBeInTheDocument();
     expect(screen.getByText(/\.\\\.venv\\Scripts\\python worker\.py/)).toBeInTheDocument();
+    expect(screen.getByText("render_plan_attached")).toBeInTheDocument();
+    expect(screen.getByText("render_plan_shots")).toBeInTheDocument();
     expect(screen.getByText("YouTube/TikTok/Threads 업로드는 비활성화 상태입니다.")).toBeInTheDocument();
   });
 });
