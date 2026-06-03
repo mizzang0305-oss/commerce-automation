@@ -1075,9 +1075,13 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
 
   async upsertChannelUploadPackage(input: ChannelUploadPackage) {
     const normalized = normalizeChannelUploadPackage(input);
+    const row = {
+      ...normalized,
+      uploaded_at: normalized.uploaded_at.trim() ? normalized.uploaded_at : null
+    };
     const { data, error } = await this.client
       .from("channel_upload_packages")
-      .upsert(normalized, { onConflict: "id" })
+      .upsert(row, { onConflict: "id" })
       .select("*")
       .single();
     throwIfSupabaseError(error, "upsertChannelUploadPackage");
