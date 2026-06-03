@@ -3,6 +3,7 @@ import type { GeneratedContent, ProductQueueItem, WorkerJob } from "@/types/auto
 import { canProcessBatch } from "@/lib/guards";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { createAutomationRun } from "@/lib/server/runLog";
+import { buildStoryboardRenderPlan } from "@/lib/video/storyboardTemplatePlanner";
 import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 
 export const dynamic = "force-dynamic";
@@ -96,6 +97,7 @@ export async function POST() {
       queue_status: "processing",
       error_message: ""
     });
+    const renderPlan = buildStoryboardRenderPlan(item, content);
     jobs.push(
       await repository.createWorkerJob({
         job_type: "video_render",
@@ -115,7 +117,8 @@ export async function POST() {
             title: content?.video_title ?? item.product_name,
             description: content?.youtube_description ?? "",
             hashtags: content?.hashtags ?? ""
-          }
+          },
+          ...(renderPlan.ok ? { render_plan: renderPlan.render_plan } : {})
         }
       })
     );

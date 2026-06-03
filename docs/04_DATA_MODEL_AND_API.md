@@ -197,7 +197,7 @@ Returns worker heartbeats and worker job counts for the `/workers` UI.
 
 ## Render Plan Scaffold
 
-`render_plan` is an internal planning shape for future shot-plan based rendering. It is not persisted in the database yet and does not replace the current Python Worker render path.
+`render_plan` is an internal planning shape for shot-plan based rendering. It is not persisted in the database yet. When `next-batch` can build a valid template plan, it includes the plan in the `video_render` worker job payload; otherwise the existing image/script payload path remains unchanged.
 
 Current scaffold:
 
@@ -213,7 +213,9 @@ Current scaffold:
 - `safety.vimax_dependency = false`
 - `safety.worker_jobs_created = false`
 
-The template planner requires product name, affiliate URL, product image URL, video script, and disclosure text. Missing inputs return readiness reasons instead of generating a fake render plan. The scaffold adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
+The template planner requires product name, affiliate URL, product image URL, video script, and disclosure text. Missing inputs return readiness reasons instead of generating a fake render plan. The Python Worker validates `render_plan.shots` before ffmpeg diagnostics, uses the first shot image as the current render image, and joins shot captions/voice text into the render script. The legacy payload path remains the fallback when no plan is present.
+
+The scaffold adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
 
 ## Run API
 
@@ -232,7 +234,8 @@ Behavior:
 7. Invalid items become `manual_review`.
 8. Valid items become `processing`.
 9. Create `video_render` rows in `worker_jobs` with both `image_url` and `thumbnail_url` populated from the queue image URL.
-10. Record `AutomationRun`.
+10. Include `payload.render_plan` when the storyboard template planner can build a ready plan.
+11. Record `AutomationRun`.
 
 No due items returns:
 

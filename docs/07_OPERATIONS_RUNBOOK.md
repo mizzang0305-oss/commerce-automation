@@ -547,7 +547,7 @@ Safety rules:
 
 ## Render Plan / Storyboard Scaffold
 
-The render plan scaffold is a planning-only layer for future shot-plan based rendering. It does not change the current `next-batch -> Python Worker -> R2 artifact` path.
+The render plan scaffold is an internal shot-plan layer inside the current `next-batch -> Python Worker -> R2 artifact` path. When a valid plan exists, `next-batch` includes it in the `video_render` worker job payload. When a plan is not ready, the legacy image/script payload path is used.
 
 Use `buildStoryboardRenderPlan` only after a queue item has:
 
@@ -563,9 +563,10 @@ Safety expectations:
 
 - No ViMax package is installed or imported.
 - No OpenRouter, Veo, Google image generator, OpenAI, or Gemini API call is made.
-- No worker job is created by the planner.
+- No worker job is created by the planner; `next-batch` remains the only worker job creation path.
 - No YouTube, TikTok, Threads, or public upload action is enabled.
-- Python Worker rendering still uses the existing worker job payload until a later reviewed PR explicitly adds shot-plan rendering.
+- Python Worker validates `render_plan.shots` before ffmpeg diagnostics, uses the first shot image as the current render image, and joins shot captions/voice text into the render script.
+- Malformed render plans fail safely; they must not be converted into completed jobs or `video_ready`.
 
 ## Run Next Batch
 
