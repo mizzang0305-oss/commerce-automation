@@ -36,10 +36,10 @@ describe("queue detail render plan preview", () => {
     expect(screen.getByText("render_plan_attached=true")).toBeInTheDocument();
     expect(screen.getByText("shots=4")).toBeInTheDocument();
     expect(screen.getByText("duration=18s")).toBeInTheDocument();
-    expect(screen.getByText("hook")).toBeInTheDocument();
+    expect(screen.getAllByText("hook").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("product_focus").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("check_points")).toBeInTheDocument();
-    expect(screen.getByText("manual_cta")).toBeInTheDocument();
+    expect(screen.getAllByText("check_points").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("manual_cta").length).toBeGreaterThanOrEqual(1);
   });
 
   test("renders legacy fallback copy and gaps when render plan cannot be built", () => {
@@ -72,5 +72,38 @@ describe("queue detail render plan preview", () => {
     expect(screen.getByText("Legacy render fallback will be used until the missing inputs are fixed.")).toBeInTheDocument();
     expect(screen.getByText("thumbnail_url")).toBeInTheDocument();
     expect(screen.getByText("video_script")).toBeInTheDocument();
+  });
+
+  test("renders lightweight override editor and safety copy", () => {
+    const item = createQueueItemFixture({
+      id: "queue-render-plan-override-ui",
+      product_name: "Render plan override UI product",
+      queue_status: "scheduled",
+      selected_affiliate_url: "https://link.coupang.com/a/render-plan-override-ui",
+      thumbnail_url: "https://picsum.photos/seed/render-plan-override-ui/1080/1920"
+    });
+    const content = createGeneratedContentFixture({
+      product_queue_id: item.id,
+      product_name: item.product_name,
+      video_title: "Render plan override UI product checklist",
+      video_script:
+        "Open with the product. Show the category and price context. Ask operators to check current terms before upload.",
+      disclosure_text: "This content contains affiliate links."
+    });
+
+    render(
+      <QueueDetailView
+        item={item}
+        content={content}
+        settings={createDefaultSettings()}
+        assets={[]}
+        workerJobs={[]}
+      />
+    );
+
+    expect(screen.getByText("Render plan lightweight override")).toBeInTheDocument();
+    expect(screen.getByText("Save render plan override")).toBeInTheDocument();
+    expect(screen.getByText("Override save creates 0 worker jobs. Next-batch is still the only worker job creation path.")).toBeInTheDocument();
+    expect(screen.getByText("External video APIs and platform uploads remain disabled.")).toBeInTheDocument();
   });
 });

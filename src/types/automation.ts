@@ -1,3 +1,5 @@
+import type { RenderPlanOverride } from "@/lib/video/renderPlanOverride";
+
 export type RunMode =
   | "generate_only"
   | "youtube_private"
@@ -141,6 +143,9 @@ export type GeneratedContent = {
   video_status: string;
   blog_draft_url: string;
   blog_draft_status: string;
+  render_plan_override?: RenderPlanOverride | null;
+  render_plan_override_updated_at?: string;
+  render_plan_override_updated_by?: string;
   created_at: string;
   updated_at: string;
 };

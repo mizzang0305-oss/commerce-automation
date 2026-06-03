@@ -187,7 +187,17 @@ The `/queue/[id]` page previews this plan before dispatch:
 - per-shot layout, caption, image URL, voice text, and readiness gaps
 - legacy fallback copy when a plan cannot be built
 
-The preview is read-only. It creates zero `worker_jobs`, does not launch Python Worker, does not install ViMax, and does not call external video/image APIs.
+The base preview is deterministic. Operators may save a lightweight `render_plan_override` on `/queue/[id]` to adjust shot captions, voice text, and durations. The base plan remains unchanged, the override is stored on `generated_contents`, and the app computes an `effective_render_plan` for preview and next-batch dispatch.
+
+Override guardrails:
+
+- only shot text and 2-8 second shot durations are editable;
+- affiliate links, disclosure text, image URLs, worker commands, upload flags, and external URLs are not editable through overrides;
+- unsafe claim language is rejected;
+- saving an override creates zero `worker_jobs`;
+- `/api/run/next-batch` remains the only worker job creation path and includes the effective render plan in the worker payload only when the override validates.
+
+The preview and override editor do not launch Python Worker, do not install ViMax, do not call external video/image APIs, and do not enable platform uploads.
 
 ## Event-Driven Production Planner
 
@@ -204,7 +214,7 @@ The planner does not create `worker_jobs`. Candidate promotion creates a schedul
 
 Channel profiles are routing metadata only. Defaults use `upload_enabled=false` and `manual_upload_only=true`; YouTube OAuth readiness may be displayed as configured booleans, but no upload flow, OAuth start route, token storage, or `videos.insert` call is implemented. The `/channels` page can edit channel name, handle, channel ID, category routing, upload window, and manual upload copy templates. Attempts to enable upload automation are ignored and persisted as disabled.
 
-Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` and `supabase/migrations/005_channel_upload_package_results.sql` to store channel-specific manual upload packages and manual upload result tracking. Apply `supabase/migrations/006_channel_profile_admin_readiness.sql` for editable manual upload templates. RLS is enabled and no public anon/authenticated policies are created.
+Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` and `supabase/migrations/005_channel_upload_package_results.sql` to store channel-specific manual upload packages and manual upload result tracking. Apply `supabase/migrations/006_channel_profile_admin_readiness.sql` for editable manual upload templates. Apply `supabase/migrations/007_generated_content_render_plan_override.sql` before saving render plan overrides. RLS is enabled and no public anon/authenticated policies are created.
 
 ## Key Pages
 

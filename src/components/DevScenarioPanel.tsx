@@ -5,6 +5,7 @@ import type { AutomationSettings } from "@/types/automation";
 import type { N8nConfigStatus } from "@/lib/server/env";
 import type { RepositoryRuntimeInfo } from "@/lib/repositories/repositoryFactory";
 import { getDailyCapacity, getDailyCapacityWarning, getNextRunAt } from "@/lib/scheduler";
+import { formatDateTime } from "@/lib/format";
 import { WebhookStatusCard } from "@/components/WebhookStatusCard";
 
 type SmokeStatus = {
@@ -20,6 +21,8 @@ type SmokeStatus = {
   product_asset_types: string[];
   render_plan_attached: boolean;
   render_plan_shot_count: number;
+  render_plan_override_present: boolean;
+  effective_render_plan_shot_count: number;
   upload_package_id: string;
   upload_package_status: string;
   created_worker_jobs: number;
@@ -185,6 +188,8 @@ export function DevScenarioPanel({
           <SmokeField label="product_assets" value={smokeStatus ? `${smokeStatus.product_assets_count} (${smokeStatus.product_asset_types.join(", ")})` : ""} />
           <SmokeField label="render_plan_attached" value={smokeStatus ? String(smokeStatus.render_plan_attached === true) : ""} />
           <SmokeField label="render_plan_shots" value={smokeStatus ? String(smokeStatus.render_plan_shot_count ?? 0) : ""} />
+          <SmokeField label="render_plan_override_present" value={smokeStatus ? String(smokeStatus.render_plan_override_present === true) : ""} />
+          <SmokeField label="effective_render_plan_shots" value={smokeStatus ? String(smokeStatus.effective_render_plan_shot_count ?? 0) : ""} />
           <SmokeField label="upload_package_id" value={uploadPackageId} />
         </div>
         {smokeStatus?.blocking_reasons?.length ? (
@@ -230,7 +235,7 @@ export function DevScenarioPanel({
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-950">다음 실행 시간</h2>
-          <p className="mt-3 text-2xl font-bold text-slate-900">{getNextRunAt(settings).toLocaleString("ko-KR")}</p>
+          <p className="mt-3 text-2xl font-bold text-slate-900">{formatDateTime(getNextRunAt(settings))}</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-950">하루 처리 가능량</h2>

@@ -153,7 +153,9 @@ describe("Coupang product-to-video smoke workflow", () => {
       created_jobs: 1,
       status: {
         render_plan_attached: true,
-        render_plan_shot_count: 4
+        render_plan_shot_count: 4,
+        render_plan_override_present: false,
+        effective_render_plan_shot_count: 4
       }
     });
     expect(jobs).toEqual([
@@ -186,7 +188,9 @@ describe("Coupang product-to-video smoke workflow", () => {
     expect(payload.status).toMatchObject({
       queue_id: promoted.queue_id,
       stage: "promoted_to_queue",
-      next_step: "generate-content"
+      next_step: "generate-content",
+      render_plan_override_present: false,
+      effective_render_plan_shot_count: 0
     });
     expect(payload.status).toHaveProperty("blocking_reasons", expect.arrayContaining(["missing_script"]));
     expect(JSON.stringify(payload)).not.toContain("WORKER_API_SECRET");

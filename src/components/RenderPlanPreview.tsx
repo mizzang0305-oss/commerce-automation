@@ -25,6 +25,8 @@ export function RenderPlanPreview({
         </div>
         <div className="flex flex-wrap gap-2">
           <PreviewPill label={`render_plan_attached=${attached ? "true" : "false"}`} ok={attached} />
+          <PreviewPill label={`override_present=${summary.override_present ? "true" : "false"}`} ok={summary.override_present} />
+          <PreviewPill label={`effective_plan_valid=${summary.override_valid ? "true" : "false"}`} ok={summary.override_valid} />
           <PreviewPill label={`shots=${summary.shot_count}`} ok={summary.shot_count > 0} />
           <PreviewPill label={`duration=${summary.total_duration_sec}s`} ok={summary.total_duration_sec > 0} />
         </div>
@@ -54,6 +56,11 @@ export function RenderPlanPreview({
           Render plan inputs and shot rows are ready for next-batch payload attachment.
         </p>
       )}
+      {summary.override_error ? (
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+          {summary.override_error}
+        </p>
+      ) : null}
 
       {summary.rows.length ? (
         <div className="mt-4 overflow-x-auto">
@@ -133,6 +140,7 @@ function gapLabel(gap: string) {
     missing_caption: "missing_caption",
     missing_voice_text: "missing_voice_text",
     too_long_caption: "too_long_caption",
+    invalid_override: "invalid_override",
     unsafe_claim_warning: "unsafe_claim_warning"
   };
   return labels[gap] ?? gap;

@@ -44,6 +44,39 @@ describe("render plan preview summary", () => {
     expect(summary.gaps).toContain("no_render_plan");
   });
 
+  test("summarizes an effective render plan after applying an override", () => {
+    const item = queueItemFixture();
+    const content = generatedContentFixture({
+      render_plan_override: {
+        shots: [
+          {
+            shot_id: "hook",
+            caption: "Operator preview hook",
+            voice_text: "This operator preview hook is safe.",
+            duration_seconds: 4
+          }
+        ],
+        updated_by: "operator"
+      }
+    });
+    const plan = buildStoryboardRenderPlan(item, content);
+
+    if (!plan.ok) {
+      throw new Error(plan.missing_reasons.join(","));
+    }
+
+    const summary = summarizeRenderPlanPreview(plan.render_plan, item, content);
+
+    expect(summary.override_present).toBe(true);
+    expect(summary.total_duration_sec).toBe(19);
+    expect(summary.rows[0]).toMatchObject({
+      shot_id: "hook",
+      caption: "Operator preview hook",
+      voice_text: "This operator preview hook is safe.",
+      duration_sec: 4
+    });
+  });
+
   test("reports readiness gaps for invalid shot plans without faking readiness", () => {
     const item = queueItemFixture({ thumbnail_url: "" });
     const content = generatedContentFixture({ video_script: "" });

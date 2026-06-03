@@ -35,6 +35,8 @@ describe("Coupang product-to-video smoke UI", () => {
     expect(screen.getByText(/\.\\\.venv\\Scripts\\python worker\.py/)).toBeInTheDocument();
     expect(screen.getByText("render_plan_attached")).toBeInTheDocument();
     expect(screen.getByText("render_plan_shots")).toBeInTheDocument();
+    expect(screen.getByText("render_plan_override_present")).toBeInTheDocument();
+    expect(screen.getByText("effective_render_plan_shots")).toBeInTheDocument();
     expect(screen.getByText("YouTube/TikTok/Threads 업로드는 비활성화 상태입니다.")).toBeInTheDocument();
   });
 });

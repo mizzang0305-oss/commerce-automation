@@ -17,6 +17,7 @@ import { getRenderableChecklist } from "@/lib/queueAnalytics";
 import { getWorkerJobStatusLabel, getWorkerJobTypeLabel } from "@/lib/statusLabels";
 import { GuardNotice } from "@/components/GuardNotice";
 import { QueueActionButtons } from "@/components/QueueActionButtons";
+import { RenderPlanOverrideEditor } from "@/components/RenderPlanOverrideEditor";
 import { RenderPlanPreview } from "@/components/RenderPlanPreview";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -204,6 +205,20 @@ export function QueueDetailView({
       <GuardNotice settings={settings} item={item} />
 
       <RenderPlanPreview item={item} content={draftContent} />
+
+      <RenderPlanOverrideEditor
+        key={`${item.id}-${draftContent?.updated_at ?? ""}-${draftContent?.render_plan_override_updated_at ?? ""}`}
+        item={item}
+        content={draftContent}
+        onSaved={(override) => {
+          setDraftContent((current) => current ? {
+            ...current,
+            render_plan_override: override,
+            render_plan_override_updated_at: new Date().toISOString(),
+            render_plan_override_updated_by: override.updated_by ?? ""
+          } : current);
+        }}
+      />
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-bold text-slate-950">worker job 전달 가능 체크리스트</h2>

@@ -28,6 +28,7 @@ supabase/migrations/003_event_calendar_and_planner.sql
 supabase/migrations/004_channel_upload_packages.sql
 supabase/migrations/005_channel_upload_package_results.sql
 supabase/migrations/006_channel_profile_admin_readiness.sql
+supabase/migrations/007_generated_content_render_plan_override.sql
 ```
 
 Tables created by the migration:
@@ -197,7 +198,7 @@ Returns worker heartbeats and worker job counts for the `/workers` UI.
 
 ## Render Plan Scaffold
 
-`render_plan` is an internal planning shape for shot-plan based rendering. It is not persisted in the database yet. When `next-batch` can build a valid template plan, it includes the plan in the `video_render` worker job payload; otherwise the existing image/script payload path remains unchanged.
+`render_plan` is an internal planning shape for shot-plan based rendering. The base plan is derived from queue/content inputs. Lightweight operator edits are stored separately as `generated_contents.render_plan_override`, then merged into an `effective_render_plan` for preview and next-batch payloads. When `next-batch` can build a valid template plan, it includes the effective plan in the `video_render` worker job payload; otherwise the existing image/script payload path remains unchanged.
 
 Current scaffold:
 
@@ -216,6 +217,29 @@ Current scaffold:
 The template planner requires product name, affiliate URL, product image URL, video script, and disclosure text. Missing inputs return readiness reasons instead of generating a fake render plan. The Python Worker validates `render_plan.shots` before ffmpeg diagnostics, uses the first shot image as the current render image, and joins shot captions/voice text into the render script. The legacy payload path remains the fallback when no plan is present.
 
 The `/queue/[id]` page shows a read-only render plan preview when the template planner can build one. The preview displays shot count, total duration, shot captions, image URLs, voice text, and readiness gaps. If required inputs are missing, the page shows legacy fallback copy and the missing fields instead of claiming a ready render plan.
+
+### POST /api/queue/[id]/render-plan-override
+
+Saves a lightweight operator override for the existing storyboard render plan.
+
+Allowed override fields:
+
+- `shots[].shot_id`
+- `shots[].caption`
+- `shots[].voice_text`
+- `shots[].duration_seconds`
+- `updated_by`
+
+Forbidden through this API:
+
+- image URL replacement;
+- affiliate link or disclosure edits;
+- worker command or worker job creation;
+- upload flags;
+- external video/image API configuration;
+- platform upload fields.
+
+Validation rejects unknown shot IDs, forbidden fields, unsafe claim language, per-shot durations outside 2-8 seconds, and total duration outside the allowed range. A successful save returns `created_worker_jobs: 0` and does not change queue status. `/api/run/next-batch` revalidates the override before using it; invalid persisted overrides send the queue item to manual review instead of creating a worker job.
 
 The scaffold adds no ViMax dependency, no external video/image API call, and no platform upload behavior.
 
@@ -236,7 +260,7 @@ Behavior:
 7. Invalid items become `manual_review`.
 8. Valid items become `processing`.
 9. Create `video_render` rows in `worker_jobs` with both `image_url` and `thumbnail_url` populated from the queue image URL.
-10. Include `payload.render_plan` when the storyboard template planner can build a ready plan.
+10. Include `payload.render_plan` when the storyboard template planner can build a ready plan. If a valid `render_plan_override` exists, the payload contains the effective plan.
 11. Record `AutomationRun`.
 
 No due items returns:
