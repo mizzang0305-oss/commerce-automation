@@ -100,11 +100,24 @@ export function buildChannelUploadPackage(input: {
   }
 
   const now = input.now ?? new Date().toISOString();
-  const title = (content?.video_title || item.product_name).trim();
-  const hashtags = mergeChannelHashtags(content?.hashtags ?? "", channel);
+  const baseTitle = (content?.video_title || item.product_name).trim();
+  const hashtags = mergeChannelHashtags([content?.hashtags ?? "", channel.hashtag_template ?? ""].join(" "), channel);
   const disclosure = content?.disclosure_text.trim() ?? "";
-  const description = [
-    content?.youtube_description?.trim() || `${item.product_name} 수동 업로드용 설명입니다.`,
+  const baseDescription = content?.youtube_description?.trim() || `${item.product_name} 수동 업로드용 설명입니다.`;
+  const templateContext = {
+    product_name: item.product_name,
+    channel_name: channel.channel_name,
+    video_title: baseTitle,
+    description: baseDescription,
+    affiliate_url: item.selected_affiliate_url,
+    disclosure_text: disclosure,
+    hashtags,
+    price_now_text: item.price_now_text,
+    category_path: item.category_path
+  };
+  const title = applyChannelTemplate(channel.title_template, templateContext) || baseTitle;
+  const description = applyChannelTemplate(channel.description_template, templateContext) || [
+    baseDescription,
     "",
     item.selected_affiliate_url ? `제휴 링크: ${item.selected_affiliate_url}` : "",
     disclosure,
@@ -143,4 +156,12 @@ export function buildChannelUploadPackage(input: {
 
 function findAssetUrl(assets: ProductAsset[], assetType: ProductAsset["asset_type"]) {
   return assets.find((asset) => asset.asset_type === assetType)?.url ?? "";
+}
+
+function applyChannelTemplate(template: string | undefined, values: Record<string, string>) {
+  const source = template?.trim();
+  if (!source) {
+    return "";
+  }
+  return source.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key: string) => values[key] ?? "").trim();
 }

@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
   Platform,
@@ -97,6 +98,9 @@ export interface AutomationRepository {
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
+  getChannelProfiles(): Promise<ChannelProfile[]>;
+  getChannelProfile(id: string): Promise<ChannelProfile | null>;
+  updateChannelProfile(id: string, patch: Partial<ChannelProfile>): Promise<ChannelProfile | null>;
   getChannelUploadPackages(productQueueId?: string): Promise<ChannelUploadPackage[]>;
   getChannelUploadPackage(id: string): Promise<ChannelUploadPackage | null>;
   upsertChannelUploadPackage(input: ChannelUploadPackage): Promise<ChannelUploadPackage>;

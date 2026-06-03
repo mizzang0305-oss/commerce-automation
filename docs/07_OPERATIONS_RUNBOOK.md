@@ -71,7 +71,8 @@ For Supabase/Postgres shared state:
 2. Apply `supabase/migrations/001_automation_core.sql`.
 3. Apply `supabase/migrations/002_candidate_scoring_fields.sql` for candidate `product_key`, dedupe, scoring, and promotion readiness fields.
 4. Apply `supabase/migrations/003_event_calendar_and_planner.sql` for event calendar, daily planner, and channel profile tables.
-5. Set server-only env values in `.env.local` or the deployment secret store:
+5. Apply `supabase/migrations/004_channel_upload_packages.sql`, `005_channel_upload_package_results.sql`, and `006_channel_profile_admin_readiness.sql` for manual upload package and channel template tracking.
+6. Set server-only env values in `.env.local` or the deployment secret store:
 
 ```text
 AUTOMATION_REPOSITORY_ADAPTER=supabase
@@ -79,7 +80,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=replace-with-service-role-key
 ```
 
-6. Run `npm run test`, `npm run lint`, and `npm run build`.
+7. Run `npm run test`, `npm run lint`, and `npm run build`.
 
 Do not expose `SUPABASE_SERVICE_ROLE_KEY` to client code. The Python Worker still polls the WebApp API and does not need Supabase DB credentials. Artifact storage is configured separately in the Python Worker.
 
@@ -235,6 +236,18 @@ Invoke-RestMethod http://localhost:3000/api/planner/daily | ConvertTo-Json -Dept
 ```
 
 The planner should show active events in the 7-30 day window, candidate matches, and channel routing. Channel profiles are manual-only by default. The planner does not create queue rows or worker jobs.
+
+## Channel Admin Readiness
+
+Open `/channels` after applying migration 006. Use it to edit channel names, handles, channel IDs, routing categories, upload windows, and manual upload copy templates.
+
+Safety expectations:
+
+- Saving a channel profile keeps `upload_enabled=false`.
+- Saving a channel profile keeps `manual_upload_only=true`.
+- OAuth readiness is displayed as a configured boolean only.
+- The page does not provide OAuth start, token storage, YouTube upload, TikTok upload, or Threads post actions.
+- Channel template changes affect manual upload package preview/copy only.
 
 ## Development API Guard
 

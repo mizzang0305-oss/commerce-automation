@@ -183,14 +183,15 @@ The planner foundation turns collected candidates into a daily production shortl
 - `/planner`: shows the current daily plan, upcoming 7-30 day event window, and channel routing.
 - `GET /api/events`: returns the static event calendar seed for the selected year.
 - `GET /api/channels`: returns manual-only YouTube channel profiles.
+- `/channels`: edits channel display metadata, routing categories, upload windows, and manual upload templates.
 - `GET /api/planner/daily`: computes a safe daily plan from `product_candidates`, upcoming events, and channel profiles.
 - `POST /api/dev/seed` with `{ "mode": "candidate-video-smoke" }`: creates a repeatable candidate-to-video smoke candidate.
 
 The planner does not create `worker_jobs`. Candidate promotion creates a scheduled queue row and generated-content scaffold, content draft generation fills script/copy fields, and `/api/run/next-batch` remains the only route that creates worker jobs.
 
-Channel profiles are routing metadata only. Defaults use `upload_enabled=false` and `manual_upload_only=true`; YouTube OAuth readiness may be displayed as configured booleans, but no upload flow or `videos.insert` call is implemented.
+Channel profiles are routing metadata only. Defaults use `upload_enabled=false` and `manual_upload_only=true`; YouTube OAuth readiness may be displayed as configured booleans, but no upload flow, OAuth start route, token storage, or `videos.insert` call is implemented. The `/channels` page can edit channel name, handle, channel ID, category routing, upload window, and manual upload copy templates. Attempts to enable upload automation are ignored and persisted as disabled.
 
-Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` and `supabase/migrations/005_channel_upload_package_results.sql` to store channel-specific manual upload packages and manual upload result tracking. RLS is enabled and no public anon/authenticated policies are created.
+Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supabase and you want the planner tables available for future persisted event/channel/plan records. Apply `supabase/migrations/004_channel_upload_packages.sql` and `supabase/migrations/005_channel_upload_package_results.sql` to store channel-specific manual upload packages and manual upload result tracking. Apply `supabase/migrations/006_channel_profile_admin_readiness.sql` for editable manual upload templates. RLS is enabled and no public anon/authenticated policies are created.
 
 ## Key Pages
 
@@ -198,6 +199,7 @@ Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supaba
 - `/queue`: product queue with worker job status.
 - `/queue/[id]`: generated result URLs, assets, content draft action, channel upload package action, and manual review controls.
 - `/planner`: event-driven daily production plan and manual-only channel routing.
+- `/channels`: manual-only channel profile readiness and upload package template admin.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.

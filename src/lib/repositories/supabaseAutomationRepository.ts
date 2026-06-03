@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
   Platform,
@@ -33,6 +34,8 @@ import { getQueueSummary } from "@/lib/status";
 import { assignSlots } from "@/lib/scheduler";
 import { getSupabaseAdminClient } from "@/lib/server/supabaseAdmin";
 import { normalizeChannelUploadPackage } from "@/lib/channels/uploadResult";
+import { getDefaultChannelProfiles } from "@/lib/channels/defaultChannels";
+import { normalizeChannelProfile } from "@/lib/channels/channelProfileAdmin";
 import {
   buildCandidatePromotion,
   filterProductCandidates,
@@ -396,6 +399,31 @@ function mapAssetRow(row: Record<string, unknown>): ProductAsset {
     url: emptyString(row.url),
     created_at: emptyString(row.created_at)
   };
+}
+
+function mapChannelProfileRow(row: Record<string, unknown>): ChannelProfile {
+  return normalizeChannelProfile({
+    id: emptyString(row.id),
+    channel_key: emptyString(row.channel_key),
+    channel_name: emptyString(row.channel_name),
+    platform: (emptyString(row.platform) || "youtube") as ChannelProfile["platform"],
+    youtube_channel_id: emptyString(row.youtube_channel_id),
+    youtube_handle: emptyString(row.youtube_handle),
+    niche: emptyString(row.niche),
+    allowed_categories: Array.isArray(row.allowed_categories) ? row.allowed_categories.filter((entry): entry is string => typeof entry === "string") : [],
+    excluded_categories: Array.isArray(row.excluded_categories) ? row.excluded_categories.filter((entry): entry is string => typeof entry === "string") : [],
+    default_hashtags: Array.isArray(row.default_hashtags) ? row.default_hashtags.filter((entry): entry is string => typeof entry === "string") : [],
+    title_template: emptyString(row.title_template),
+    description_template: emptyString(row.description_template),
+    hashtag_template: emptyString(row.hashtag_template),
+    pinned_comment_template: emptyString(row.pinned_comment_template),
+    upload_window: ensureRecord(row.upload_window),
+    status: (emptyString(row.status) || "active") as ChannelProfile["status"],
+    upload_enabled: booleanOrDefault(row.upload_enabled, false),
+    manual_upload_only: booleanOrDefault(row.manual_upload_only, true),
+    created_at: emptyString(row.created_at),
+    updated_at: emptyString(row.updated_at)
+  });
 }
 
 function mapChannelUploadPackageRow(row: Record<string, unknown>): ChannelUploadPackage {
@@ -1051,6 +1079,54 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     const { data, error } = await query.order("created_at", { ascending: true });
     throwIfSupabaseError(error, "getProductAssets");
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapAssetRow));
+  }
+
+  async getChannelProfiles() {
+    const { data, error } = await this.client
+      .from("channel_profiles")
+      .select("*")
+      .order("channel_name", { ascending: true });
+    throwIfSupabaseError(error, "getChannelProfiles");
+
+    if (!data || data.length === 0) {
+      const defaults = getDefaultChannelProfiles().map(normalizeChannelProfile);
+      await this.upsertRows("channel_profiles", defaults);
+      return clone(defaults);
+    }
+
+    return clone(((data ?? []) as Record<string, unknown>[]).map(mapChannelProfileRow));
+  }
+
+  async getChannelProfile(id: string) {
+    const { data, error } = await this.client
+      .from("channel_profiles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    throwIfSupabaseError(error, "getChannelProfile");
+    return data ? clone(mapChannelProfileRow(data as Record<string, unknown>)) : null;
+  }
+
+  async updateChannelProfile(id: string, patch: Partial<ChannelProfile>) {
+    const existing = await this.getChannelProfile(id);
+    if (!existing) {
+      return null;
+    }
+    const normalized = normalizeChannelProfile({
+      ...existing,
+      ...patch,
+      id,
+      upload_enabled: false,
+      manual_upload_only: true,
+      updated_at: nowIso()
+    });
+    const { data, error } = await this.client
+      .from("channel_profiles")
+      .upsert(normalized, { onConflict: "id" })
+      .select("*")
+      .single();
+    throwIfSupabaseError(error, "updateChannelProfile");
+    return clone(mapChannelProfileRow(data as Record<string, unknown>));
   }
 
   async getChannelUploadPackages(productQueueId?: string) {

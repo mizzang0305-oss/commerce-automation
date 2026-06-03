@@ -11,6 +11,7 @@ export type AutomationStoragePaths = {
   productCandidates: string;
   productionHistory: string;
   productAssets: string;
+  channelProfiles: string;
   channelUploadPackages: string;
 };
 
@@ -30,6 +31,7 @@ export function getStoragePaths(dataDir = getAutomationDataDir()): AutomationSto
     productCandidates: resolve(dataDir, "product_candidates.json"),
     productionHistory: resolve(dataDir, "production_history.json"),
     productAssets: resolve(dataDir, "product_assets.json"),
+    channelProfiles: resolve(dataDir, "channel_profiles.json"),
     channelUploadPackages: resolve(dataDir, "channel_upload_packages.json")
   };
 }

@@ -368,6 +368,10 @@ export type ChannelProfile = {
   allowed_categories: string[];
   excluded_categories: string[];
   default_hashtags: string[];
+  title_template?: string;
+  description_template?: string;
+  hashtag_template?: string;
+  pinned_comment_template?: string;
   upload_window: JsonRecord;
   status: ChannelProfileStatus;
   upload_enabled: boolean;

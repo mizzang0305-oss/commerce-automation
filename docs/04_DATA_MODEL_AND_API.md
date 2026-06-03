@@ -27,6 +27,7 @@ supabase/migrations/002_candidate_scoring_fields.sql
 supabase/migrations/003_event_calendar_and_planner.sql
 supabase/migrations/004_channel_upload_packages.sql
 supabase/migrations/005_channel_upload_package_results.sql
+supabase/migrations/006_channel_profile_admin_readiness.sql
 ```
 
 Tables created by the migration:
@@ -62,7 +63,7 @@ Supabase Storage and R2 object storage are not part of the repository schema. Ge
 
 `daily_production_plans` and `daily_production_plan_items` store future persisted daily plan output. Planner items reference candidates, optional queue rows, event keys, target channels, rank, status, and reason text.
 
-`channel_profiles` stores manual-only routing metadata. Defaults must keep `upload_enabled=false` and `manual_upload_only=true`. This table does not authorize platform uploads and does not store OAuth tokens.
+`channel_profiles` stores manual-only routing metadata. Defaults must keep `upload_enabled=false` and `manual_upload_only=true`. Editable fields include display name, YouTube channel ID/handle, routing categories, upload window, and manual upload templates (`title_template`, `description_template`, `hashtag_template`, `pinned_comment_template`). This table does not authorize platform uploads and does not store OAuth tokens.
 
 `channel_upload_packages` stores prepared copy, artifact links, and operator-recorded manual upload outcomes for human-operated channel uploads. Rows must keep `upload_enabled=false` and `manual_upload_only=true`; they do not trigger YouTube, TikTok, or Threads API calls. Result tracking fields such as `uploaded_url`, `uploaded_at`, `uploaded_by`, `upload_notes`, and `platform_upload_status` are manually maintained audit metadata only.
 
@@ -74,7 +75,15 @@ Returns static event calendar seeds for the requested year.
 
 ### GET /api/channels
 
-Returns channel profiles with upload disabled and manual upload only.
+Returns channel profiles with upload disabled and manual upload only. The response may include safe OAuth readiness booleans but must not include OAuth client secrets, service role keys, access tokens, or refresh tokens.
+
+### GET /api/channels/[id]
+
+Returns one channel profile plus safe readiness booleans.
+
+### PATCH /api/channels/[id]
+
+Updates operator-editable channel metadata and manual upload templates. Token-like fields are ignored. `upload_enabled` is always persisted as `false`, `manual_upload_only` is always persisted as `true`, and the route creates zero worker jobs and zero platform uploads.
 
 ### GET /api/planner/daily
 
