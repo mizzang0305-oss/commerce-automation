@@ -40,6 +40,47 @@ If you need to prove the source string itself is valid UTF-8, inspect it with Py
 python -c "from pathlib import Path; print(repr(Path('app/api/dev/seed/route.ts').read_text(encoding='utf-8')[0:500]))"
 ```
 
+PowerShell console rendering can corrupt inline Korean JSON even when the API and source files are correct. For smoke payloads with Korean text, prefer a UTF-8 request body file:
+
+```powershell
+@'
+{
+  "product_name": "쿠팡 테스트 상품",
+  "raw_coupang_url": "https://www.coupang.com/vp/products/123456789",
+  "selected_affiliate_url": "https://link.coupang.com/a/test",
+  "thumbnail_url": "https://picsum.photos/seed/test/1080/1920",
+  "price_now_text": "12,900원",
+  "category_path": "선물/생활",
+  "source_type": "manual_url"
+}
+'@ | Out-File -Encoding utf8 .\tmp-coupang-import-body.json
+
+Invoke-RestMethod `
+  -Method Post `
+  -ContentType "application/json; charset=utf-8" `
+  -InFile .\tmp-coupang-import-body.json `
+  "http://localhost:3001/api/candidates/import-coupang" |
+  ConvertTo-Json -Depth 10
+```
+
+For API response inspection, write JSON to a UTF-8 file before reading it back:
+
+```powershell
+Invoke-RestMethod http://localhost:3001/api/dev/diagnostics |
+  ConvertTo-Json -Depth 8 |
+  Out-File -Encoding utf8 .\tmp-diagnostics.json
+
+Get-Content .\tmp-diagnostics.json -Encoding utf8
+```
+
+Use the repository scanner to separate source mojibake from terminal display issues:
+
+```powershell
+node scripts/check-mojibake.mjs --paths README.md,docs/07_OPERATIONS_RUNBOOK.md,src/components/DevScenarioPanel.tsx
+```
+
+`scripts/check-mojibake.mjs` prints file names, line numbers, and short snippets only; it must not read `.env.local`, `python-worker/.env`, local JSON data, worker outputs, temp files, logs, or virtualenv files.
+
 ## Configure Web Service
 
 Create `.env.local` from `.env.example`; do not commit it.
@@ -92,6 +133,19 @@ Before calling the Supabase adapter production-ready, complete `docs/SUPABASE_VE
 ## Production Deployment Baseline
 
 Use this baseline for production or production-like sandbox verification. The primary path is in-house Python Worker based Coupang MVP operation, not n8n, Creatomate, or Google Docs generation.
+
+## Verification Error-Triage Routine
+
+Use this routine before changing code or declaring a smoke PASS.
+
+1. Separate the failed phase: request, repository adapter, migration, PostgREST schema cache, environment variable, Python Worker, image download, ffmpeg render, R2/S3 upload, browser rendering, or PowerShell console rendering.
+2. Capture the evidence without secrets: request URL, HTTP status, safe response body, dev server stack trace, Supabase SQL result, worker log, `candidate_id`, `queue_id`, `worker_job_id`, branch, and commit.
+3. Identify the root cause before editing. If the issue is an empty 500, add a RED safe-error test first. If the issue may create fake success, add a regression test before fixing it.
+4. Apply the smallest fix that addresses the root cause. Do not expand feature scope, do not change the worker job creation path, and do not relax safety guards.
+5. Return to GREEN with targeted tests, `npm run test`, Python unittest, lint, build, compileall, `git diff --check`, secret grep, and a forbidden-path staging scan.
+6. If sandbox credentials, migration access, or runtime dependencies are unavailable, report the smoke as NOT RUN. Do not convert a missing smoke into PASS.
+
+Final reports should include: failed phase, root cause, fix, tests, smoke result, safety state, and next action. Any `video_ready` without `video_url` is a blocking bug, not a cosmetic issue.
 
 Required web service env:
 

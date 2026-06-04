@@ -172,3 +172,54 @@ Not included:
 - Python Worker process launch from WebApp;
 - ViMax dependency or external video/image API calls;
 - YouTube/TikTok/Threads upload APIs or public upload enablement.
+
+## v2.1 Coupang MVP Operating Roadmap
+
+The next work stays centered on the current in-house Coupang MVP: candidate input, scoring/dedupe/readiness, queue promotion, content draft, render plan, Python Worker render, R2 artifact upload, channel upload package, and manual upload result tracking.
+
+n8n, Creatomate, and Google Docs are not the current production path. Naver BrandConnect is deferred. multi-user SaaS is deferred. YouTube OAuth/upload stays last and must remain behind an explicit approval gate.
+
+Recommended PR order:
+
+1. PR #37. Production hosting target decision package
+   - Compare Vercel, Render, Fly.io, and server options for the WebApp.
+   - Decide where Python Worker runs.
+   - Prepare Supabase/R2 production env rollout and production smoke steps.
+   - Do not deploy until the target is approved.
+   - Keep YouTube upload disabled.
+2. PR #38. Render quality tuning v2
+   - Improve shot layouts, subtitle positioning, thumbnail readability, product image card treatment, and vertical transition stability.
+   - Keep the current Python Worker renderer; do not introduce ViMax or external video APIs.
+3. PR #39. Coupang collector MVP
+   - Harden batch/manual URL import and server-only Coupang Partners API readiness.
+   - Create candidates only; do not create queue rows or worker jobs from import.
+4. PR #40. Daily production planner actual use
+   - Turn event windows into a daily shortlist.
+   - Let operators promote selected candidates.
+   - Keep Naver, Musinsa, and BrandConnect as future candidate sources only.
+5. PR #41. Channel package operations dashboard
+   - Track manual_ready, uploaded, and needs_fix package counts by channel.
+   - Keep upload URLs and result tracking manual-only.
+6. PR #42. Content quality review queue
+   - Add checklist review for titles, scripts, hashtags, affiliate disclosure, and blocked claims.
+   - Compare template and future provider outputs without enabling uploads.
+7. PR #43. YouTube channel readiness only
+   - Strengthen channel handle/channel ID/readiness metadata.
+   - Show OAuth readiness booleans only.
+   - Do not add OAuth start, token storage, or `videos.insert`.
+8. PR #44. Approval-gated YouTube OAuth scaffold
+   - Design OAuth and token policy only after manual operations are stable.
+   - Keep upload API implementation as a later, separately approved step.
+9. PR #45. Multi-user readiness design only
+   - Document user/workspace/affiliate-account boundaries.
+   - Keep the current single-operator MVP unchanged unless a production need is proven.
+
+Priority rule:
+
+1. Operations stability.
+2. Render quality.
+3. Product collection and selection.
+4. Daily production planning.
+5. Channel operations dashboard.
+6. YouTube readiness metadata.
+7. YouTube OAuth/upload stays last.
