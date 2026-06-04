@@ -578,7 +578,7 @@ Optional:
 - `price_now_text`
 - `category_path`
 
-The API removes tracking parameters, preserves product/item/vendor identifiers for `product_key`, validates the affiliate short link, validates product image readiness, and upserts only `product_candidates`. It must report `queue_items_created=0` and `worker_jobs_created=0`.
+The API removes tracking parameters, preserves product/item/vendor identifiers for `product_key`, validates the affiliate short link, validates product image readiness, and upserts only `product_candidates`. It must report `queue_created=false`, `worker_jobs_created=false`, and `upload_triggered=false`.
 
 Example request:
 
@@ -764,4 +764,7 @@ Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`,
 - Use `/candidates` to run dry-run Coupang candidate collection. This creates candidates only.
 - Use `/artifacts` to review generated video, thumbnail, subtitle, and upload package URLs before manual upload.
 - Marking artifact QA as `passed` does not upload to YouTube, TikTok, Threads, or any public channel.
+- `/artifacts` supports `qa_status`, `asset_type`, `missing`, `search`, and `sort` filters plus bulk QA actions.
+- Bulk QA updates persist only artifact QA fields and return `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
+- Migration 008 SQL verification for artifact QA persistence is recorded as PASS, but production pilot readiness stays approval-gated until env, deployment, worker, storage, and manual smoke evidence are complete.
 - Supabase deployments must apply `supabase/migrations/008_product_asset_qa.sql` and reload PostgREST schema cache if needed.

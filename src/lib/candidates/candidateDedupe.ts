@@ -54,9 +54,7 @@ export function analyzeCandidateDedupe(
     const produced = isProducedQueueItem(matchingQueue, productKey, context.productionHistory);
     return {
       duplicate_status: produced ? "already_produced" : "already_queued",
-      duplicate_reason: produced
-        ? "이미 제작 이력이 있는 상품입니다."
-        : "이미 상품 큐에 등록된 URL입니다.",
+      duplicate_reason: produced ? "이미 제작 이력이 있는 상품입니다." : "이미 상품 큐에 등록된 URL입니다.",
       duplicate_queue_id: matchingQueue.id
     };
   }

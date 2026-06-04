@@ -44,6 +44,8 @@
 - [ ] `/api/dev/*` mutation routes are enabled only in controlled sandboxes.
 - [ ] `/api/dev/diagnostics` returns configured booleans only.
 - [ ] Artifact storage smoke uses real R2/S3/Supabase Storage URLs, not `/mock-storage`.
+- [ ] Artifact QA updates and bulk QA updates do not trigger uploads, posts, worker jobs, or queue status changes.
+- [ ] Collector responses report no queue, worker, or upload side effects.
 - [ ] WebApp does not launch Python Worker.
 - [ ] Worker jobs are created only by `/api/run/next-batch`.
 - [ ] `npm run check:production-env` output contains no raw secret or URL values.

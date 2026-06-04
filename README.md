@@ -184,12 +184,15 @@ CSV rows must include a product name and an `http`/`https` source URL. Non-web s
 Imported candidates now receive quality-control fields before they are promoted:
 
 - `product_key`: deterministic dedupe key. Coupang uses product/item/vendor identifiers when present, Musinsa uses `goods_no` or URL IDs, and other sources use normalized URL/name hashes.
+- `payload.duplicate_key`, `payload.score_breakdown`, `payload.source_trace`, and `payload.risk_flags`: safe operator metadata for dedupe and scoring review.
 - `candidate_score`: 0-100 score based on affiliate link, product name, image, price, discount, review/rating, source type, and known platform signals.
 - `image_readiness_status`: `ready`, `missing_image`, or `invalid_image_url`; candidates without a usable image cannot be promoted to a renderable queue item.
 - `duplicate_status`: `unique`, `duplicate_candidate`, `already_queued`, `already_produced`, or `unknown`.
 - `promotion_status`: `ready`, `blocked_missing_affiliate`, `blocked_missing_name`, `blocked_duplicate`, `needs_review`, or `promoted`.
 
 The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold, and propagates the selected candidate image into `product_queue.thumbnail_url`; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
+
+Collector endpoints are candidate-only. They must return `queue_created=false`, `worker_jobs_created=false`, and `upload_triggered=false`; they never create queue rows, render plans, upload packages, or platform uploads.
 
 Promoted queue items can receive a safe template draft before worker dispatch:
 
@@ -274,6 +277,7 @@ Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supaba
 - `/queue/[id]`: generated result URLs, assets, render plan preview, content draft action, channel upload package action, and manual review controls.
 - `/planner`: event-driven daily production plan and manual-only channel routing.
 - `/channels`: manual-only channel profile readiness and upload package template admin.
+- `/artifacts`: generated artifact QA with filters, search, sorting, and bulk QA review. QA updates never trigger uploads or worker jobs.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
 - `/runs`: automation run log.

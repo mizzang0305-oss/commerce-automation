@@ -72,6 +72,16 @@ export function buildProductionReadinessSummary(env: NodeJS.ProcessEnv = process
       pending: manualPending,
       completed: 0
     },
+    data_persistence: {
+      migration_008_sql_verification_pass: true,
+      artifact_qa_persistence_pass: true,
+      artifact_qa_columns_verification_pass: true,
+      artifact_qa_indexes_verification_pass: true,
+      artifact_qa_rls_policy_verification_pass: true,
+      smoke_row_verification_pass: true,
+      production_pilot_ready_after_db_verification: false,
+      note: "Migration 008 SQL verification passed. Production pilot remains approval-gated until env, deployment, and manual smoke evidence are complete."
+    },
     safety: {
       deploy_command_executed: false,
       vercel_cli_invoked: false,
@@ -83,6 +93,7 @@ export function buildProductionReadinessSummary(env: NodeJS.ProcessEnv = process
     sections: [
       section("vercel", "Vercel", missingRequired > 0 ? "missing" : "manual_pending", "Project/env/deploy readiness is not completed."),
       section("supabase", "Supabase", "manual_pending", "Migrations/RLS/policies/schema reload must be confirmed manually."),
+      section("data_persistence", "Data Persistence", "manual_pending", "Migration 008 artifact QA persistence verification is recorded, but production pilot approval is still required."),
       section("r2", "Cloudflare R2", "manual_pending", "Bucket/public URL/artifact path readiness must be confirmed manually."),
       section("local_worker", "Local Python Worker", "manual_pending", "Python 3.12, venv, ffmpeg, R2 env, and manual PowerShell start must be confirmed.")
     ],

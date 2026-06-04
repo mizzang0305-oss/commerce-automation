@@ -90,7 +90,7 @@ export function buildCoupangCandidate(
   const thumbnailUrl = normalizeImageUrl(text(input.thumbnail_url));
   const priceNowText = text(input.price_now_text);
 
-  const candidate = enrichProductCandidate(
+  let candidate = enrichProductCandidate(
     {
       id: createCandidateId(productKey),
       product_name: productName,
@@ -121,6 +121,47 @@ export function buildCoupangCandidate(
     context
   );
   const imageReadiness = buildImageReadiness(candidate);
+  const duplicateInContext = (context.candidates ?? []).some((item) => {
+    const contextKey = item.product_key || "";
+    return item !== candidate && Boolean(contextKey && contextKey === (candidate.product_key ?? productKey));
+  });
+  if (duplicateInContext && candidate.duplicate_status === "unique") {
+    candidate = {
+      ...candidate,
+      duplicate_status: "duplicate_candidate",
+      duplicate_reason: "동일 product_key 후보가 이미 있습니다.",
+      promotion_status: "blocked_duplicate"
+    };
+  }
+  const riskFlags = [
+    affiliate.ok ? "" : `affiliate_${affiliate.status}`,
+    imageReadiness.status === "ready" ? "" : imageReadiness.status,
+    candidate.duplicate_status && candidate.duplicate_status !== "unique" ? candidate.duplicate_status : ""
+  ].filter(Boolean);
+  candidate = {
+    ...candidate,
+    payload: {
+      ...candidate.payload,
+      duplicate_key: candidate.product_key ?? productKey,
+      score_breakdown: {
+        candidate_score: candidate.candidate_score ?? 0,
+        score_reason: candidate.score_reason ?? "",
+        affiliate_validation_status: affiliate.status,
+        image_readiness_status: imageReadiness.status,
+        duplicate_status: candidate.duplicate_status ?? "unknown"
+      },
+      source_trace: {
+        source: text(input.source) || "coupang_manual",
+        source_type: sourceType,
+        platform: "coupang",
+        normalized_raw_url: normalizedRawUrl,
+        product_id: extractCoupangProductId(normalizedRawUrl),
+        item_id: itemId,
+        vendor_item_id: vendorItemId
+      },
+      risk_flags: riskFlags
+    }
+  };
 
   return {
     candidate,

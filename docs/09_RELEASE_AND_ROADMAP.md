@@ -244,6 +244,7 @@ Priority rule:
 ## Next MVP Operations Layer
 
 - Ops readiness dashboard: implemented as an approval-gated visibility layer, not a deploy flow.
-- Coupang Collector MVP: candidates-only dry-run collection. Queue promotion remains a separate operator action.
-- Worker Artifact QA: manual review state for generated artifacts. QA pass is not platform upload.
+- Coupang Collector MVP: candidates-only dry-run collection with deterministic duplicate keys, score breakdowns, source trace metadata, and risk flags. Queue promotion remains a separate operator action.
+- Worker Artifact QA: manual review state for generated artifacts, now with filters and bulk review. QA pass is not platform upload.
+- Production pilot readiness: Migration 008 artifact QA persistence SQL verification is PASS, but deployment and production smoke remain approval-gated.
 - Deferred: YouTube OAuth/upload, TikTok Direct Post, Threads post, multi-user SaaS, n8n/Creatomate/Google Docs-first pipelines.

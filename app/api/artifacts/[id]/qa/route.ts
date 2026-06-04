@@ -9,7 +9,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const body = await request.json().catch(() => ({}));
   const result = await updateArtifactQaStatus(getAutomationRepository(), id, body);
   if (!result.ok) {
-    return NextResponse.json({ ok: false, message: result.message }, { status: result.status });
+    return NextResponse.json({ ok: false, error_code: result.error_code, message: result.message }, { status: result.status });
   }
   return NextResponse.json(result);
 }
