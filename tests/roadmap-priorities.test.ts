@@ -10,11 +10,14 @@ describe("Coupang MVP roadmap priorities", () => {
     expect(roadmap).toContain("PR #37. Render quality tuning v2");
     expect(roadmap).toContain("PR #38. Render quality tuning v3");
     expect(roadmap).toContain("PR #39. Production hosting target decision package");
-    expect(roadmap).toContain("PR #40. Coupang collector MVP");
-    expect(roadmap).toContain("PR #41. Daily production planner actual use");
-    expect(roadmap).toContain("PR #42. Channel package operations dashboard");
-    expect(roadmap).toContain("PR #43. Content quality review queue");
-    expect(roadmap).toContain("PR #44. YouTube channel readiness only");
+    expect(roadmap).toContain("PR #40. Vercel local worker production pilot guide");
+    expect(roadmap).toContain("PR #41. Coupang collector MVP");
+    expect(roadmap).toContain("PR #42. Daily production planner actual use");
+    expect(roadmap).toContain("PR #43. Channel package operations dashboard");
+    expect(roadmap).toContain("PR #44. Content quality review queue");
+    expect(roadmap).toContain("PR #45. YouTube channel readiness only");
+    expect(roadmap).toContain("PR #46. Approval-gated YouTube OAuth scaffold");
+    expect(roadmap).toContain("PR #47. Multi-user readiness design only");
     expect(roadmap).toContain("YouTube OAuth/upload stays last");
 
     for (const doc of [roadmap, readme, architecture]) {

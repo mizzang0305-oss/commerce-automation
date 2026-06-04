@@ -208,6 +208,32 @@ node scripts/check-production-env.mjs --strict
 
 The helper checks required env presence and risky flags but prints only env names, configured booleans, and warning codes. It does not print raw Supabase, R2, Worker, Coupang, OpenAI, or Gemini values and does not make network calls.
 
+## Vercel WebApp And Local Windows Worker Pilot
+
+Use `docs/PRODUCTION_PILOT_RUNBOOK.md` after the production hosting target is approved. The pilot path is Vercel WebApp, local Windows Python Worker, Supabase/Postgres, and Cloudflare R2.
+
+Preparation artifacts:
+
+- `docs/PRODUCTION_HOSTING_DECISION.md`
+- `docs/PRODUCTION_PILOT_RUNBOOK.md`
+- `checklists/production-hosting-target-checklist.md`
+- `checklists/vercel-production-checklist.md`
+- `checklists/local-worker-production-checklist.md`
+
+The pilot guide is not a deployment script. The operator must explicitly create the Vercel project, enter server-side env values, start the local Worker, and approve production smoke. The WebApp must not launch Python Worker.
+
+Pilot boundaries:
+
+- `CONTENT_AI_PROVIDER=template`.
+- `ENABLE_DEV_TOOLS=false` or unset.
+- `ENABLE_MOCK_STORAGE_ROUTE=false` or unset.
+- `youtube_upload_enabled=false`.
+- channel `upload_enabled=false`.
+- channel package `manual_upload_only=true`.
+- no OAuth token storage.
+- no YouTube/TikTok/Threads upload API.
+- no public upload.
+
 ## Candidate-To-Video Smoke
 
 Use this when validating the full operator path from a collected candidate to a rendered artifact:
