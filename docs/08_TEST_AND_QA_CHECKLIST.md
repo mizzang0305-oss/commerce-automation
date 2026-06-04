@@ -94,8 +94,11 @@ python -m compileall python-worker
 - Collectors do not create `worker_jobs` directly.
 - Crawling/import work does not bypass login, CAPTCHA, bot blocking, terms, or copy protected review text.
 - Imported candidates get `product_key`, `candidate_score`, `duplicate_status`, and `promotion_status`.
+- Coupang candidates include safe `duplicate_key`, `score_breakdown`, `source_trace`, and `risk_flags` metadata.
+- `score_breakdown` includes `demand_score`, `price_score`, `content_angle_score`, `risk_penalty`, `duplicate_penalty`, and `final_score`.
+- `source_trace` includes `source_platform`, `source_keyword`, `collected_mode`, `collected_at`, and `collector_version` without secrets.
 - `product_key` generation must not include secret-like payload keys or token values.
-- `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns `queue_items_created=0` plus `worker_jobs_created=0`.
+- `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns no queue, worker, or upload side effects.
 - Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.
 - Coupang candidate image URLs accept only usable `http`/`https` image sources; empty, `file:`, `javascript:`, and other unsafe schemes are blocked from render readiness.
 - Missing `selected_affiliate_url` maps to `blocked_missing_affiliate`; missing `product_name` maps to `blocked_missing_name`.
@@ -234,4 +237,7 @@ python -m compileall python-worker
 - Collector responses must show `queue_created=false` and `worker_jobs_created=false`.
 - `GET /api/artifacts` returns safe artifact summaries.
 - `POST /api/artifacts/[id]/qa` updates QA status without creating worker jobs or triggering upload.
+- Collector responses must also show `upload_triggered=false`.
+- `GET /api/artifacts` filters by QA status, asset type, missing artifact type, search text, and sort order.
+- `POST /api/artifacts/bulk-qa` updates selected artifact QA fields only and returns `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
 - Client components must not reference service role keys, R2 secrets, worker secrets, Coupang secrets, or Authorization headers.

@@ -53,6 +53,7 @@
 - [ ] RLS is enabled on automation tables.
 - [ ] No broad anon/authenticated public read/write policy exists.
 - [ ] `automation_settings.id='default'` exists.
+- [ ] Migration 008 artifact QA columns, indexes, RLS/policy posture, and smoke row behavior are verified.
 - [ ] R2/S3 buckets exist for rendered videos, thumbnails, subtitles, and upload packages.
 - [ ] Artifact URLs are real storage URLs, not `/mock-storage`.
 
@@ -68,6 +69,7 @@
 - [ ] Worker job completes only with `video_url`.
 - [ ] Queue reaches `video_ready` only with `video_url`.
 - [ ] Video, thumbnail, subtitle, and upload package URLs return HTTP 200 or valid signed URL responses.
+- [ ] Artifact QA filters and bulk QA update selected rows without creating worker jobs or triggering upload.
 - [ ] Channel upload package is `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
 - [ ] Manual result tracking can mark uploaded, skipped, or needs_fix without calling platform APIs.
 

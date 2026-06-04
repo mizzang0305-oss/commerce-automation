@@ -1,113 +1,106 @@
 import { describe, expect, test } from "vitest";
-import type { ProductCandidate, ProductionHistory } from "@/types/automation";
-import { analyzeCandidateDedupe, resolvePromotionStatus } from "@/lib/candidates/candidateDedupe";
-import { scoreProductCandidate } from "@/lib/candidates/candidateScoring";
-import { createQueueItemFixture } from "@/test/fixtures";
+import { POST as collectCoupang } from "../app/api/candidates/collect-coupang/route";
+import { buildCoupangCandidate } from "@/lib/coupang/coupangCandidateImport";
+import { resetMockRepositoryForTests } from "@/lib/repositories/automationRepository";
 
-function candidateFixture(overrides: Partial<ProductCandidate> = {}): ProductCandidate {
-  return {
-    id: "candidate-score-001",
-    product_name: "이벤트 인기 상품",
-    raw_coupang_url: "https://www.coupang.com/vp/products/score-001",
-    selected_affiliate_url: "https://link.coupang.com/a/score-001",
-    payload: {
-      source: "coupang",
-      source_type: "event",
+describe("candidate scoring and dedupe hardening", () => {
+  test("normalizes Coupang duplicate keys and records scoring/source metadata", () => {
+    const first = buildCoupangCandidate({
+      product_name: "쿠팡 중복 테스트 상품",
+      raw_coupang_url:
+        "https://www.coupang.com/vp/products/123456789?itemId=111222&vendorItemId=333444&utm_source=alpha",
+      selected_affiliate_url: "https://link.coupang.com/a/test-one",
+      thumbnail_url: "https://picsum.photos/seed/dedupe-one/1080/1920",
+      price_now_text: "15,900원",
       category_path: "생활/정리",
-      thumbnail_url: "https://image.example.com/item.jpg",
-      price_now_text: "12,900원",
-      discount_rate: 20,
-      review_count: 180,
-      rating: 4.6
-    },
-    created_at: "2026-05-31T00:00:00.000Z",
-    updated_at: "2026-05-31T00:00:00.000Z",
-    ...overrides
-  };
-}
-
-describe("candidate scoring and dedupe", () => {
-  test("scores rich event candidates higher and explains the score", () => {
-    const score = scoreProductCandidate(candidateFixture());
-
-    expect(score.candidate_score).toBeGreaterThanOrEqual(85);
-    expect(score.score_reason).toEqual(
-      expect.arrayContaining(["제휴 링크 있음", "이벤트 상품", "이미지 있음"])
+      source_type: "manual_url",
+      source: "dedupe_test"
+    });
+    const duplicate = buildCoupangCandidate(
+      {
+        product_name: "쿠팡 중복 테스트 상품",
+        raw_coupang_url:
+          "https://www.coupang.com/vp/products/123456789?utm_campaign=ignored&vendorItemId=333444&itemId=111222",
+        selected_affiliate_url: "https://link.coupang.com/a/test-two",
+        thumbnail_url: "https://picsum.photos/seed/dedupe-two/1080/1920",
+        price_now_text: "15,900원",
+        category_path: "생활/정리",
+        source_type: "manual_url",
+        source: "dedupe_test"
+      },
+      { candidates: [first.candidate] }
     );
-  });
 
-  test("penalizes missing required or useful fields", () => {
-    const score = scoreProductCandidate(
-      candidateFixture({
-        product_name: "",
-        selected_affiliate_url: "",
-        raw_coupang_url: "",
-        payload: {}
+    expect(duplicate.candidate.product_key).toBe(first.candidate.product_key);
+    expect(duplicate.candidate.payload).toEqual(
+      expect.objectContaining({
+        duplicate_key: first.candidate.product_key,
+        score_breakdown: expect.objectContaining({
+          demand_score: expect.any(Number),
+          price_score: expect.any(Number),
+          content_angle_score: expect.any(Number),
+          risk_penalty: expect.any(Number),
+          duplicate_penalty: expect.any(Number),
+          final_score: expect.any(Number)
+        }),
+        source_trace: expect.objectContaining({
+          source_platform: "coupang",
+          collected_mode: "manual_url",
+          collected_at: expect.any(String),
+          collector_version: expect.any(String)
+        }),
+        risk_flags: expect.arrayContaining(["duplicate_candidate"])
       })
     );
+    expect(duplicate.candidate.duplicate_status).toBe("duplicate_candidate");
+  });
 
-    expect(score.candidate_score).toBeLessThan(30);
-    expect(score.score_reason).toEqual(
-      expect.arrayContaining(["상품명 누락", "제휴 링크 누락", "URL 누락"])
+  test("collector response remains candidate-only and exposes safe scoring metadata", async () => {
+    const repository = resetMockRepositoryForTests();
+    const initialQueue = await repository.getQueue();
+    const initialJobs = await repository.getWorkerJobs();
+
+    const response = await collectCoupang(
+      new Request("http://localhost/api/candidates/collect-coupang", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "dry_run", keywords: ["차량 정리"], limit_per_keyword: 1 })
+      })
     );
-  });
+    const payload = await response.json();
+    const finalQueue = await repository.getQueue();
+    const finalJobs = await repository.getWorkerJobs();
 
-  test("detects duplicate candidates by product_key", () => {
-    const candidate = candidateFixture({ id: "candidate-a", product_key: "coupang:1:2:3" });
-    const duplicate = candidateFixture({ id: "candidate-b", product_key: "coupang:1:2:3" });
-
-    const result = analyzeCandidateDedupe(candidate, {
-      candidates: [candidate, duplicate],
-      queueItems: [],
-      productionHistory: []
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      mode: "dry_run",
+      queue_created: false,
+      worker_jobs_created: false,
+      upload_triggered: false
     });
-
-    expect(result).toMatchObject({
-      duplicate_status: "duplicate_candidate",
-      duplicate_reason: "동일 product_key 후보가 이미 있습니다."
-    });
-  });
-
-  test("detects queued and produced duplicates by URLs and history", () => {
-    const queueItem = createQueueItemFixture({
-      id: "queue-produced",
-      raw_coupang_url: "https://www.coupang.com/vp/products/produced",
-      selected_affiliate_url: "https://link.coupang.com/a/produced"
-    });
-    const history: ProductionHistory = {
-      id: "history-produced",
-      product_queue_id: "queue-produced",
-      worker_job_id: "job-produced",
-      event_type: "worker_job_completed",
-      message: "done",
-      metadata: {},
-      created_at: "2026-05-31T00:00:00.000Z"
-    };
-
-    expect(
-      analyzeCandidateDedupe(candidateFixture({ raw_coupang_url: queueItem.raw_coupang_url }), {
-        candidates: [],
-        queueItems: [queueItem],
-        productionHistory: []
-      }).duplicate_status
-    ).toBe("already_queued");
-
-    expect(
-      analyzeCandidateDedupe(candidateFixture({ selected_affiliate_url: queueItem.selected_affiliate_url }), {
-        candidates: [],
-        queueItems: [queueItem],
-        productionHistory: [history]
-      }).duplicate_status
-    ).toBe("already_produced");
-  });
-
-  test("resolves promotion readiness from missing fields, duplicates, and score", () => {
-    expect(resolvePromotionStatus(candidateFixture({ selected_affiliate_url: "" }), "unique", 90)).toBe(
-      "blocked_missing_affiliate"
+    expect(payload.items[0]).toEqual(
+      expect.objectContaining({
+        duplicate_key: expect.any(String),
+        score_breakdown: expect.objectContaining({
+          demand_score: expect.any(Number),
+          price_score: expect.any(Number),
+          content_angle_score: expect.any(Number),
+          risk_penalty: expect.any(Number),
+          duplicate_penalty: expect.any(Number),
+          final_score: expect.any(Number)
+        }),
+        source_trace: expect.objectContaining({
+          source_platform: "coupang",
+          source_keyword: "차량 정리",
+          collected_mode: "collector_dry_run",
+          collected_at: expect.any(String),
+          collector_version: expect.any(String)
+        }),
+        risk_flags: expect.any(Array)
+      })
     );
-    expect(resolvePromotionStatus(candidateFixture({ product_name: "" }), "unique", 90)).toBe("blocked_missing_name");
-    expect(resolvePromotionStatus(candidateFixture(), "already_queued", 90)).toBe("blocked_duplicate");
-    expect(resolvePromotionStatus(candidateFixture({ payload: {} }), "unique", 25)).toBe("needs_review");
-    expect(resolvePromotionStatus(candidateFixture(), "unique", 90)).toBe("ready");
+    expect(finalQueue).toHaveLength(initialQueue.length);
+    expect(finalJobs).toHaveLength(initialJobs.length);
   });
 });

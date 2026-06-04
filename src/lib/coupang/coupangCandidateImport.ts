@@ -90,7 +90,7 @@ export function buildCoupangCandidate(
   const thumbnailUrl = normalizeImageUrl(text(input.thumbnail_url));
   const priceNowText = text(input.price_now_text);
 
-  const candidate = enrichProductCandidate(
+  let candidate = enrichProductCandidate(
     {
       id: createCandidateId(productKey),
       product_name: productName,
@@ -121,6 +121,59 @@ export function buildCoupangCandidate(
     context
   );
   const imageReadiness = buildImageReadiness(candidate);
+  const duplicateInContext = (context.candidates ?? []).some((item) => {
+    const contextKey = item.product_key || "";
+    return item !== candidate && Boolean(contextKey && contextKey === (candidate.product_key ?? productKey));
+  });
+  if (duplicateInContext && candidate.duplicate_status === "unique") {
+    candidate = {
+      ...candidate,
+      duplicate_status: "duplicate_candidate",
+      duplicate_reason: "동일 product_key 후보가 이미 있습니다.",
+      promotion_status: "blocked_duplicate"
+    };
+  }
+  const riskFlags = buildRiskFlags(candidate, {
+    affiliateOk: affiliate.ok,
+    imageReady: imageReadiness.status === "ready",
+    categoryPath,
+    priceNowText
+  });
+  const finalScore = candidate.candidate_score ?? 0;
+  const duplicatePenalty = candidate.duplicate_status && candidate.duplicate_status !== "unique" ? 25 : 0;
+  const riskPenalty = Math.min(30, riskFlags.filter((flag) => flag !== "duplicate_candidate").length * 5);
+  candidate = {
+    ...candidate,
+    payload: {
+      ...candidate.payload,
+      duplicate_key: candidate.product_key ?? productKey,
+      score_breakdown: {
+        demand_score: estimateDemandScore(sourceType, candidate.score_reason ?? ""),
+        price_score: priceNowText ? 10 : 0,
+        content_angle_score: estimateContentAngleScore(productName, categoryPath, imageReadiness.status === "ready"),
+        risk_penalty: riskPenalty,
+        duplicate_penalty: duplicatePenalty,
+        final_score: finalScore,
+        score_reason: candidate.score_reason ?? "",
+        affiliate_validation_status: affiliate.status,
+        image_readiness_status: imageReadiness.status,
+        duplicate_status: candidate.duplicate_status ?? "unknown"
+      },
+      source_trace: {
+        source_platform: "coupang",
+        source_keyword: "",
+        collected_mode: sourceType,
+        collected_at: now,
+        collector_version: "coupang-candidate-v1",
+        source_name: text(input.source) || "coupang_manual",
+        normalized_raw_url: normalizedRawUrl,
+        product_id: extractCoupangProductId(normalizedRawUrl),
+        item_id: itemId,
+        vendor_item_id: vendorItemId
+      },
+      risk_flags: riskFlags
+    }
+  };
 
   return {
     candidate,
@@ -135,6 +188,66 @@ export function buildCoupangCandidate(
       candidate_score: candidate.candidate_score ?? 0
     }
   };
+}
+
+function buildRiskFlags(
+  candidate: ProductCandidate,
+  input: { affiliateOk: boolean; imageReady: boolean; categoryPath: string; priceNowText: string }
+) {
+  const flags = new Set<string>();
+  const searchable = `${candidate.product_name} ${input.categoryPath}`.toLowerCase();
+  if (!input.imageReady) {
+    flags.add("missing_thumbnail");
+  }
+  if (!input.affiliateOk) {
+    flags.add("missing_affiliate_url");
+  }
+  if (candidate.duplicate_status && candidate.duplicate_status !== "unique") {
+    flags.add("duplicate_candidate");
+  }
+  if (/건강|의료|영양|다이어트|보충제|health|medical|diet/.test(searchable)) {
+    flags.add("food_or_health_claim_risk");
+  }
+  if (/화장품|스킨|로션|cosmetic|beauty/.test(searchable)) {
+    flags.add("cosmetic_claim_risk");
+  }
+  if (/노트북|모니터|카메라|전자|electronics/.test(searchable)) {
+    flags.add("expensive_electronics_risk");
+  }
+  if (/가구|침대|소파|furniture/.test(searchable)) {
+    flags.add("oversized_furniture_risk");
+  }
+  if (/유리|도자기|fragile/.test(searchable)) {
+    flags.add("fragile_item_risk");
+  }
+  if ((candidate.candidate_score ?? 0) < 45) {
+    flags.add("low_content_angle");
+  }
+  return [...flags];
+}
+
+function estimateDemandScore(sourceType: string, scoreReason: string) {
+  if (sourceType === "event") {
+    return 25;
+  }
+  if (sourceType === "ranking" || sourceType === "popular" || scoreReason.includes("인기")) {
+    return 20;
+  }
+  return 15;
+}
+
+function estimateContentAngleScore(productName: string, categoryPath: string, imageReady: boolean) {
+  let score = 0;
+  if (productName.trim()) {
+    score += 10;
+  }
+  if (categoryPath.trim()) {
+    score += 5;
+  }
+  if (imageReady) {
+    score += 10;
+  }
+  return score;
 }
 
 function withCoupangIds(value: string, itemId: string, vendorItemId: string): string {

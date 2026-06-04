@@ -62,6 +62,19 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
           <p className="mt-2 text-sm text-slate-600">{readiness.blocked_actions.join(", ")}</p>
         </div>
       </div>
+
+      <div className="mt-4 rounded-md border border-slate-200 p-3">
+        <h3 className="text-sm font-bold text-slate-900">Data Persistence Readiness</h3>
+        <ul className="mt-2 grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
+          <li>Migration 008 SQL verification: {yesNo(readiness.data_persistence.migration_008_sql_verification_pass)}</li>
+          <li>Artifact QA persistence: {yesNo(readiness.data_persistence.artifact_qa_persistence_pass)}</li>
+          <li>Columns verified: {yesNo(readiness.data_persistence.artifact_qa_columns_verification_pass)}</li>
+          <li>Indexes verified: {yesNo(readiness.data_persistence.artifact_qa_indexes_verification_pass)}</li>
+          <li>RLS/policy verified: {yesNo(readiness.data_persistence.artifact_qa_rls_policy_verification_pass)}</li>
+          <li>Smoke row verified: {yesNo(readiness.data_persistence.smoke_row_verification_pass)}</li>
+        </ul>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{readiness.data_persistence.note}</p>
+      </div>
     </section>
   );
 }
@@ -73,4 +86,8 @@ function ReadinessMetric({ label, value }: { label: string; value: string | numb
       <span className="text-lg font-bold text-slate-950">{value}</span>
     </div>
   );
+}
+
+function yesNo(value: boolean) {
+  return value ? "YES" : "NO";
 }

@@ -34,8 +34,18 @@ describe("ops production readiness API", () => {
         }
       });
       expect(payload.env.required).toBeGreaterThan(0);
+      expect(payload.data_persistence).toEqual(
+        expect.objectContaining({
+          migration_008_sql_verification_pass: true,
+          artifact_qa_persistence_pass: true,
+          artifact_qa_columns_verification_pass: true,
+          artifact_qa_indexes_verification_pass: true,
+          artifact_qa_rls_policy_verification_pass: true,
+          smoke_row_verification_pass: true
+        })
+      );
       expect(payload.sections.map((section: { key: string }) => section.key)).toEqual(
-        expect.arrayContaining(["vercel", "supabase", "r2", "local_worker"])
+        expect.arrayContaining(["vercel", "supabase", "r2", "local_worker", "data_persistence"])
       );
       expect(serialized).not.toContain("supabase-secret-value");
       expect(serialized).not.toContain("worker-secret-value");

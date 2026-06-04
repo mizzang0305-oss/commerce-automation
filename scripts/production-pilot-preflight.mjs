@@ -41,7 +41,7 @@ const FORBIDDEN_PUBLIC_SECRETS = [
 const MANUAL_CHECKS = [
   ["vercel.project_selected", "Vercel project selected and linked to GitHub."],
   ["vercel.node_build_confirmed", "Vercel build command and Node runtime reviewed."],
-  ["supabase.migrations_001_007_applied", "Supabase migrations 001 through 007 applied."],
+  ["supabase.migrations_001_008_applied", "Supabase migrations 001 through 008 applied, including artifact QA persistence."],
   ["supabase.rls_verified", "Supabase RLS enabled and broad public policies absent."],
   ["supabase.postgrest_reloaded", "PostgREST schema cache reloaded after migrations."],
   ["r2.buckets_ready", "R2 buckets and bucket-specific public base URLs prepared."],

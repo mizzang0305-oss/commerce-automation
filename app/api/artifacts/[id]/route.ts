@@ -8,7 +8,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const detail = await getArtifactQaDetail(getAutomationRepository(), id);
   if (!detail) {
-    return NextResponse.json({ ok: false, message: "Artifact를 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ ok: false, error_code: "ARTIFACT_NOT_FOUND", message: "Artifact를 찾을 수 없습니다." }, { status: 404 });
   }
   return NextResponse.json({ ok: true, ...detail });
 }

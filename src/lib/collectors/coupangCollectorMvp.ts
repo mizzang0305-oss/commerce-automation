@@ -1,6 +1,6 @@
 import { buildCoupangCandidate } from "@/lib/coupang/coupangCandidateImport";
 import type { AutomationRepository } from "@/lib/repositories/types";
-import type { ProductCandidate } from "@/types/automation";
+import type { JsonRecord, ProductCandidate } from "@/types/automation";
 
 export type CoupangCollectorMode = "dry_run";
 
@@ -10,7 +10,7 @@ export type CollectCoupangInput = {
   limit_per_keyword?: unknown;
 };
 
-const SAMPLE_CATEGORIES = ["차량/정리", "주방/생활", "계절/선물", "수납/정돈"];
+const SAMPLE_CATEGORIES = ["차량/정리", "주방/생활", "계절/선물", "반려/정돈"];
 
 export async function collectCoupangCandidates(repository: AutomationRepository, input: CollectCoupangInput) {
   const mode: CoupangCollectorMode = "dry_run";
@@ -52,7 +52,14 @@ export async function collectCoupangCandidates(repository: AutomationRepository,
           ...candidate.payload,
           collector_mode: mode,
           source_keyword: keyword,
-          risk_flags: []
+          source_trace: {
+            ...payloadRecord(candidate.payload, "source_trace"),
+            source_platform: "coupang",
+            source_keyword: keyword,
+            collected_mode: "collector_dry_run",
+            collected_at: candidate.created_at,
+            collector_version: "coupang-collector-mvp-v1"
+          }
         }
       });
     }
@@ -70,6 +77,7 @@ export async function collectCoupangCandidates(repository: AutomationRepository,
     rejected_count: 0,
     queue_created: finalQueue.length > initialQueue.length,
     worker_jobs_created: finalJobs.length > initialJobs.length,
+    upload_triggered: false,
     items: saved.map(toSafeCollectorItem)
   };
 }
@@ -78,11 +86,14 @@ function toSafeCollectorItem(candidate: ProductCandidate) {
   return {
     id: candidate.id,
     source_platform: "coupang",
-    source_keyword: typeof candidate.payload.source_keyword === "string" ? candidate.payload.source_keyword : "",
+    source_keyword: payloadString(candidate.payload, "source_keyword"),
     product_name: candidate.product_name,
     product_score: candidate.candidate_score ?? 0,
     candidate_status: candidate.promotion_status === "promoted" ? "promoted" : "collected",
     duplicate_status: candidate.duplicate_status ?? "unknown",
+    duplicate_key: payloadString(candidate.payload, "duplicate_key") || candidate.product_key || "",
+    score_breakdown: payloadRecord(candidate.payload, "score_breakdown"),
+    source_trace: payloadRecord(candidate.payload, "source_trace"),
     risk_flags: Array.isArray(candidate.payload.risk_flags)
       ? candidate.payload.risk_flags.filter((flag): flag is string => typeof flag === "string")
       : []
@@ -93,7 +104,7 @@ function normalizeKeywords(value: unknown) {
   const keywords = Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
     : [];
-  return keywords.length > 0 ? keywords.slice(0, 10) : ["차량 정리함", "여름 주방용품", "생활 선물"];
+  return keywords.length > 0 ? keywords.slice(0, 10) : ["차량 정리", "여름 주방용품", "생활 선물"];
 }
 
 function normalizeLimit(value: unknown) {
@@ -110,4 +121,14 @@ function stableSeed(keyword: string, index: number) {
     hash = (hash * 31 + char.charCodeAt(0)) % 1000000000;
   }
   return String(100000000 + hash).slice(0, 9);
+}
+
+function payloadString(payload: JsonRecord, key: string) {
+  const value = payload[key];
+  return typeof value === "string" ? value : "";
+}
+
+function payloadRecord(payload: JsonRecord, key: string) {
+  const value = payload[key];
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }

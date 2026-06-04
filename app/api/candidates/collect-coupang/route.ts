@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ...result,
     queue_created: false,
-    worker_jobs_created: false
+    worker_jobs_created: false,
+    upload_triggered: false
   });
 }
