@@ -7,7 +7,14 @@ export type ArtifactQaSort = "newest" | "oldest" | "qa_status" | "asset_type";
 export type ArtifactQaFilters = {
   qa_status: ArtifactQaStatus | "all";
   asset_type: ProductAsset["asset_type"] | "all";
-  missing: "all" | "none" | "video" | "thumbnail" | "subtitle" | "upload_package";
+  missing:
+    | "all"
+    | "none"
+    | "missing_video"
+    | "missing_thumbnail"
+    | "missing_subtitle"
+    | "missing_upload_package"
+    | "has_warnings";
   search: string;
   sort: ArtifactQaSort;
 };
@@ -203,7 +210,10 @@ function filterAndSortArtifactSummaries(
       if (filters.missing === "none" && artifact.missing_asset_types.length > 0) {
         return false;
       }
-      if (filters.missing !== "none" && !artifact.missing_asset_types.includes(filters.missing)) {
+      if (filters.missing === "has_warnings" && artifact.missing_asset_types.length === 0 && artifact.qa_status !== "needs_fix" && artifact.qa_status !== "rejected") {
+        return false;
+      }
+      if (filters.missing !== "none" && filters.missing !== "has_warnings" && !artifact.missing_asset_types.includes(stripMissingPrefix(filters.missing))) {
         return false;
       }
     }
@@ -290,15 +300,28 @@ function normalizeAssetType(value: unknown): ProductAsset["asset_type"] | null {
 }
 
 function normalizeMissingFilter(value: unknown): ArtifactQaFilters["missing"] {
-  return value === "none" ||
-    value === "video" ||
-    value === "thumbnail" ||
-    value === "subtitle" ||
-    value === "upload_package"
-    ? value
-    : "all";
+  if (value === "none" || value === "has_warnings") {
+    return value;
+  }
+  if (value === "missing_video" || value === "video") {
+    return "missing_video";
+  }
+  if (value === "missing_thumbnail" || value === "thumbnail") {
+    return "missing_thumbnail";
+  }
+  if (value === "missing_subtitle" || value === "subtitle") {
+    return "missing_subtitle";
+  }
+  if (value === "missing_upload_package" || value === "upload_package") {
+    return "missing_upload_package";
+  }
+  return "all";
 }
 
 function normalizeSort(value: unknown): ArtifactQaSort {
   return value === "oldest" || value === "qa_status" || value === "asset_type" ? value : "newest";
+}
+
+function stripMissingPrefix(value: Exclude<ArtifactQaFilters["missing"], "all" | "none" | "has_warnings">) {
+  return value.replace(/^missing_/, "") as ProductAsset["asset_type"];
 }

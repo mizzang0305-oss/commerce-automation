@@ -35,9 +35,21 @@ describe("candidate scoring and dedupe hardening", () => {
     expect(duplicate.candidate.payload).toEqual(
       expect.objectContaining({
         duplicate_key: first.candidate.product_key,
-        score_breakdown: expect.any(Object),
-        source_trace: expect.any(Object),
-        risk_flags: expect.any(Array)
+        score_breakdown: expect.objectContaining({
+          demand_score: expect.any(Number),
+          price_score: expect.any(Number),
+          content_angle_score: expect.any(Number),
+          risk_penalty: expect.any(Number),
+          duplicate_penalty: expect.any(Number),
+          final_score: expect.any(Number)
+        }),
+        source_trace: expect.objectContaining({
+          source_platform: "coupang",
+          collected_mode: "manual_url",
+          collected_at: expect.any(String),
+          collector_version: expect.any(String)
+        }),
+        risk_flags: expect.arrayContaining(["duplicate_candidate"])
       })
     );
     expect(duplicate.candidate.duplicate_status).toBe("duplicate_candidate");
@@ -70,8 +82,21 @@ describe("candidate scoring and dedupe hardening", () => {
     expect(payload.items[0]).toEqual(
       expect.objectContaining({
         duplicate_key: expect.any(String),
-        score_breakdown: expect.any(Object),
-        source_trace: expect.any(Object),
+        score_breakdown: expect.objectContaining({
+          demand_score: expect.any(Number),
+          price_score: expect.any(Number),
+          content_angle_score: expect.any(Number),
+          risk_penalty: expect.any(Number),
+          duplicate_penalty: expect.any(Number),
+          final_score: expect.any(Number)
+        }),
+        source_trace: expect.objectContaining({
+          source_platform: "coupang",
+          source_keyword: "차량 정리",
+          collected_mode: "collector_dry_run",
+          collected_at: expect.any(String),
+          collector_version: expect.any(String)
+        }),
         risk_flags: expect.any(Array)
       })
     );

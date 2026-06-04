@@ -95,6 +95,8 @@ python -m compileall python-worker
 - Crawling/import work does not bypass login, CAPTCHA, bot blocking, terms, or copy protected review text.
 - Imported candidates get `product_key`, `candidate_score`, `duplicate_status`, and `promotion_status`.
 - Coupang candidates include safe `duplicate_key`, `score_breakdown`, `source_trace`, and `risk_flags` metadata.
+- `score_breakdown` includes `demand_score`, `price_score`, `content_angle_score`, `risk_penalty`, `duplicate_penalty`, and `final_score`.
+- `source_trace` includes `source_platform`, `source_keyword`, `collected_mode`, `collected_at`, and `collector_version` without secrets.
 - `product_key` generation must not include secret-like payload keys or token values.
 - `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns no queue, worker, or upload side effects.
 - Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.

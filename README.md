@@ -184,7 +184,7 @@ CSV rows must include a product name and an `http`/`https` source URL. Non-web s
 Imported candidates now receive quality-control fields before they are promoted:
 
 - `product_key`: deterministic dedupe key. Coupang uses product/item/vendor identifiers when present, Musinsa uses `goods_no` or URL IDs, and other sources use normalized URL/name hashes.
-- `payload.duplicate_key`, `payload.score_breakdown`, `payload.source_trace`, and `payload.risk_flags`: safe operator metadata for dedupe and scoring review.
+- `payload.duplicate_key`, `payload.score_breakdown`, `payload.source_trace`, and `payload.risk_flags`: safe operator metadata for dedupe and scoring review. `score_breakdown` carries demand, price, content-angle, risk, duplicate, and final score fields; `source_trace` carries platform, keyword, collection mode/time, and collector version without secrets.
 - `candidate_score`: 0-100 score based on affiliate link, product name, image, price, discount, review/rating, source type, and known platform signals.
 - `image_readiness_status`: `ready`, `missing_image`, or `invalid_image_url`; candidates without a usable image cannot be promoted to a renderable queue item.
 - `duplicate_status`: `unique`, `duplicate_candidate`, `already_queued`, `already_produced`, or `unknown`.

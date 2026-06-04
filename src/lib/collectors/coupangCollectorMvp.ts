@@ -51,7 +51,15 @@ export async function collectCoupangCandidates(repository: AutomationRepository,
         payload: {
           ...candidate.payload,
           collector_mode: mode,
-          source_keyword: keyword
+          source_keyword: keyword,
+          source_trace: {
+            ...payloadRecord(candidate.payload, "source_trace"),
+            source_platform: "coupang",
+            source_keyword: keyword,
+            collected_mode: "collector_dry_run",
+            collected_at: candidate.created_at,
+            collector_version: "coupang-collector-mvp-v1"
+          }
         }
       });
     }

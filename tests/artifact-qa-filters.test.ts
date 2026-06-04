@@ -64,4 +64,78 @@ describe("artifact QA filters API", () => {
       })
     );
   });
+
+  test("filters artifact summaries by explicit missing_* filter names", async () => {
+    const repository = resetMockRepositoryForTests();
+    const [item] = await repository.getQueue({ status: "scheduled", limit: 1 });
+    const job = await repository.createWorkerJob({
+      job_type: "video_render",
+      product_queue_id: item.id,
+      product_candidate_id: "",
+      priority: 10,
+      payload: {},
+      max_retries: 1
+    });
+    const claimed = await repository.claimWorkerJob({ worker_id: "qa-missing-filter-worker", job_types: ["video_render"] });
+    const workerJobId = claimed?.id ?? job.id;
+    const now = new Date().toISOString();
+    const mutableRepository = repository as unknown as {
+      productAssets: Array<Record<string, unknown>>;
+    };
+    mutableRepository.productAssets.push(
+      {
+        id: `asset-${workerJobId}-thumbnail`,
+        product_queue_id: item.id,
+        worker_job_id: workerJobId,
+        asset_type: "thumbnail",
+        bucket: "thumbnails",
+        url: "https://r2.example.com/thumbnails/missing-video-thumb.jpg",
+        render_qa_metadata: {},
+        qa_status: "pending",
+        qa_note: "",
+        created_at: now,
+        updated_at: now
+      },
+      {
+        id: `asset-${workerJobId}-subtitle`,
+        product_queue_id: item.id,
+        worker_job_id: workerJobId,
+        asset_type: "subtitle",
+        bucket: "subtitles",
+        url: "https://r2.example.com/subtitles/missing-video.srt",
+        render_qa_metadata: {},
+        qa_status: "pending",
+        qa_note: "",
+        created_at: now,
+        updated_at: now
+      },
+      {
+        id: `asset-${workerJobId}-upload_package`,
+        product_queue_id: item.id,
+        worker_job_id: workerJobId,
+        asset_type: "upload_package",
+        bucket: "upload-packages",
+        url: "https://r2.example.com/upload-packages/missing-video.json",
+        render_qa_metadata: {},
+        qa_status: "pending",
+        qa_note: "",
+        created_at: now,
+        updated_at: now
+      }
+    );
+
+    const response = await getArtifacts(new Request("http://localhost/api/artifacts?missing=missing_video"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.filters).toEqual(expect.objectContaining({ missing: "missing_video" }));
+    expect(payload.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          product_queue_id: item.id,
+          missing_asset_types: expect.arrayContaining(["video"])
+        })
+      ])
+    );
+  });
 });

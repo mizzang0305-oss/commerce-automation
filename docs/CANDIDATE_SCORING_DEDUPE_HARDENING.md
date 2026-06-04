@@ -9,8 +9,8 @@ Coupang candidates include:
 - `product_key`: deterministic key from product, item, and vendor identifiers.
 - `payload.duplicate_key`: explicit duplicate comparison key.
 - `candidate_score`: operational priority score.
-- `payload.score_breakdown`: safe scoring metadata for operator review.
-- `payload.source_trace`: non-secret source metadata such as platform, source type, normalized product URL, and parsed IDs.
+- `payload.score_breakdown`: safe scoring metadata for operator review. Expected keys include `demand_score`, `price_score`, `content_angle_score`, `risk_penalty`, `duplicate_penalty`, and `final_score`.
+- `payload.source_trace`: non-secret source metadata. Expected keys include `source_platform`, `source_keyword`, `collected_mode`, `collected_at`, `collector_version`, normalized product URL, and parsed Coupang IDs.
 - `payload.risk_flags`: safe flags such as missing affiliate, missing image, or duplicate state.
 
 ## Dedupe Policy

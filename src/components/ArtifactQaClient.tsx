@@ -177,7 +177,12 @@ export function ArtifactQaClient({
           />
           <FilterSelect label="QA" value={filters.qa_status} onChange={(value) => updateFilter("qa_status", value)} options={["all", "pending", "passed", "needs_fix", "rejected"]} />
           <FilterSelect label="Asset" value={filters.asset_type} onChange={(value) => updateFilter("asset_type", value)} options={["all", "video", "thumbnail", "subtitle", "upload_package"]} />
-          <FilterSelect label="Missing" value={filters.missing} onChange={(value) => updateFilter("missing", value)} options={["all", "none", "video", "thumbnail", "subtitle", "upload_package"]} />
+          <FilterSelect
+            label="Missing"
+            value={filters.missing}
+            onChange={(value) => updateFilter("missing", value)}
+            options={["all", "none", "missing_video", "missing_thumbnail", "missing_subtitle", "missing_upload_package", "has_warnings"]}
+          />
           <FilterSelect label="Sort" value={filters.sort} onChange={(value) => updateFilter("sort", value)} options={["newest", "oldest", "qa_status", "asset_type"]} />
         </div>
 
