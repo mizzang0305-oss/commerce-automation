@@ -202,27 +202,32 @@ Recommended PR order:
    - Add Supabase/R2 production checklist, smoke sequence, rollback, and failure triage.
    - Do not execute deployment from the PR.
    - Keep YouTube upload disabled.
-5. PR #41. Coupang collector MVP
+5. PR #41. Production pilot preflight
+   - Add approval-gated production pilot preflight.
+   - Add safe preflight script with configured booleans, missing env names, and manual checks only.
+   - Do not create Vercel project, enter production env, deploy, or run production smoke from the PR.
+   - Keep platform uploads disabled.
+6. PR #42. Coupang collector MVP
    - Harden batch/manual URL import and server-only Coupang Partners API readiness.
    - Create candidates only; do not create queue rows or worker jobs from import.
-6. PR #42. Daily production planner actual use
+7. PR #43. Daily production planner actual use
    - Turn event windows into a daily shortlist.
    - Let operators promote selected candidates.
    - Keep Naver, Musinsa, and BrandConnect as future candidate sources only.
-7. PR #43. Channel package operations dashboard
+8. PR #44. Channel package operations dashboard
    - Track manual_ready, uploaded, and needs_fix package counts by channel.
    - Keep upload URLs and result tracking manual-only.
-8. PR #44. Content quality review queue
+9. PR #45. Content quality review queue
    - Add checklist review for titles, scripts, hashtags, affiliate disclosure, and blocked claims.
    - Compare template and future provider outputs without enabling uploads.
-9. PR #45. YouTube channel readiness only
+10. PR #46. YouTube channel readiness only
    - Strengthen channel handle/channel ID/readiness metadata.
    - Show OAuth readiness booleans only.
    - Do not add OAuth start, token storage, or `videos.insert`.
-10. PR #46. Approval-gated YouTube OAuth scaffold
+11. PR #47. Approval-gated YouTube OAuth scaffold
    - Design OAuth and token policy only after manual operations are stable.
    - Keep upload API implementation as a later, separately approved step.
-11. PR #47. Multi-user readiness design only
+12. PR #48. Multi-user readiness design only
    - Document user/workspace/affiliate-account boundaries.
    - Keep the current single-operator MVP unchanged unless a production need is proven.
 

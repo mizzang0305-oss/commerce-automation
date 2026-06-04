@@ -216,11 +216,21 @@ Preparation artifacts:
 
 - `docs/PRODUCTION_HOSTING_DECISION.md`
 - `docs/PRODUCTION_PILOT_RUNBOOK.md`
+- `docs/PRODUCTION_PILOT_PREFLIGHT.md`
 - `checklists/production-hosting-target-checklist.md`
 - `checklists/vercel-production-checklist.md`
 - `checklists/local-worker-production-checklist.md`
+- `checklists/production-pilot-preflight-checklist.md`
 
 The pilot guide is not a deployment script. The operator must explicitly create the Vercel project, enter server-side env values, start the local Worker, and approve production smoke. The WebApp must not launch Python Worker.
+
+Before any actual deployment or production smoke, run:
+
+```powershell
+npm run preflight:production-pilot
+```
+
+The preflight helper prints configured booleans, missing env names, manual-check items, and warning codes only. It does not run Vercel CLI, Supabase CLI, R2 network calls, Python Worker, or platform upload APIs.
 
 Pilot boundaries:
 

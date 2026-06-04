@@ -133,8 +133,12 @@ python -m compileall python-worker
 
 - `docs/PRODUCTION_HOSTING_DECISION.md` recommends the production pilot target before deployment.
 - `docs/PRODUCTION_PILOT_RUNBOOK.md` documents Vercel WebApp plus local Windows Worker operation without executing deployment.
+- `docs/PRODUCTION_PILOT_PREFLIGHT.md` documents the approval gate before any deploy or production smoke.
 - `checklists/vercel-production-checklist.md` keeps WebApp secrets server-side and blocks `NEXT_PUBLIC_*` secrets.
 - `checklists/local-worker-production-checklist.md` keeps `SUPABASE_SERVICE_ROLE_KEY` out of the Worker environment.
+- `checklists/production-pilot-preflight-checklist.md` separates Vercel, Supabase, R2, Worker, approval, and safety readiness.
+- `npm run preflight:production-pilot` prints configured/missing/manual-check status only.
+- `npm run preflight:production-pilot` does not run Vercel deploy, Supabase CLI, R2 network calls, Python Worker, or platform upload APIs.
 - Production pilot smoke confirms import creates candidates only.
 - Promotion and content generation create zero `worker_jobs`.
 - `/api/run/next-batch` remains the only worker-job creation path.
