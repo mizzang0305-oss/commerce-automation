@@ -8,6 +8,7 @@
     "build:n8n-workflows": "node scripts/build-n8n-workflows.mjs",
     "check:mojibake": "node scripts/check-mojibake.mjs",
     "check:production-env": "node scripts/check-production-env.mjs --pretty",
+    "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
