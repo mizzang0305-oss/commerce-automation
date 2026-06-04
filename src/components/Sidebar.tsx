@@ -4,12 +4,14 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   ClipboardCheck,
+  FileVideo,
   FlaskConical,
   LayoutDashboard,
   ListChecks,
   ScrollText,
   Settings,
   ServerCog,
+  ShieldCheck,
   RadioTower,
   Webhook
 } from "lucide-react";
@@ -20,6 +22,8 @@ const navItems = [
   { href: "/candidates", label: "후보 검수", icon: ClipboardCheck },
   { href: "/planner", label: "제작 플래너", icon: CalendarClock },
   { href: "/channels", label: "채널 관리", icon: RadioTower },
+  { href: "/ops/production-readiness", label: "Production Readiness", icon: ShieldCheck },
+  { href: "/artifacts", label: "Artifact QA", icon: FileVideo },
   { href: "/jobs", label: "작업 목록", icon: BriefcaseBusiness },
   { href: "/workers", label: "워커 상태", icon: ServerCog },
   { href: "/settings", label: "설정", icon: Settings },

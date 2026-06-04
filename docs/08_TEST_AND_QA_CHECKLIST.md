@@ -226,3 +226,12 @@ python -m compileall python-worker
 - Keep fixes minimal. Do not change the worker job creation path, public upload defaults, manual-only channel package semantics, or secret handling.
 - Verify GREEN with targeted tests, full `npm run test`, Python unittest, lint, build, compileall, `git diff --check`, secret grep, and forbidden-path staging scan.
 - Report unavailable sandbox/live checks as NOT RUN, not PASS.
+
+## Ops / Collector / Artifact QA Checks
+
+- `GET /api/ops/production-readiness` returns counts and booleans only.
+- `POST /api/candidates/collect-coupang` creates candidates only.
+- Collector responses must show `queue_created=false` and `worker_jobs_created=false`.
+- `GET /api/artifacts` returns safe artifact summaries.
+- `POST /api/artifacts/[id]/qa` updates QA status without creating worker jobs or triggering upload.
+- Client components must not reference service role keys, R2 secrets, worker secrets, Coupang secrets, or Authorization headers.

@@ -252,7 +252,11 @@ export type ProductAsset = {
   asset_type: "video" | "thumbnail" | "subtitle" | "upload_package" | "sheet_export" | "product_image";
   bucket: string;
   url: string;
+  render_qa_metadata?: JsonRecord;
+  qa_status?: "pending" | "passed" | "needs_fix" | "rejected";
+  qa_note?: string;
   created_at: string;
+  updated_at?: string;
 };
 
 export type ChannelUploadPackageStatus =

@@ -240,3 +240,10 @@ Priority rule:
 5. Channel operations dashboard.
 6. YouTube readiness metadata.
 7. YouTube OAuth/upload stays last.
+
+## Next MVP Operations Layer
+
+- Ops readiness dashboard: implemented as an approval-gated visibility layer, not a deploy flow.
+- Coupang Collector MVP: candidates-only dry-run collection. Queue promotion remains a separate operator action.
+- Worker Artifact QA: manual review state for generated artifacts. QA pass is not platform upload.
+- Deferred: YouTube OAuth/upload, TikTok Direct Post, Threads post, multi-user SaaS, n8n/Creatomate/Google Docs-first pipelines.

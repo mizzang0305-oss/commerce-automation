@@ -1,4 +1,5 @@
 import { CandidateReviewClient } from "@/components/CandidateReviewClient";
+import { CandidateCollectorPanel } from "@/components/CandidateCollectorPanel";
 import { StatCard } from "@/components/StatCard";
 import { getCandidateReadiness } from "@/lib/candidatePromotion";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
@@ -44,6 +45,7 @@ export default async function CandidatesPage() {
         제휴 링크 없는 후보는 승격할 수 없습니다. 승격 직후 worker job은 만들지 않으며, 다음 배치 실행 시 조건을 통과한 항목만 생성됩니다.
       </section>
 
+      <CandidateCollectorPanel />
       <CandidateReviewClient candidates={candidates} readiness={readiness} />
     </div>
   );

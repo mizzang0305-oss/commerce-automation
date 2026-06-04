@@ -544,3 +544,10 @@ npm run lint
 npm run build
 python -m compileall python-worker
 ```
+
+## Ops / Collector / Artifact QA
+
+- `/ops/production-readiness` shows approval-gated readiness counts and safety locks. It does not deploy or call production smoke.
+- `/candidates` includes a Coupang Collector MVP dry-run panel. It creates candidates only and never creates queue rows, worker jobs, render plans, upload packages, or platform uploads.
+- `/artifacts` provides Worker artifact QA for video, thumbnail, subtitle, and upload package URLs. QA pass is a manual review marker only and never triggers upload.
+- Apply `supabase/migrations/008_product_asset_qa.sql` before using artifact QA against Supabase.
