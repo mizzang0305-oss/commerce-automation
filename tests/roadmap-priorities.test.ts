@@ -7,8 +7,8 @@ describe("Coupang MVP roadmap priorities", () => {
     const readme = readFileSync("README.md", "utf8");
     const architecture = readFileSync("docs/03_ARCHITECTURE_DESIGN.md", "utf8");
 
-    expect(roadmap).toContain("PR #37. Production hosting target decision package");
-    expect(roadmap).toContain("PR #38. Render quality tuning v2");
+    expect(roadmap).toContain("PR #37. Render quality tuning v2");
+    expect(roadmap).toContain("PR #38. Production hosting target decision package");
     expect(roadmap).toContain("PR #39. Coupang collector MVP");
     expect(roadmap).toContain("PR #40. Daily production planner actual use");
     expect(roadmap).toContain("PR #41. Channel package operations dashboard");

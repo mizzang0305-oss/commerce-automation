@@ -25,9 +25,11 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         image_url = render_context["image_url"]
         script = render_context["script"]
         disclosure_text = render_context["disclosure_text"]
+        shot_durations = render_context["shot_durations"]
     else:
         image_url = str(payload.get("image_url") or payload.get("thumbnail_url") or "").strip()
         script = str(payload.get("script", "")).strip()
+        shot_durations = None
 
     if not disclosure_text:
         raise ValueError("disclosure_text is required for video_render")
@@ -43,7 +45,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     image_path = download_image(image_url, work_dir / "product.jpg")
     heartbeat()
     audio_path = create_tts_audio(script, work_dir / "voiceover.wav")
-    srt_path = write_srt(script, output_dir / "captions.srt")
+    srt_path = write_srt(script, output_dir / "captions.srt", shot_durations=shot_durations)
     heartbeat()
     video_path = render_vertical_video(
         image_path,
@@ -83,6 +85,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         raise ValueError("render_plan.disclosure_text is required")
 
     voice_lines: list[str] = []
+    shot_durations: list[float] = []
     first_image_url = ""
     for index, shot in enumerate(shots, start=1):
         if not isinstance(shot, dict):
@@ -99,11 +102,13 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         if not first_image_url:
             first_image_url = image_url
         caption = str(shot.get("caption") or "").strip()
-        voice_lines.append(f"{caption}\n{voice_text}" if caption else voice_text)
+        voice_lines.append(" ".join(part for part in [caption, voice_text] if part))
+        shot_durations.append(float(duration_sec))
 
     return {
         "product_name": product_name,
         "image_url": first_image_url,
         "script": "\n".join(voice_lines).strip(),
         "disclosure_text": disclosure_text,
+        "shot_durations": shot_durations,
     }

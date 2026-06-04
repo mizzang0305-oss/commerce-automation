@@ -112,7 +112,17 @@ If `ffmpeg` is missing, startup can still succeed, but `video_render` jobs fail 
 
 Failures raise safe worker errors and use the normal fail/retry path. The worker must not upload placeholder artifacts, complete `video_render`, or mark a queue item `video_ready` after image download failure.
 
-Rendered videos and thumbnails target a 1080x1920 vertical format. The ffmpeg filter scales and pads product imagery into the vertical frame, burns generated subtitles, and the thumbnail generator wraps long product names so text stays inside the output.
+Rendered videos and thumbnails target a 1080x1920 vertical format. The ffmpeg filter scales and pads product imagery into the vertical frame, uses a dark safe background, burns generated subtitles with readable outline styling, and the thumbnail generator wraps long product names so text stays inside the output.
+
+Render quality v2 keeps the same Python/ffmpeg renderer and does not add ViMax or an external video API. Current quality controls are:
+
+- layout presets: `hook`, `product_focus`, `benefit`, `caution`, and `manual_cta`
+- safe-area boxes that stay within the 1080x1920 canvas
+- two-line caption wrapping with ellipsis clipping for dense captions
+- render-plan shot durations mapped into SRT timing when `render_plan.shots[].duration_sec` is present
+- thumbnail font fallback for Windows environments without a specific font path
+
+These controls improve readability only. They must not bypass image download checks, ffmpeg failures, storage failures, or the `video_url` requirement for `video_ready`.
 
 ## Local Smoke Rerun
 

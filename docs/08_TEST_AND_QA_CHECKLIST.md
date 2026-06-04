@@ -120,6 +120,10 @@ python -m compileall python-worker
 - Image download failure does not upload placeholder video/thumbnail/SRT/upload package artifacts.
 - The vertical render layout stays 1080x1920 and uses scale/pad before burning subtitles.
 - Generated thumbnails are 1080x1920 and wrap long product titles instead of overflowing.
+- Render quality v2 layout presets (`hook`, `product_focus`, `benefit`, `caution`, `manual_cta`) keep image and caption boxes inside the 1080x1920 canvas.
+- Render-plan shot durations map to SRT timing when `render_plan.shots[].duration_sec` is present.
+- Dense captions wrap or clip with an ellipsis instead of overflowing the subtitle safe area.
+- Thumbnail generation still succeeds with the default font fallback when a preferred Windows font path is unavailable.
 
 ## Event Planner QA
 
