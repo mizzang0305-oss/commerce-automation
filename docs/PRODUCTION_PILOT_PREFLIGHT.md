@@ -150,3 +150,7 @@ If any preflight item is missing:
 5. rerun `npm run preflight:production-pilot`.
 
 If a live smoke later fails, use `docs/PRODUCTION_PILOT_RUNBOOK.md` rollback and triage. Do not report PASS when artifact upload, worker completion, or `video_url` verification is missing.
+
+## 8. Dashboard Companion
+
+The same approval-gated readiness posture is available in `/ops/production-readiness` and summarized on `/dashboard`. These screens show counts/status only and do not execute deployment or production smoke.

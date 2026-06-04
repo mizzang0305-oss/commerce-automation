@@ -634,6 +634,27 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
   }
 
+  async updateProductAssetQa(
+    id: string,
+    patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }
+  ) {
+    await this.ensureInitialized();
+    const assets = await readJson<ProductAsset[]>(this.paths.productAssets);
+    const index = assets.findIndex((asset) => asset.id === id);
+    if (index === -1) {
+      return null;
+    }
+    assets[index] = {
+      ...assets[index],
+      qa_status: patch.qa_status,
+      qa_note: patch.qa_note,
+      render_qa_metadata: patch.render_qa_metadata ?? assets[index].render_qa_metadata ?? {},
+      updated_at: nowIso()
+    };
+    await atomicWriteJson(this.paths.productAssets, assets);
+    return clone(assets[index]);
+  }
+
   async getChannelProfiles() {
     await this.ensureInitialized();
     const profiles = await readJson<ChannelProfile[]>(this.paths.channelProfiles);
@@ -972,7 +993,11 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
         asset_type: assetType,
         bucket,
         url,
-        created_at: nowIso()
+        render_qa_metadata: {},
+        qa_status: "pending",
+        qa_note: "",
+        created_at: nowIso(),
+        updated_at: nowIso()
       });
     }
     await atomicWriteJson(this.paths.productAssets, updatedAssets);

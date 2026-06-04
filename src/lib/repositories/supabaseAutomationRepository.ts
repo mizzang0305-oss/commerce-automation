@@ -257,7 +257,11 @@ export function buildSupabaseAssetRowsForWorkerJob(job: WorkerJob, options: { in
       asset_type: assetType,
       bucket,
       url,
-      created_at: nowIso()
+      render_qa_metadata: {},
+      qa_status: "pending",
+      qa_note: "",
+      created_at: nowIso(),
+      updated_at: nowIso()
     }));
 }
 
@@ -406,7 +410,11 @@ function mapAssetRow(row: Record<string, unknown>): ProductAsset {
     asset_type: emptyString(row.asset_type) as ProductAsset["asset_type"],
     bucket: emptyString(row.bucket),
     url: emptyString(row.url),
-    created_at: emptyString(row.created_at)
+    render_qa_metadata: ensureRecord(row.render_qa_metadata),
+    qa_status: (emptyString(row.qa_status) || "pending") as ProductAsset["qa_status"],
+    qa_note: emptyString(row.qa_note),
+    created_at: emptyString(row.created_at),
+    updated_at: emptyString(row.updated_at)
   };
 }
 
@@ -1088,6 +1096,25 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     const { data, error } = await query.order("created_at", { ascending: true });
     throwIfSupabaseError(error, "getProductAssets");
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapAssetRow));
+  }
+
+  async updateProductAssetQa(
+    id: string,
+    patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }
+  ) {
+    const { data, error } = await this.client
+      .from("product_assets")
+      .update(stripUndefined({
+        qa_status: patch.qa_status,
+        qa_note: patch.qa_note,
+        render_qa_metadata: patch.render_qa_metadata ?? {},
+        updated_at: nowIso()
+      }))
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    throwIfSupabaseError(error, "updateProductAssetQa");
+    return data ? clone(mapAssetRow(data as Record<string, unknown>)) : null;
   }
 
   async getChannelProfiles() {

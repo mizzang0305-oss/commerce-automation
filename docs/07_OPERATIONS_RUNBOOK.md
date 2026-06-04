@@ -757,3 +757,11 @@ CONTENT_AI_PROVIDER=template
 For readiness checks, `CONTENT_AI_PROVIDER=openai` or `gemini` may be set with a matching server-only key. If the key is absent or the provider is unavailable, `generate-content` should return `content_provider=template`, `used_fallback=true`, and `created_worker_jobs=0`.
 
 Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`, `gemini_configured`, and `enabled`. Raw API keys must never appear in diagnostics, logs intended for operators, or client UI.
+
+## Ops Dashboard And Artifact QA
+
+- Use `/ops/production-readiness` to review env counts, manual pending checks, and safety locks before pilot approval.
+- Use `/candidates` to run dry-run Coupang candidate collection. This creates candidates only.
+- Use `/artifacts` to review generated video, thumbnail, subtitle, and upload package URLs before manual upload.
+- Marking artifact QA as `passed` does not upload to YouTube, TikTok, Threads, or any public channel.
+- Supabase deployments must apply `supabase/migrations/008_product_asset_qa.sql` and reload PostgREST schema cache if needed.

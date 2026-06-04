@@ -25,6 +25,8 @@ import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { QueueStatusChart } from "@/components/charts/QueueStatusChart";
 import { WorkerJobStatusChart } from "@/components/charts/WorkerJobStatusChart";
+import { ProductionReadinessPanel } from "@/components/ProductionReadinessPanel";
+import type { buildProductionReadinessSummary } from "@/lib/ops/productionReadiness";
 
 export function DashboardView({
   settings,
@@ -34,7 +36,10 @@ export function DashboardView({
   workerJobs = [],
   workerHeartbeats = [],
   contents = new Map(),
-  diagnostics
+  diagnostics,
+  productionReadiness,
+  candidateSummary,
+  artifactQaSummary
 }: {
   settings: AutomationSettings;
   items: ProductQueueItem[];
@@ -44,6 +49,25 @@ export function DashboardView({
   workerHeartbeats?: WorkerHeartbeat[];
   contents?: Map<string, GeneratedContent | null>;
   diagnostics: N8nConfigStatus;
+  productionReadiness?: ReturnType<typeof buildProductionReadinessSummary>;
+  candidateSummary?: {
+    total: number;
+    collected: number;
+    promoted: number;
+    duplicate: number;
+    manual_review: number;
+  };
+  artifactQaSummary?: {
+    total: number;
+    pending: number;
+    passed: number;
+    needs_fix: number;
+    rejected: number;
+    missing_video: number;
+    missing_thumbnail: number;
+    missing_subtitle: number;
+    missing_upload_package: number;
+  };
 }) {
   const nextRunAt = getNextRunAt(settings);
   const capacityWarning = getDailyCapacityWarning(settings);
@@ -79,6 +103,36 @@ export function DashboardView({
             <InfoPill label="현재 모드" value={settings.run_mode === "generate_only" ? "생성 전용(generate_only)" : settings.run_mode} />
             <InfoPill label="자동화 상태" value={settings.is_paused ? "일시 정지" : "실행 가능"} />
             <InfoPill label="마지막 실행" value={lastRun ? formatDateTime(lastRun.started_at) : "-"} />
+          </div>
+        </div>
+      </section>
+
+      {productionReadiness ? <ProductionReadinessPanel readiness={productionReadiness} /> : null}
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">Candidate Collector</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Collector runs create candidates only. Queue rows and worker jobs remain controlled by promotion and next-batch.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-5">
+            <InfoPill label="Total" value={String(candidateSummary?.total ?? 0)} />
+            <InfoPill label="Collected" value={String(candidateSummary?.collected ?? 0)} />
+            <InfoPill label="Promoted" value={String(candidateSummary?.promoted ?? 0)} />
+            <InfoPill label="Duplicates" value={String(candidateSummary?.duplicate ?? 0)} />
+            <InfoPill label="Review" value={String(candidateSummary?.manual_review ?? 0)} />
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">Worker Artifact QA</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            QA is a manual review gate for generated video, thumbnail, subtitle, and upload package artifacts. It never uploads.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <InfoPill label="Pending" value={String(artifactQaSummary?.pending ?? 0)} />
+            <InfoPill label="Passed" value={String(artifactQaSummary?.passed ?? 0)} />
+            <InfoPill label="Needs fix" value={String(artifactQaSummary?.needs_fix ?? 0)} />
+            <InfoPill label="Missing package" value={String(artifactQaSummary?.missing_upload_package ?? 0)} />
           </div>
         </div>
       </section>

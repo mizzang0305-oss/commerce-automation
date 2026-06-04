@@ -98,6 +98,10 @@ export interface AutomationRepository {
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
+  updateProductAssetQa(
+    id: string,
+    patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }
+  ): Promise<ProductAsset | null>;
   getChannelProfiles(): Promise<ChannelProfile[]>;
   getChannelProfile(id: string): Promise<ChannelProfile | null>;
   updateChannelProfile(id: string, patch: Partial<ChannelProfile>): Promise<ChannelProfile | null>;

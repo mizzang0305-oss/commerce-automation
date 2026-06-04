@@ -812,6 +812,24 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(assets);
   }
 
+  async updateProductAssetQa(
+    id: string,
+    patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }
+  ) {
+    const index = this.productAssets.findIndex((asset) => asset.id === id);
+    if (index === -1) {
+      return null;
+    }
+    this.productAssets[index] = {
+      ...this.productAssets[index],
+      qa_status: patch.qa_status,
+      qa_note: patch.qa_note,
+      render_qa_metadata: patch.render_qa_metadata ?? this.productAssets[index].render_qa_metadata ?? {},
+      updated_at: nowIso()
+    };
+    return clone(this.productAssets[index]);
+  }
+
   async getChannelProfiles() {
     return clone(this.channelProfiles.map(normalizeChannelProfile));
   }
@@ -1010,7 +1028,11 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
         asset_type: assetType,
         bucket,
         url,
-        created_at: nowIso()
+        render_qa_metadata: {},
+        qa_status: "pending",
+        qa_note: "",
+        created_at: nowIso(),
+        updated_at: nowIso()
       });
     }
   }
