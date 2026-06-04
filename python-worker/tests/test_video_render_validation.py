@@ -77,6 +77,8 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertIn("Detail voice text", tts.call_args.args[0])
         self.assertNotIn("legacy script should not drive render plan mode", tts.call_args.args[0])
         self.assertEqual(tts.call_args.args[0], srt.call_args.args[0])
+        self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
+        self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
         self.assertEqual(render.call_args.args[4], "Render plan product")
         self.assertIn("video_url", result)
 

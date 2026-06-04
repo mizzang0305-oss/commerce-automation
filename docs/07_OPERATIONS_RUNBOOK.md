@@ -649,6 +649,11 @@ Safety expectations:
 - No YouTube, TikTok, Threads, or public upload action is enabled.
 - Python Worker validates `render_plan.shots` before ffmpeg diagnostics, uses the first shot image as the current render image, and joins shot captions/voice text into the render script.
 - Malformed render plans fail safely; they must not be converted into completed jobs or `video_ready`.
+- Render quality v2 stays local to Python/ffmpeg. It adds no ViMax dependency and makes no external video API call.
+- Supported layout presets are `hook`, `product_focus`, `benefit`, `caution`, and `manual_cta`; image and caption boxes must remain inside the 1080x1920 canvas.
+- Dense captions are wrapped or ellipsis-clipped inside the subtitle safe area.
+- Render-plan shot durations are reflected in SRT timing, so visual QA should compare shot order, subtitle timing, and generated captions before approving a video.
+- Thumbnail QA should verify long product names stay inside the white title card and that font fallback still produces a readable image on Windows.
 
 ## Run Next Batch
 

@@ -181,15 +181,16 @@ n8n, Creatomate, and Google Docs are not the current production path. Naver Bran
 
 Recommended PR order:
 
-1. PR #37. Production hosting target decision package
+1. PR #37. Render quality tuning v2
+   - Improve shot layouts, subtitle positioning, thumbnail readability, product image card treatment, and vertical transition stability.
+   - Keep the current Python Worker renderer; do not introduce ViMax or external video APIs.
+   - Keep platform uploads disabled.
+2. PR #38. Production hosting target decision package
    - Compare Vercel, Render, Fly.io, and server options for the WebApp.
    - Decide where Python Worker runs.
    - Prepare Supabase/R2 production env rollout and production smoke steps.
    - Do not deploy until the target is approved.
    - Keep YouTube upload disabled.
-2. PR #38. Render quality tuning v2
-   - Improve shot layouts, subtitle positioning, thumbnail readability, product image card treatment, and vertical transition stability.
-   - Keep the current Python Worker renderer; do not introduce ViMax or external video APIs.
 3. PR #39. Coupang collector MVP
    - Harden batch/manual URL import and server-only Coupang Partners API readiness.
    - Create candidates only; do not create queue rows or worker jobs from import.
