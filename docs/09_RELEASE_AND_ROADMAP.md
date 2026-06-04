@@ -195,6 +195,7 @@ Recommended PR order:
    - Prepare Supabase/R2 production env rollout and production smoke steps.
    - Do not deploy until the target is approved.
    - Keep YouTube upload disabled.
+   - Recommendation: Vercel WebApp, local Windows Python Worker for the first production pilot, Supabase/Postgres, and Cloudflare R2.
 4. PR #40. Coupang collector MVP
    - Harden batch/manual URL import and server-only Coupang Partners API readiness.
    - Create candidates only; do not create queue rows or worker jobs from import.
