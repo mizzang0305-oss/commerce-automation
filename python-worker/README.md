@@ -122,6 +122,13 @@ Render quality v2 keeps the same Python/ffmpeg renderer and does not add ViMax o
 - render-plan shot durations mapped into SRT timing when `render_plan.shots[].duration_sec` is present
 - thumbnail font fallback for Windows environments without a specific font path
 
+Render quality v3 tightens subtitle polish without changing the artifact flow:
+
+- product imagery is scaled into a bounded center card instead of filling the whole vertical canvas;
+- the subtitle box stays in the lower safe area with compact font sizing, side margins, and a translucent background;
+- dense captions default to two compact lines with ellipsis clipping;
+- upload package text includes non-secret render QA metadata such as `render_layout_version`, `subtitle_style`, `render_plan_used`, and `shot_count`.
+
 These controls improve readability only. They must not bypass image download checks, ffmpeg failures, storage failures, or the `video_url` requirement for `video_ready`.
 
 ## Local Smoke Rerun

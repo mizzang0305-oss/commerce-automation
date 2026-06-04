@@ -309,7 +309,9 @@ The worker checks the interpreter version before loading env config or contactin
 
 For `video_render`, the worker accepts `payload.image_url` first and falls back to `payload.thumbnail_url`. It downloads the image with a bounded timeout, requires a successful HTTP 200 response, requires an `image/*` content type, and rejects empty image bodies. Image download failures become worker job fail/retry results; they must not upload placeholder artifacts, complete the job, or mark the queue item `video_ready`.
 
-Rendered videos use a fixed 1080x1920 vertical layout. The renderer scales and pads product imagery into that frame and burns generated SRT captions into the output. Thumbnail generation also targets 1080x1920 and wraps long product titles so the preview remains usable for manual upload package review.
+Rendered videos use a fixed 1080x1920 vertical layout. The renderer scales product imagery into a bounded center card, keeps SRT captions in the lower safe area, and limits dense subtitles to compact wrapped lines. Thumbnail generation also targets 1080x1920 and wraps long product titles so the preview remains usable for manual upload package review. Upload package text may include non-secret render QA metadata such as layout version, subtitle style, render-plan usage, and shot count.
+
+Render quality work stays inside the existing Python/ffmpeg worker. It does not add ViMax, external video APIs, or platform upload behavior.
 
 Required worker env:
 

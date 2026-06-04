@@ -80,7 +80,32 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
         self.assertEqual(render.call_args.args[4], "Render plan product")
+        self.assertEqual(render.call_args.kwargs["subtitle_text"], tts.call_args.args[0])
+        self.assertEqual(render.call_args.kwargs["shot_durations"], [3, 5])
         self.assertIn("video_url", result)
+
+    def test_upload_package_includes_visual_quality_metadata(self):
+        storage = Mock()
+        storage.upload.side_effect = lambda bucket, path, key: f"https://storage.example/{key}"
+        payload = _valid_payload() | {"render_plan": _valid_render_plan()}
+        job = {"id": "job-render-quality-metadata", "payload": payload}
+        package_path = Path("outputs/job-render-quality-metadata/upload_package.txt")
+        package_path.unlink(missing_ok=True)
+
+        with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
+            patch("src.tasks.video_render.download_image", return_value=Path("temp/job-render-quality-metadata/product.jpg")), \
+            patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-quality-metadata/voiceover.wav")), \
+            patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-quality-metadata/captions.srt")), \
+            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-quality-metadata/video.mp4")), \
+            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-quality-metadata/thumbnail.jpg")), \
+            patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
+            run_video_render(job, None, storage, Mock())
+
+        package_text = package_path.read_text(encoding="utf-8")
+        self.assertIn("render_layout_version: v3-subtitle-polish", package_text)
+        self.assertIn("subtitle_style: compact_safe_area", package_text)
+        self.assertIn("render_plan_used: true", package_text)
+        self.assertIn("shot_count: 2", package_text)
 
     def test_malformed_render_plan_fails_before_ffmpeg_check(self):
         payload = _valid_payload() | {

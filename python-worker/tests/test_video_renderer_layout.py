@@ -18,12 +18,52 @@ class VideoRendererLayoutTest(unittest.TestCase):
     def test_render_settings_target_vertical_shorts_size(self):
         self.assertEqual(VIDEO_WIDTH, 1080)
         self.assertEqual(VIDEO_HEIGHT, 1920)
-        filter_graph = build_video_filter(Path("temp/job/captions.srt"))
-        self.assertIn("scale=1080:1920", filter_graph)
+        filter_graph = build_video_filter(
+            Path("temp/job/captions.srt"),
+            subtitle_text="Line one\nLine two",
+            shot_durations=[3, 5],
+        )
+        self.assertIn("scale=936:1100", filter_graph)
         self.assertIn("pad=1080:1920", filter_graph)
-        self.assertIn("subtitles=", filter_graph)
-        self.assertIn("FontSize=12", filter_graph)
-        self.assertIn("MarginV=180", filter_graph)
+        self.assertIn("drawtext=", filter_graph)
+        self.assertIn("fontsize=44", filter_graph)
+        self.assertIn("y=h-240-text_h", filter_graph)
+
+    def test_video_filter_reserves_bottom_subtitle_safe_area(self):
+        filter_graph = build_video_filter(
+            Path("temp/job/captions.srt"),
+            subtitle_text="Test subtitle line one\nTest line two",
+            shot_durations=[3, 5],
+        )
+
+        self.assertIn("scale=936:1100:force_original_aspect_ratio=decrease", filter_graph)
+        self.assertIn("pad=1080:1920:(ow-iw)/2:260:color=0x0f172a", filter_graph)
+        self.assertIn("fontsize=44", filter_graph)
+        self.assertIn("y=h-240-text_h", filter_graph)
+        self.assertIn("box=1", filter_graph)
+        self.assertIn("boxcolor=black@0.42", filter_graph)
+        self.assertIn("enable='between(t,0.000,3.000)'", filter_graph)
+        self.assertIn("enable='between(t,3.000,8.000)'", filter_graph)
+
+    def test_drawtext_subtitle_files_wrap_to_compact_lines(self):
+        target = Path("temp/test-drawtext-filter/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        build_video_filter(
+            target,
+            subtitle_text="ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            shot_durations=[4],
+            subtitle_dir=subtitle_dir,
+        )
+
+        line_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        self.assertEqual(len(line_files), 2)
+        lines = [path.read_text(encoding="utf-8") for path in line_files]
+        self.assertLessEqual(len(lines), 2)
+        self.assertTrue(all(len(line) <= 24 for line in lines))
 
     def test_wrap_title_limits_long_product_names(self):
         lines = wrap_title(
@@ -50,6 +90,8 @@ class VideoRendererLayoutTest(unittest.TestCase):
                     self.assertLessEqual(y2, VIDEO_HEIGHT)
                     self.assertGreater(x2, x1)
                     self.assertGreater(y2, y1)
+                self.assertLessEqual(config["caption_box"][3], VIDEO_HEIGHT - 240)
+                self.assertLess(config["image_box"][3], config["caption_box"][1])
 
     def test_caption_wrapping_limits_dense_text(self):
         lines = wrap_caption(
@@ -60,6 +102,15 @@ class VideoRendererLayoutTest(unittest.TestCase):
 
         self.assertLessEqual(len(lines), 2)
         self.assertTrue(all(len(line) <= 16 for line in lines))
+        self.assertTrue(lines[-1].endswith("..."))
+
+    def test_caption_default_wrapping_stays_compact_for_subtitle_box(self):
+        lines = wrap_caption(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        )
+
+        self.assertLessEqual(len(lines), 2)
+        self.assertTrue(all(len(line) <= 24 for line in lines))
         self.assertTrue(lines[-1].endswith("..."))
 
     def test_srt_timing_can_follow_render_plan_shot_durations(self):
