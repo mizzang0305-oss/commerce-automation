@@ -124,6 +124,10 @@ python -m compileall python-worker
 - Render-plan shot durations map to SRT timing when `render_plan.shots[].duration_sec` is present.
 - Dense captions wrap or clip with an ellipsis instead of overflowing the subtitle safe area.
 - Thumbnail generation still succeeds with the default font fallback when a preferred Windows font path is unavailable.
+- Render quality v3 keeps product imagery above the subtitle safe area instead of scaling it across the entire canvas.
+- Subtitle styling uses a compact lower safe-area box, two-line wrapping, side margins, and a translucent background.
+- Visual smoke must confirm subtitles do not cover the product image, title/caption text does not overflow, and the thumbnail title card remains readable.
+- Upload package text may include non-secret render QA metadata; it must not include storage keys, service role keys, Authorization headers, or platform upload flags.
 
 ## Event Planner QA
 

@@ -7,7 +7,7 @@ from ..media.ffmpeg_check import require_ffmpeg_for_video_render
 from ..media.subtitle_generator import write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
-from ..media.video_renderer import render_vertical_video
+from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
@@ -54,11 +54,19 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         output_dir / "video.mp4",
         product_name,
         ffmpeg_exe=ffmpeg_exe,
+        subtitle_text=script,
+        shot_durations=shot_durations,
     )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
     package_path = output_dir / "upload_package.txt"
+    quality_metadata = build_render_quality_metadata(
+        render_plan_used=render_plan is not None,
+        shot_count=len(shot_durations or []),
+        total_duration_sec=sum(shot_durations) if shot_durations else None,
+    )
+    quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
     package_path.write_text(
-        f"{product_name}\n\n{script}\n\n{disclosure_text}\n{affiliate_url}\n",
+        f"{product_name}\n\n{script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n",
         encoding="utf-8",
     )
 

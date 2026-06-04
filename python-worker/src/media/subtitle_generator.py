@@ -2,7 +2,7 @@ from pathlib import Path
 import textwrap
 
 
-def wrap_caption(text: str, max_chars: int = 28, max_lines: int = 2) -> list[str]:
+def wrap_caption(text: str, max_chars: int = 24, max_lines: int = 2) -> list[str]:
     cleaned = " ".join(text.strip().split())
     if not cleaned:
         return []

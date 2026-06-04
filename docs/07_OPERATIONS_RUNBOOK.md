@@ -654,6 +654,9 @@ Safety expectations:
 - Dense captions are wrapped or ellipsis-clipped inside the subtitle safe area.
 - Render-plan shot durations are reflected in SRT timing, so visual QA should compare shot order, subtitle timing, and generated captions before approving a video.
 - Thumbnail QA should verify long product names stay inside the white title card and that font fallback still produces a readable image on Windows.
+- Render quality v3 scales the product image into a bounded center card and keeps subtitles in the lower safe area.
+- Visual QA must reject a smoke if subtitles cover the product image, fill the entire frame, overflow the lower safe area, or make the thumbnail/title card unreadable.
+- Upload package text can include non-secret render QA metadata (`render_layout_version`, `subtitle_style`, `render_plan_used`, `shot_count`, and total duration) for operator review.
 
 ## Run Next Batch
 
