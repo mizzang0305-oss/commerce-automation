@@ -129,6 +129,20 @@ python -m compileall python-worker
 - Visual smoke must confirm subtitles do not cover the product image, title/caption text does not overflow, and the thumbnail title card remains readable.
 - Upload package text may include non-secret render QA metadata; it must not include storage keys, service role keys, Authorization headers, or platform upload flags.
 
+## Production Pilot QA
+
+- `docs/PRODUCTION_HOSTING_DECISION.md` recommends the production pilot target before deployment.
+- `docs/PRODUCTION_PILOT_RUNBOOK.md` documents Vercel WebApp plus local Windows Worker operation without executing deployment.
+- `checklists/vercel-production-checklist.md` keeps WebApp secrets server-side and blocks `NEXT_PUBLIC_*` secrets.
+- `checklists/local-worker-production-checklist.md` keeps `SUPABASE_SERVICE_ROLE_KEY` out of the Worker environment.
+- Production pilot smoke confirms import creates candidates only.
+- Promotion and content generation create zero `worker_jobs`.
+- `/api/run/next-batch` remains the only worker-job creation path.
+- Python Worker is started outside WebApp.
+- R2 artifacts return HTTP 200 or expected signed URL responses.
+- Channel upload package remains `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
+- Pilot rollback stops the local worker, pauses automation, and preserves production data unless a backed-up cleanup is explicitly approved.
+
 ## Event Planner QA
 
 - `GET /api/events` returns active event seeds without secrets.

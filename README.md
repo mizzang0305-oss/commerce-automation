@@ -29,7 +29,7 @@ The current production-ready path is the in-house Coupang product-to-video flow:
 
 The WebApp must not launch Python Worker. Worker jobs are created only by `/api/run/next-batch`. Platform uploads remain manual-only; YouTube/TikTok/Threads upload APIs are not implemented.
 
-Use [docs/PRODUCTION_HOSTING_DECISION.md](docs/PRODUCTION_HOSTING_DECISION.md) and [checklists/production-hosting-target-checklist.md](checklists/production-hosting-target-checklist.md) before choosing a production target. Use [checklists/deployment-checklist.md](checklists/deployment-checklist.md) before deploying and [checklists/security-checklist.md](checklists/security-checklist.md) before opening a sandbox or production instance.
+Use [docs/PRODUCTION_HOSTING_DECISION.md](docs/PRODUCTION_HOSTING_DECISION.md) and [checklists/production-hosting-target-checklist.md](checklists/production-hosting-target-checklist.md) before choosing a production target. After the target is approved, use [docs/PRODUCTION_PILOT_RUNBOOK.md](docs/PRODUCTION_PILOT_RUNBOOK.md), [checklists/vercel-production-checklist.md](checklists/vercel-production-checklist.md), and [checklists/local-worker-production-checklist.md](checklists/local-worker-production-checklist.md) to prepare the Vercel WebApp plus local Windows Worker pilot. Use [checklists/deployment-checklist.md](checklists/deployment-checklist.md) before deploying and [checklists/security-checklist.md](checklists/security-checklist.md) before opening a sandbox or production instance.
 
 For a safe local production-env readiness summary that prints booleans and warnings only:
 
