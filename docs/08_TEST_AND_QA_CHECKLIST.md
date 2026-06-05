@@ -248,4 +248,5 @@ python -m compileall python-worker
 - `GET /api/artifacts` returns pagination metadata, clamps `page_size` to `100`, preserves filters, and must not update QA/upload/worker state.
 - `POST /api/artifacts/bulk-qa` updates selected artifact QA fields only and returns `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
 - Artifact QA review queues and keyboard shortcuts update QA status only and must show `QA status only changed. No platform upload was executed.`
+- Artifact QA large-list rendering caps visible rows to the page window, clears selection on page/filter/search/sort/page-size changes, and keeps keyboard selection inside the visible page.
 - Client components must not reference service role keys, R2 secrets, worker secrets, Coupang secrets, or Authorization headers.
