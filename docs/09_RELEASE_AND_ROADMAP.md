@@ -246,5 +246,7 @@ Priority rule:
 - Ops readiness dashboard: implemented as an approval-gated visibility layer, not a deploy flow.
 - Coupang Collector MVP: candidates-only dry-run collection with deterministic duplicate keys, score breakdowns, source trace metadata, and risk flags. Queue promotion remains a separate operator action.
 - Worker Artifact QA: manual review state for generated artifacts, now with filters and bulk review. QA pass is not platform upload.
+- Candidate Scoring Analytics: read-only dashboard for candidate score, duplicate, source trace, risk flag, and linked artifact QA signals. It does not infer sales outcome and does not create queue rows, worker jobs, upload packages, or uploads.
+- Artifact QA Productivity: review queues, note templates, and keyboard shortcuts for faster manual QA. These controls update QA metadata only.
 - Production pilot readiness: Migration 008 artifact QA persistence SQL verification is PASS, but deployment and production smoke remain approval-gated.
 - Deferred: YouTube OAuth/upload, TikTok Direct Post, Threads post, multi-user SaaS, n8n/Creatomate/Google Docs-first pipelines.

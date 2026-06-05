@@ -8,28 +8,29 @@ import {
   FlaskConical,
   LayoutDashboard,
   ListChecks,
-  ScrollText,
-  Settings,
-  ServerCog,
-  ShieldCheck,
   RadioTower,
+  ScrollText,
+  ServerCog,
+  Settings,
+  ShieldCheck,
   Webhook
 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
-  { href: "/queue", label: "상품 큐", icon: ListChecks },
-  { href: "/candidates", label: "후보 검수", icon: ClipboardCheck },
-  { href: "/planner", label: "제작 플래너", icon: CalendarClock },
-  { href: "/channels", label: "채널 관리", icon: RadioTower },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/queue", label: "Queue", icon: ListChecks },
+  { href: "/candidates", label: "Candidates", icon: ClipboardCheck },
+  { href: "/candidates/analytics", label: "Candidate Analytics", icon: ClipboardCheck },
+  { href: "/planner", label: "Planner", icon: CalendarClock },
+  { href: "/channels", label: "Channels", icon: RadioTower },
   { href: "/ops/production-readiness", label: "Production Readiness", icon: ShieldCheck },
   { href: "/artifacts", label: "Artifact QA", icon: FileVideo },
-  { href: "/jobs", label: "작업 목록", icon: BriefcaseBusiness },
-  { href: "/workers", label: "워커 상태", icon: ServerCog },
-  { href: "/settings", label: "설정", icon: Settings },
-  { href: "/runs", label: "실행 로그", icon: ScrollText },
-  { href: "/dev/test-lab", label: "스모크 테스트", icon: FlaskConical },
-  { href: "/dev/webhook-test", label: "Webhook 테스트", icon: Webhook }
+  { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
+  { href: "/workers", label: "Workers", icon: ServerCog },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/runs", label: "Runs", icon: ScrollText },
+  { href: "/dev/test-lab", label: "Dev Test Lab", icon: FlaskConical },
+  { href: "/dev/webhook-test", label: "Webhook Test", icon: Webhook }
 ];
 
 export function Sidebar() {
@@ -40,8 +41,8 @@ export function Sidebar() {
           <Activity size={18} aria-hidden="true" />
         </span>
         <span>
-          <span className="block text-sm font-bold text-slate-950">자동화</span>
-          <span className="block text-xs text-slate-500">관제실</span>
+          <span className="block text-sm font-bold text-slate-950">Commerce Automation</span>
+          <span className="block text-xs text-slate-500">Control room</span>
         </span>
       </Link>
       <nav className="mt-8 space-y-1">

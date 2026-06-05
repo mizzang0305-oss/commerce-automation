@@ -192,6 +192,8 @@ Imported candidates now receive quality-control fields before they are promoted:
 
 The `/candidates` page shows these fields so operators can sort by score, filter blocked rows, inspect dedupe reasons, and promote only ready candidates. Promotion creates a scheduled `product_queue` row plus a generated-content scaffold, and propagates the selected candidate image into `product_queue.thumbnail_url`; it never creates `worker_jobs`. Worker jobs remain the responsibility of `/api/run/next-batch`.
 
+`/candidates/analytics` summarizes candidate score, duplicate, source trace, risk flag, and linked artifact QA signals. It is read-only decision support and does not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads. See [docs/CANDIDATE_SCORING_ANALYTICS_DASHBOARD.md](docs/CANDIDATE_SCORING_ANALYTICS_DASHBOARD.md).
+
 Collector endpoints are candidate-only. They must return `queue_created=false`, `worker_jobs_created=false`, and `upload_triggered=false`; they never create queue rows, render plans, upload packages, or platform uploads.
 
 Promoted queue items can receive a safe template draft before worker dispatch:
@@ -553,5 +555,7 @@ python -m compileall python-worker
 
 - `/ops/production-readiness` shows approval-gated readiness counts and safety locks. It does not deploy or call production smoke.
 - `/candidates` includes a Coupang Collector MVP dry-run panel. It creates candidates only and never creates queue rows, worker jobs, render plans, upload packages, or platform uploads.
+- `/candidates/analytics` is read-only candidate quality analytics. It does not imply sales outcome and cannot trigger collection, promotion, workers, or uploads.
 - `/artifacts` provides Worker artifact QA for video, thumbnail, subtitle, and upload package URLs. QA pass is a manual review marker only and never triggers upload.
+- Artifact QA review queues, note templates, and keyboard shortcuts are productivity controls only. They update QA metadata and show `QA status only changed. No platform upload was executed.` after status changes. See [docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md](docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md).
 - Apply `supabase/migrations/008_product_asset_qa.sql` before using artifact QA against Supabase.

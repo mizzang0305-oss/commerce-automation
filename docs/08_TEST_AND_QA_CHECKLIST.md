@@ -106,6 +106,8 @@ python -m compileall python-worker
 - Duplicate candidate, queued, or produced rows map to `blocked_duplicate`.
 - Candidate promotion creates `product_queue` and generated-content scaffold only; `worker_jobs` must remain empty until `next-batch`.
 - `/candidates` shows score, product key, duplicate status, promotion status, and keeps secret-like payload keys redacted.
+- `/candidates/analytics` returns read-only aggregate candidate analytics and `side_effects.queue_created=false`, `side_effects.worker_jobs_created=false`, and `side_effects.upload_triggered=false`.
+- Candidate analytics copy must not claim revenue, profit, or guaranteed channel performance.
 
 ## Content Draft QA
 
@@ -240,4 +242,5 @@ python -m compileall python-worker
 - Collector responses must also show `upload_triggered=false`.
 - `GET /api/artifacts` filters by QA status, asset type, missing artifact type, search text, and sort order.
 - `POST /api/artifacts/bulk-qa` updates selected artifact QA fields only and returns `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
+- Artifact QA review queues and keyboard shortcuts update QA status only and must show `QA status only changed. No platform upload was executed.`
 - Client components must not reference service role keys, R2 secrets, worker secrets, Coupang secrets, or Authorization headers.
