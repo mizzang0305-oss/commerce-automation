@@ -211,9 +211,48 @@ function SeedDryRunPlannerPanel({
   onCopyJson: () => void;
   copyMessage: string;
 }) {
+  const [confirmationChecked, setConfirmationChecked] = useState(false);
+  const [confirmationText, setConfirmationText] = useState("");
+  const [executionMessage, setExecutionMessage] = useState("");
   const exportHref = plan
     ? `data:application/json;charset=utf-8,${encodeURIComponent(plan.copy_blocks.json_payload)}`
     : "data:application/json;charset=utf-8,%7B%7D";
+  const executionEnabled =
+    Boolean(plan?.seed_keywords.length) &&
+    confirmationChecked &&
+    confirmationText.trim() === "EXECUTE_CANDIDATE_ONLY_COLLECTOR";
+
+  async function executeCandidateOnlyCollector() {
+    if (!plan || !executionEnabled) {
+      return;
+    }
+    setExecutionMessage("Candidate-only execution requested.");
+    const response = await fetch("/api/candidates/execute-seed-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...plan.collector_payload_preview,
+        confirmation: "EXECUTE_CANDIDATE_ONLY_COLLECTOR",
+        mode: "candidate_only",
+        dry_run: true,
+        candidate_only: true,
+        queue_creation_enabled: false,
+        worker_job_creation_enabled: false,
+        render_plan_creation_enabled: false,
+        upload_package_creation_enabled: false,
+        upload_enabled: false
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (payload?.ok) {
+      setExecutionMessage(
+        `Candidate-only execution completed: created=${payload.created_count ?? 0}, duplicates=${payload.duplicate_count ?? 0}.`
+      );
+      return;
+    }
+    setExecutionMessage(payload?.safe_error || "Candidate-only execution failed safely.");
+  }
+
   return (
     <section id="seed-plan" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -314,6 +353,58 @@ function SeedDryRunPlannerPanel({
             Export JSON
           </a>
           {copyMessage ? <p className="text-sm font-semibold text-slate-700">{copyMessage}</p> : null}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-amber-950">Candidate-only Execution Gate</h3>
+            <p className="mt-1 max-w-3xl text-sm text-amber-900">
+              Only product_candidates can be created. Queue rows, worker jobs, render plans, upload packages, and platform uploads stay disabled.
+            </p>
+          </div>
+          <div className="grid gap-1 rounded-md bg-white/70 px-3 py-2 text-xs font-bold text-amber-950">
+            <span>render_plan_creation_enabled=false</span>
+            <span>upload_package_creation_enabled=false</span>
+            <span>platform_upload_triggered=false</span>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="rounded-md bg-white/70 p-3 text-sm text-amber-950">
+            <p className="font-bold">Keywords preview</p>
+            <p className="mt-1">{plan?.collector_payload_preview.keywords.join(", ") || "No keywords selected."}</p>
+            <p className="mt-2 font-bold">Limit per keyword</p>
+            <p className="mt-1">{plan?.collector_payload_preview.limit_per_keyword ?? 0}</p>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 text-sm font-semibold text-amber-950">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={confirmationChecked}
+                onChange={(event) => setConfirmationChecked(event.target.checked)}
+              />
+              I understand this creates candidates only.
+            </label>
+            <label className="block text-xs font-bold uppercase text-amber-950">
+              Confirmation text
+              <input
+                value={confirmationText}
+                onChange={(event) => setConfirmationText(event.target.value)}
+                className="mt-1 block w-full rounded-md border border-amber-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!executionEnabled}
+              onClick={executeCandidateOnlyCollector}
+              className="w-full rounded-md bg-amber-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-amber-200 disabled:text-amber-700"
+            >
+              Candidate-only 수집 실행
+            </button>
+            {executionMessage ? <p className="text-sm font-semibold text-amber-950">{executionMessage}</p> : null}
+          </div>
         </div>
       </div>
     </section>
