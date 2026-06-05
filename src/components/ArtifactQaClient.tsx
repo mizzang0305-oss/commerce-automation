@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type ArtifactQaStatus = "pending" | "passed" | "needs_fix" | "rejected";
 
@@ -43,6 +43,25 @@ type ArtifactFilters = {
   sort: string;
 };
 
+const BULK_NOTE_TEMPLATES = [
+  "Video, thumbnail, subtitle, and upload package checked.",
+  "Subtitle timing needs operator review.",
+  "Thumbnail missing or needs review.",
+  "Upload package missing or needs review.",
+  "Product image quality needs review.",
+  "Copy or disclosure text needs review.",
+  "Playback length needs review."
+];
+
+const REVIEW_QUEUES: Array<{ label: string; filters: Partial<ArtifactFilters> }> = [
+  { label: "Pending Review", filters: { qa_status: "pending", missing: "all" } },
+  { label: "Needs Fix", filters: { qa_status: "needs_fix", missing: "all" } },
+  { label: "Missing Assets", filters: { qa_status: "all", missing: "has_warnings" } },
+  { label: "Has Warnings", filters: { qa_status: "all", missing: "has_warnings" } },
+  { label: "Passed", filters: { qa_status: "passed", missing: "all" } },
+  { label: "Rejected", filters: { qa_status: "rejected", missing: "all" } }
+];
+
 export function ArtifactQaClient({
   artifacts,
   summary
@@ -65,6 +84,8 @@ export function ArtifactQaClient({
     search: "",
     sort: "newest"
   });
+  const searchRef = useRef<HTMLInputElement>(null);
+  const searchFocusedRef = useRef(false);
   const selected = useMemo(
     () => visibleArtifacts.find((artifact) => artifact.id === selectedId) ?? visibleArtifacts[0] ?? null,
     [visibleArtifacts, selectedId]
@@ -77,25 +98,74 @@ export function ArtifactQaClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (document.activeElement === searchRef.current && !searchFocusedRef.current) {
+        // JSDOM can leave activeElement on a blurred input; use the explicit focus flag as the source of truth.
+      } else if (isTypingTarget(document.activeElement)) {
+        return;
+      }
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSelectedIds([]);
+        searchRef.current?.blur();
+        return;
+      }
+      if (event.key === "j") {
+        event.preventDefault();
+        moveSelected(1);
+        return;
+      }
+      if (event.key === "k") {
+        event.preventDefault();
+        moveSelected(-1);
+        return;
+      }
+      if (event.key === "x" && selected) {
+        event.preventDefault();
+        toggleSelected(selected.id);
+        return;
+      }
+      const shortcutStatus: Record<string, ArtifactQaStatus> = {
+        p: "passed",
+        f: "needs_fix",
+        r: "rejected",
+        u: "pending"
+      };
+      const nextStatus = shortcutStatus[event.key];
+      if (nextStatus) {
+        event.preventDefault();
+        void updateQaStatus(nextStatus);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   async function reloadArtifacts(signal?: AbortSignal) {
     try {
       const params = new URLSearchParams(filters);
       const response = await fetch(`/api/artifacts?${params.toString()}`, { signal });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) {
-        setMessage(typeof payload.message === "string" ? payload.message : "Artifact 목록을 불러오지 못했습니다.");
+        setMessage(typeof payload.message === "string" ? payload.message : "Artifact list could not be loaded.");
         return;
       }
-      const nextArtifacts = payload.artifacts ?? [];
+      const nextArtifacts = (payload.artifacts ?? []) as ArtifactSummary[];
       setVisibleArtifacts(nextArtifacts);
       setVisibleSummary(payload.summary ?? summary);
-      setSelectedIds((current) => current.filter((id) => nextArtifacts.some((artifact: ArtifactSummary) => artifact.id === id)));
-      if (!nextArtifacts.some((artifact: ArtifactSummary) => artifact.id === selectedId)) {
+      setSelectedIds((current) => current.filter((id) => nextArtifacts.some((artifact) => artifact.id === id)));
+      if (!nextArtifacts.some((artifact) => artifact.id === selectedId)) {
         setSelectedId(nextArtifacts[0]?.id ?? "");
       }
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
-        setMessage("Artifact 목록을 불러오지 못했습니다.");
+        setMessage("Artifact list could not be loaded.");
       }
     }
   }
@@ -114,13 +184,15 @@ export function ArtifactQaClient({
       setMessage(typeof payload.message === "string" ? payload.message : "QA update failed.");
       return;
     }
-    setMessage(`QA status updated to ${status}. Upload triggered: ${String(payload.upload_triggered).toUpperCase()}.`);
+    setMessage("QA status only changed. No platform upload was executed.");
+    moveSelected(1);
+    setSelectedIds([]);
     await reloadArtifacts();
   }
 
   async function updateBulkQaStatus() {
     if (selectedIds.length === 0) {
-      setMessage("선택된 artifact가 없습니다.");
+      setMessage("No artifacts selected.");
       return;
     }
     const response = await fetch("/api/artifacts/bulk-qa", {
@@ -133,9 +205,7 @@ export function ArtifactQaClient({
       setMessage(typeof payload.message === "string" ? payload.message : "Bulk QA update failed.");
       return;
     }
-    setMessage(
-      `Bulk QA updated ${payload.updated_count}/${payload.requested_count}. Upload triggered: ${String(payload.upload_triggered).toUpperCase()}.`
-    );
+    setMessage("QA status only changed. No platform upload was executed.");
     setSelectedIds([]);
     await reloadArtifacts();
   }
@@ -154,6 +224,19 @@ export function ArtifactQaClient({
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  function applyReviewQueue(nextFilters: Partial<ArtifactFilters>) {
+    setFilters((current) => ({ ...current, ...nextFilters }));
+  }
+
+  function moveSelected(direction: 1 | -1) {
+    if (visibleArtifacts.length === 0) {
+      return;
+    }
+    const currentIndex = Math.max(0, visibleArtifacts.findIndex((artifact) => artifact.id === selected?.id));
+    const nextIndex = Math.min(visibleArtifacts.length - 1, Math.max(0, currentIndex + direction));
+    setSelectedId(visibleArtifacts[nextIndex]?.id ?? "");
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
       <section className="space-y-4">
@@ -168,11 +251,37 @@ export function ArtifactQaClient({
           <QaMetric label="Missing package" value={visibleSummary.missing_upload_package} />
         </div>
 
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-bold text-slate-700">Review queues</span>
+            {REVIEW_QUEUES.map((queue) => (
+              <button
+                key={queue.label}
+                type="button"
+                onClick={() => applyReviewQueue(queue.filters)}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                {queue.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            Shortcuts: j/k move, x select, p pass, f needs_fix, r reject, u pending, / search, Esc clear. QA actions never upload.
+          </p>
+        </div>
+
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_auto_auto_auto_auto]">
           <input
+            ref={searchRef}
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
-            placeholder="상품명, queue id, URL 검색"
+            onFocus={() => {
+              searchFocusedRef.current = true;
+            }}
+            onBlur={() => {
+              searchFocusedRef.current = false;
+            }}
+            placeholder="Search product, queue id, or URL"
             className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-600"
           />
           <FilterSelect label="QA" value={filters.qa_status} onChange={(value) => updateFilter("qa_status", value)} options={["all", "pending", "passed", "needs_fix", "rejected"]} />
@@ -186,7 +295,7 @@ export function ArtifactQaClient({
           <FilterSelect label="Sort" value={filters.sort} onChange={(value) => updateFilter("sort", value)} options={["newest", "oldest", "qa_status", "asset_type"]} />
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[auto_auto_1fr_auto]">
+        <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[auto_auto_minmax(180px,240px)_1fr_auto]">
           <select
             value={bulkStatus}
             onChange={(event) => setBulkStatus(event.target.value as ArtifactQaStatus)}
@@ -198,6 +307,21 @@ export function ArtifactQaClient({
             <option value="pending">pending</option>
           </select>
           <span className="self-center text-sm font-semibold text-slate-600">{selectedIds.length} selected</span>
+          <label className="text-xs font-bold uppercase text-slate-500">
+            Bulk note template
+            <select
+              value=""
+              onChange={(event) => setBulkNote(event.target.value)}
+              className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-800"
+            >
+              <option value="">Select template</option>
+              {BULK_NOTE_TEMPLATES.map((template) => (
+                <option key={template} value={template}>
+                  {template}
+                </option>
+              ))}
+            </select>
+          </label>
           <input
             value={bulkNote}
             onChange={(event) => setBulkNote(event.target.value)}
@@ -388,4 +512,15 @@ function QaButton({ label, onClick }: { label: string; onClick: () => void }) {
 
 function yesNo(value: boolean) {
   return value ? "YES" : "NO";
+}
+
+function isTypingTarget(element: Element | null) {
+  if (!element) {
+    return false;
+  }
+  if (element instanceof HTMLElement && !element.matches(":focus")) {
+    return false;
+  }
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select" || element.getAttribute("contenteditable") === "true";
 }

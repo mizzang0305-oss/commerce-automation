@@ -762,9 +762,11 @@ Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`,
 
 - Use `/ops/production-readiness` to review env counts, manual pending checks, and safety locks before pilot approval.
 - Use `/candidates` to run dry-run Coupang candidate collection. This creates candidates only.
+- Use `/candidates/analytics` for read-only candidate quality analytics. It summarizes score, duplicate, source trace, risk flag, and linked artifact QA signals; it does not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads.
 - Use `/artifacts` to review generated video, thumbnail, subtitle, and upload package URLs before manual upload.
 - Marking artifact QA as `passed` does not upload to YouTube, TikTok, Threads, or any public channel.
 - `/artifacts` supports `qa_status`, `asset_type`, `missing`, `search`, and `sort` filters plus bulk QA actions.
+- Artifact QA review queues, note templates, and keyboard shortcuts update QA metadata only. They must not trigger public upload or worker dispatch.
 - Bulk QA updates persist only artifact QA fields and return `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
 - Migration 008 SQL verification for artifact QA persistence is recorded as PASS, but production pilot readiness stays approval-gated until env, deployment, worker, storage, and manual smoke evidence are complete.
 - Supabase deployments must apply `supabase/migrations/008_product_asset_qa.sql` and reload PostgREST schema cache if needed.

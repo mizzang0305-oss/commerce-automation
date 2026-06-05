@@ -1,0 +1,32 @@
+import { NextResponse } from "next/server";
+import { buildCandidateAnalytics, type CandidateAnalyticsFilters } from "@/lib/candidates/candidateAnalytics";
+import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const filters: CandidateAnalyticsFilters = {
+    from: valueOrUndefined(url.searchParams.get("from")),
+    to: valueOrUndefined(url.searchParams.get("to")),
+    keyword: valueOrUndefined(url.searchParams.get("keyword")),
+    category: valueOrUndefined(url.searchParams.get("category")),
+    risk_flag: valueOrUndefined(url.searchParams.get("risk_flag")),
+    status: valueOrUndefined(url.searchParams.get("status")),
+    min_score: numberOrUndefined(url.searchParams.get("min_score"))
+  };
+  const analytics = await buildCandidateAnalytics(getAutomationRepository(), filters);
+  return NextResponse.json(analytics);
+}
+
+function valueOrUndefined(value: string | null) {
+  return value?.trim() || undefined;
+}
+
+function numberOrUndefined(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}

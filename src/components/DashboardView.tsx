@@ -39,7 +39,9 @@ export function DashboardView({
   diagnostics,
   productionReadiness,
   candidateSummary,
-  artifactQaSummary
+  candidateAnalyticsSummary,
+  artifactQaSummary,
+  artifactQaProductivitySummary
 }: {
   settings: AutomationSettings;
   items: ProductQueueItem[];
@@ -57,6 +59,12 @@ export function DashboardView({
     duplicate: number;
     manual_review: number;
   };
+  candidateAnalyticsSummary?: {
+    top_keyword: string;
+    avg_final_score: number;
+    duplicate_rate: number;
+    risk_heavy_keywords: string[];
+  };
   artifactQaSummary?: {
     total: number;
     pending: number;
@@ -67,6 +75,12 @@ export function DashboardView({
     missing_thumbnail: number;
     missing_subtitle: number;
     missing_upload_package: number;
+  };
+  artifactQaProductivitySummary?: {
+    pending_queue_count: number;
+    needs_fix_count: number;
+    missing_assets_count: number;
+    today_reviewed_count: number;
   };
 }) {
   const nextRunAt = getNextRunAt(settings);
@@ -133,6 +147,33 @@ export function DashboardView({
             <InfoPill label="Passed" value={String(artifactQaSummary?.passed ?? 0)} />
             <InfoPill label="Needs fix" value={String(artifactQaSummary?.needs_fix ?? 0)} />
             <InfoPill label="Missing package" value={String(artifactQaSummary?.missing_upload_package ?? 0)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">Candidate Analytics Summary</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Candidate quality proxy only. No sales outcome, queue creation, worker job, or upload action is inferred.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <InfoPill label="Top keyword" value={candidateAnalyticsSummary?.top_keyword || "-"} />
+            <InfoPill label="Avg final score" value={String(candidateAnalyticsSummary?.avg_final_score ?? 0)} />
+            <InfoPill label="Duplicate rate" value={`${Math.round((candidateAnalyticsSummary?.duplicate_rate ?? 0) * 100)}%`} />
+            <InfoPill label="Risk-heavy keywords" value={(candidateAnalyticsSummary?.risk_heavy_keywords ?? []).join(", ") || "-"} />
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-950">Artifact QA Productivity Summary</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            QA productivity actions update review fields only. They do not trigger uploads or worker jobs.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <InfoPill label="Pending queue" value={String(artifactQaProductivitySummary?.pending_queue_count ?? 0)} />
+            <InfoPill label="Needs fix" value={String(artifactQaProductivitySummary?.needs_fix_count ?? 0)} />
+            <InfoPill label="Missing assets" value={String(artifactQaProductivitySummary?.missing_assets_count ?? 0)} />
+            <InfoPill label="Today reviewed" value={String(artifactQaProductivitySummary?.today_reviewed_count ?? 0)} />
           </div>
         </div>
       </section>

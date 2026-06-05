@@ -32,6 +32,12 @@ Collector responses must include:
 }
 ```
 
+## Analytics Dashboard
+
+`/candidates/analytics` and `GET /api/candidates/analytics` summarize candidate scoring, dedupe, risk flag, source trace, and linked artifact QA signals. The dashboard is read-only decision support. It must not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads.
+
+Score analytics are quality proxies only. They must not claim sales outcome, revenue, profit, or guaranteed platform performance.
+
 ## Out Of Scope
 
 - No crawling that bypasses login, CAPTCHA, blocking, robots, or terms.

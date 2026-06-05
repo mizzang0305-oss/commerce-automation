@@ -7,6 +7,7 @@ Artifact QA is an operator review layer for rendered files. It does not upload, 
 - Review generated `video`, `thumbnail`, `subtitle`, and `upload_package` assets.
 - Filter by QA status, asset type, missing artifact type, search text, and sort order.
 - Apply bulk QA status changes to selected artifact rows.
+- Use review queue shortcuts, bulk note templates, and keyboard shortcuts for faster manual review.
 - Persist only `product_assets.qa_status`, `product_assets.qa_note`, `product_assets.render_qa_metadata`, and `updated_at`.
 
 ## API
@@ -35,6 +36,8 @@ Bulk QA mutation responses must include:
 - QA `passed` does not create channel upload packages.
 - QA `passed` does not call YouTube, TikTok, Threads, or any public upload endpoint.
 - Missing artifact rows should be marked `needs_fix` or `rejected`, not treated as successful renders.
+- Keyboard shortcuts must be disabled while an input, textarea, select, or editable field is focused.
+- QA status changes should show `QA status only changed. No platform upload was executed.`
 - Storage secrets, service-role keys, and Authorization headers must never appear in QA notes, UI, or API responses.
 
 ## Production Pilot Note
