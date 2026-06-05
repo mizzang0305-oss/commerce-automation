@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import type {
   CandidateAnalyticsResponse,
   CandidateSeedDryRunPlanResponse,
   CollectorSeedStrategy
 } from "@/lib/candidates/candidateAnalytics";
+import {
+  CANDIDATE_ONLY_EXECUTION_CONFIRMATION,
+  candidateOnlySeedExecutionSchema,
+  type CandidateOnlySeedExecutionFormInput,
+  type CandidateOnlySeedExecutionFormValues
+} from "@/lib/validation/operatorFormSchemas";
 
 export function CandidateAnalyticsDashboard({
   analytics,
@@ -212,18 +220,32 @@ function SeedDryRunPlannerPanel({
   copyMessage: string;
 }) {
   const [confirmationChecked, setConfirmationChecked] = useState(false);
-  const [confirmationText, setConfirmationText] = useState("");
   const [executionMessage, setExecutionMessage] = useState("");
+  const executionForm = useForm<CandidateOnlySeedExecutionFormInput, unknown, CandidateOnlySeedExecutionFormValues>({
+    resolver: zodResolver(candidateOnlySeedExecutionSchema),
+    mode: "onChange",
+    defaultValues: {
+      confirmation: "" as CandidateOnlySeedExecutionFormValues["confirmation"],
+      mode: "candidate_only",
+      dry_run: true,
+      candidate_only: true,
+      queue_creation_enabled: false,
+      worker_job_creation_enabled: false,
+      render_plan_creation_enabled: false,
+      upload_package_creation_enabled: false,
+      upload_enabled: false,
+      keywords: plan?.collector_payload_preview.keywords ?? [],
+      limit_per_keyword: plan?.collector_payload_preview.limit_per_keyword ?? 5,
+      source: "seed_plan"
+    }
+  });
   const exportHref = plan
     ? `data:application/json;charset=utf-8,${encodeURIComponent(plan.copy_blocks.json_payload)}`
     : "data:application/json;charset=utf-8,%7B%7D";
-  const executionEnabled =
-    Boolean(plan?.seed_keywords.length) &&
-    confirmationChecked &&
-    confirmationText.trim() === "EXECUTE_CANDIDATE_ONLY_COLLECTOR";
+  const executionEnabled = Boolean(plan?.seed_keywords.length) && confirmationChecked && executionForm.formState.isValid;
 
-  async function executeCandidateOnlyCollector() {
-    if (!plan || !executionEnabled) {
+  async function executeCandidateOnlyCollector(values: CandidateOnlySeedExecutionFormValues) {
+    if (!plan) {
       return;
     }
     setExecutionMessage("Candidate-only execution requested.");
@@ -232,7 +254,7 @@ function SeedDryRunPlannerPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...plan.collector_payload_preview,
-        confirmation: "EXECUTE_CANDIDATE_ONLY_COLLECTOR",
+        confirmation: values.confirmation,
         mode: "candidate_only",
         dry_run: true,
         candidate_only: true,
@@ -390,15 +412,19 @@ function SeedDryRunPlannerPanel({
             <label className="block text-xs font-bold uppercase text-amber-950">
               Confirmation text
               <input
-                value={confirmationText}
-                onChange={(event) => setConfirmationText(event.target.value)}
+                {...executionForm.register("confirmation")}
                 className="mt-1 block w-full rounded-md border border-amber-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900"
               />
             </label>
+            {executionForm.formState.errors.confirmation ? (
+              <p className="text-xs font-semibold text-amber-950">
+                Enter {CANDIDATE_ONLY_EXECUTION_CONFIRMATION} to enable candidate-only execution.
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={!executionEnabled}
-              onClick={executeCandidateOnlyCollector}
+              onClick={executionForm.handleSubmit(executeCandidateOnlyCollector)}
               className="w-full rounded-md bg-amber-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:bg-amber-200 disabled:text-amber-700"
             >
               Candidate-only 수집 실행

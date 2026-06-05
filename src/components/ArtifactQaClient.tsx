@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import {
+  artifactBulkQaSchema,
+  type ArtifactBulkQaInput,
+  type ArtifactBulkQaValues
+} from "@/lib/validation/operatorFormSchemas";
 
 type ArtifactQaStatus = "pending" | "passed" | "needs_fix" | "rejected";
 
@@ -92,8 +99,6 @@ export function ArtifactQaClient({
   const [selectedId, setSelectedId] = useState(artifacts[0]?.id ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
-  const [bulkNote, setBulkNote] = useState("");
-  const [bulkStatus, setBulkStatus] = useState<ArtifactQaStatus>("passed");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<ArtifactFilters>({
@@ -107,6 +112,15 @@ export function ArtifactQaClient({
   });
   const searchRef = useRef<HTMLInputElement>(null);
   const searchFocusedRef = useRef(false);
+  const bulkQaForm = useForm<ArtifactBulkQaInput, unknown, ArtifactBulkQaValues>({
+    resolver: zodResolver(artifactBulkQaSchema),
+    mode: "onChange",
+    defaultValues: {
+      artifact_ids: [],
+      qa_status: "passed",
+      qa_note: ""
+    }
+  });
   const renderedArtifacts = useMemo(
     () => visibleArtifacts.slice(0, Math.min(visiblePagination.page_size, MAX_RENDERED_ARTIFACT_ROWS)),
     [visibleArtifacts, visiblePagination.page_size]
@@ -174,6 +188,10 @@ export function ArtifactQaClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  useEffect(() => {
+    bulkQaForm.setValue("artifact_ids", selectedIds, { shouldValidate: true });
+  }, [bulkQaForm, selectedIds]);
+
   async function reloadArtifacts(signal?: AbortSignal) {
     setIsLoading(true);
     try {
@@ -221,7 +239,7 @@ export function ArtifactQaClient({
     await reloadArtifacts();
   }
 
-  async function updateBulkQaStatus() {
+  async function updateBulkQaStatus(values: ArtifactBulkQaValues) {
     if (selectedIds.length === 0) {
       setMessage("No artifacts selected.");
       return;
@@ -229,7 +247,7 @@ export function ArtifactQaClient({
     const response = await fetch("/api/artifacts/bulk-qa", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artifact_ids: selectedIds, qa_status: bulkStatus, qa_note: bulkNote })
+      body: JSON.stringify({ artifact_ids: selectedIds, qa_status: values.qa_status, qa_note: values.qa_note })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
@@ -370,8 +388,7 @@ export function ArtifactQaClient({
 
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[auto_auto_minmax(180px,240px)_1fr_auto]">
           <select
-            value={bulkStatus}
-            onChange={(event) => setBulkStatus(event.target.value as ArtifactQaStatus)}
+            {...bulkQaForm.register("qa_status")}
             className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800"
           >
             <option value="passed">passed</option>
@@ -384,7 +401,7 @@ export function ArtifactQaClient({
             Bulk note template
             <select
               value=""
-              onChange={(event) => setBulkNote(event.target.value)}
+              onChange={(event) => bulkQaForm.setValue("qa_note", event.target.value, { shouldValidate: true })}
               className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-800"
             >
               <option value="">Select template</option>
@@ -396,18 +413,20 @@ export function ArtifactQaClient({
             </select>
           </label>
           <input
-            value={bulkNote}
-            onChange={(event) => setBulkNote(event.target.value)}
+            {...bulkQaForm.register("qa_note")}
             placeholder="Bulk QA note"
             className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-600"
           />
           <button
             type="button"
-            onClick={updateBulkQaStatus}
+            onClick={bulkQaForm.handleSubmit(updateBulkQaStatus)}
             className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
           >
             Apply bulk QA
           </button>
+          {bulkQaForm.formState.errors.artifact_ids ? (
+            <p className="text-xs font-semibold text-slate-500 md:col-span-5">Select at least one artifact before bulk QA.</p>
+          ) : null}
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">

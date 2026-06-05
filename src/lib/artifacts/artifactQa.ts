@@ -1,4 +1,5 @@
 import type { AutomationRepository } from "@/lib/repositories/types";
+import { artifactBulkQaSchema } from "@/lib/validation/operatorFormSchemas";
 import type { ProductAsset } from "@/types/automation";
 
 export type ArtifactQaStatus = "pending" | "passed" | "needs_fix" | "rejected";
@@ -114,10 +115,8 @@ export async function bulkUpdateArtifactQaStatus(
   repository: AutomationRepository,
   input: { artifact_ids?: unknown; qa_status?: unknown; qa_note?: unknown }
 ) {
-  const artifactIds = Array.isArray(input.artifact_ids)
-    ? input.artifact_ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0).map((id) => id.trim())
-    : [];
-  if (artifactIds.length === 0) {
+  const parsed = artifactBulkQaSchema.safeParse(input);
+  if (!parsed.success && parsed.error.issues.some((issue) => issue.path[0] === "artifact_ids")) {
     return {
       ok: false as const,
       status: 400,
@@ -126,8 +125,7 @@ export async function bulkUpdateArtifactQaStatus(
     };
   }
 
-  const status = normalizeQaStatus(input.qa_status);
-  if (!status) {
+  if (!parsed.success) {
     return {
       ok: false as const,
       status: 400,
@@ -136,8 +134,10 @@ export async function bulkUpdateArtifactQaStatus(
     };
   }
 
+  const artifactIds = parsed.data.artifact_ids;
+  const status = parsed.data.qa_status;
   const uniqueIds = [...new Set(artifactIds)].slice(0, 200);
-  const qaNote = typeof input.qa_note === "string" ? input.qa_note.trim().slice(0, 1000) : "";
+  const qaNote = parsed.data.qa_note;
   const updated: ProductAsset[] = [];
   const skipped_ids: string[] = [];
 
