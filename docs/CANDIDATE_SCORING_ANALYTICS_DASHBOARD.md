@@ -12,6 +12,7 @@ Candidate scoring analytics is an operator-only decision support view. It summar
 ## API
 
 - `GET /api/candidates/analytics`
+- `GET /api/candidates/seed-plan`
   - optional query: `from`, `to`, `keyword`, `category`, `risk_flag`, `status`, `min_score`
   - returns safe aggregate summaries only
 
@@ -38,8 +39,9 @@ Responses include:
 
 ## UI
 
-- `/candidates/analytics` renders the full analytics dashboard.
+- `/candidates/analytics` renders the full analytics dashboard and the Seed Dry-run Planner panel.
 - The main dashboard shows a compact candidate analytics summary.
+- The main dashboard shows a compact candidate seed plan summary with a link to `/candidates/analytics#seed-plan`.
 - Sidebar navigation includes `Candidate Analytics`.
 
 Analytics copy must stay conservative. Scores are candidate quality proxies only; they do not imply sales outcome, revenue, profit, or guaranteed channel performance.

@@ -59,6 +59,59 @@ export type CandidateAnalyticsResponse = {
   };
 };
 
+export type CandidateSeedPlanStrategy = "balanced" | "high_score" | "low_duplicate" | "low_risk" | "discovery";
+
+export type CandidateSeedPlanOptions = {
+  strategy?: CandidateSeedPlanStrategy;
+  max_keywords?: number;
+  limit_per_keyword?: number;
+  include_keep?: boolean;
+  include_expand?: boolean;
+  include_review?: boolean;
+  include_avoid?: boolean;
+};
+
+export type CandidateSeedKeywordPlan = SeedKeywordRecommendation & {
+  source: "analytics_keep_keyword" | "analytics_expand_keyword" | "analytics_review_keyword" | "analytics_avoid_keyword";
+  suggested_limit: number;
+  risk_notes: string[];
+};
+
+export type CandidateSeedDryRunPlanResponse = {
+  ok: true;
+  mode: "candidate_only_dry_run_plan";
+  strategy: CandidateSeedPlanStrategy;
+  applied_filters: AppliedCandidateAnalyticsFilters;
+  plan_summary: {
+    keyword_count: number;
+    estimated_candidate_limit: number;
+    collector_execution: false;
+    queue_created: false;
+    worker_jobs_created: false;
+    upload_triggered: false;
+  };
+  seed_keywords: CandidateSeedKeywordPlan[];
+  collector_payload_preview: {
+    mode: "dry_run";
+    keywords: string[];
+    limit_per_keyword: number;
+    candidate_only: true;
+    queue_creation_enabled: false;
+    worker_job_creation_enabled: false;
+    upload_enabled: false;
+  };
+  copy_blocks: {
+    keyword_list: string;
+    json_payload: string;
+  };
+  side_effects: {
+    collector_executed: false;
+    queue_created: false;
+    worker_jobs_created: false;
+    upload_triggered: false;
+  };
+};
+
 export type CandidateAnalyticsAvailableFilters = {
   keywords: string[];
   categories: string[];
@@ -185,6 +238,62 @@ export async function buildCandidateAnalytics(
       worker_jobs_created: false,
       upload_triggered: false,
       collector_executed: false
+    }
+  };
+}
+
+export async function buildCandidateSeedDryRunPlan(
+  repository: AutomationRepository,
+  filters: CandidateAnalyticsFilters = {},
+  options: CandidateSeedPlanOptions = {}
+): Promise<CandidateSeedDryRunPlanResponse> {
+  const strategy = normalizeSeedPlanStrategy(options.strategy);
+  const maxKeywords = clampSeedMaxKeywords(options.max_keywords);
+  const limitPerKeyword = clampLimitPerKeyword(options.limit_per_keyword);
+  const analytics = await buildCandidateAnalytics(repository, filters);
+  const seedKeywords = sortSeedKeywords(
+    collectSeedKeywords(analytics.seed_strategy, options).map((item) => ({
+      ...item,
+      suggested_limit: limitPerKeyword,
+      risk_notes: riskNotesForKeyword(item, analytics.risk_flag_performance)
+    })),
+    strategy
+  ).slice(0, maxKeywords);
+  const keywords = seedKeywords.map((item) => item.keyword);
+  const collectorPayloadPreview = {
+    mode: "dry_run" as const,
+    keywords,
+    limit_per_keyword: limitPerKeyword,
+    candidate_only: true as const,
+    queue_creation_enabled: false as const,
+    worker_job_creation_enabled: false as const,
+    upload_enabled: false as const
+  };
+
+  return {
+    ok: true,
+    mode: "candidate_only_dry_run_plan",
+    strategy,
+    applied_filters: analytics.applied_filters ?? normalizeCandidateAnalyticsFilters(filters),
+    plan_summary: {
+      keyword_count: seedKeywords.length,
+      estimated_candidate_limit: seedKeywords.length * limitPerKeyword,
+      collector_execution: false,
+      queue_created: false,
+      worker_jobs_created: false,
+      upload_triggered: false
+    },
+    seed_keywords: seedKeywords,
+    collector_payload_preview: collectorPayloadPreview,
+    copy_blocks: {
+      keyword_list: keywords.join("\n"),
+      json_payload: JSON.stringify(collectorPayloadPreview, null, 2)
+    },
+    side_effects: {
+      collector_executed: false,
+      queue_created: false,
+      worker_jobs_created: false,
+      upload_triggered: false
     }
   };
 }
@@ -578,6 +687,118 @@ function clampLimit(value: number | undefined) {
     return 50;
   }
   return Math.min(200, Math.max(1, Math.floor(value)));
+}
+
+function clampSeedMaxKeywords(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 10;
+  }
+  return Math.min(30, Math.max(1, Math.floor(value)));
+}
+
+function clampLimitPerKeyword(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 5;
+  }
+  return Math.min(20, Math.max(1, Math.floor(value)));
+}
+
+function normalizeSeedPlanStrategy(value: unknown): CandidateSeedPlanStrategy {
+  return value === "high_score" ||
+    value === "low_duplicate" ||
+    value === "low_risk" ||
+    value === "discovery" ||
+    value === "balanced"
+    ? value
+    : "balanced";
+}
+
+function collectSeedKeywords(
+  strategy: CollectorSeedStrategy | undefined,
+  options: CandidateSeedPlanOptions
+): CandidateSeedKeywordPlan[] {
+  if (!strategy) {
+    return [];
+  }
+  const includeKeep = options.include_keep !== false;
+  const includeExpand = options.include_expand !== false;
+  const includeReview = options.include_review !== false;
+  const includeAvoid = options.include_avoid === true;
+  return [
+    ...(includeKeep ? withSeedSource(strategy.keep_keywords, "analytics_keep_keyword") : []),
+    ...(includeExpand ? withSeedSource(strategy.expand_keywords, "analytics_expand_keyword") : []),
+    ...(includeReview ? withSeedSource(strategy.review_keywords, "analytics_review_keyword") : []),
+    ...(includeAvoid ? withSeedSource(strategy.avoid_keywords, "analytics_avoid_keyword") : [])
+  ].filter(uniqueSeedKeyword());
+}
+
+function withSeedSource(
+  items: SeedKeywordRecommendation[],
+  source: CandidateSeedKeywordPlan["source"]
+): CandidateSeedKeywordPlan[] {
+  return items.map((item) => ({
+    ...item,
+    source,
+    suggested_limit: 5,
+    risk_notes: []
+  }));
+}
+
+function uniqueSeedKeyword() {
+  const seen = new Set<string>();
+  return (item: CandidateSeedKeywordPlan) => {
+    const key = item.keyword.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  };
+}
+
+function sortSeedKeywords(items: CandidateSeedKeywordPlan[], strategy: CandidateSeedPlanStrategy) {
+  const actionRank: Record<SeedKeywordRecommendation["suggested_action"], number> = {
+    keep: 0,
+    expand: 1,
+    review: 2,
+    avoid: 3
+  };
+  return [...items].sort((left, right) => {
+    if (strategy === "high_score") {
+      return right.avg_final_score - left.avg_final_score || left.keyword.localeCompare(right.keyword);
+    }
+    if (strategy === "low_duplicate") {
+      return left.duplicate_rate - right.duplicate_rate || right.avg_final_score - left.avg_final_score;
+    }
+    if (strategy === "low_risk") {
+      return (
+        left.rejected_rate + left.manual_review_rate - (right.rejected_rate + right.manual_review_rate) ||
+        left.duplicate_rate - right.duplicate_rate ||
+        right.avg_final_score - left.avg_final_score
+      );
+    }
+    if (strategy === "discovery") {
+      return actionRank[left.suggested_action] - actionRank[right.suggested_action] || right.avg_final_score - left.avg_final_score;
+    }
+    return actionRank[left.suggested_action] - actionRank[right.suggested_action] || right.avg_final_score - left.avg_final_score;
+  });
+}
+
+function riskNotesForKeyword(item: SeedKeywordRecommendation, riskFlags: RiskFlagPerformance[]) {
+  const notes: string[] = [];
+  if (item.duplicate_rate >= 0.3) {
+    notes.push("duplicate_rate_watch");
+  }
+  if (item.manual_review_rate >= 0.3) {
+    notes.push("manual_review_rate_watch");
+  }
+  if (item.rejected_rate >= 0.3) {
+    notes.push("rejected_rate_watch");
+  }
+  if (riskFlags.length > 0 && item.suggested_action === "review") {
+    notes.push("risk_flags_present");
+  }
+  return notes;
 }
 
 function normalizeAnalyticsSort(value: unknown): CandidateAnalyticsSort {

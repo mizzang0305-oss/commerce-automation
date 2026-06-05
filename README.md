@@ -194,6 +194,8 @@ The `/candidates` page shows these fields so operators can sort by score, filter
 
 `/candidates/analytics` summarizes candidate score, duplicate, source trace, risk flag, and linked artifact QA signals. It is read-only decision support and does not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads. See [docs/CANDIDATE_SCORING_ANALYTICS_DASHBOARD.md](docs/CANDIDATE_SCORING_ANALYTICS_DASHBOARD.md).
 
+`/api/candidates/seed-plan` and `/candidates/analytics#seed-plan` convert filtered seed strategy insights into a candidate-only dry-run collector payload preview. Operators can copy or export keyword lists and JSON payloads, but the planner never runs collectors, creates queue rows, creates worker jobs, creates upload packages, or uploads. See [docs/CANDIDATE_SEED_DRY_RUN_PLANNER.md](docs/CANDIDATE_SEED_DRY_RUN_PLANNER.md).
+
 Collector endpoints are candidate-only. They must return `queue_created=false`, `worker_jobs_created=false`, and `upload_triggered=false`; they never create queue rows, render plans, upload packages, or platform uploads.
 
 Promoted queue items can receive a safe template draft before worker dispatch:
@@ -557,6 +559,7 @@ python -m compileall python-worker
 - `/candidates` includes a Coupang Collector MVP dry-run panel. It creates candidates only and never creates queue rows, worker jobs, render plans, upload packages, or platform uploads.
 - `/candidates/analytics` is read-only candidate quality analytics. It does not imply sales outcome and cannot trigger collection, promotion, workers, or uploads.
 - `/candidates/analytics` supports date, keyword, category, risk flag, status, score range, collected mode, collector version, sort, and limit filters. Seed Strategy copy/export is candidate-only and never executes collectors or creates queue/job/upload side effects. See [docs/CANDIDATE_ANALYTICS_FILTERS_AND_SEED_STRATEGY.md](docs/CANDIDATE_ANALYTICS_FILTERS_AND_SEED_STRATEGY.md).
+- `/api/candidates/seed-plan` provides a read-only candidate-only dry-run payload planner with strategy, keyword limit, JSON preview, copy, and export controls. It never runs collectors or creates queue/job/upload side effects. See [docs/CANDIDATE_SEED_DRY_RUN_PLANNER.md](docs/CANDIDATE_SEED_DRY_RUN_PLANNER.md).
 - `/artifacts` provides Worker artifact QA for video, thumbnail, subtitle, and upload package URLs. QA pass is a manual review marker only and never triggers upload.
 - Artifact QA review queues, note templates, and keyboard shortcuts are productivity controls only. They update QA metadata and show `QA status only changed. No platform upload was executed.` after status changes. See [docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md](docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md).
 - `/artifacts` supports read-only pagination with `page`, `page_size`, filters, and sort controls. Pagination does not update QA state, create worker jobs, or trigger upload. See [docs/ARTIFACT_QA_PAGINATION.md](docs/ARTIFACT_QA_PAGINATION.md).

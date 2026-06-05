@@ -764,6 +764,7 @@ Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`,
 - Use `/candidates` to run dry-run Coupang candidate collection. This creates candidates only.
 - Use `/candidates/analytics` for read-only candidate quality analytics. It summarizes score, duplicate, source trace, risk flag, and linked artifact QA signals; it does not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads.
 - `/api/candidates/analytics` supports read-only date, keyword, category, risk flag, status, score range, collected mode, collector version, sort, and limit filters. Seed Strategy is copy/export-only candidate planning and must not execute collectors, create queue rows, create worker jobs, or trigger uploads.
+- `/api/candidates/seed-plan` and `/candidates/analytics#seed-plan` generate candidate-only dry-run collector payload previews. They are read-only and must keep `candidate_only=true`, `queue_creation_enabled=false`, `worker_job_creation_enabled=false`, `upload_enabled=false`, and `collector_executed=false`.
 - Use `/artifacts` to review generated video, thumbnail, subtitle, and upload package URLs before manual upload.
 - Marking artifact QA as `passed` does not upload to YouTube, TikTok, Threads, or any public channel.
 - `/artifacts` supports `qa_status`, `asset_type`, `missing`, `search`, and `sort` filters plus bulk QA actions.

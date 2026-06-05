@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import type { CandidateAnalyticsResponse, CollectorSeedStrategy } from "@/lib/candidates/candidateAnalytics";
+import type {
+  CandidateAnalyticsResponse,
+  CandidateSeedDryRunPlanResponse,
+  CollectorSeedStrategy
+} from "@/lib/candidates/candidateAnalytics";
 
-export function CandidateAnalyticsDashboard({ analytics }: { analytics: CandidateAnalyticsResponse }) {
+export function CandidateAnalyticsDashboard({
+  analytics,
+  seedPlan
+}: {
+  analytics: CandidateAnalyticsResponse;
+  seedPlan?: CandidateSeedDryRunPlanResponse;
+}) {
   const [copyMessage, setCopyMessage] = useState("");
+  const [seedPlanCopyMessage, setSeedPlanCopyMessage] = useState("");
   const applied = analytics.applied_filters ?? {
     status: "all",
     collected_mode: "all",
@@ -32,6 +43,16 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
   async function copySeedJson() {
     await writeClipboard(JSON.stringify(analytics.seed_strategy ?? {}, null, 2));
     setCopyMessage("Seed strategy is for copy/export only. No collector was executed.");
+  }
+
+  async function copySeedPlanKeywords() {
+    await writeClipboard(seedPlan?.copy_blocks.keyword_list ?? "");
+    setSeedPlanCopyMessage("Keyword list copied. No collector was executed.");
+  }
+
+  async function copySeedPlanJson() {
+    await writeClipboard(seedPlan?.copy_blocks.json_payload ?? "{}");
+    setSeedPlanCopyMessage("Dry-run payload copied. No collector was executed.");
   }
 
   return (
@@ -131,6 +152,14 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
         </div>
       </section>
 
+      <SeedDryRunPlannerPanel
+        plan={seedPlan}
+        appliedFilters={applied}
+        onCopyKeywords={copySeedPlanKeywords}
+        onCopyJson={copySeedPlanJson}
+        copyMessage={seedPlanCopyMessage}
+      />
+
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold text-slate-950">Risk Flag Performance</h2>
@@ -166,6 +195,147 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
         </div>
       </section>
     </div>
+  );
+}
+
+function SeedDryRunPlannerPanel({
+  plan,
+  appliedFilters,
+  onCopyKeywords,
+  onCopyJson,
+  copyMessage
+}: {
+  plan?: CandidateSeedDryRunPlanResponse;
+  appliedFilters: NonNullable<CandidateAnalyticsResponse["applied_filters"]>;
+  onCopyKeywords: () => void;
+  onCopyJson: () => void;
+  copyMessage: string;
+}) {
+  const exportHref = plan
+    ? `data:application/json;charset=utf-8,${encodeURIComponent(plan.copy_blocks.json_payload)}`
+    : "data:application/json;charset=utf-8,%7B%7D";
+  return (
+    <section id="seed-plan" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="text-base font-bold text-slate-950">Seed Dry-run Planner</h2>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Candidate-only dry-run payload preview. This panel never runs collectors, creates queue rows, creates worker jobs, or uploads.
+          </p>
+        </div>
+        <div className="grid gap-1 rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+          <span>candidate_only=true</span>
+          <span>queue_creation_enabled=false</span>
+          <span>worker_job_creation_enabled=false</span>
+        </div>
+      </div>
+
+      <form method="get" action="/candidates/analytics#seed-plan" className="mt-4 grid gap-3 md:grid-cols-4">
+        <HiddenAppliedFilters filters={appliedFilters} />
+        <label className="text-xs font-bold uppercase text-slate-500">
+          Strategy
+          <select
+            name="strategy"
+            defaultValue={plan?.strategy ?? "balanced"}
+            className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-800"
+          >
+            <option value="balanced">balanced</option>
+            <option value="high_score">high_score</option>
+            <option value="low_duplicate">low_duplicate</option>
+            <option value="low_risk">low_risk</option>
+            <option value="discovery">discovery</option>
+          </select>
+        </label>
+        <FilterInput label="Max keywords" name="max_keywords" type="number" value={String(plan?.seed_keywords.length || 10)} />
+        <FilterInput label="Limit per keyword" name="limit_per_keyword" type="number" value={String(plan?.collector_payload_preview.limit_per_keyword ?? 5)} />
+        <div className="flex items-end">
+          <button type="submit" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">
+            Preview plan
+          </button>
+        </div>
+      </form>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <Metric label="Recommended keywords" value={plan?.plan_summary.keyword_count ?? 0} compact />
+        <Metric label="Estimated candidates" value={plan?.plan_summary.estimated_candidate_limit ?? 0} compact />
+        <Metric label="Collector execution" value={String(plan?.plan_summary.collector_execution ?? false)} compact />
+        <Metric label="Upload triggered" value={String(plan?.plan_summary.upload_triggered ?? false)} compact />
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[860px] w-full text-left text-sm">
+          <thead className="bg-slate-100 text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Keyword</th>
+              <th className="px-3 py-2">Action</th>
+              <th className="px-3 py-2">Limit</th>
+              <th className="px-3 py-2">Avg final</th>
+              <th className="px-3 py-2">Duplicate</th>
+              <th className="px-3 py-2">Manual review</th>
+              <th className="px-3 py-2">Rejected</th>
+              <th className="px-3 py-2">Risk notes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {(plan?.seed_keywords ?? []).map((item) => (
+              <tr key={`${item.source}-${item.keyword}`}>
+                <td className="px-3 py-3 font-semibold text-slate-950">{item.keyword}</td>
+                <td className="px-3 py-3">{item.suggested_action}</td>
+                <td className="px-3 py-3">{item.suggested_limit}</td>
+                <td className="px-3 py-3">{item.avg_final_score}</td>
+                <td className="px-3 py-3">{percent(item.duplicate_rate)}</td>
+                <td className="px-3 py-3">{percent(item.manual_review_rate)}</td>
+                <td className="px-3 py-3">{percent(item.rejected_rate)}</td>
+                <td className="px-3 py-3">{item.risk_notes.join(", ") || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(plan?.seed_keywords ?? []).length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No seed keywords match the active filters.</p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">
+          {plan?.copy_blocks.json_payload ?? "{}"}
+        </pre>
+        <div className="space-y-2">
+          <p className="rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">collector_executed=false</p>
+          <p className="rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">queue_creation_enabled=false</p>
+          <p className="rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">worker_job_creation_enabled=false</p>
+          <button type="button" onClick={onCopyKeywords} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
+            Copy keyword list
+          </button>
+          <button type="button" onClick={onCopyJson} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
+            Copy JSON payload
+          </button>
+          <a href={exportHref} download="candidate-seed-dry-run-plan.json" className="block rounded-md border border-slate-200 px-3 py-2 text-center text-sm font-bold text-slate-700 hover:bg-slate-100">
+            Export JSON
+          </a>
+          {copyMessage ? <p className="text-sm font-semibold text-slate-700">{copyMessage}</p> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HiddenAppliedFilters({ filters }: { filters: NonNullable<CandidateAnalyticsResponse["applied_filters"]> }) {
+  return (
+    <>
+      {filters.from ? <input type="hidden" name="from" value={filters.from} /> : null}
+      {filters.to ? <input type="hidden" name="to" value={filters.to} /> : null}
+      {filters.keyword ? <input type="hidden" name="keyword" value={filters.keyword} /> : null}
+      {filters.category ? <input type="hidden" name="category" value={filters.category} /> : null}
+      {filters.risk_flag ? <input type="hidden" name="risk_flag" value={filters.risk_flag} /> : null}
+      {filters.status !== "all" ? <input type="hidden" name="status" value={filters.status} /> : null}
+      {filters.min_score !== undefined ? <input type="hidden" name="min_score" value={String(filters.min_score)} /> : null}
+      {filters.max_score !== undefined ? <input type="hidden" name="max_score" value={String(filters.max_score)} /> : null}
+      {filters.collected_mode !== "all" ? <input type="hidden" name="collected_mode" value={filters.collected_mode} /> : null}
+      {filters.collector_version ? <input type="hidden" name="collector_version" value={filters.collector_version} /> : null}
+      <input type="hidden" name="sort" value={filters.sort} />
+      <input type="hidden" name="limit" value={String(filters.limit)} />
+    </>
   );
 }
 

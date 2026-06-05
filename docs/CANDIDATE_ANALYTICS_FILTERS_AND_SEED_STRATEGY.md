@@ -48,3 +48,19 @@ Seed strategy is candidate-only guidance. It groups keywords into:
 - `risk_flags_to_watch`
 
 Copy/export controls are allowed. Run-collector, auto-collect, promote, queue creation, worker dispatch, and upload actions are not part of this workflow.
+
+## Seed Dry-run Planner
+
+`GET /api/candidates/seed-plan` and `/candidates/analytics#seed-plan` use the same analytics filters to build a candidate-only dry-run collector payload preview.
+
+The planner supports `balanced`, `high_score`, `low_duplicate`, `low_risk`, and `discovery` strategies. It clamps `max_keywords` to `30` and `limit_per_keyword` to `20`.
+
+Planner output includes a keyword list, JSON payload preview, copy controls, and export JSON. It must always keep:
+
+- `candidate_only=true`
+- `queue_creation_enabled=false`
+- `worker_job_creation_enabled=false`
+- `upload_enabled=false`
+- `collector_executed=false`
+
+The planner is not a collector executor and is not a production smoke path. See `docs/CANDIDATE_SEED_DRY_RUN_PLANNER.md`.

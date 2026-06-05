@@ -1,5 +1,10 @@
 import { CandidateAnalyticsDashboard } from "@/components/CandidateAnalyticsDashboard";
-import { buildCandidateAnalytics, type CandidateAnalyticsFilters } from "@/lib/candidates/candidateAnalytics";
+import {
+  buildCandidateAnalytics,
+  buildCandidateSeedDryRunPlan,
+  type CandidateAnalyticsFilters,
+  type CandidateSeedPlanOptions
+} from "@/lib/candidates/candidateAnalytics";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +15,8 @@ export default async function CandidateAnalyticsPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const analytics = await buildCandidateAnalytics(getAutomationRepository(), {
+  const repository = getAutomationRepository();
+  const filters: CandidateAnalyticsFilters = {
     from: param(params, "from"),
     to: param(params, "to"),
     keyword: param(params, "keyword"),
@@ -23,8 +29,20 @@ export default async function CandidateAnalyticsPage({
     collector_version: param(params, "collector_version"),
     sort: param(params, "sort") as CandidateAnalyticsFilters["sort"],
     limit: numberParam(params, "limit")
-  });
-  return <CandidateAnalyticsDashboard analytics={analytics} />;
+  };
+  const [analytics, seedPlan] = await Promise.all([
+    buildCandidateAnalytics(repository, filters),
+    buildCandidateSeedDryRunPlan(repository, filters, {
+      strategy: param(params, "strategy") as CandidateSeedPlanOptions["strategy"],
+      max_keywords: numberParam(params, "max_keywords"),
+      limit_per_keyword: numberParam(params, "limit_per_keyword"),
+      include_keep: booleanParam(params, "include_keep"),
+      include_expand: booleanParam(params, "include_expand"),
+      include_review: booleanParam(params, "include_review"),
+      include_avoid: booleanParam(params, "include_avoid")
+    })
+  ]);
+  return <CandidateAnalyticsDashboard analytics={analytics} seedPlan={seedPlan} />;
 }
 
 function param(params: Record<string, string | string[] | undefined> | undefined, key: string) {
@@ -39,4 +57,15 @@ function numberParam(params: Record<string, string | string[] | undefined> | und
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function booleanParam(params: Record<string, string | string[] | undefined> | undefined, key: string) {
+  const value = param(params, key);
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return undefined;
 }
