@@ -241,6 +241,9 @@ python -m compileall python-worker
 - `POST /api/artifacts/[id]/qa` updates QA status without creating worker jobs or triggering upload.
 - Collector responses must also show `upload_triggered=false`.
 - `GET /api/artifacts` filters by QA status, asset type, missing artifact type, search text, and sort order.
+- `GET /api/candidates/analytics` returns `applied_filters`, `available_filters`, and read-only side-effect booleans.
+- Candidate Seed Strategy returns keep/expand/review/avoid groups and copy/export controls only. It must not execute collectors or create queue/job/upload side effects.
+- `GET /api/artifacts` returns pagination metadata, clamps `page_size` to `100`, preserves filters, and must not update QA/upload/worker state.
 - `POST /api/artifacts/bulk-qa` updates selected artifact QA fields only and returns `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
 - Artifact QA review queues and keyboard shortcuts update QA status only and must show `QA status only changed. No platform upload was executed.`
 - Client components must not reference service role keys, R2 secrets, worker secrets, Coupang secrets, or Authorization headers.

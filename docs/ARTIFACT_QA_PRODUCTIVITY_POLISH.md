@@ -40,6 +40,8 @@ Artifact QA must not:
 - call YouTube, TikTok, Threads, or any public upload API
 - expose service role keys, storage secrets, worker secrets, or Authorization headers
 
+Pagination is a read-only extension of this workflow. It may change the visible page, page size, filters, and sort order, but it must not update QA status or trigger worker/upload side effects.
+
 Mutation responses and UI messages must make this explicit:
 
 ```text

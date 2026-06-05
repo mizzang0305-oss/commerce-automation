@@ -7,24 +7,65 @@ export type CandidateAnalyticsFilters = {
   risk_flag?: string;
   status?: string;
   min_score?: number;
+  max_score?: number;
   from?: string;
   to?: string;
+  collected_mode?: string;
+  collector_version?: string;
+  sort?: CandidateAnalyticsSort;
+  limit?: number;
+};
+
+export type CandidateAnalyticsSort =
+  | "newest"
+  | "oldest"
+  | "final_score_desc"
+  | "final_score_asc"
+  | "duplicate_rate_desc"
+  | "risk_rate_desc";
+
+export type AppliedCandidateAnalyticsFilters = {
+  from?: string;
+  to?: string;
+  keyword?: string;
+  category?: string;
+  risk_flag?: string;
+  status: string;
+  min_score?: number;
+  max_score?: number;
+  collected_mode: string;
+  collector_version?: string;
+  sort: CandidateAnalyticsSort;
+  limit: number;
 };
 
 export type CandidateAnalyticsResponse = {
   ok: true;
   filters: CandidateAnalyticsFilters;
+  applied_filters?: AppliedCandidateAnalyticsFilters;
+  available_filters?: CandidateAnalyticsAvailableFilters;
   summary: CandidateAnalyticsSummary;
   score_summary: CandidateScoreSummary;
   keyword_performance: KeywordPerformance[];
   risk_flag_performance: RiskFlagPerformance[];
   source_trace_summary: SourceTraceSummary[];
   recommendations: CandidateAnalyticsRecommendation[];
+  seed_strategy?: CollectorSeedStrategy;
   side_effects: {
     queue_created: false;
     worker_jobs_created: false;
     upload_triggered: false;
+    collector_executed?: false;
   };
+};
+
+export type CandidateAnalyticsAvailableFilters = {
+  keywords: string[];
+  categories: string[];
+  risk_flags: string[];
+  statuses: string[];
+  collected_modes: string[];
+  collector_versions: string[];
 };
 
 export interface CandidateAnalyticsSummary {
@@ -77,6 +118,38 @@ export interface CandidateAnalyticsRecommendation {
   suggested_action: string;
 }
 
+export interface CollectorSeedStrategy {
+  keep_keywords: SeedKeywordRecommendation[];
+  expand_keywords: SeedKeywordRecommendation[];
+  review_keywords: SeedKeywordRecommendation[];
+  avoid_keywords: SeedKeywordRecommendation[];
+  risk_flags_to_watch: RiskFlagRecommendation[];
+  generated_at: string;
+  side_effects: {
+    collector_executed: false;
+    queue_created: false;
+    worker_jobs_created: false;
+    upload_triggered: false;
+  };
+}
+
+export interface SeedKeywordRecommendation {
+  keyword: string;
+  reason: string;
+  avg_final_score: number;
+  duplicate_rate: number;
+  manual_review_rate: number;
+  rejected_rate: number;
+  suggested_action: "keep" | "expand" | "review" | "avoid";
+}
+
+export interface RiskFlagRecommendation {
+  risk_flag: string;
+  reason: string;
+  candidate_count: number;
+  suggested_action: "watch";
+}
+
 export async function buildCandidateAnalytics(
   repository: AutomationRepository,
   filters: CandidateAnalyticsFilters = {}
@@ -85,7 +158,9 @@ export async function buildCandidateAnalytics(
     repository.getProductCandidates(),
     repository.getProductAssets()
   ]);
-  const candidates = allCandidates.filter((candidate) => matchesFilters(candidate, filters));
+  const appliedFilters = normalizeCandidateAnalyticsFilters(filters);
+  const candidates = sortCandidates(allCandidates.filter((candidate) => matchesFilters(candidate, appliedFilters)), appliedFilters)
+    .slice(0, appliedFilters.limit);
   const queueAssetGroups = groupAssetsByQueueId(assets);
   const summary = summarizeCandidates(candidates);
   const scoreSummary = summarizeScores(candidates);
@@ -96,40 +171,85 @@ export async function buildCandidateAnalytics(
   return {
     ok: true,
     filters,
+    applied_filters: appliedFilters,
+    available_filters: buildAvailableFilters(allCandidates),
     summary,
     score_summary: scoreSummary,
     keyword_performance: keywordPerformance,
     risk_flag_performance: riskFlagPerformance,
     source_trace_summary: sourceTraceSummary,
     recommendations: buildRecommendations(keywordPerformance, riskFlagPerformance),
+    seed_strategy: buildCollectorSeedStrategy(keywordPerformance, riskFlagPerformance),
     side_effects: {
       queue_created: false,
       worker_jobs_created: false,
-      upload_triggered: false
+      upload_triggered: false,
+      collector_executed: false
     }
   };
 }
 
-function matchesFilters(candidate: ProductCandidate, filters: CandidateAnalyticsFilters) {
+export function normalizeCandidateAnalyticsFilters(filters: CandidateAnalyticsFilters = {}): AppliedCandidateAnalyticsFilters {
+  const minScore = clampScore(filters.min_score);
+  const maxScore = clampScore(filters.max_score);
+  return {
+    from: validDate(filters.from) ? filters.from : undefined,
+    to: validDate(filters.to) ? filters.to : undefined,
+    keyword: filters.keyword?.trim() || undefined,
+    category: filters.category?.trim() || undefined,
+    risk_flag: filters.risk_flag?.trim() && filters.risk_flag !== "all" ? filters.risk_flag.trim() : undefined,
+    status: filters.status?.trim() || "all",
+    min_score: minScore,
+    max_score: maxScore,
+    collected_mode: filters.collected_mode?.trim() || "all",
+    collector_version: filters.collector_version?.trim() || undefined,
+    sort: normalizeAnalyticsSort(filters.sort),
+    limit: clampLimit(filters.limit)
+  };
+}
+
+export function validateCandidateAnalyticsFilters(filters: AppliedCandidateAnalyticsFilters) {
+  if (filters.min_score !== undefined && filters.max_score !== undefined && filters.min_score > filters.max_score) {
+    return {
+      ok: false as const,
+      status: 400,
+      error_code: "INVALID_SCORE_RANGE",
+      message: "Candidate score filter range is invalid.",
+      safe_error: "min_score must be less than or equal to max_score."
+    };
+  }
+  return { ok: true as const };
+}
+
+function matchesFilters(candidate: ProductCandidate, filters: AppliedCandidateAnalyticsFilters) {
   if (filters.from && candidate.created_at < `${filters.from}T00:00:00.000Z`) {
     return false;
   }
   if (filters.to && candidate.created_at > `${filters.to}T23:59:59.999Z`) {
     return false;
   }
-  if (filters.keyword && sourceKeyword(candidate).toLowerCase() !== filters.keyword.toLowerCase()) {
+  if (filters.keyword && !sourceKeyword(candidate).toLowerCase().includes(filters.keyword.toLowerCase())) {
     return false;
   }
-  if (filters.category && categoryOf(candidate).toLowerCase() !== filters.category.toLowerCase()) {
+  if (filters.category && !categoryOf(candidate).toLowerCase().includes(filters.category.toLowerCase())) {
     return false;
   }
   if (filters.risk_flag && !riskFlags(candidate).includes(filters.risk_flag)) {
     return false;
   }
-  if (filters.status && candidateStatus(candidate) !== filters.status) {
+  if (filters.status !== "all" && candidateStatus(candidate) !== filters.status) {
     return false;
   }
   if (filters.min_score !== undefined && finalScore(candidate) < filters.min_score) {
+    return false;
+  }
+  if (filters.max_score !== undefined && finalScore(candidate) > filters.max_score) {
+    return false;
+  }
+  if (filters.collected_mode !== "all" && collectedMode(candidate) !== filters.collected_mode) {
+    return false;
+  }
+  if (filters.collector_version && collectorVersion(candidate) !== filters.collector_version) {
     return false;
   }
   return true;
@@ -244,6 +364,98 @@ function buildRecommendations(
   return recommendations;
 }
 
+function buildCollectorSeedStrategy(
+  keywordPerformance: KeywordPerformance[],
+  riskFlagPerformance: RiskFlagPerformance[]
+): CollectorSeedStrategy {
+  const keep: SeedKeywordRecommendation[] = [];
+  const expand: SeedKeywordRecommendation[] = [];
+  const review: SeedKeywordRecommendation[] = [];
+  const avoid: SeedKeywordRecommendation[] = [];
+
+  for (const item of keywordPerformance) {
+    const base = {
+      keyword: item.source_keyword,
+      avg_final_score: item.avg_final_score,
+      duplicate_rate: item.duplicate_rate,
+      manual_review_rate: item.manual_review_rate,
+      rejected_rate: item.rejected_rate
+    };
+    if (item.avg_final_score >= 75 && item.duplicate_rate <= 0.2 && item.rejected_rate <= 0.2) {
+      keep.push({
+        ...base,
+        reason: "Strong average score with low duplicate and rejection rates.",
+        suggested_action: "keep"
+      });
+    }
+    if (item.avg_final_score >= 80 && item.candidate_count <= 2 && item.duplicate_rate <= 0.2 && item.rejected_rate <= 0.2) {
+      expand.push({
+        ...base,
+        reason: "Strong score with limited sample count; consider adding related candidate-only seed terms.",
+        suggested_action: "expand"
+      });
+    } else if (item.rejected_rate >= 0.5 || item.duplicate_rate >= 0.5) {
+      avoid.push({
+        ...base,
+        reason: "High duplicate or rejection rate; avoid as a near-term collector seed.",
+        suggested_action: "avoid"
+      });
+    } else if (item.manual_review_rate > 0 || item.avg_final_score < 60) {
+      review.push({
+        ...base,
+        reason: "Manual review or lower score suggests operator review before reuse.",
+        suggested_action: "review"
+      });
+    }
+  }
+
+  return {
+    keep_keywords: keep,
+    expand_keywords: expand,
+    review_keywords: review,
+    avoid_keywords: avoid,
+    risk_flags_to_watch: riskFlagPerformance.map((item) => ({
+      risk_flag: item.risk_flag,
+      candidate_count: item.candidate_count,
+      reason: "Risk flag appears in filtered candidate analytics.",
+      suggested_action: "watch"
+    })),
+    generated_at: new Date().toISOString(),
+    side_effects: {
+      collector_executed: false,
+      queue_created: false,
+      worker_jobs_created: false,
+      upload_triggered: false
+    }
+  };
+}
+
+function buildAvailableFilters(candidates: ProductCandidate[]): CandidateAnalyticsAvailableFilters {
+  return {
+    keywords: uniqueSorted(candidates.map(sourceKeyword)),
+    categories: uniqueSorted(candidates.map(categoryOf)),
+    risk_flags: uniqueSorted(candidates.flatMap(riskFlags)),
+    statuses: uniqueSorted(candidates.map(candidateStatus)),
+    collected_modes: uniqueSorted(candidates.map(collectedMode)),
+    collector_versions: uniqueSorted(candidates.map(collectorVersion))
+  };
+}
+
+function sortCandidates(candidates: ProductCandidate[], filters: AppliedCandidateAnalyticsFilters) {
+  return [...candidates].sort((left, right) => {
+    if (filters.sort === "oldest") {
+      return left.created_at.localeCompare(right.created_at);
+    }
+    if (filters.sort === "final_score_asc") {
+      return finalScore(left) - finalScore(right);
+    }
+    if (filters.sort === "final_score_desc") {
+      return finalScore(right) - finalScore(left);
+    }
+    return right.created_at.localeCompare(left.created_at);
+  });
+}
+
 function keywordQaPassRate(candidates: ProductCandidate[], queueAssetGroups: Map<string, ProductAsset[]>) {
   const linkedAssets = candidates
     .flatMap((candidate) => {
@@ -283,6 +495,11 @@ function collectedMode(candidate: ProductCandidate) {
 function collectedAt(candidate: ProductCandidate) {
   const trace = recordValue(candidate.payload.source_trace);
   return stringValue(trace.collected_at) || candidate.created_at;
+}
+
+function collectorVersion(candidate: ProductCandidate) {
+  const trace = recordValue(candidate.payload.source_trace);
+  return stringValue(trace.collector_version) || stringValue(candidate.payload.collector_version) || "unknown";
 }
 
 function categoryOf(candidate: ProductCandidate) {
@@ -347,4 +564,36 @@ function rate(count: number, total: number) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function clampScore(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.min(100, Math.max(0, value));
+}
+
+function clampLimit(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 50;
+  }
+  return Math.min(200, Math.max(1, Math.floor(value)));
+}
+
+function normalizeAnalyticsSort(value: unknown): CandidateAnalyticsSort {
+  return value === "newest" ||
+    value === "oldest" ||
+    value === "final_score_asc" ||
+    value === "duplicate_rate_desc" ||
+    value === "risk_rate_desc"
+    ? value
+    : "final_score_desc";
+}
+
+function validDate(value: string | undefined) {
+  return !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }

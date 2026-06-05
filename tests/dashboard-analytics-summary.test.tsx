@@ -39,7 +39,9 @@ describe("dashboard analytics summary", () => {
           top_keyword: "storage",
           avg_final_score: 74,
           duplicate_rate: 0.25,
-          risk_heavy_keywords: ["fragile"]
+          risk_heavy_keywords: ["fragile"],
+          active_filter_count: 2,
+          seed_strategy_generated_at: "2026-06-05T00:00:00.000Z"
         }}
         artifactQaSummary={{
           total: 4,
@@ -65,6 +67,8 @@ describe("dashboard analytics summary", () => {
     expect(screen.getByText("Artifact QA Productivity Summary")).toBeInTheDocument();
     expect(screen.getByText("Top keyword")).toBeInTheDocument();
     expect(screen.getByText("storage")).toBeInTheDocument();
+    expect(screen.getByText("Active filters")).toBeInTheDocument();
+    expect(screen.getByText("Seed generated")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /deploy/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /upload/i })).not.toBeInTheDocument();
   });

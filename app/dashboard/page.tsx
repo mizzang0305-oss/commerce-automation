@@ -51,7 +51,11 @@ export default async function DashboardPage() {
           candidateAnalytics.summary.total_candidates === 0
             ? 0
             : candidateAnalytics.summary.duplicate / candidateAnalytics.summary.total_candidates,
-        risk_heavy_keywords: candidateAnalytics.risk_flag_performance.slice(0, 3).map((item) => item.risk_flag)
+        risk_heavy_keywords: candidateAnalytics.risk_flag_performance.slice(0, 3).map((item) => item.risk_flag),
+        active_filter_count: Object.entries(candidateAnalytics.applied_filters ?? {}).filter(
+          ([key, value]) => value !== undefined && value !== "" && key !== "limit" && key !== "sort" && key !== "status" && key !== "collected_mode"
+        ).length,
+        seed_strategy_generated_at: candidateAnalytics.seed_strategy?.generated_at ?? ""
       }}
       artifactQaSummary={artifactQa.summary}
       artifactQaProductivitySummary={{

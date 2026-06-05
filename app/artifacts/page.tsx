@@ -15,7 +15,7 @@ export default async function ArtifactsPage() {
           Review generated videos, thumbnails, subtitles, and upload packages before manual channel upload. QA actions do not trigger platform uploads.
         </p>
       </div>
-      <ArtifactQaClient artifacts={result.artifacts} summary={result.summary} />
+      <ArtifactQaClient artifacts={result.artifacts} summary={result.summary} pagination={result.pagination} />
     </div>
   );
 }
