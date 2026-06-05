@@ -85,7 +85,7 @@ export async function buildCandidateOnlySeedExecution(
   if (!confirmationMatched) {
     return errorResponse(
       "CANDIDATE_ONLY_CONFIRMATION_REQUIRED",
-      "Candidate-only 수집 실행 확인 문구가 필요합니다.",
+      "Candidate-only execution confirmation is required.",
       "confirmation must equal EXECUTE_CANDIDATE_ONLY_COLLECTOR.",
       input,
       400
@@ -94,7 +94,7 @@ export async function buildCandidateOnlySeedExecution(
   if (!hasSafeFlags(input)) {
     return errorResponse(
       "CANDIDATE_ONLY_SAFETY_FLAGS_REQUIRED",
-      "Candidate-only 안전 플래그가 필요합니다.",
+      "Candidate-only safety flags are required.",
       "candidate_only must be true and queue, worker, render, package, upload flags must be false.",
       input,
       400
@@ -105,7 +105,7 @@ export async function buildCandidateOnlySeedExecution(
   if (keywords.length === 0) {
     return errorResponse(
       "CANDIDATE_ONLY_KEYWORDS_REQUIRED",
-      "실행할 seed keyword가 필요합니다.",
+      "At least one seed keyword is required.",
       "keywords must include at least one non-empty keyword.",
       input,
       400
@@ -129,6 +129,7 @@ export async function buildCandidateOnlySeedExecution(
     const saved = newCandidates.length > 0
       ? await repository.upsertProductCandidates(newCandidates)
       : [];
+
     return {
       ok: true,
       status: 200,
@@ -159,7 +160,7 @@ export async function buildCandidateOnlySeedExecution(
     });
     return errorResponse(
       "CANDIDATE_ONLY_EXECUTION_FAILED",
-      "Candidate-only 수집 실행 중 오류가 발생했습니다.",
+      "Candidate-only execution failed.",
       "candidate-only execution failed without creating queue, worker, render, package, or upload side effects.",
       input,
       500
