@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { buildCoupangCandidate } from "@/lib/coupang/coupangCandidateImport";
 import type { AutomationRepository } from "@/lib/repositories/types";
+import {
+  CANDIDATE_ONLY_EXECUTION_CONFIRMATION,
+  candidateOnlySeedExecutionSchema
+} from "@/lib/validation/operatorFormSchemas";
 import type { ProductCandidate } from "@/types/automation";
-
-const CONFIRMATION = "EXECUTE_CANDIDATE_ONLY_COLLECTOR";
 
 type CandidateOnlySeedExecutionInput = {
   confirmation?: unknown;
@@ -81,7 +83,7 @@ export async function buildCandidateOnlySeedExecution(
   rawInput: unknown
 ): Promise<CandidateOnlySeedExecutionResponse> {
   const input = toInput(rawInput);
-  const confirmationMatched = text(input.confirmation) === CONFIRMATION;
+  const confirmationMatched = text(input.confirmation) === CANDIDATE_ONLY_EXECUTION_CONFIRMATION;
   if (!confirmationMatched) {
     return errorResponse(
       "CANDIDATE_ONLY_CONFIRMATION_REQUIRED",
@@ -101,7 +103,8 @@ export async function buildCandidateOnlySeedExecution(
     );
   }
 
-  const keywords = normalizeKeywords(input.keywords);
+  const parsed = candidateOnlySeedExecutionSchema.safeParse(input);
+  const keywords = parsed.success ? parsed.data.keywords : normalizeKeywords(input.keywords);
   if (keywords.length === 0) {
     return errorResponse(
       "CANDIDATE_ONLY_KEYWORDS_REQUIRED",
@@ -220,16 +223,11 @@ function buildSeedCandidates(input: {
 }
 
 function hasSafeFlags(input: CandidateOnlySeedExecutionInput) {
-  return (
-    text(input.mode) === "candidate_only" &&
-    input.dry_run === true &&
-    input.candidate_only === true &&
-    input.queue_creation_enabled === false &&
-    input.worker_job_creation_enabled === false &&
-    input.render_plan_creation_enabled === false &&
-    input.upload_package_creation_enabled === false &&
-    input.upload_enabled === false
-  );
+  const parsed = candidateOnlySeedExecutionSchema.safeParse({
+    ...input,
+    keywords: Array.isArray(input.keywords) && input.keywords.length > 0 ? input.keywords : ["validation-placeholder"]
+  });
+  return parsed.success;
 }
 
 function normalizeKeywords(value: unknown) {
@@ -264,7 +262,7 @@ function errorResponse(
     safety: {
       candidate_only: input.candidate_only === true,
       confirmation_required: true,
-      confirmation_matched: text(input.confirmation) === CONFIRMATION
+      confirmation_matched: text(input.confirmation) === CANDIDATE_ONLY_EXECUTION_CONFIRMATION
     }
   };
 }

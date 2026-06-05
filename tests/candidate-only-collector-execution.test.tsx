@@ -157,6 +157,15 @@ describe("candidate-only collector execution gate", () => {
 
     fireEvent.click(screen.getByLabelText("I understand this creates candidates only."));
     fireEvent.change(screen.getByLabelText("Confirmation text"), {
+      target: { value: "RUN" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Enter EXECUTE_CANDIDATE_ONLY_COLLECTOR to enable candidate-only execution.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Candidate-only 수집 실행" })).toBeDisabled();
+    });
+
+    fireEvent.change(screen.getByLabelText("Confirmation text"), {
       target: { value: "EXECUTE_CANDIDATE_ONLY_COLLECTOR" }
     });
 
