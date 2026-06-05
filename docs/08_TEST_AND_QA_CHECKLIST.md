@@ -56,6 +56,16 @@ python -m compileall python-worker
 - `python-worker/.env` is not committed.
 - `python-worker/.venv`, `python-worker/outputs`, `python-worker/temp`, and worker logs are not committed.
 
+## Operator Command Palette QA
+
+- `Ctrl+K` and `Cmd+K` open the command palette.
+- `Esc` closes the command palette.
+- Navigation commands route only to admin pages.
+- Safe copy commands copy text only and never execute shell commands.
+- Copied snippets contain no service-role keys, storage keys, provider keys, Coupang keys, worker secrets, or Authorization headers.
+- The palette does not include deploy, database write, worker execution, collector execution, platform upload, queue creation, worker job creation, render plan creation, or upload package creation commands.
+- Artifact QA shortcuts are ignored while the command palette input is focused.
+
 ## Repository Adapter QA
 
 - Default repository adapter remains `local-json`.

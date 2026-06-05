@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OperatorCommandPalette } from "@/components/OperatorCommandPalette";
 
 export function Topbar() {
   return (
@@ -8,10 +9,11 @@ export function Topbar() {
           Commerce Automation
         </Link>
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-1">독립 관리자 웹앱</span>
-          <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-700">n8n 관제실</span>
-          <span className="rounded-full bg-orange-50 px-3 py-1 text-orange-700">자동 공개 업로드 기본 비활성</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1">Operator console</span>
+          <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-700">In-house worker flow</span>
+          <span className="rounded-full bg-orange-50 px-3 py-1 text-orange-700">Public upload disabled</span>
         </div>
+        <OperatorCommandPalette />
       </div>
     </header>
   );

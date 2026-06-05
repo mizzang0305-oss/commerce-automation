@@ -218,6 +218,25 @@ Recommended PR order:
    - Track manual_ready, uploaded, and needs_fix package counts by channel.
    - Keep upload URLs and result tracking manual-only.
 9. PR #45. Content quality review queue
+
+## v2.2 Operator UX Safety Tools
+
+The operator UX layer improves speed without adding execution side effects.
+
+Included:
+
+- `cmdk` command palette for admin navigation.
+- Copy-only validation command snippets.
+- Read-only safety reminders.
+- Keyboard access through `Ctrl+K` and `Cmd+K`.
+
+Not included:
+
+- Python Worker process launch from WebApp.
+- Production deploy execution.
+- Supabase db push, migrations, SQL writes, or database write smoke.
+- Collector execution, queue creation, worker job creation, render plan creation, or upload package creation.
+- YouTube/TikTok/Threads upload APIs, OAuth token storage, or public upload enablement.
    - Add checklist review for titles, scripts, hashtags, affiliate disclosure, and blocked claims.
    - Compare template and future provider outputs without enabling uploads.
 10. PR #46. YouTube channel readiness only

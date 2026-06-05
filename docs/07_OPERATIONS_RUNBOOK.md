@@ -9,6 +9,12 @@ npm run dev
 
 Open `http://localhost:3000` or the configured dev URL.
 
+## Operator Command Palette
+
+Open the command palette with `Ctrl+K` or `Cmd+K` in the admin app. It is a navigation and safe-copy tool only. It can copy validation snippets such as `npm run test`, `npm run build`, `npm run check:production-env`, and Python Worker unittest commands, but it never executes them.
+
+The palette must not start Python Worker, run deploys, run database writes, run collectors, create queue rows, create worker jobs, create render plans, create upload packages, or trigger platform uploads. It must not display or copy `.env.local`, `python-worker/.env`, service-role keys, R2/S3 keys, API keys, or Authorization headers. See `docs/OPERATOR_COMMAND_PALETTE.md`.
+
 ## PowerShell UTF-8 Console
 
 If Korean text from local API responses appears corrupted in Windows PowerShell, configure the current shell for UTF-8:
