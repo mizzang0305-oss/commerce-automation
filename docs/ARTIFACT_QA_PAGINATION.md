@@ -38,3 +38,18 @@ The API response includes:
 - `qa_status`, `asset_type`, `missing`, `search`: existing Artifact QA filters.
 
 Changing a filter or search resets `page` to `1` in the UI. Previous/Next controls preserve the active filters.
+
+## Large-Volume Table Boundary
+
+The `/artifacts` table renders a bounded page-sized window only. Even if an upstream repository or API bug returns more
+rows than the requested `page_size`, the client caps the rendered rows at `100` and shows `Large-list optimized view active`.
+
+Selection is page-scoped:
+
+- Select all applies only to the currently rendered page window.
+- Changing page, page size, filters, search, sort, or review queue clears the current selection.
+- Keyboard navigation (`j`/`k`) and row selection (`x`) stay inside the rendered page window.
+- `Esc` clears the current selection and leaves search.
+
+Virtualization, pagination, selection, and keyboard navigation are view controls only. They must not update QA state,
+create worker jobs, create upload packages, alter queue upload/post status, or trigger platform upload.

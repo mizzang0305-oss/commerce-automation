@@ -73,6 +73,8 @@ const REVIEW_QUEUES: Array<{ label: string; filters: Partial<ArtifactFilters> }>
   { label: "Rejected", filters: { qa_status: "rejected", missing: "all" } }
 ];
 
+const MAX_RENDERED_ARTIFACT_ROWS = 100;
+
 export function ArtifactQaClient({
   artifacts,
   summary,
@@ -93,6 +95,7 @@ export function ArtifactQaClient({
   const [bulkNote, setBulkNote] = useState("");
   const [bulkStatus, setBulkStatus] = useState<ArtifactQaStatus>("passed");
   const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<ArtifactFilters>({
     qa_status: "all",
     asset_type: "all",
@@ -104,10 +107,16 @@ export function ArtifactQaClient({
   });
   const searchRef = useRef<HTMLInputElement>(null);
   const searchFocusedRef = useRef(false);
-  const selected = useMemo(
-    () => visibleArtifacts.find((artifact) => artifact.id === selectedId) ?? visibleArtifacts[0] ?? null,
-    [visibleArtifacts, selectedId]
+  const renderedArtifacts = useMemo(
+    () => visibleArtifacts.slice(0, Math.min(visiblePagination.page_size, MAX_RENDERED_ARTIFACT_ROWS)),
+    [visibleArtifacts, visiblePagination.page_size]
   );
+  const selected = useMemo(
+    () => renderedArtifacts.find((artifact) => artifact.id === selectedId) ?? renderedArtifacts[0] ?? null,
+    [renderedArtifacts, selectedId]
+  );
+  const largeListOptimized =
+    visiblePagination.total_items > renderedArtifacts.length || visibleArtifacts.length > renderedArtifacts.length;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -166,6 +175,7 @@ export function ArtifactQaClient({
   });
 
   async function reloadArtifacts(signal?: AbortSignal) {
+    setIsLoading(true);
     try {
       const params = new URLSearchParams(filters);
       const response = await fetch(`/api/artifacts?${params.toString()}`, { signal });
@@ -178,7 +188,7 @@ export function ArtifactQaClient({
       setVisibleArtifacts(nextArtifacts);
       setVisibleSummary(payload.summary ?? summary);
       setVisiblePagination(payload.pagination ?? visiblePagination);
-      setSelectedIds((current) => current.filter((id) => nextArtifacts.some((artifact) => artifact.id === id)));
+      setSelectedIds([]);
       if (!nextArtifacts.some((artifact) => artifact.id === selectedId)) {
         setSelectedId(nextArtifacts[0]?.id ?? "");
       }
@@ -186,6 +196,8 @@ export function ArtifactQaClient({
       if ((error as Error).name !== "AbortError") {
         setMessage("Artifact list could not be loaded.");
       }
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -235,19 +247,22 @@ export function ArtifactQaClient({
 
   function toggleAllVisible() {
     setSelectedIds((current) =>
-      current.length === visibleArtifacts.length ? [] : visibleArtifacts.map((artifact) => artifact.id)
+      current.length === renderedArtifacts.length ? [] : renderedArtifacts.map((artifact) => artifact.id)
     );
   }
 
   function updateFilter(key: keyof ArtifactFilters, value: string) {
+    setSelectedIds([]);
     setFilters((current) => ({ ...current, [key]: value, page: key === "page" ? value : "1" }));
   }
 
   function applyReviewQueue(nextFilters: Partial<ArtifactFilters>) {
+    setSelectedIds([]);
     setFilters((current) => ({ ...current, ...nextFilters, page: "1" }));
   }
 
   function movePage(direction: 1 | -1) {
+    setSelectedIds([]);
     setFilters((current) => ({
       ...current,
       page: String(Math.max(1, Number(current.page || "1") + direction))
@@ -255,12 +270,12 @@ export function ArtifactQaClient({
   }
 
   function moveSelected(direction: 1 | -1) {
-    if (visibleArtifacts.length === 0) {
+    if (renderedArtifacts.length === 0) {
       return;
     }
-    const currentIndex = Math.max(0, visibleArtifacts.findIndex((artifact) => artifact.id === selected?.id));
-    const nextIndex = Math.min(visibleArtifacts.length - 1, Math.max(0, currentIndex + direction));
-    setSelectedId(visibleArtifacts[nextIndex]?.id ?? "");
+    const currentIndex = Math.max(0, renderedArtifacts.findIndex((artifact) => artifact.id === selected?.id));
+    const nextIndex = Math.min(renderedArtifacts.length - 1, Math.max(0, currentIndex + direction));
+    setSelectedId(renderedArtifacts[nextIndex]?.id ?? "");
   }
 
   return (
@@ -322,8 +337,15 @@ export function ArtifactQaClient({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm">
-          <div className="font-semibold text-slate-700">
-            Page {visiblePagination.page} / {visiblePagination.total_pages} · {visiblePagination.total_items} artifacts
+          <div className="space-y-1 font-semibold text-slate-700">
+            <div>
+              Page {visiblePagination.page} / {visiblePagination.total_pages} - {visiblePagination.total_items} artifacts - showing{" "}
+              {renderedArtifacts.length}
+            </div>
+            {largeListOptimized ? (
+              <div className="text-xs font-bold text-teal-700">Large-list optimized view active</div>
+            ) : null}
+            {isLoading ? <div className="text-xs font-bold text-slate-500">Loading artifacts...</div> : null}
           </div>
           <div className="flex items-center gap-2">
             <FilterSelect label="Page size" value={filters.page_size} onChange={(value) => updateFilter("page_size", value)} options={["10", "25", "50", "100"]} />
@@ -404,7 +426,7 @@ export function ArtifactQaClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visibleArtifacts.map((artifact) => (
+              {renderedArtifacts.map((artifact) => (
                 <tr key={artifact.id} className={artifact.id === selected?.id ? "bg-teal-50" : "bg-white"}>
                   <td className="px-4 py-4">
                     <input
@@ -434,7 +456,7 @@ export function ArtifactQaClient({
                   <td className="px-4 py-4 text-xs text-slate-500">{artifact.product_queue_id}</td>
                 </tr>
               ))}
-              {visibleArtifacts.length === 0 ? (
+              {renderedArtifacts.length === 0 ? (
                 <tr>
                   <td className="px-4 py-8 text-sm text-slate-500" colSpan={5}>
                     No artifacts match the current filters.

@@ -42,6 +42,9 @@ Artifact QA must not:
 
 Pagination is a read-only extension of this workflow. It may change the visible page, page size, filters, and sort order, but it must not update QA status or trigger worker/upload side effects.
 
+Large-list table optimization is also read-only. The UI caps rendered rows to the current page window, clears selection
+when the operator changes page/filter/sort/page size, and keeps keyboard selection inside the visible page.
+
 Mutation responses and UI messages must make this explicit:
 
 ```text
