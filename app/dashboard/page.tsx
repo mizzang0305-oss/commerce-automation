@@ -1,6 +1,6 @@
 import { DashboardView } from "@/components/DashboardView";
 import { listArtifactQaSummaries } from "@/lib/artifacts/artifactQa";
-import { buildCandidateAnalytics } from "@/lib/candidates/candidateAnalytics";
+import { buildCandidateAnalytics, buildCandidateSeedDryRunPlan } from "@/lib/candidates/candidateAnalytics";
 import { buildProductionReadinessSummary } from "@/lib/ops/productionReadiness";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { getN8nConfigStatus } from "@/lib/server/n8nClient";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const repository = getAutomationRepository();
-  const [settings, items, summary, runs, workerJobs, workerHeartbeats, candidates, artifactQa, candidateAnalytics] = await Promise.all([
+  const [settings, items, summary, runs, workerJobs, workerHeartbeats, candidates, artifactQa, candidateAnalytics, candidateSeedPlan] = await Promise.all([
     repository.getSettings(),
     repository.getQueue(),
     repository.getQueueSummary(),
@@ -18,7 +18,8 @@ export default async function DashboardPage() {
     repository.getWorkerHeartbeats(),
     repository.getProductCandidates(),
     listArtifactQaSummaries(repository),
-    buildCandidateAnalytics(repository)
+    buildCandidateAnalytics(repository),
+    buildCandidateSeedDryRunPlan(repository)
   ]);
   const contents = new Map(
     await Promise.all(
@@ -56,6 +57,12 @@ export default async function DashboardPage() {
           ([key, value]) => value !== undefined && value !== "" && key !== "limit" && key !== "sort" && key !== "status" && key !== "collected_mode"
         ).length,
         seed_strategy_generated_at: candidateAnalytics.seed_strategy?.generated_at ?? ""
+      }}
+      candidateSeedPlanSummary={{
+        strategy: candidateSeedPlan.strategy,
+        keyword_count: candidateSeedPlan.plan_summary.keyword_count,
+        estimated_candidate_limit: candidateSeedPlan.plan_summary.estimated_candidate_limit,
+        collector_executed: candidateSeedPlan.side_effects.collector_executed
       }}
       artifactQaSummary={artifactQa.summary}
       artifactQaProductivitySummary={{
