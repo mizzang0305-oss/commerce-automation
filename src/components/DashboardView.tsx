@@ -64,6 +64,8 @@ export function DashboardView({
     avg_final_score: number;
     duplicate_rate: number;
     risk_heavy_keywords: string[];
+    active_filter_count?: number;
+    seed_strategy_generated_at?: string;
   };
   artifactQaSummary?: {
     total: number;
@@ -162,6 +164,8 @@ export function DashboardView({
             <InfoPill label="Avg final score" value={String(candidateAnalyticsSummary?.avg_final_score ?? 0)} />
             <InfoPill label="Duplicate rate" value={`${Math.round((candidateAnalyticsSummary?.duplicate_rate ?? 0) * 100)}%`} />
             <InfoPill label="Risk-heavy keywords" value={(candidateAnalyticsSummary?.risk_heavy_keywords ?? []).join(", ") || "-"} />
+            <InfoPill label="Active filters" value={String(candidateAnalyticsSummary?.active_filter_count ?? 0)} />
+            <InfoPill label="Seed generated" value={candidateAnalyticsSummary?.seed_strategy_generated_at || "-"} />
           </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

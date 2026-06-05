@@ -248,5 +248,7 @@ Priority rule:
 - Worker Artifact QA: manual review state for generated artifacts, now with filters and bulk review. QA pass is not platform upload.
 - Candidate Scoring Analytics: read-only dashboard for candidate score, duplicate, source trace, risk flag, and linked artifact QA signals. It does not infer sales outcome and does not create queue rows, worker jobs, upload packages, or uploads.
 - Artifact QA Productivity: review queues, note templates, and keyboard shortcuts for faster manual QA. These controls update QA metadata only.
+- Candidate Analytics Filters And Seed Strategy: use filtered candidate quality signals to plan future candidate-only collector seeds without auto-running collectors.
+- Artifact QA Pagination: keep large artifact review queues operational without changing QA state or upload status.
 - Production pilot readiness: Migration 008 artifact QA persistence SQL verification is PASS, but deployment and production smoke remain approval-gated.
 - Deferred: YouTube OAuth/upload, TikTok Direct Post, Threads post, multi-user SaaS, n8n/Creatomate/Google Docs-first pipelines.

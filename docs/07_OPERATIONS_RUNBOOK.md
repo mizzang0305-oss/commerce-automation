@@ -763,9 +763,11 @@ Use `/api/dev/diagnostics` to verify `content_ai.provider`, `openai_configured`,
 - Use `/ops/production-readiness` to review env counts, manual pending checks, and safety locks before pilot approval.
 - Use `/candidates` to run dry-run Coupang candidate collection. This creates candidates only.
 - Use `/candidates/analytics` for read-only candidate quality analytics. It summarizes score, duplicate, source trace, risk flag, and linked artifact QA signals; it does not create queue rows, worker jobs, upload packages, storage artifacts, or platform uploads.
+- `/api/candidates/analytics` supports read-only date, keyword, category, risk flag, status, score range, collected mode, collector version, sort, and limit filters. Seed Strategy is copy/export-only candidate planning and must not execute collectors, create queue rows, create worker jobs, or trigger uploads.
 - Use `/artifacts` to review generated video, thumbnail, subtitle, and upload package URLs before manual upload.
 - Marking artifact QA as `passed` does not upload to YouTube, TikTok, Threads, or any public channel.
 - `/artifacts` supports `qa_status`, `asset_type`, `missing`, `search`, and `sort` filters plus bulk QA actions.
+- `/artifacts` supports read-only pagination with `page` and `page_size`. Pagination must not update QA state, create worker jobs, or trigger uploads.
 - Artifact QA review queues, note templates, and keyboard shortcuts update QA metadata only. They must not trigger public upload or worker dispatch.
 - Bulk QA updates persist only artifact QA fields and return `upload_triggered=false`, `worker_jobs_created=false`, and `queue_auto_uploaded_or_posted=false`.
 - Migration 008 SQL verification for artifact QA persistence is recorded as PASS, but production pilot readiness stays approval-gated until env, deployment, worker, storage, and manual smoke evidence are complete.

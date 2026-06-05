@@ -17,6 +17,8 @@ export type ArtifactQaFilters = {
     | "has_warnings";
   search: string;
   sort: ArtifactQaSort;
+  page: number;
+  page_size: number;
 };
 
 const REQUIRED_ASSET_TYPES: ProductAsset["asset_type"][] = ["video", "thumbnail", "subtitle", "upload_package"];
@@ -39,11 +41,25 @@ export async function listArtifactQaSummaries(repository: AutomationRepository, 
     return buildArtifactSummary(productQueueId, queueItem?.product_name ?? "", groupAssets, uploadPackage?.status ?? "");
   });
   const filteredArtifacts = filterAndSortArtifactSummaries(artifacts, normalizedFilters);
+  const pagination = paginate(filteredArtifacts, normalizedFilters.page, normalizedFilters.page_size);
 
   return {
-    artifacts: filteredArtifacts,
+    artifacts: filteredArtifacts.slice(pagination.start_index, pagination.end_index),
     summary: summarizeArtifacts(filteredArtifacts),
-    filters: normalizedFilters
+    filters: normalizedFilters,
+    pagination: {
+      page: pagination.page,
+      page_size: pagination.page_size,
+      total_items: filteredArtifacts.length,
+      total_pages: pagination.total_pages,
+      has_next: pagination.page < pagination.total_pages,
+      has_prev: pagination.page > 1
+    },
+    side_effects: {
+      upload_triggered: false,
+      worker_jobs_created: false,
+      queue_auto_uploaded_or_posted: false
+    }
   };
 }
 
@@ -160,7 +176,9 @@ export function parseArtifactQaFilters(searchParams: URLSearchParams): ArtifactQ
     asset_type: searchParams.get("asset_type") ?? undefined,
     missing: searchParams.get("missing") ?? undefined,
     search: searchParams.get("search") ?? undefined,
-    sort: searchParams.get("sort") ?? undefined
+    sort: searchParams.get("sort") ?? undefined,
+    page: searchParams.get("page") ?? undefined,
+    page_size: searchParams.get("page_size") ?? undefined
   });
 }
 
@@ -270,7 +288,9 @@ function normalizeArtifactQaFilters(filters: Partial<Record<keyof ArtifactQaFilt
     asset_type: normalizeAssetType(filters.asset_type) ?? "all",
     missing: normalizeMissingFilter(filters.missing),
     search: typeof filters.search === "string" ? filters.search.trim().slice(0, 120) : "",
-    sort: normalizeSort(filters.sort)
+    sort: normalizeSort(filters.sort),
+    page: normalizePositiveInteger(filters.page, 1, 1, 100000),
+    page_size: normalizePositiveInteger(filters.page_size, 25, 1, 100)
   };
 }
 
@@ -324,4 +344,25 @@ function normalizeSort(value: unknown): ArtifactQaSort {
 
 function stripMissingPrefix(value: Exclude<ArtifactQaFilters["missing"], "all" | "none" | "has_warnings">) {
   return value.replace(/^missing_/, "") as ProductAsset["asset_type"];
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+function paginate(items: unknown[], page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(totalPages, Math.max(1, page));
+  const startIndex = (safePage - 1) * pageSize;
+  return {
+    page: safePage,
+    page_size: pageSize,
+    total_pages: totalPages,
+    start_index: startIndex,
+    end_index: startIndex + pageSize
+  };
 }

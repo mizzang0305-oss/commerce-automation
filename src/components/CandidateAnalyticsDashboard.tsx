@@ -1,6 +1,39 @@
-import type { CandidateAnalyticsResponse } from "@/lib/candidates/candidateAnalytics";
+"use client";
+
+import { useState } from "react";
+import type { CandidateAnalyticsResponse, CollectorSeedStrategy } from "@/lib/candidates/candidateAnalytics";
 
 export function CandidateAnalyticsDashboard({ analytics }: { analytics: CandidateAnalyticsResponse }) {
+  const [copyMessage, setCopyMessage] = useState("");
+  const applied = analytics.applied_filters ?? {
+    status: "all",
+    collected_mode: "all",
+    sort: "final_score_desc",
+    limit: 50
+  };
+  const available = analytics.available_filters ?? {
+    keywords: [],
+    categories: [],
+    risk_flags: [],
+    statuses: [],
+    collected_modes: [],
+    collector_versions: []
+  };
+
+  async function copySeedList() {
+    const keywords = [
+      ...(analytics.seed_strategy?.keep_keywords ?? []),
+      ...(analytics.seed_strategy?.expand_keywords ?? [])
+    ].map((item) => item.keyword);
+    await writeClipboard(keywords.join("\n"));
+    setCopyMessage("Seed strategy is for copy/export only. No collector was executed.");
+  }
+
+  async function copySeedJson() {
+    await writeClipboard(JSON.stringify(analytics.seed_strategy ?? {}, null, 2));
+    setCopyMessage("Seed strategy is for copy/export only. No collector was executed.");
+  }
+
   return (
     <div className="space-y-5">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -15,6 +48,38 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
             Read-only: queue_created=false, worker_jobs_created=false, upload_triggered=false
           </div>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-base font-bold text-slate-950">Analytics Filters</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          This analysis is a candidate selection reference. It does not run collectors, create queue rows, create worker jobs, or upload.
+        </p>
+        <form method="get" className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterInput label="From" name="from" type="date" value={applied.from ?? ""} />
+          <FilterInput label="To" name="to" type="date" value={applied.to ?? ""} />
+          <FilterInput label="Keyword" name="keyword" value={applied.keyword ?? ""} list="candidate-keywords" />
+          <FilterInput label="Category" name="category" value={applied.category ?? ""} list="candidate-categories" />
+          <FilterSelect label="Risk flag" name="risk_flag" value={applied.risk_flag ?? "all"} options={["all", ...available.risk_flags]} />
+          <FilterSelect label="Status" name="status" value={applied.status} options={["all", "collected", "scored", "duplicate", "manual_review", "rejected", "promoted"]} />
+          <FilterInput label="Min score" name="min_score" type="number" value={String(applied.min_score ?? "")} />
+          <FilterInput label="Max score" name="max_score" type="number" value={String(applied.max_score ?? "")} />
+          <FilterSelect label="Collected mode" name="collected_mode" value={applied.collected_mode} options={["all", "dry_run", "api", "manual", ...available.collected_modes]} />
+          <FilterInput label="Collector version" name="collector_version" value={applied.collector_version ?? ""} list="candidate-collector-versions" />
+          <FilterSelect label="Sort" name="sort" value={applied.sort} options={["newest", "oldest", "final_score_desc", "final_score_asc", "duplicate_rate_desc", "risk_rate_desc"]} />
+          <FilterInput label="Limit" name="limit" type="number" value={String(applied.limit)} />
+          <datalist id="candidate-keywords">{available.keywords.map((item) => <option key={item} value={item} />)}</datalist>
+          <datalist id="candidate-categories">{available.categories.map((item) => <option key={item} value={item} />)}</datalist>
+          <datalist id="candidate-collector-versions">{available.collector_versions.map((item) => <option key={item} value={item} />)}</datalist>
+          <div className="flex items-end gap-2 xl:col-span-4">
+            <button type="submit" className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">
+              Apply filters
+            </button>
+            <a href="/candidates/analytics" className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100">
+              Reset filters
+            </a>
+          </div>
+        </form>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -62,6 +127,7 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
         <div className="space-y-4">
           <ScoreBreakdown analytics={analytics} />
           <Recommendations analytics={analytics} />
+          <SeedStrategyPanel strategy={analytics.seed_strategy} onCopyList={copySeedList} onCopyJson={copySeedJson} message={copyMessage} />
         </div>
       </section>
 
@@ -99,6 +165,66 @@ export function CandidateAnalyticsDashboard({ analytics }: { analytics: Candidat
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function SeedStrategyPanel({
+  strategy,
+  onCopyList,
+  onCopyJson,
+  message
+}: {
+  strategy?: CollectorSeedStrategy;
+  onCopyList: () => void;
+  onCopyJson: () => void;
+  message: string;
+}) {
+  const empty = !strategy;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-base font-bold text-slate-950">Seed Strategy</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Recommendations can be copied for candidate-only planning. No collector, promotion, queue, worker, or upload action is executed.
+      </p>
+      {empty ? (
+        <p className="mt-3 text-sm text-slate-500">No seed strategy yet.</p>
+      ) : (
+        <div className="mt-3 grid gap-3">
+          <SeedGroup title="Keep" items={strategy.keep_keywords} />
+          <SeedGroup title="Expand" items={strategy.expand_keywords} />
+          <SeedGroup title="Review" items={strategy.review_keywords} />
+          <SeedGroup title="Avoid" items={strategy.avoid_keywords} />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={onCopyList} className="rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
+              Copy seed list
+            </button>
+            <button type="button" onClick={onCopyJson} className="rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
+              Copy JSON
+            </button>
+          </div>
+          {message ? <p className="text-sm font-semibold text-slate-700">{message}</p> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SeedGroup({ title, items }: { title: string; items: NonNullable<CollectorSeedStrategy["keep_keywords"]> }) {
+  return (
+    <div className="rounded-md bg-slate-50 p-3">
+      <h3 className="text-sm font-bold text-slate-950">{title}</h3>
+      {items.length === 0 ? (
+        <p className="mt-1 text-sm text-slate-500">No keywords.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-sm text-slate-700">
+          {items.map((item) => (
+            <li key={`${title}-${item.keyword}`}>
+              <span className="font-semibold text-slate-950">{item.keyword}</span> - {item.reason}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -146,10 +272,63 @@ function Metric({ label, value, compact = false }: { label: string; value: strin
   );
 }
 
+function FilterInput({
+  label,
+  name,
+  value,
+  type = "text",
+  list
+}: {
+  label: string;
+  name: string;
+  value: string;
+  type?: string;
+  list?: string;
+}) {
+  return (
+    <label className="text-xs font-bold uppercase text-slate-500">
+      {label}
+      <input
+        name={name}
+        defaultValue={value}
+        type={type}
+        list={list}
+        className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-800"
+      />
+    </label>
+  );
+}
+
+function FilterSelect({ label, name, value, options }: { label: string; name: string; value: string; options: string[] }) {
+  const uniqueOptions = [...new Set(options)];
+  return (
+    <label className="text-xs font-bold uppercase text-slate-500">
+      {label}
+      <select
+        name={name}
+        defaultValue={value}
+        className="mt-1 block w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-800"
+      >
+        {uniqueOptions.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function rateFromCounts(count: number, total: number) {
   return total === 0 ? 0 : count / total;
 }
 
 function percent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+async function writeClipboard(value: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard) {
+    await navigator.clipboard.writeText(value).catch(() => undefined);
+  }
 }

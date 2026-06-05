@@ -48,6 +48,8 @@ Analytics copy must stay conservative. Scores are candidate quality proxies only
 
 - Recommendations are operator references only.
 - Recommendations do not auto-run collectors.
+- Filters include date range, keyword, category, risk flag, status, score range, collected mode, collector version, sort, and limit.
+- Seed Strategy is copy/export-only candidate planning. It must not create queue rows, worker jobs, upload packages, or platform uploads.
 - Analytics does not promote candidates.
 - Analytics does not dispatch workers.
 - Analytics does not upload or publish anything.

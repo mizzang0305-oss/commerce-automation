@@ -556,6 +556,8 @@ python -m compileall python-worker
 - `/ops/production-readiness` shows approval-gated readiness counts and safety locks. It does not deploy or call production smoke.
 - `/candidates` includes a Coupang Collector MVP dry-run panel. It creates candidates only and never creates queue rows, worker jobs, render plans, upload packages, or platform uploads.
 - `/candidates/analytics` is read-only candidate quality analytics. It does not imply sales outcome and cannot trigger collection, promotion, workers, or uploads.
+- `/candidates/analytics` supports date, keyword, category, risk flag, status, score range, collected mode, collector version, sort, and limit filters. Seed Strategy copy/export is candidate-only and never executes collectors or creates queue/job/upload side effects. See [docs/CANDIDATE_ANALYTICS_FILTERS_AND_SEED_STRATEGY.md](docs/CANDIDATE_ANALYTICS_FILTERS_AND_SEED_STRATEGY.md).
 - `/artifacts` provides Worker artifact QA for video, thumbnail, subtitle, and upload package URLs. QA pass is a manual review marker only and never triggers upload.
 - Artifact QA review queues, note templates, and keyboard shortcuts are productivity controls only. They update QA metadata and show `QA status only changed. No platform upload was executed.` after status changes. See [docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md](docs/ARTIFACT_QA_PRODUCTIVITY_POLISH.md).
+- `/artifacts` supports read-only pagination with `page`, `page_size`, filters, and sort controls. Pagination does not update QA state, create worker jobs, or trigger upload. See [docs/ARTIFACT_QA_PAGINATION.md](docs/ARTIFACT_QA_PAGINATION.md).
 - Apply `supabase/migrations/008_product_asset_qa.sql` before using artifact QA against Supabase.
