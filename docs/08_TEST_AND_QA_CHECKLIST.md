@@ -144,6 +144,9 @@ python -m compileall python-worker
 - Every image-video plan response keeps `approval_required=true`.
 - `/image-prompts` exposes copy-only prompt, negative prompt, storyboard, narration, subtitle, CTA, and JSON controls.
 - The image planning flow must not call image APIs, Google Drive APIs, Worker APIs, queue APIs, upload APIs, or platform upload APIs.
+- `GET /api/candidates/[id]/local-image-package` returns a local image generation package with suggested filenames, local output paths, Google Drive sync-folder suggestions, manifest JSON, prompt markdown, manual steps, and QA checklist text.
+- Every local image package response keeps `scraped_live_web=false`, `external_api_called=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `payment_triggered=false`, `message_sent=false`, `deployment_triggered=false`, `worker_job_created=false`, `queue_created=false`, `local_file_written=false`, and `google_drive_api_called=false`.
+- Local image package UI controls are copy-only. They must not generate images, write local files, call Google Drive, create artifacts, create queue rows, create worker jobs, create upload packages, or run uploads.
 
 ## Render Quality QA
 

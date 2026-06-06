@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
 import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
 
@@ -14,15 +15,19 @@ function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
 
 export function ImagePromptPlanClient({
   plan,
-  imageVideoPlan
+  imageVideoPlan,
+  localImagePackage
 }: {
   plan: CommerceImagePromptPlan;
   imageVideoPlan?: CommerceImageVideoPlan | null;
+  localImagePackage?: LocalImageGenerationPackage | null;
 }) {
   const [message, setMessage] = useState("");
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
   const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
   const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
+  const localPackageJson = useMemo(() => JSON.stringify(localImagePackage ?? {}, null, 2), [localImagePackage]);
+  const manifestJson = useMemo(() => JSON.stringify(localImagePackage?.manifest ?? {}, null, 2), [localImagePackage]);
 
   async function copyText(text: string, label: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -204,6 +209,97 @@ export function ImagePromptPlanClient({
               <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Affiliate disclosure reminder</p>
               <p className="mt-1 text-sm text-slate-700">{imageVideoPlan.video_plan.affiliate_disclosure_reminder}</p>
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {localImagePackage ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-700">approval-gated copy-only bridge</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Local Image Generation Package</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Copy prompts, manifest JSON, and QA notes for a separately approved local image workflow. This UI does not
+                generate files, call Google Drive APIs, write DB rows, or create worker jobs.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void copyText(localPackageJson, "Local package JSON")}
+                className="rounded-md border border-teal-300 px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50"
+              >
+                Copy local package JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(manifestJson, "Manifest JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy manifest JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localImagePackage.prompt_markdown, "Prompt markdown")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy prompt markdown
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localImagePackage.qa_checklist.join("\n"), "QA checklist")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy QA checklist
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localImagePackage.manual_generation_steps.join("\n"), "Manual steps")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy manual steps
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SideEffectBadge label="local_file_written" value={localImagePackage.side_effects.local_file_written} />
+            <SideEffectBadge label="google_drive_api_called" value={localImagePackage.side_effects.google_drive_api_called} />
+            <SideEffectBadge label="external_api_called" value={localImagePackage.side_effects.external_api_called} />
+            <SideEffectBadge label="db_written" value={localImagePackage.side_effects.db_written} />
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              approval_required={String(localImagePackage.approval_required)}
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Local output path suggestion</p>
+              <p className="mt-1 break-all text-sm font-semibold text-slate-700">{localImagePackage.local_output_path_suggestion}</p>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Google Drive sync path suggestion</p>
+              <p className="mt-1 break-all text-sm font-semibold text-slate-700">
+                {localImagePackage.google_drive_sync_path_suggestion}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">Sync folder suggestion only. No Google Drive API or OAuth call is made.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {localImagePackage.assets.map((asset) => (
+              <article key={asset.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{asset.asset_type}</p>
+                <h3 className="mt-1 text-sm font-bold text-slate-950">{asset.suggested_filename}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{asset.purpose}</p>
+                <p className="mt-2 text-xs text-slate-500">Use after manual approval: {asset.usage_targets.join(", ")}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            {localImagePackage.future_import_instruction}
           </div>
         </section>
       ) : null}

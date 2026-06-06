@@ -106,6 +106,8 @@ G:/My Drive/commerce-assets/video-packages/
 
 This is a folder convention only. Google Drive API and OAuth are not implemented.
 
+`GET /api/candidates/[id]/local-image-package` turns the image prompt plan and video plan into a copy-only local image generation package. It includes suggested filenames, manifest JSON, prompt markdown, manual steps, and QA checklist text for operator review. It remains generated-on-read and keeps `local_file_written=false` and `google_drive_api_called=false`.
+
 ## KPI Direction
 
 Future KPI candidates:

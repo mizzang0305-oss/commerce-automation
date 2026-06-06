@@ -265,6 +265,7 @@ Included:
 - Candidate-based image asset plan for `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`.
 - Candidate-based `VideoPlan` with a 15-second shorts storyboard, shot list, narration, subtitle lines, CTA, and affiliate disclosure reminder.
 - `/image-prompts` copy-only preview and JSON export controls.
+- Local image generation package with suggested filenames, local output folders, Google Drive sync-folder suggestions, manifest JSON, prompt markdown, manual steps, and QA checklist text.
 - Documentation for local asset folders, optional Google Drive sync-folder conventions, and future KPI candidates.
 
 Not included:
@@ -273,7 +274,7 @@ Not included:
 - Image-to-video API calls.
 - FFmpeg/MoviePy execution from the planning layer.
 - Google Drive API/OAuth.
-- DB writes, queue creation, worker job creation, upload packages, uploads, production deploys, or production smoke.
+- DB writes, local file writes, queue creation, worker job creation, upload packages, uploads, production deploys, or production smoke.
 
 Priority rule:
 
