@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
+import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
 
 function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
   return (
@@ -11,9 +12,17 @@ function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
   );
 }
 
-export function ImagePromptPlanClient({ plan }: { plan: CommerceImagePromptPlan }) {
+export function ImagePromptPlanClient({
+  plan,
+  imageVideoPlan
+}: {
+  plan: CommerceImagePromptPlan;
+  imageVideoPlan?: CommerceImageVideoPlan | null;
+}) {
   const [message, setMessage] = useState("");
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
+  const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
+  const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
 
   async function copyText(text: string, label: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -47,6 +56,15 @@ export function ImagePromptPlanClient({ plan }: { plan: CommerceImagePromptPlan 
           <SideEffectBadge label="uploaded" value={plan.side_effects.uploaded} />
           <SideEffectBadge label="worker_job_created" value={plan.side_effects.worker_job_created} />
           <SideEffectBadge label="queue_created" value={plan.side_effects.queue_created} />
+          {imageVideoPlan ? (
+            <>
+              <SideEffectBadge label="external_api_called" value={imageVideoPlan.side_effects.external_api_called} />
+              <SideEffectBadge label="db_written" value={imageVideoPlan.side_effects.db_written} />
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                approval_required={String(imageVideoPlan.approval_required)}
+              </span>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -106,6 +124,89 @@ export function ImagePromptPlanClient({ plan }: { plan: CommerceImagePromptPlan 
           </article>
         ))}
       </div>
+
+      {imageVideoPlan ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-700">15-second storyboard</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Video Plan Preview</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {imageVideoPlan.video_plan.format} / {imageVideoPlan.video_plan.duration_sec}s / copy-only planning output
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void copyText(videoPlanJson, "Video plan JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy video plan JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(JSON.stringify(imageVideoPlan.video_plan.shot_list, null, 2), "Storyboard")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy storyboard
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageVideoPlan.video_plan.narration_script, "Narration")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy narration
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageVideoPlan.video_plan.subtitle_lines.join("\n"), "Subtitle lines")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy subtitle lines
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageVideoPlan.video_plan.cta, "CTA")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy CTA
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(fullPlanJson, "Full image and video plan JSON")}
+                className="rounded-md border border-teal-300 px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50"
+              >
+                Copy full image and video plan JSON
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {imageVideoPlan.video_plan.shot_list.map((shot) => (
+              <article key={shot.index} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Shot {shot.index} / {shot.start_sec}-{shot.end_sec}s / {shot.image_asset_type}
+                </p>
+                <h3 className="mt-1 text-sm font-bold text-slate-950">{shot.overlay_text}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{shot.visual_direction}</p>
+                <p className="mt-2 text-xs text-slate-500">Narration: {shot.narration}</p>
+                <p className="mt-1 text-xs text-slate-500">Subtitle: {shot.subtitle}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">CTA</p>
+              <p className="mt-1 text-sm text-slate-700">{imageVideoPlan.video_plan.cta}</p>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Affiliate disclosure reminder</p>
+              <p className="mt-1 text-sm text-slate-700">{imageVideoPlan.video_plan.affiliate_disclosure_reminder}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

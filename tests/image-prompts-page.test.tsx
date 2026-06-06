@@ -24,7 +24,7 @@ describe("/image-prompts page", () => {
     }));
 
     expect(screen.getByRole("heading", { name: "Commerce Image Prompts" })).toBeInTheDocument();
-    expect(screen.getByText(/이 화면은 이미지 생성 계획과 프롬프트만 만듭니다/)).toBeInTheDocument();
+    expect(screen.getByText(/This screen creates image prompt plans and 15-second video planning drafts only/)).toBeInTheDocument();
     expect(screen.getByText("main_product")).toBeInTheDocument();
     expect(screen.getByText("benefit_scene")).toBeInTheDocument();
     expect(screen.getByText("hook_thumbnail")).toBeInTheDocument();
@@ -36,9 +36,18 @@ describe("/image-prompts page", () => {
     expect(screen.getByText("uploaded=false")).toBeInTheDocument();
     expect(screen.getByText("worker_job_created=false")).toBeInTheDocument();
     expect(screen.getByText("queue_created=false")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Video Plan Preview" })).toBeInTheDocument();
+    expect(screen.getByText("15-second storyboard")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy video plan JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy storyboard" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy narration" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy subtitle lines" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy CTA" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy full image and video plan JSON" })).toBeInTheDocument();
+    expect(screen.getByText("approval_required=true")).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? "";
-    expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Call Gemini|Call OpenAI/);
+    expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive/);
     expect(screen.queryByRole("button", { name: /^Upload$/i })).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ImagePromptPlanClient } from "@/components/ImagePromptPlanClient";
 import { buildCommerceImagePromptPlan } from "@/lib/image-prompts/prompt-builder";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { buildCommerceImageVideoPlan } from "@/lib/video-plans/buildCommerceVideoPlan";
 import type { ProductCandidate } from "@/types/automation";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function ImagePromptsPage(
   const candidates = testData?.candidates ?? await getAutomationRepository().getProductCandidates();
   const selectedCandidate = candidates.find((candidate) => candidate.id === searchParams.candidate_id) ?? candidates[0] ?? null;
   const plan = selectedCandidate ? buildCommerceImagePromptPlan(selectedCandidate) : null;
+  const imageVideoPlan = plan ? buildCommerceImageVideoPlan(plan) : null;
 
   return (
     <div className="space-y-5">
@@ -25,7 +27,8 @@ export default async function ImagePromptsPage(
         <div>
           <h1 className="text-2xl font-bold text-slate-950">Commerce Image Prompts</h1>
           <p className="mt-2 text-sm text-slate-500">
-            이 화면은 이미지 생성 계획과 프롬프트만 만듭니다. 실제 이미지 생성, 영상 생성, 업로드는 실행하지 않습니다.
+            This screen creates image prompt plans and 15-second video planning drafts only. It does not generate images,
+            videos, uploads, worker jobs, queue rows, or external API calls.
           </p>
         </div>
         <Link
@@ -60,10 +63,11 @@ export default async function ImagePromptsPage(
       </section>
 
       <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-        Plan-only / copy-only workflow입니다. 이미지 생성, 영상 생성, 업로드, Worker 실행, 외부 AI 호출, Google Drive 연동, queue, render plan, worker job 생성 기능은 제공하지 않습니다.
+        Plan-only / copy-only workflow. Image generation, video generation, upload, Worker execution, external AI calls,
+        Google Drive integration, queue creation, render execution, and worker job creation are not available here.
       </section>
 
-      {plan ? <ImagePromptPlanClient plan={plan} /> : null}
+      {plan ? <ImagePromptPlanClient plan={plan} imageVideoPlan={imageVideoPlan} /> : null}
     </div>
   );
 }

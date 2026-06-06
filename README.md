@@ -212,7 +212,7 @@ Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The templat
 
 ## Commerce Image Prompt Planning
 
-`/image-prompts` provides candidate-based commerce image prompt planning for four copy-only asset types: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`. The page and `GET /api/candidates/[id]/image-plan` return prompt text, negative prompts, risk flags, safety notes, and explicit false side effects. They do not call image APIs, create image generation jobs, create video jobs, create queue rows, create render plans, upload files, or call Google Drive. See `docs/COMMERCE_IMAGE_PIPELINE.md`.
+`/image-prompts` provides candidate-based commerce image prompt planning for four copy-only asset types: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`. The page, `GET /api/candidates/[id]/image-plan`, and `GET /api/candidates/[id]/image-video-plan` return prompt text, negative prompts, risk flags, safety notes, a 15-second storyboard, shot list, narration, subtitle lines, CTA, disclosure reminder, and explicit false side effects. They do not call image APIs, create image generation jobs, create video jobs, create queue rows, create render plans, upload files, or call Google Drive. See `docs/COMMERCE_IMAGE_PIPELINE.md` and `docs/COMMERCE_IMAGE_VIDEO_PIPELINE.md`.
 
 Optional provider selection is server-only:
 

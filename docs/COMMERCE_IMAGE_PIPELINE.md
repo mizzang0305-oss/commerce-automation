@@ -14,7 +14,7 @@ The current implementation is plan-only and copy-only:
 6. Manual upload package
 7. Performance data assetization
 
-Only steps 1-3 are introduced in this PR. The system does not generate images, generate videos, create worker jobs, create queue rows, create render plans, upload files, call Google Drive, or call external image APIs.
+Only steps 1-3 are introduced by the image prompt planning layer. The follow-on image and video planning layer adds a deterministic 15-second `VideoPlan` preview, but still does not generate images, generate videos, create worker jobs, create queue rows, create render plans, upload files, call Google Drive, or call external image/video APIs.
 
 ## Image Asset Types
 
@@ -81,3 +81,5 @@ Future local-only skill pack structure:
 ```
 
 Google Drive API, image APIs, image-to-video, SNS upload automation, and public upload remain separate approval-gated PRs.
+
+See `docs/COMMERCE_IMAGE_VIDEO_PIPELINE.md` for the 15-second storyboard, shot list, narration, subtitle, CTA, and disclosure reminder planning layer.
