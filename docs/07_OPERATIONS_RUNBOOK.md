@@ -11,7 +11,9 @@ Open `http://localhost:3000` or the configured dev URL.
 
 ## Operator Command Palette
 
-Open the command palette with `Ctrl+K` or `Cmd+K` in the admin app. It is a navigation and safe-copy tool only. It can copy validation snippets such as `npm run test`, `npm run build`, `npm run check:production-env`, and Python Worker unittest commands, but it never executes them.
+Open the command palette with `Ctrl+K` or `Cmd+K` in the admin app. It is a navigation and safe-copy tool only. It can copy validation snippets such as `npm run test`, `npm run build`, `npm run check:production-env`, targeted test commands, git safety checks, and Python Worker unittest commands, but it never executes them.
+
+Recent commands and favorites are stored in browser `localStorage` only. Recent entries store command id, label, type, and timestamp; favorites store command ids. The palette also shows context-aware suggestions for dashboard, candidate analytics, artifact QA, and production readiness pages. These suggestions are still navigation/copy-only.
 
 The palette must not start Python Worker, run deploys, run database writes, run collectors, create queue rows, create worker jobs, create render plans, create upload packages, or trigger platform uploads. It must not display or copy `.env.local`, `python-worker/.env`, service-role keys, R2/S3 keys, API keys, or Authorization headers. See `docs/OPERATOR_COMMAND_PALETTE.md`.
 

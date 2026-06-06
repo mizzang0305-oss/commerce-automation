@@ -62,6 +62,12 @@ python -m compileall python-worker
 - `Esc` closes the command palette.
 - Navigation commands route only to admin pages.
 - Safe copy commands copy text only and never execute shell commands.
+- Safe copy commands are grouped by Validation, Python Worker, Targeted Tests, and Git Safety.
+- Recent commands render after navigation and safe copy actions.
+- Recent commands store command metadata only, not copied command bodies.
+- Favorite commands can be toggled and persist only safe command ids.
+- Context-aware commands change by current route and remain navigation/copy-only.
+- Aliases/search tags such as `qa`, `seed`, `preflight`, `test`, `worker`, and `env` find the expected safe commands.
 - Copied snippets contain no service-role keys, storage keys, provider keys, Coupang keys, worker secrets, or Authorization headers.
 - The palette does not include deploy, database write, worker execution, collector execution, platform upload, queue creation, worker job creation, render plan creation, or upload package creation commands.
 - Artifact QA shortcuts are ignored while the command palette input is focused.

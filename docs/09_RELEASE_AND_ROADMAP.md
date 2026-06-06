@@ -226,7 +226,8 @@ The operator UX layer improves speed without adding execution side effects.
 Included:
 
 - `cmdk` command palette for admin navigation.
-- Copy-only validation command snippets.
+- Recent commands, favorites, route-aware suggestions, and command aliases.
+- Copy-only validation, Python Worker validation, targeted test, and git safety snippets.
 - Read-only safety reminders.
 - Keyboard access through `Ctrl+K` and `Cmd+K`.
 
