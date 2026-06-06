@@ -223,6 +223,10 @@ Recommended PR order:
    - Turn selected image asset JSON into a copy-only 15-second slideshow package plan.
    - Produce timeline, image sequence, overlay/narration/subtitle mapping, CTA, disclosure reminder, FFmpeg/MoviePy previews, and manual render checklist.
    - Do not execute FFmpeg/MoviePy, read/write local files, upload to R2, create upload packages, create worker jobs, create queue rows, or deploy.
+10. PR #59. Generated video QA import bridge
+   - Accept manually pasted generated video manifest text and create an in-memory QA/import plan.
+   - Produce QA markdown, next-step JSON, safety flags, missing requirements, and readiness for future manual upload package work.
+   - Do not read local files, probe video metadata, execute FFmpeg/MoviePy, upload to R2, write DB rows, create upload packages, create worker jobs, create queue rows, or deploy.
 7. PR #43. Daily production planner actual use
    - Turn event windows into a daily shortlist.
    - Let operators promote selected candidates.

@@ -155,6 +155,12 @@ python -m compileall python-worker
 - `POST /api/candidates/[id]/slideshow-package-plan` returns an in-memory `SlideshowPackagePlan` with selected image sequence, 15-second timeline, overlay/narration/subtitle mapping, CTA, disclosure reminder, FFmpeg preview, MoviePy preview, and manual render checklist.
 - Every slideshow package plan response keeps `external_api_called=false`, `scraped_live_web=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `local_file_read=false`, `local_file_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
 - `/image-prompts` exposes copy-only slideshow package controls and must not expose Run FFmpeg, Run MoviePy, Create Video File, Upload Video, Create Upload Package, Send to R2, or platform post buttons.
+- `POST /api/candidates/[id]/generated-video-qa-import-plan` validates optional generated video manifest text and returns an in-memory `GeneratedVideoQaImportPlan`.
+- Generated video QA import manifest validation checks `candidate_id`, filename, path text, source, duration text/number, format, QA status, and QA notes without reading local files, probing video metadata, calling R2, or writing DB rows.
+- Generated video QA import plans return QA markdown, next-step JSON, missing requirements, safety flags, and `ready_for_manual_upload_package`.
+- `ready_for_manual_upload_package=true` requires at least one `passed` or `selected_for_manual_upload` video, `format=shorts_9_16`, and duration between 10 and 60 seconds.
+- Every generated video QA import response keeps `external_api_called=false`, `scraped_live_web=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `local_file_read=false`, `local_file_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
+- `/image-prompts` exposes copy-only generated video QA import controls and must not expose Read Video Metadata, Run FFmpeg, Run MoviePy, Upload Video, Create Upload Package, Send to R2, Import to DB, or platform post buttons.
 
 ## Render Quality QA
 

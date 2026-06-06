@@ -5,6 +5,7 @@ import { buildImageQaImportPlan } from "@/lib/image-qa-import/buildImageQaImport
 import { buildCommerceImagePromptPlan } from "@/lib/image-prompts/prompt-builder";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { buildSlideshowPackagePlan } from "@/lib/slideshow-package";
+import { buildGeneratedVideoQaImportPlan } from "@/lib/video-qa-import";
 import { buildCommerceImageVideoPlan } from "@/lib/video-plans/buildCommerceVideoPlan";
 import type { ProductCandidate } from "@/types/automation";
 
@@ -29,6 +30,9 @@ export default async function ImagePromptsPage(
     : null;
   const slideshowPackagePlan = selectedCandidate
     ? buildSlideshowPackagePlan(selectedCandidate, imageQaImportPlan?.selected_image_asset_plan)
+    : null;
+  const generatedVideoQaImportPlan = selectedCandidate
+    ? buildGeneratedVideoQaImportPlan(selectedCandidate, null)
     : null;
 
   return (
@@ -84,6 +88,7 @@ export default async function ImagePromptsPage(
           localImagePackage={localImagePackage}
           imageQaImportPlan={imageQaImportPlan}
           slideshowPackagePlan={slideshowPackagePlan}
+          generatedVideoQaImportPlan={generatedVideoQaImportPlan}
         />
       ) : null}
     </div>
