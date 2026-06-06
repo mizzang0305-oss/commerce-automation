@@ -25,10 +25,10 @@ describe("/image-prompts page", () => {
 
     expect(screen.getByRole("heading", { name: "Commerce Image Prompts" })).toBeInTheDocument();
     expect(screen.getByText(/This screen creates image prompt plans and 15-second video planning drafts only/)).toBeInTheDocument();
-    expect(screen.getByText("main_product")).toBeInTheDocument();
-    expect(screen.getByText("benefit_scene")).toBeInTheDocument();
-    expect(screen.getByText("hook_thumbnail")).toBeInTheDocument();
-    expect(screen.getByText("comparison_card")).toBeInTheDocument();
+    expect(screen.getAllByText("main_product").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("benefit_scene").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("hook_thumbnail").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("comparison_card").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Copy prompt/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Copy JSON" })).toBeInTheDocument();
     expect(screen.getByText("image_generated=false")).toBeInTheDocument();
@@ -44,7 +44,17 @@ describe("/image-prompts page", () => {
     expect(screen.getByRole("button", { name: "Copy subtitle lines" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy CTA" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy full image and video plan JSON" })).toBeInTheDocument();
-    expect(screen.getByText("approval_required=true")).toBeInTheDocument();
+    expect(screen.getAllByText("approval_required=true").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Local Image Generation Package" })).toBeInTheDocument();
+    expect(screen.getByText("commerce-assets/output/generated/candidate-image-page-001/")).toBeInTheDocument();
+    expect(screen.getByText("G:/My Drive/commerce-assets/generated/candidate-image-page-001/")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy local package JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy manifest JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy QA checklist" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy manual steps" })).toBeInTheDocument();
+    expect(screen.getByText("local_file_written=false")).toBeInTheDocument();
+    expect(screen.getByText("google_drive_api_called=false")).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? "";
     expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive/);

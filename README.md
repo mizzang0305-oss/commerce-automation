@@ -214,6 +214,8 @@ Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The templat
 
 `/image-prompts` provides candidate-based commerce image prompt planning for four copy-only asset types: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`. The page, `GET /api/candidates/[id]/image-plan`, and `GET /api/candidates/[id]/image-video-plan` return prompt text, negative prompts, risk flags, safety notes, a 15-second storyboard, shot list, narration, subtitle lines, CTA, disclosure reminder, and explicit false side effects. They do not call image APIs, create image generation jobs, create video jobs, create queue rows, create render plans, upload files, or call Google Drive. See `docs/COMMERCE_IMAGE_PIPELINE.md` and `docs/COMMERCE_IMAGE_VIDEO_PIPELINE.md`.
 
+`GET /api/candidates/[id]/local-image-package` and `/image-prompts` also provide an approval-gated local image generation package. It suggests filenames, local output folders, Google Drive sync folders, manifest JSON, prompt markdown, manual steps, and QA checklist text for separate manual image work. It remains copy-only: `external_api_called=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `worker_job_created=false`, `queue_created=false`, `local_file_written=false`, and `google_drive_api_called=false`. See `docs/LOCAL_IMAGE_GENERATION_BRIDGE.md`.
+
 Optional provider selection is server-only:
 
 ```text

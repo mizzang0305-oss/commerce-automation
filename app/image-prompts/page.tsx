@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ImagePromptPlanClient } from "@/components/ImagePromptPlanClient";
+import { buildLocalImageGenerationPackage } from "@/lib/image-generation-bridge/buildLocalImageGenerationPackage";
 import { buildCommerceImagePromptPlan } from "@/lib/image-prompts/prompt-builder";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { buildCommerceImageVideoPlan } from "@/lib/video-plans/buildCommerceVideoPlan";
@@ -20,6 +21,7 @@ export default async function ImagePromptsPage(
   const selectedCandidate = candidates.find((candidate) => candidate.id === searchParams.candidate_id) ?? candidates[0] ?? null;
   const plan = selectedCandidate ? buildCommerceImagePromptPlan(selectedCandidate) : null;
   const imageVideoPlan = plan ? buildCommerceImageVideoPlan(plan) : null;
+  const localImagePackage = selectedCandidate ? buildLocalImageGenerationPackage(selectedCandidate) : null;
 
   return (
     <div className="space-y-5">
@@ -67,7 +69,13 @@ export default async function ImagePromptsPage(
         Google Drive integration, queue creation, render execution, and worker job creation are not available here.
       </section>
 
-      {plan ? <ImagePromptPlanClient plan={plan} imageVideoPlan={imageVideoPlan} /> : null}
+      {plan ? (
+        <ImagePromptPlanClient
+          plan={plan}
+          imageVideoPlan={imageVideoPlan}
+          localImagePackage={localImagePackage}
+        />
+      ) : null}
     </div>
   );
 }
