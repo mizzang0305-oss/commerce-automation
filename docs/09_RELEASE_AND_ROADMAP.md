@@ -207,7 +207,12 @@ Recommended PR order:
    - Add safe preflight script with configured booleans, missing env names, and manual checks only.
    - Do not create Vercel project, enter production env, deploy, or run production smoke from the PR.
    - Keep platform uploads disabled.
-6. PR #42. Coupang collector MVP
+6. PR #53. Production pilot readiness closeout
+   - Group env readiness into WebApp Base, Supabase, WebApp Runtime / AI, Local Python Worker, and Cloudflare R2.
+   - Group manual readiness into Vercel, Supabase, R2, Local Worker, and Rollback / Approval.
+   - Keep `production_pilot_ready=false` until env, manual evidence, explicit approval, and safety locks all pass.
+   - Do not create a Vercel project, enter production env, deploy, run DB writes, run production smoke, or trigger uploads from the PR.
+7. PR #42. Coupang collector MVP
    - Harden batch/manual URL import and server-only Coupang Partners API readiness.
    - Create candidates only; do not create queue rows or worker jobs from import.
 7. PR #43. Daily production planner actual use

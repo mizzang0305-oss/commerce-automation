@@ -159,6 +159,8 @@ python -m compileall python-worker
 - `checklists/local-worker-production-checklist.md` keeps `SUPABASE_SERVICE_ROLE_KEY` out of the Worker environment.
 - `checklists/production-pilot-preflight-checklist.md` separates Vercel, Supabase, R2, Worker, approval, and safety readiness.
 - `npm run preflight:production-pilot` prints configured/missing/manual-check status only.
+- `/ops/production-readiness` shows grouped env readiness, grouped manual readiness, not-ready reasons, and safety locks only.
+- Production pilot readiness is false until required env, manual evidence, explicit approval, and upload/deploy safety locks all pass.
 - `npm run preflight:production-pilot` does not run Vercel deploy, Supabase CLI, R2 network calls, Python Worker, or platform upload APIs.
 - Production pilot smoke confirms import creates candidates only.
 - Promotion and content generation create zero `worker_jobs`.

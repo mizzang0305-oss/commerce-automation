@@ -51,6 +51,26 @@ const MANUAL_CHECKS = [
   ["smoke.evidence_plan_ready", "Evidence capture plan prepared without raw secrets."]
 ];
 
+const ENV_GROUPS = [
+  ["webapp_base", "WebApp Base", ["AUTOMATION_REPOSITORY_ADAPTER", "PUBLIC_APP_BASE_URL"]],
+  ["supabase", "Supabase", ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]],
+  ["webapp_runtime", "WebApp Runtime / AI", ["WORKER_API_SECRET", "CONTENT_AI_PROVIDER"]],
+  ["local_worker", "Local Python Worker", WORKER_REQUIRED_ENV],
+  ["r2", "Cloudflare R2", R2_REQUIRED_ENV]
+];
+
+const MANUAL_GROUPS = [
+  ["vercel", "Vercel Readiness", ["vercel.project_selected", "vercel.node_build_confirmed"]],
+  [
+    "supabase",
+    "Supabase Readiness",
+    ["supabase.migrations_001_008_applied", "supabase.rls_verified", "supabase.postgrest_reloaded"]
+  ],
+  ["r2", "R2 Readiness", ["r2.buckets_ready"]],
+  ["local_worker", "Local Worker Readiness", ["worker.python_312_ready", "worker.ffmpeg_ready"]],
+  ["rollback_approval", "Rollback / Approval", ["smoke.operator_approval", "smoke.evidence_plan_ready"]]
+];
+
 export function buildProductionPilotPreflightReport(env = process.env) {
   const checks = [
     ...envChecks("vercel_webapp_env", WEB_REQUIRED_ENV, env),
@@ -69,10 +89,37 @@ export function buildProductionPilotPreflightReport(env = process.env) {
   ).length;
   const manualPending = checks.filter((check) => check.status === "manual_check").length;
   const criticalWarnings = warnings.filter((warning) => warning.severity === "critical").length;
+  const envGroups = buildEnvGroups(env);
+  const manualGroups = buildManualGroups();
+  const platformUploadDisabled =
+    !isTruthy(env.YOUTUBE_UPLOAD_ENABLED) && !isTruthy(env.PUBLIC_UPLOAD_ENABLED) && !isTruthy(env.UPLOAD_ENABLED);
+  const manualUploadOnly = !isExplicitFalse(env.MANUAL_UPLOAD_ONLY);
+  const explicitApprovalPresent = isTruthy(env.PRODUCTION_PILOT_APPROVED);
+  const readinessFormula = {
+    all_required_env_configured: missingRequired === 0,
+    missing_required_zero: missingRequired === 0,
+    forbidden_public_secrets_absent: forbiddenConfigured === 0,
+    all_manual_checks_completed: manualPending === 0,
+    explicit_approval_present: explicitApprovalPresent,
+    deploy_command_not_executed: true,
+    vercel_cli_not_invoked: true,
+    raw_secret_values_not_printed: true,
+    platform_upload_disabled: platformUploadDisabled,
+    youtube_auto_upload_disabled: !isTruthy(env.YOUTUBE_UPLOAD_ENABLED),
+    public_upload_disabled: !isTruthy(env.PUBLIC_UPLOAD_ENABLED),
+    manual_upload_only: manualUploadOnly,
+    production_pilot_ready:
+      missingRequired === 0 &&
+      forbiddenConfigured === 0 &&
+      manualPending === 0 &&
+      explicitApprovalPresent &&
+      platformUploadDisabled &&
+      manualUploadOnly
+  };
 
   return {
     ok: false,
-    ready_for_deploy: false,
+    ready_for_deploy: readinessFormula.production_pilot_ready,
     approval_required: true,
     summary: {
       configured_env: checks.filter(
@@ -85,6 +132,9 @@ export function buildProductionPilotPreflightReport(env = process.env) {
       warnings: warnings.length,
       critical_warnings: criticalWarnings
     },
+    env_groups: envGroups,
+    manual_groups: manualGroups,
+    readiness_formula: readinessFormula,
     checks,
     warnings,
     safety: {
@@ -113,6 +163,18 @@ export function formatPreflightReport(report) {
 
   for (const check of report.checks) {
     lines.push(`${check.status.toUpperCase()} ${check.group} ${check.name}`);
+  }
+
+  for (const group of report.env_groups) {
+    lines.push(
+      `ENV_GROUP ${group.key} configured=${group.configured}/${group.required} missing=${group.missing} status=${group.status}`
+    );
+  }
+
+  for (const group of report.manual_groups) {
+    lines.push(
+      `MANUAL_GROUP ${group.key} completed=${group.completed} pending=${group.pending} status=${group.status}`
+    );
   }
 
   for (const warning of report.warnings) {
@@ -150,6 +212,33 @@ function manualChecks() {
     kind: "manual",
     status: "manual_check",
     description
+  }));
+}
+
+function buildEnvGroups(env) {
+  return ENV_GROUPS.map(([key, label, envKeys]) => {
+    const configured = envKeys.filter((name) => hasValue(env[name])).length;
+    const missing = envKeys.length - configured;
+    return {
+      key,
+      label,
+      configured,
+      required: envKeys.length,
+      missing,
+      status: missing === 0 ? "configured" : "missing",
+      env_keys: envKeys
+    };
+  });
+}
+
+function buildManualGroups() {
+  return MANUAL_GROUPS.map(([key, label, checkKeys]) => ({
+    key,
+    label,
+    completed: 0,
+    pending: checkKeys.length,
+    status: "pending",
+    check_keys: checkKeys
   }));
 }
 
@@ -209,6 +298,10 @@ function normalized(value) {
 
 function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(normalized(value));
+}
+
+function isExplicitFalse(value) {
+  return ["0", "false", "no", "off"].includes(normalized(value));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

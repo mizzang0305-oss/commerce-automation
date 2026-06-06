@@ -36,12 +36,27 @@ describe("production pilot preflight", () => {
     expect(report.approval_required).toBe(true);
     expect(report.summary.missing_required).toBe(0);
     expect(report.summary.manual_pending).toBeGreaterThan(0);
+    expect(report.env_groups.map((group) => group.key)).toEqual(["webapp_base", "supabase", "webapp_runtime", "local_worker", "r2"]);
+    expect(report.env_groups.reduce((total, group) => total + group.required, 0)).toBe(19);
+    expect(report.manual_groups.map((group) => group.key)).toEqual(["vercel", "supabase", "r2", "local_worker", "rollback_approval"]);
+    expect(report.manual_groups.reduce((total, group) => total + group.pending, 0)).toBe(10);
+    expect(report.readiness_formula).toMatchObject({
+      all_required_env_configured: true,
+      all_manual_checks_completed: false,
+      explicit_approval_present: false,
+      deploy_command_not_executed: true,
+      vercel_cli_not_invoked: true,
+      raw_secret_values_not_printed: true,
+      production_pilot_ready: false
+    });
     expect(report.safety.deploy_command_executed).toBe(false);
     expect(report.safety.vercel_cli_invoked).toBe(false);
     expect(report.safety.supabase_cli_invoked).toBe(false);
     expect(report.safety.r2_network_call_executed).toBe(false);
     expect(output).toContain("production_pilot_preflight_ready=false");
     expect(output).toContain("approval_required=true");
+    expect(output).toContain("ENV_GROUP webapp_base configured=2/2 missing=0 status=configured");
+    expect(output).toContain("MANUAL_GROUP rollback_approval completed=0 pending=2 status=pending");
     expect(output).toContain("DEPLOY_COMMAND_EXECUTED false");
     expect(output).not.toContain("supabase-secret-value");
     expect(output).not.toContain("worker-secret-value");
@@ -57,6 +72,8 @@ describe("production pilot preflight", () => {
     const qa = readFileSync("docs/08_TEST_AND_QA_CHECKLIST.md", "utf8");
 
     expect(doc).toContain("Status: preparation only.");
+    expect(doc).toContain("Production pilot readiness closeout is not a deploy.");
+    expect(doc).toContain("Production pilot is ready only when env, manual evidence, and explicit approval are all complete.");
     expect(doc).toContain("npm run preflight:production-pilot");
     expect(doc).toContain("The preflight checks only readiness inputs.");
     expect(doc).toContain("The preflight script does not contact R2.");
@@ -66,7 +83,7 @@ describe("production pilot preflight", () => {
 
     expect(checklist).toContain("Operator explicitly approved the production pilot timing.");
     expect(checklist).toContain("No deploy command has been run by this checklist.");
-    expect(checklist).toContain("Migrations `001` through `007` applied.");
+    expect(checklist).toContain("Migrations `001` through `008` applied.");
     expect(checklist).toContain("Worker starts manually in PowerShell only.");
     expect(checklist).toContain("YouTube `videos.insert` absent.");
 

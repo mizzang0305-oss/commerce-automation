@@ -240,6 +240,24 @@ npm run preflight:production-pilot
 
 The preflight helper prints configured booleans, missing env names, manual-check items, and warning codes only. It does not run Vercel CLI, Supabase CLI, R2 network calls, Python Worker, or platform upload APIs.
 
+`/ops/production-readiness` is the companion closeout view. It is not a deployment console and does not write env values, run production smoke, or trigger uploads. The readiness formula requires all 19 required env checks, zero forbidden public secrets, all 10 manual checks, explicit operator approval, deploy/smoke non-execution flags, and upload locks (`youtube_upload_enabled=false`, public upload disabled, `upload_enabled=false`, `manual_upload_only=true`).
+
+Env groups:
+
+- WebApp Base
+- Supabase
+- WebApp Runtime / AI
+- Local Python Worker
+- Cloudflare R2
+
+Manual groups:
+
+- Vercel Readiness
+- Supabase Readiness
+- R2 Readiness
+- Local Worker Readiness
+- Rollback / Approval
+
 Pilot boundaries:
 
 - `CONTENT_AI_PROVIDER=template`.

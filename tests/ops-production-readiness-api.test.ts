@@ -34,6 +34,41 @@ describe("ops production readiness API", () => {
         }
       });
       expect(payload.env.required).toBeGreaterThan(0);
+      expect(payload.env.required).toBe(19);
+      expect(payload.env_groups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "webapp_base", label: "WebApp Base" }),
+          expect.objectContaining({ key: "supabase", label: "Supabase" }),
+          expect.objectContaining({ key: "webapp_runtime", label: "WebApp Runtime / AI" }),
+          expect.objectContaining({ key: "local_worker", label: "Local Python Worker" }),
+          expect.objectContaining({ key: "r2", label: "Cloudflare R2" })
+        ])
+      );
+      expect(payload.env_groups.reduce((total: number, group: { required: number }) => total + group.required, 0)).toBe(19);
+      expect(payload.manual_groups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "vercel", label: "Vercel Readiness" }),
+          expect.objectContaining({ key: "supabase", label: "Supabase Readiness" }),
+          expect.objectContaining({ key: "r2", label: "R2 Readiness" }),
+          expect.objectContaining({ key: "local_worker", label: "Local Worker Readiness" }),
+          expect.objectContaining({ key: "rollback_approval", label: "Rollback / Approval" })
+        ])
+      );
+      expect(payload.manual_groups.reduce((total: number, group: { pending: number }) => total + group.pending, 0)).toBe(10);
+      expect(payload.readiness_formula).toMatchObject({
+        all_required_env_configured: false,
+        forbidden_public_secrets_absent: true,
+        all_manual_checks_completed: false,
+        explicit_approval_present: false,
+        deploy_command_not_executed: true,
+        vercel_cli_not_invoked: true,
+        raw_secret_values_not_printed: true,
+        platform_upload_disabled: true,
+        youtube_auto_upload_disabled: true,
+        public_upload_disabled: true,
+        manual_upload_only: true,
+        production_pilot_ready: false
+      });
       expect(payload.data_persistence).toEqual(
         expect.objectContaining({
           migration_008_sql_verification_pass: true,
