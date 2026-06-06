@@ -99,6 +99,8 @@ Every package response must keep:
 5. Run manual QA against the checklist.
 6. Wait for a separate image QA/import PR before bringing generated files into `commerce-automation`.
 
+That follow-on bridge is documented in [IMAGE_QA_IMPORT_BRIDGE.md](IMAGE_QA_IMPORT_BRIDGE.md). It accepts manifest text and creates a QA/import plan only; it still does not read files, write files, write DB rows, call Google Drive, upload to R2, create worker jobs, or create queue rows.
+
 ## QA Checklist
 
 - Product identity and category remain consistent.

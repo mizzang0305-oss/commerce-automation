@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/types";
+import type { ImageQaImportPlan } from "@/lib/image-qa-import/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
 import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
 
@@ -16,24 +17,45 @@ function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
 export function ImagePromptPlanClient({
   plan,
   imageVideoPlan,
-  localImagePackage
+  localImagePackage,
+  imageQaImportPlan
 }: {
   plan: CommerceImagePromptPlan;
   imageVideoPlan?: CommerceImageVideoPlan | null;
   localImagePackage?: LocalImageGenerationPackage | null;
+  imageQaImportPlan?: ImageQaImportPlan | null;
 }) {
   const [message, setMessage] = useState("");
+  const [importManifestText, setImportManifestText] = useState(imageQaImportPlan?.import_manifest_json ?? "");
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
   const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
   const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
   const localPackageJson = useMemo(() => JSON.stringify(localImagePackage ?? {}, null, 2), [localImagePackage]);
   const manifestJson = useMemo(() => JSON.stringify(localImagePackage?.manifest ?? {}, null, 2), [localImagePackage]);
+  const imageQaImportPlanJson = useMemo(() => JSON.stringify(imageQaImportPlan ?? {}, null, 2), [imageQaImportPlan]);
+  const selectedImageAssetJson = useMemo(
+    () => JSON.stringify(imageQaImportPlan?.selected_image_asset_plan ?? {}, null, 2),
+    [imageQaImportPlan]
+  );
+  const nextStepJson = useMemo(
+    () => JSON.stringify({
+      next_step_after_qa: imageQaImportPlan?.next_step_after_qa ?? [],
+      next_step: imageQaImportPlan?.selected_image_asset_plan.next_step ?? "manual_review",
+      ready_for_slideshow_plan: imageQaImportPlan?.selected_image_asset_plan.ready_for_slideshow_plan ?? false,
+      side_effects: imageQaImportPlan?.side_effects ?? {}
+    }, null, 2),
+    [imageQaImportPlan]
+  );
 
   async function copyText(text: string, label: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       await navigator.clipboard.writeText(text).catch(() => undefined);
     }
     setMessage(`${label} copied. No image, video, upload, queue, or worker job was created.`);
+  }
+
+  function previewImportPlan() {
+    setMessage("QA import plan preview refreshed. No local file was read, no DB row was written, and no upload was started.");
   }
 
   return (
@@ -300,6 +322,135 @@ export function ImagePromptPlanClient({
 
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
             {localImagePackage.future_import_instruction}
+          </div>
+        </section>
+      ) : null}
+
+      {imageQaImportPlan ? (
+        <section className="rounded-lg border border-indigo-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">plan-only import bridge</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Image QA Import Bridge</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                This bridge creates QA/import planning text for manually generated images. It does not upload files, read
+                local files, write DB rows, call Google Drive APIs, upload to R2, generate video, or create worker jobs.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={previewImportPlan}
+                className="rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-bold text-indigo-800 hover:bg-indigo-50"
+              >
+                Preview QA import plan
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(importManifestText, "Import manifest JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy import manifest JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(selectedImageAssetJson, "Selected image asset JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy selected image asset JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageQaImportPlan.qa_markdown, "QA markdown")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy QA markdown
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(nextStepJson, "Next-step JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy next-step JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageQaImportPlanJson, "Import plan JSON download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download import plan JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(imageQaImportPlan.qa_markdown, "QA markdown download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download QA markdown
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SideEffectBadge label="external_api_called" value={imageQaImportPlan.side_effects.external_api_called} />
+            <SideEffectBadge label="scraped_live_web" value={imageQaImportPlan.side_effects.scraped_live_web} />
+            <SideEffectBadge label="image_generated" value={imageQaImportPlan.side_effects.image_generated} />
+            <SideEffectBadge label="video_generated" value={imageQaImportPlan.side_effects.video_generated} />
+            <SideEffectBadge label="uploaded" value={imageQaImportPlan.side_effects.uploaded} />
+            <SideEffectBadge label="db_written" value={imageQaImportPlan.side_effects.db_written} />
+            <SideEffectBadge label="file_uploaded" value={imageQaImportPlan.side_effects.file_uploaded} />
+            <SideEffectBadge label="local_file_read" value={imageQaImportPlan.side_effects.local_file_read} />
+            <SideEffectBadge label="local_file_written" value={imageQaImportPlan.side_effects.local_file_written} />
+            <SideEffectBadge label="google_drive_api_called" value={imageQaImportPlan.side_effects.google_drive_api_called} />
+            <SideEffectBadge label="r2_uploaded" value={imageQaImportPlan.side_effects.r2_uploaded} />
+            <SideEffectBadge label="worker_job_created" value={imageQaImportPlan.side_effects.worker_job_created} />
+            <SideEffectBadge label="queue_created" value={imageQaImportPlan.side_effects.queue_created} />
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              approval_required={String(imageQaImportPlan.approval_required)}
+            </span>
+            <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-800">
+              ready_for_slideshow_plan={String(imageQaImportPlan.selected_image_asset_plan.ready_for_slideshow_plan)}
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="image-import-manifest" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Import manifest JSON
+            </label>
+            <textarea
+              id="image-import-manifest"
+              value={importManifestText}
+              onChange={(event) => setImportManifestText(event.target.value)}
+              className="mt-2 min-h-48 w-full rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Text validation only. No local path is read and no Google Drive file lookup is performed.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Missing required asset types</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {imageQaImportPlan.selected_image_asset_plan.missing_required_asset_types.join(", ") || "none"}
+              </p>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Next step</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {imageQaImportPlan.selected_image_asset_plan.next_step}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {imageQaImportPlan.assets.map((asset) => (
+              <article key={asset.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{asset.asset_type}</p>
+                <h3 className="mt-1 text-sm font-bold text-slate-950">{asset.expected_filename}</h3>
+                <p className="mt-2 text-xs text-slate-500">QA status: {asset.qa_status}</p>
+                <p className="mt-1 break-all text-xs text-slate-500">Provided path: {asset.provided_path || "not provided"}</p>
+              </article>
+            ))}
           </div>
         </section>
       ) : null}

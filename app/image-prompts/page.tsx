@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ImagePromptPlanClient } from "@/components/ImagePromptPlanClient";
 import { buildLocalImageGenerationPackage } from "@/lib/image-generation-bridge/buildLocalImageGenerationPackage";
+import { buildImageQaImportPlan } from "@/lib/image-qa-import/buildImageQaImportPlan";
 import { buildCommerceImagePromptPlan } from "@/lib/image-prompts/prompt-builder";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { buildCommerceImageVideoPlan } from "@/lib/video-plans/buildCommerceVideoPlan";
@@ -22,6 +23,9 @@ export default async function ImagePromptsPage(
   const plan = selectedCandidate ? buildCommerceImagePromptPlan(selectedCandidate) : null;
   const imageVideoPlan = plan ? buildCommerceImageVideoPlan(plan) : null;
   const localImagePackage = selectedCandidate ? buildLocalImageGenerationPackage(selectedCandidate) : null;
+  const imageQaImportPlan = selectedCandidate && localImagePackage
+    ? buildImageQaImportPlan(selectedCandidate, localImagePackage)
+    : null;
 
   return (
     <div className="space-y-5">
@@ -74,6 +78,7 @@ export default async function ImagePromptsPage(
           plan={plan}
           imageVideoPlan={imageVideoPlan}
           localImagePackage={localImagePackage}
+          imageQaImportPlan={imageQaImportPlan}
         />
       ) : null}
     </div>

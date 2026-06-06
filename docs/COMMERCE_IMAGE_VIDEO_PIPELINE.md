@@ -108,6 +108,8 @@ This is a folder convention only. Google Drive API and OAuth are not implemented
 
 `GET /api/candidates/[id]/local-image-package` turns the image prompt plan and video plan into a copy-only local image generation package. It includes suggested filenames, manifest JSON, prompt markdown, manual steps, and QA checklist text for operator review. It remains generated-on-read and keeps `local_file_written=false` and `google_drive_api_called=false`.
 
+`POST /api/candidates/[id]/image-qa-import-plan` turns manually pasted filename/path manifest text into an `ImageQaImportPlan`. It reports per-asset QA status, missing required asset types, selected image asset JSON, and `ready_for_slideshow_plan`. It validates text shape only and keeps `local_file_read=false`, `local_file_written=false`, `db_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
+
 ## KPI Direction
 
 Future KPI candidates:
@@ -141,6 +143,7 @@ This PR does not collect KPI data or write KPI records.
 - Queue creation.
 - Upload package creation.
 - Google Drive API/OAuth.
+- Image QA file import or upload.
 - YouTube/TikTok/Threads upload.
 - Public upload enablement.
 - Production deploy or production smoke.

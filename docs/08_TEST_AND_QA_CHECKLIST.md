@@ -147,6 +147,11 @@ python -m compileall python-worker
 - `GET /api/candidates/[id]/local-image-package` returns a local image generation package with suggested filenames, local output paths, Google Drive sync-folder suggestions, manifest JSON, prompt markdown, manual steps, and QA checklist text.
 - Every local image package response keeps `scraped_live_web=false`, `external_api_called=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `payment_triggered=false`, `message_sent=false`, `deployment_triggered=false`, `worker_job_created=false`, `queue_created=false`, `local_file_written=false`, and `google_drive_api_called=false`.
 - Local image package UI controls are copy-only. They must not generate images, write local files, call Google Drive, create artifacts, create queue rows, create worker jobs, create upload packages, or run uploads.
+- `POST /api/candidates/[id]/image-qa-import-plan` validates optional import manifest text and returns an in-memory `ImageQaImportPlan`.
+- Image QA import manifest validation checks `candidate_id`, asset type, filename, path text, and QA status without reading local files or calling Google Drive.
+- Image QA import plans return selected image asset JSON, QA markdown, missing required asset types, and `ready_for_slideshow_plan`.
+- Every image QA import response keeps `external_api_called=false`, `scraped_live_web=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `local_file_read=false`, `local_file_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
+- `/image-prompts` exposes copy-only QA import bridge controls and must not expose Upload Image, Browse Local File, Read File, Import to DB, Save Selected Assets, Send to Google Drive, Upload to R2, Generate Video, Run FFmpeg, or platform post buttons.
 
 ## Render Quality QA
 
