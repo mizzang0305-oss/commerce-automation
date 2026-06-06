@@ -52,11 +52,12 @@ const MANUAL_CHECKS = [
 ];
 
 const ENV_GROUPS = [
-  ["webapp_base", "WebApp Base", ["AUTOMATION_REPOSITORY_ADAPTER", "PUBLIC_APP_BASE_URL"]],
+  ["webapp_base", "WebApp Base", ["AUTOMATION_REPOSITORY_ADAPTER", "PUBLIC_APP_BASE_URL", "WORKER_API_SECRET"]],
   ["supabase", "Supabase", ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]],
-  ["webapp_runtime", "WebApp Runtime / AI", ["WORKER_API_SECRET", "CONTENT_AI_PROVIDER"]],
   ["local_worker", "Local Python Worker", WORKER_REQUIRED_ENV],
-  ["r2", "Cloudflare R2", R2_REQUIRED_ENV]
+  ["r2", "Cloudflare R2", R2_REQUIRED_ENV],
+  ["ai_coupang", "AI / Coupang", ["CONTENT_AI_PROVIDER"]],
+  ["safety_flags", "Safety Flags", []]
 ];
 
 const MANUAL_GROUPS = [

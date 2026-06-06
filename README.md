@@ -51,7 +51,7 @@ npm run preflight:production-pilot
 
 The preflight helper prints configured/missing/manual-check status only. It does not run Vercel deploy, call Supabase CLI, contact R2, start Python Worker, or print raw secret values.
 
-Production pilot closeout is a readiness view, not a deploy. `/ops/production-readiness` and the preflight helper group the 19 required env checks into WebApp Base, Supabase, WebApp Runtime / AI, Local Python Worker, and Cloudflare R2, and group the 10 manual checks into Vercel, Supabase, R2, Local Worker, and Rollback / Approval. Pilot readiness remains false until all required env values are configured, forbidden public secrets are absent, every manual check has evidence, explicit operator approval is present, deploy/smoke commands have not been run by the tool, and upload locks remain disabled/manual-only.
+Production pilot closeout is a readiness view, not a deploy. `/ops/production-readiness` and the preflight helper group the 19 required env checks into WebApp Base, Supabase, Local Python Worker, Cloudflare R2, AI / Coupang, and Safety Flags, and group the 10 manual checks into Vercel, Supabase, R2, Local Worker, and Rollback / Approval. Pilot readiness remains false until all required env values are configured, forbidden public secrets are absent, every manual check has evidence, explicit operator approval is present, deploy/smoke commands have not been run by the tool, and upload locks remain disabled/manual-only.
 
 ## Repository Adapters
 

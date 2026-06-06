@@ -39,9 +39,10 @@ describe("ops production readiness API", () => {
         expect.arrayContaining([
           expect.objectContaining({ key: "webapp_base", label: "WebApp Base" }),
           expect.objectContaining({ key: "supabase", label: "Supabase" }),
-          expect.objectContaining({ key: "webapp_runtime", label: "WebApp Runtime / AI" }),
           expect.objectContaining({ key: "local_worker", label: "Local Python Worker" }),
-          expect.objectContaining({ key: "r2", label: "Cloudflare R2" })
+          expect.objectContaining({ key: "r2", label: "Cloudflare R2" }),
+          expect.objectContaining({ key: "ai_coupang", label: "AI / Coupang" }),
+          expect.objectContaining({ key: "safety_flags", label: "Safety Flags" })
         ])
       );
       expect(payload.env_groups.reduce((total: number, group: { required: number }) => total + group.required, 0)).toBe(19);

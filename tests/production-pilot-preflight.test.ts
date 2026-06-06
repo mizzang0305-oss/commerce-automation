@@ -36,7 +36,14 @@ describe("production pilot preflight", () => {
     expect(report.approval_required).toBe(true);
     expect(report.summary.missing_required).toBe(0);
     expect(report.summary.manual_pending).toBeGreaterThan(0);
-    expect(report.env_groups.map((group) => group.key)).toEqual(["webapp_base", "supabase", "webapp_runtime", "local_worker", "r2"]);
+    expect(report.env_groups.map((group) => group.key)).toEqual([
+      "webapp_base",
+      "supabase",
+      "local_worker",
+      "r2",
+      "ai_coupang",
+      "safety_flags"
+    ]);
     expect(report.env_groups.reduce((total, group) => total + group.required, 0)).toBe(19);
     expect(report.manual_groups.map((group) => group.key)).toEqual(["vercel", "supabase", "r2", "local_worker", "rollback_approval"]);
     expect(report.manual_groups.reduce((total, group) => total + group.pending, 0)).toBe(10);
@@ -55,7 +62,9 @@ describe("production pilot preflight", () => {
     expect(report.safety.r2_network_call_executed).toBe(false);
     expect(output).toContain("production_pilot_preflight_ready=false");
     expect(output).toContain("approval_required=true");
-    expect(output).toContain("ENV_GROUP webapp_base configured=2/2 missing=0 status=configured");
+    expect(output).toContain("ENV_GROUP webapp_base configured=3/3 missing=0 status=configured");
+    expect(output).toContain("ENV_GROUP ai_coupang configured=1/1 missing=0 status=configured");
+    expect(output).toContain("ENV_GROUP safety_flags configured=0/0 missing=0 status=configured");
     expect(output).toContain("MANUAL_GROUP rollback_approval completed=0 pending=2 status=pending");
     expect(output).toContain("DEPLOY_COMMAND_EXECUTED false");
     expect(output).not.toContain("supabase-secret-value");

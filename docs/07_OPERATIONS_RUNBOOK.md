@@ -246,9 +246,10 @@ Env groups:
 
 - WebApp Base
 - Supabase
-- WebApp Runtime / AI
 - Local Python Worker
 - Cloudflare R2
+- AI / Coupang
+- Safety Flags
 
 Manual groups:
 
