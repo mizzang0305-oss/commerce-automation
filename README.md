@@ -216,6 +216,8 @@ Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The templat
 
 `GET /api/candidates/[id]/local-image-package` and `/image-prompts` also provide an approval-gated local image generation package. It suggests filenames, local output folders, Google Drive sync folders, manifest JSON, prompt markdown, manual steps, and QA checklist text for separate manual image work. It remains copy-only: `external_api_called=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `worker_job_created=false`, `queue_created=false`, `local_file_written=false`, and `google_drive_api_called=false`. See `docs/LOCAL_IMAGE_GENERATION_BRIDGE.md`.
 
+`POST /api/candidates/[id]/image-qa-import-plan` and `/image-prompts` add the next copy-only bridge for manually generated image filenames or path text. Operators can paste an import manifest, preview QA status, copy selected image asset JSON, and copy QA markdown. The bridge validates text only and keeps `local_file_read=false`, `local_file_written=false`, `db_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `worker_job_created=false`, and `queue_created=false`. See `docs/IMAGE_QA_IMPORT_BRIDGE.md`.
+
 Optional provider selection is server-only:
 
 ```text
