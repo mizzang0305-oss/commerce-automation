@@ -137,8 +137,12 @@ python -m compileall python-worker
 ## Commerce Image Prompt Planning QA
 
 - `GET /api/candidates/[id]/image-plan` returns four plan-only asset prompts: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`.
+- `GET /api/candidates/[id]/image-video-plan` returns the image asset plan plus a plan-only 15-second `VideoPlan`.
+- The `VideoPlan` must include a 4-6 shot list covering 0-15 seconds, narration, subtitle lines, CTA, and Coupang Partners disclosure reminder.
 - Every image plan response keeps `image_generated=false`, `video_generated=false`, `uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
-- `/image-prompts` exposes copy-only prompt, negative prompt, and JSON controls.
+- Every image-video plan response keeps `scraped_live_web=false`, `external_api_called=false`, `db_written=false`, `file_uploaded=false`, `payment_triggered=false`, `message_sent=false`, `deployment_triggered=false`, `worker_job_created=false`, and `queue_created=false`.
+- Every image-video plan response keeps `approval_required=true`.
+- `/image-prompts` exposes copy-only prompt, negative prompt, storyboard, narration, subtitle, CTA, and JSON controls.
 - The image planning flow must not call image APIs, Google Drive APIs, Worker APIs, queue APIs, upload APIs, or platform upload APIs.
 
 ## Render Quality QA

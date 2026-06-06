@@ -256,6 +256,25 @@ Not included:
    - Document user/workspace/affiliate-account boundaries.
    - Keep the current single-operator MVP unchanged unless a production need is proven.
 
+## v2.3 Commerce Image And Video Planning
+
+The media planning layer keeps the system plan-only and copy-only while preparing better source material for future approval-gated image generation and video rendering work.
+
+Included:
+
+- Candidate-based image asset plan for `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`.
+- Candidate-based `VideoPlan` with a 15-second shorts storyboard, shot list, narration, subtitle lines, CTA, and affiliate disclosure reminder.
+- `/image-prompts` copy-only preview and JSON export controls.
+- Documentation for local asset folders, optional Google Drive sync-folder conventions, and future KPI candidates.
+
+Not included:
+
+- Image generation API calls.
+- Image-to-video API calls.
+- FFmpeg/MoviePy execution from the planning layer.
+- Google Drive API/OAuth.
+- DB writes, queue creation, worker job creation, upload packages, uploads, production deploys, or production smoke.
+
 Priority rule:
 
 1. Operations stability.
