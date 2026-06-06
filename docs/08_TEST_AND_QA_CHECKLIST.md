@@ -134,6 +134,13 @@ python -m compileall python-worker
 - A queue item with generated `video_script`, disclosure text, affiliate link, and thumbnail can later pass next-batch render guards.
 - `/queue/[id]` shows content readiness and the `콘텐츠 초안 생성` action without exposing secrets.
 
+## Commerce Image Prompt Planning QA
+
+- `GET /api/candidates/[id]/image-plan` returns four plan-only asset prompts: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`.
+- Every image plan response keeps `image_generated=false`, `video_generated=false`, `uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
+- `/image-prompts` exposes copy-only prompt, negative prompt, and JSON controls.
+- The image planning flow must not call image APIs, Google Drive APIs, Worker APIs, queue APIs, upload APIs, or platform upload APIs.
+
 ## Render Quality QA
 
 - Python Worker image download uses a bounded timeout and requires HTTP 200.

@@ -39,6 +39,7 @@ export const navigationCommands: NavigationOperatorCommand[] = [
   { id: "nav.candidates", type: "navigation", label: "Candidates", description: "Review collected product candidates", href: "/candidates", aliases: ["candidate", "queue seed"] },
   { id: "nav.candidate-analytics", type: "navigation", label: "Candidate Analytics", description: "Analyze seed, scoring, and collector signals", href: "/candidates/analytics", aliases: ["analytics", "seed", "score"], defaultFavorite: true },
   { id: "nav.candidate-seed-plan", type: "navigation", label: "Candidate Seed Plan", description: "Open candidate analytics seed planning section", href: "/candidates/analytics#seed-plan", aliases: ["seed", "planner"] },
+  { id: "nav.image-prompts", type: "navigation", label: "Image Prompts", description: "Plan copy-only commerce image prompts for candidates", href: "/image-prompts", aliases: ["image", "prompt", "asset plan"] },
   { id: "nav.artifacts", type: "navigation", label: "Artifacts", description: "Manual QA for video, thumbnail, subtitle, and package artifacts", href: "/artifacts", aliases: ["artifact qa", "qa", "review"], defaultFavorite: true },
   { id: "nav.production-readiness", type: "navigation", label: "Production Readiness", description: "Readiness checks without running deploys", href: "/ops/production-readiness", aliases: ["preflight", "env", "production"], defaultFavorite: true },
   { id: "nav.runs", type: "navigation", label: "Runs", description: "Inspect automation run history", href: "/runs", aliases: ["history"] },
@@ -93,7 +94,8 @@ export const defaultFavoriteCommandIds = operatorCommands
 
 const contextCommandIdsByPath: Array<{ match: (pathname: string) => boolean; ids: string[] }> = [
   { match: (pathname) => pathname === "/dashboard" || pathname === "/", ids: ["nav.production-readiness", "nav.candidate-analytics", "copy.test.full"] },
-  { match: (pathname) => pathname.startsWith("/candidates/analytics"), ids: ["nav.candidate-seed-plan", "copy.test.candidates", "nav.candidates"] },
+  { match: (pathname) => pathname.startsWith("/candidates/analytics"), ids: ["nav.candidate-seed-plan", "nav.image-prompts", "copy.test.candidates", "nav.candidates"] },
+  { match: (pathname) => pathname.startsWith("/image-prompts"), ids: ["nav.candidates", "nav.candidate-analytics", "copy.test.candidates"] },
   { match: (pathname) => pathname.startsWith("/artifacts"), ids: ["nav.artifacts.pending", "nav.artifacts.needs-fix", "copy.test.artifacts"] },
   { match: (pathname) => pathname.startsWith("/ops/production-readiness"), ids: ["copy.preflight.production-pilot", "copy.check.production-env", "nav.production-readiness"] }
 ];

@@ -210,6 +210,10 @@ Promoted queue items can receive a safe template draft before worker dispatch:
 
 Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The template provider creates `video_title`, `video_script`, captions, descriptions, hashtags, and disclosure text without external API calls. `POST /api/queue/[id]/generate-content` still creates zero `worker_jobs`; worker jobs are created only by `/api/run/next-batch`.
 
+## Commerce Image Prompt Planning
+
+`/image-prompts` provides candidate-based commerce image prompt planning for four copy-only asset types: `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`. The page and `GET /api/candidates/[id]/image-plan` return prompt text, negative prompts, risk flags, safety notes, and explicit false side effects. They do not call image APIs, create image generation jobs, create video jobs, create queue rows, create render plans, upload files, or call Google Drive. See `docs/COMMERCE_IMAGE_PIPELINE.md`.
+
 Optional provider selection is server-only:
 
 ```text
@@ -287,6 +291,7 @@ Apply `supabase/migrations/003_event_calendar_and_planner.sql` when using Supaba
 - `/queue/[id]`: generated result URLs, assets, render plan preview, content draft action, channel upload package action, and manual review controls.
 - `/planner`: event-driven daily production plan and manual-only channel routing.
 - `/channels`: manual-only channel profile readiness and upload package template admin.
+- `/image-prompts`: copy-only commerce image prompt planning for product candidates.
 - `/artifacts`: generated artifact QA with filters, search, sorting, and bulk QA review. QA updates never trigger uploads or worker jobs.
 - `/jobs`: worker job list with status/type/error filters, sorting, and pagination.
 - `/workers`: worker heartbeat/current job view.
