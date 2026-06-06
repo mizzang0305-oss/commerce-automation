@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/types";
 import type { ImageQaImportPlan } from "@/lib/image-qa-import/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
+import type { SlideshowPackagePlan } from "@/lib/slideshow-package";
 import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
 
 function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
@@ -18,12 +19,14 @@ export function ImagePromptPlanClient({
   plan,
   imageVideoPlan,
   localImagePackage,
-  imageQaImportPlan
+  imageQaImportPlan,
+  slideshowPackagePlan
 }: {
   plan: CommerceImagePromptPlan;
   imageVideoPlan?: CommerceImageVideoPlan | null;
   localImagePackage?: LocalImageGenerationPackage | null;
   imageQaImportPlan?: ImageQaImportPlan | null;
+  slideshowPackagePlan?: SlideshowPackagePlan | null;
 }) {
   const [message, setMessage] = useState("");
   const [importManifestText, setImportManifestText] = useState(imageQaImportPlan?.import_manifest_json ?? "");
@@ -36,6 +39,14 @@ export function ImagePromptPlanClient({
   const selectedImageAssetJson = useMemo(
     () => JSON.stringify(imageQaImportPlan?.selected_image_asset_plan ?? {}, null, 2),
     [imageQaImportPlan]
+  );
+  const slideshowPackagePlanJson = useMemo(
+    () => JSON.stringify(slideshowPackagePlan ?? {}, null, 2),
+    [slideshowPackagePlan]
+  );
+  const slideshowTimelineMarkdown = useMemo(
+    () => slideshowPackagePlan?.timeline_markdown ?? "",
+    [slideshowPackagePlan]
   );
   const nextStepJson = useMemo(
     () => JSON.stringify({
@@ -56,6 +67,10 @@ export function ImagePromptPlanClient({
 
   function previewImportPlan() {
     setMessage("QA import plan preview refreshed. No local file was read, no DB row was written, and no upload was started.");
+  }
+
+  function previewSlideshowPlan() {
+    setMessage("Slideshow package plan preview refreshed. No FFmpeg, MoviePy, file write, upload, queue, or worker job was started.");
   }
 
   return (
@@ -451,6 +466,178 @@ export function ImagePromptPlanClient({
                 <p className="mt-1 break-all text-xs text-slate-500">Provided path: {asset.provided_path || "not provided"}</p>
               </article>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {slideshowPackagePlan ? (
+        <section className="rounded-lg border border-purple-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-purple-700">manual slideshow planning</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Selected Image Slideshow Package Plan</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                This screen creates a selected-image slideshow package plan only. It does not execute FFmpeg/MoviePy,
+                create video files, upload to R2, create upload packages, write DB rows, or post to social platforms.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={previewSlideshowPlan}
+                className="rounded-md border border-purple-300 px-3 py-1.5 text-xs font-bold text-purple-800 hover:bg-purple-50"
+              >
+                Preview slideshow package plan
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowPackagePlanJson, "Slideshow package JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy slideshow package JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowTimelineMarkdown, "Timeline markdown")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy timeline markdown
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowPackagePlan.ffmpeg_preview.ffmpeg_command_preview, "FFmpeg command preview")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy FFmpeg command preview
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowPackagePlan.moviepy_preview.moviepy_script_preview, "MoviePy script preview")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy MoviePy script preview
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowPackagePlan.manual_render_checklist.join("\n"), "Manual render checklist")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy manual render checklist
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowPackagePlanJson, "Slideshow package JSON download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download slideshow package JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(slideshowTimelineMarkdown, "Timeline markdown download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download timeline markdown
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SideEffectBadge label="external_api_called" value={slideshowPackagePlan.side_effects.external_api_called} />
+            <SideEffectBadge label="scraped_live_web" value={slideshowPackagePlan.side_effects.scraped_live_web} />
+            <SideEffectBadge label="image_generated" value={slideshowPackagePlan.side_effects.image_generated} />
+            <SideEffectBadge label="video_generated" value={slideshowPackagePlan.side_effects.video_generated} />
+            <SideEffectBadge label="uploaded" value={slideshowPackagePlan.side_effects.uploaded} />
+            <SideEffectBadge label="db_written" value={slideshowPackagePlan.side_effects.db_written} />
+            <SideEffectBadge label="file_uploaded" value={slideshowPackagePlan.side_effects.file_uploaded} />
+            <SideEffectBadge label="local_file_read" value={slideshowPackagePlan.side_effects.local_file_read} />
+            <SideEffectBadge label="local_file_written" value={slideshowPackagePlan.side_effects.local_file_written} />
+            <SideEffectBadge label="google_drive_api_called" value={slideshowPackagePlan.side_effects.google_drive_api_called} />
+            <SideEffectBadge label="r2_uploaded" value={slideshowPackagePlan.side_effects.r2_uploaded} />
+            <SideEffectBadge label="ffmpeg_executed" value={slideshowPackagePlan.side_effects.ffmpeg_executed} />
+            <SideEffectBadge label="moviepy_executed" value={slideshowPackagePlan.side_effects.moviepy_executed} />
+            <SideEffectBadge label="upload_package_created" value={slideshowPackagePlan.side_effects.upload_package_created} />
+            <SideEffectBadge label="worker_job_created" value={slideshowPackagePlan.side_effects.worker_job_created} />
+            <SideEffectBadge label="queue_created" value={slideshowPackagePlan.side_effects.queue_created} />
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              approval_required={String(slideshowPackagePlan.approval_required)}
+            </span>
+            <span className="rounded-full bg-purple-50 px-2 py-1 text-xs font-bold text-purple-800">
+              ready_for_slideshow_plan={String(slideshowPackagePlan.ready_for_slideshow_plan)}
+            </span>
+          </div>
+
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            이 화면은 선택 이미지 기반 쇼츠 슬라이드쇼 패키지 계획만 만듭니다. FFmpeg/MoviePy 실행, 영상 파일 생성,
+            업로드, R2 저장, SNS 게시를 실행하지 않습니다.
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">15-second slideshow timeline</p>
+              <div className="mt-2 space-y-2">
+                {slideshowPackagePlan.timeline.length > 0 ? slideshowPackagePlan.timeline.map((item) => (
+                  <article key={item.index} className="rounded-md border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-purple-700">
+                      Shot {item.index} / {item.start_sec}-{item.end_sec}s / {item.asset_type}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{item.overlay_text}</p>
+                    <p className="mt-1 text-xs text-slate-500">Narration: {item.narration}</p>
+                    <p className="mt-1 text-xs text-slate-500">Subtitle: {item.subtitle}</p>
+                  </article>
+                )) : (
+                  <p className="text-sm font-semibold text-slate-700">
+                    Missing selected image requirements. Resolve manual QA before local slideshow planning.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">image sequence</p>
+              <ol className="mt-2 space-y-1 text-xs text-slate-600">
+                {slideshowPackagePlan.image_sequence.length > 0 ? slideshowPackagePlan.image_sequence.map((imagePath, index) => (
+                  <li key={`${imagePath}-${index}`} className="break-all">
+                    {index + 1}. {imagePath}
+                  </li>
+                )) : (
+                  <li>No selected image sequence is ready yet.</li>
+                )}
+              </ol>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">CTA</p>
+              <p className="mt-1 text-sm text-slate-700">{slideshowPackagePlan.cta}</p>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">affiliate disclosure reminder</p>
+              <p className="mt-1 text-sm text-slate-700">{slideshowPackagePlan.affiliate_disclosure_reminder}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">FFmpeg command preview</p>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-700">
+                {slideshowPackagePlan.ffmpeg_preview.ffmpeg_command_preview}
+              </pre>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">MoviePy script preview</p>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-700">
+                {slideshowPackagePlan.moviepy_preview.moviepy_script_preview}
+              </pre>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-md bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">manual render checklist</p>
+            <ul className="mt-2 space-y-1 text-sm text-slate-700">
+              {slideshowPackagePlan.manual_render_checklist.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
         </section>
       ) : null}

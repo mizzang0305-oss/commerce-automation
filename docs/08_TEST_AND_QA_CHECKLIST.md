@@ -152,6 +152,9 @@ python -m compileall python-worker
 - Image QA import plans return selected image asset JSON, QA markdown, missing required asset types, and `ready_for_slideshow_plan`.
 - Every image QA import response keeps `external_api_called=false`, `scraped_live_web=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `local_file_read=false`, `local_file_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
 - `/image-prompts` exposes copy-only QA import bridge controls and must not expose Upload Image, Browse Local File, Read File, Import to DB, Save Selected Assets, Send to Google Drive, Upload to R2, Generate Video, Run FFmpeg, or platform post buttons.
+- `POST /api/candidates/[id]/slideshow-package-plan` returns an in-memory `SlideshowPackagePlan` with selected image sequence, 15-second timeline, overlay/narration/subtitle mapping, CTA, disclosure reminder, FFmpeg preview, MoviePy preview, and manual render checklist.
+- Every slideshow package plan response keeps `external_api_called=false`, `scraped_live_web=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `file_uploaded=false`, `local_file_read=false`, `local_file_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
+- `/image-prompts` exposes copy-only slideshow package controls and must not expose Run FFmpeg, Run MoviePy, Create Video File, Upload Video, Create Upload Package, Send to R2, or platform post buttons.
 
 ## Render Quality QA
 
