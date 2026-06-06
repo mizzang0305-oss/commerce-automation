@@ -96,7 +96,7 @@ The bridge returns `selected_image_asset_plan` with selected/passed assets, miss
 - At least three assets are `passed` or `selected`.
 - No selected asset is simultaneously treated as rejected.
 
-This readiness flag only prepares the next plan-only step. It does not create a slideshow package, render plan, worker job, upload package, R2 object, or queue row.
+This readiness flag only prepares the next plan-only step. It does not render video, execute FFmpeg/MoviePy, create a worker job, create an upload package, upload an R2 object, or create a queue row.
 
 ## UI
 
@@ -112,11 +112,14 @@ This readiness flag only prepares the next plan-only step. It does not create a 
 
 The controls do not browse local files, read files, upload files, save selected assets, write DB rows, call Google Drive, call R2, run FFmpeg/MoviePy, or post to any platform.
 
+## Next Plan-Only Bridge
+
+`POST /api/candidates/[id]/slideshow-package-plan` consumes the selected image asset plan and returns a copy-only slideshow package plan. It creates timeline text, FFmpeg/MoviePy previews, and a manual checklist only. It still does not execute commands, render files, upload files, write DB rows, create worker jobs, create upload packages, or create queue rows.
+
 ## Next Steps
 
 Future PRs must stay separate and approval-gated:
 
-- selected image to FFmpeg/MoviePy slideshow package plan;
 - approval-gated local slideshow generation;
 - generated image file import/upload;
 - R2 image asset upload;

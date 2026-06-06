@@ -110,6 +110,8 @@ This is a folder convention only. Google Drive API and OAuth are not implemented
 
 `POST /api/candidates/[id]/image-qa-import-plan` turns manually pasted filename/path manifest text into an `ImageQaImportPlan`. It reports per-asset QA status, missing required asset types, selected image asset JSON, and `ready_for_slideshow_plan`. It validates text shape only and keeps `local_file_read=false`, `local_file_written=false`, `db_written=false`, `google_drive_api_called=false`, `r2_uploaded=false`, `worker_job_created=false`, and `queue_created=false`.
 
+`POST /api/candidates/[id]/slideshow-package-plan` turns selected image asset JSON into a copy-only `SlideshowPackagePlan`. It maps selected images into a 15-second `shorts_9_16` timeline, image sequence, overlay text, narration, subtitle lines, CTA, disclosure reminder, BGM/SFX direction, FFmpeg command preview, MoviePy script preview, and manual render checklist. The command outputs are preview text only and keep `ffmpeg_executed=false`, `moviepy_executed=false`, `video_generated=false`, `local_file_read=false`, `local_file_written=false`, `db_written=false`, `r2_uploaded=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
+
 ## KPI Direction
 
 Future KPI candidates:
@@ -139,6 +141,7 @@ This PR does not collect KPI data or write KPI records.
 - Image generation API.
 - Image-to-video API.
 - FFmpeg/MoviePy execution from this planning layer.
+- Local slideshow rendering.
 - Worker job creation.
 - Queue creation.
 - Upload package creation.

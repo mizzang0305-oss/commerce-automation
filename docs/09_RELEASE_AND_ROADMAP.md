@@ -219,6 +219,10 @@ Recommended PR order:
    - Accept manually pasted image manifest text and create an in-memory QA/import plan.
    - Produce selected image asset JSON and readiness for a future slideshow package plan.
    - Do not read local files, write files, write DB rows, call Google Drive/R2, generate images/videos, create worker jobs, create queue rows, or deploy.
+9. PR #58. Selected image slideshow package plan
+   - Turn selected image asset JSON into a copy-only 15-second slideshow package plan.
+   - Produce timeline, image sequence, overlay/narration/subtitle mapping, CTA, disclosure reminder, FFmpeg/MoviePy previews, and manual render checklist.
+   - Do not execute FFmpeg/MoviePy, read/write local files, upload to R2, create upload packages, create worker jobs, create queue rows, or deploy.
 7. PR #43. Daily production planner actual use
    - Turn event windows into a daily shortlist.
    - Let operators promote selected candidates.
