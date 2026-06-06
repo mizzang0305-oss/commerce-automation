@@ -2,6 +2,10 @@
 
 Status: preparation only. This document does not approve, create, or execute a production deployment.
 
+Production pilot readiness closeout is not a deploy.
+
+Production pilot is ready only when env, manual evidence, and explicit approval are all complete.
+
 Use this preflight after the production target decision and before a human-approved Vercel WebApp plus local Windows Python Worker pilot.
 
 ## 0. Approval Gate
@@ -73,7 +77,7 @@ NEXT_PUBLIC_COUPANG_SECRET_KEY
 Confirm manually:
 
 - production project ref is known.
-- migrations `001` through `007` are applied.
+- migrations `001` through `008` are applied.
 - `automation_settings.id='default'` exists.
 - `channel_profiles` are seeded.
 - `channel_upload_packages` exists.

@@ -4,7 +4,7 @@ import type { buildProductionReadinessSummary } from "@/lib/ops/productionReadin
 type ProductionReadinessSummary = ReturnType<typeof buildProductionReadinessSummary>;
 
 export function ProductionReadinessPanel({ readiness }: { readiness: ProductionReadinessSummary }) {
-  const stateLabel = readiness.production_pilot_ready ? "Ready" : "Approval-gated";
+  const stateLabel = readiness.production_pilot_ready ? "Production Pilot: Ready" : "Production Pilot: Not Ready";
   const stateTone = readiness.production_pilot_ready
     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
     : "border-amber-200 bg-amber-50 text-amber-800";
@@ -15,8 +15,7 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
         <div>
           <h2 className="text-base font-bold text-slate-950">Production Readiness</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            This panel shows readiness signals only. It does not create a Vercel project, set env values, deploy, or run
-            production smoke.
+            This screen does not deploy, write env values, run production smoke, or trigger platform uploads.
           </p>
         </div>
         <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${stateTone}`}>
@@ -31,6 +30,38 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
         <ReadinessMetric label="Forbidden configured" value={readiness.env.forbidden_configured} />
         <ReadinessMetric label="Manual pending" value={readiness.manual.pending} />
         <ReadinessMetric label="Approval required" value={readiness.approval_required ? "YES" : "NO"} />
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        {readiness.env_groups.map((group) => (
+          <div key={group.key} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-slate-900">{group.label}</h3>
+              <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                {group.status}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Configured {group.configured}/{group.required}; missing {group.missing}.
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-5">
+        {readiness.manual_groups.map((group) => (
+          <div key={group.key} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-slate-900">{group.label}</h3>
+              <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                {group.status}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Completed {group.completed}; pending {group.pending}.
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-4">
@@ -55,6 +86,12 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
             <li>Vercel CLI invoked: {String(readiness.safety.vercel_cli_invoked).toUpperCase()}</li>
             <li>Raw secret values printed: {String(readiness.safety.raw_secret_values_printed).toUpperCase()}</li>
             <li>Platform upload disabled: {String(readiness.safety.platform_upload_disabled).toUpperCase()}</li>
+            <li>YouTube auto upload enabled: {String(readiness.safety.youtube_auto_upload_enabled).toUpperCase()}</li>
+            <li>Public upload enabled: {String(readiness.safety.public_upload_enabled).toUpperCase()}</li>
+            <li>Upload enabled: {String(readiness.safety.upload_enabled).toUpperCase()}</li>
+            <li>Manual upload only: {String(readiness.safety.manual_upload_only).toUpperCase()}</li>
+            <li>OAuth token storage enabled: {String(readiness.safety.oauth_token_storage_enabled).toUpperCase()}</li>
+            <li>videos.insert implemented: {String(readiness.safety.videos_insert_implemented).toUpperCase()}</li>
           </ul>
         </div>
         <div className="rounded-md border border-slate-200 p-3">
@@ -62,6 +99,17 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
           <p className="mt-2 text-sm text-slate-600">{readiness.blocked_actions.join(", ")}</p>
         </div>
       </div>
+
+      {readiness.not_ready_reasons.length > 0 ? (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <h3 className="text-sm font-bold text-amber-900">Not Ready Reasons</h3>
+          <ul className="mt-2 space-y-1 text-sm text-amber-800">
+            {readiness.not_ready_reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-md border border-slate-200 p-3">
         <h3 className="text-sm font-bold text-slate-900">Data Persistence Readiness</h3>

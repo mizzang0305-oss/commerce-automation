@@ -30,7 +30,7 @@ Use this before any Vercel production deployment or production smoke.
 ## Supabase
 
 - [ ] Production project ref confirmed.
-- [ ] Migrations `001` through `007` applied.
+- [ ] Migrations `001` through `008` applied.
 - [ ] PostgREST schema cache reloaded.
 - [ ] RLS enabled on automation tables.
 - [ ] Broad anon/authenticated public policies absent.

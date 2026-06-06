@@ -70,6 +70,10 @@ describe("dashboard ops panels", () => {
     );
 
     expect(screen.getByText("Production Readiness")).toBeInTheDocument();
+    expect(screen.getByText("Production Pilot: Not Ready")).toBeInTheDocument();
+    expect(screen.getByText("WebApp Base")).toBeInTheDocument();
+    expect(screen.getByText("Rollback / Approval")).toBeInTheDocument();
+    expect(screen.getByText("This screen does not deploy, write env values, run production smoke, or trigger platform uploads.")).toBeInTheDocument();
     expect(screen.getByText("Candidate Collector")).toBeInTheDocument();
     expect(screen.getByText("Worker Artifact QA")).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
