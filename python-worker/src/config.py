@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+WORKER_DOTENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+
 
 @dataclass(frozen=True)
 class WorkerConfig:
@@ -31,7 +33,7 @@ def first_env(*names: str, default: str = "") -> str:
 
 
 def load_config() -> WorkerConfig:
-    load_dotenv()
+    load_dotenv(dotenv_path=WORKER_DOTENV_PATH, override=False, encoding="utf-8-sig")
     secret = os.getenv("WORKER_API_SECRET", "")
     if not secret:
         raise RuntimeError("WORKER_API_SECRET is required")

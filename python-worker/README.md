@@ -24,6 +24,17 @@ Copy-Item .env.example .env
 
 Python 3.14 is intentionally not supported for this worker. Some binary wheels can lag new interpreter releases, which can force source builds for packages such as Pillow on Windows.
 
+The worker resolves `python-worker/.env` from the worker project directory even when launched from another current working directory. The file is read with UTF-8 BOM tolerance, but prefer saving `.env` as UTF-8 without BOM.
+
+Before a smoke run, verify the effective WebApp URL and storage backend:
+
+```powershell
+cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
+.\.venv\Scripts\python -c "from src.config import load_config; c=load_config(); print(c.web_app_base_url, c.storage_backend)"
+```
+
+The printed URL must match the active Next.js port, for example `http://localhost:3001` when the WebApp runs with `npm run dev -- -p 3001`. If it prints `http://localhost:3000`, check `WEB_APP_BASE_URL` in `python-worker/.env` and any shell environment variable overriding it.
+
 ## Requirements Sets
 
 - `requirements.txt`: default worker runtime, including `imageio-ffmpeg` for ffmpeg fallback.
