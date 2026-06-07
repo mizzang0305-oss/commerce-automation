@@ -3,8 +3,8 @@ import "server-only";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { YouTubeLocalTokenProviderStatus } from "@/lib/uploads/youtube/types";
+import { YOUTUBE_UPLOAD_SCOPE } from "@/lib/uploads/youtube/youtubeOAuthScopes";
 
-const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const TOKEN_FILE_ENV = "YOUTUBE_LOCAL_TOKEN_FILE_PATH";
 
 type TokenFileJson = {

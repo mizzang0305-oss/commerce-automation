@@ -80,3 +80,16 @@ RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
 ```
 
 This document does not authorize a live upload. It only documents local readiness preparation.
+
+## Local OAuth Helper
+
+If a local operator needs to create the token file, use the approval-gated helper documented in
+[YOUTUBE_LOCAL_OAUTH_TOKEN_HELPER.md](YOUTUBE_LOCAL_OAUTH_TOKEN_HELPER.md).
+
+The helper supports:
+
+- printing an OAuth authorization URL
+- exchanging an authorization code only with exact approval
+- validating token file metadata without printing token values
+
+It does not run during validation and does not authorize live upload smoke.

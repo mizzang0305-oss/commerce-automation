@@ -71,6 +71,8 @@ Without readiness and explicit approval, it returns `BLOCKED_BY_CONFIRMATION` or
 ## Local Token Provider
 
 Local token provider readiness is documented in [YOUTUBE_LOCAL_TOKEN_PROVIDER.md](YOUTUBE_LOCAL_TOKEN_PROVIDER.md).
+The local OAuth helper for creating an operator-owned token file is documented in
+[YOUTUBE_LOCAL_OAUTH_TOKEN_HELPER.md](YOUTUBE_LOCAL_OAUTH_TOKEN_HELPER.md).
 
 The local token provider:
 
@@ -107,7 +109,7 @@ blocked_reason: BLOCKED_BY_YOUTUBE_READINESS or BLOCKED_BY_MISSING_SMOKE_APPROVA
 ## Safety Boundaries
 
 - Public upload is blocked.
-- OAuth token exchange is not implemented in this PR.
+- OAuth token exchange remains local-only and approval-gated by `APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION`.
 - OAuth token storage is not implemented in the repository.
 - Access tokens and refresh tokens must never be shown in UI or logs.
 - Raw Authorization headers must never be shown.
