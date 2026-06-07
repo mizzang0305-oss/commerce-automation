@@ -15,10 +15,11 @@ Included:
 - `GET /api/uploads/platform-readiness`.
 - `POST /api/candidates/[id]/platform-upload-plan`.
 - `/uploads` readiness page.
+- YouTube private/unlisted adapter scaffold. See `docs/YOUTUBE_UPLOAD_ADAPTER.md`.
 
 Not included:
 
-- YouTube `videos.insert`.
+- Live YouTube `videos.insert` execution.
 - TikTok Direct Post.
 - Threads publish.
 - OAuth token exchange.
@@ -40,6 +41,8 @@ default_visibility=private
 ```
 
 The default readiness response blocks every provider until provider configuration, token readiness, scopes, quota, account, policy, upload-enabled, and manual-only gates are satisfied by a future explicitly approved PR.
+
+The YouTube adapter adds provider-specific readiness, request preparation, and exact confirmation gates for `private` and `unlisted` visibility only. Public visibility remains blocked, OAuth token values are never accepted from the UI, and live smoke remains `NOT RUN` unless the separate smoke phrase and readiness evidence are present.
 
 ## APIs
 
