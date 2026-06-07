@@ -4,6 +4,7 @@ import {
   APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION,
   buildYouTubeLocalOAuthAuthorizationUrl,
   buildYouTubeLocalOAuthExchangeBlockedResult,
+  hasYouTubeLocalOAuthApproval,
   validateYouTubeLocalOAuthTokenFilePath,
   validateYouTubeTokenFileMetadataFromJson
 } from "@/lib/uploads/youtube/localOAuthTokenHelper";
@@ -41,6 +42,11 @@ describe("YouTube local OAuth token helper", () => {
       required_confirmation: APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION
     });
     expect(JSON.stringify(result)).not.toMatch(secretNeedles);
+  });
+
+  test("does not treat boolean-like approval as exact local OAuth approval", () => {
+    expect(hasYouTubeLocalOAuthApproval("true")).toBe(false);
+    expect(hasYouTubeLocalOAuthApproval(APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION)).toBe(true);
   });
 
   test("rejects token files inside the repository", () => {

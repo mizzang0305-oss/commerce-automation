@@ -50,7 +50,7 @@ function buildAuthUrl() {
 
 async function exchangeCode() {
   const confirmation = args.confirm ?? process.env.APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION;
-  if (confirmation !== APPROVAL && confirmation !== "true") {
+  if (confirmation !== APPROVAL) {
     printJson({
       ok: false,
       error_code: "YOUTUBE_LOCAL_OAUTH_APPROVAL_REQUIRED",

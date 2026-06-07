@@ -22,6 +22,26 @@ C:\Users\LOVE\.commerce-automation\youtube-token.json
 
 The token file must be outside this repository. Paths inside `C:\Users\LOVE\MyProjects\commerce-automation` are blocked.
 
+## Google Cloud Console Setup
+
+Before running the helper, complete these manual setup steps in Google Cloud Console:
+
+1. Create or select a Google Cloud project.
+2. Enable YouTube Data API v3.
+3. Configure the OAuth consent screen.
+4. Keep the publishing status in Testing until the operator has reviewed production risk.
+5. Add the YouTube account that will upload as a test user.
+6. Create an OAuth Client:
+   - Application type: Desktop app
+   - Name: `commerce-automation-local-youtube-uploader`
+7. Use this scope:
+
+```text
+https://www.googleapis.com/auth/youtube.upload
+```
+
+Do not paste client secrets, auth codes, access tokens, refresh tokens, or Authorization headers into docs, PRs, issues, chat, or UI fields.
+
 ## Commands
 
 Print an authorization URL:

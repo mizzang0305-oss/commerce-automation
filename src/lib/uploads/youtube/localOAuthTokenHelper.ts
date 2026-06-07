@@ -59,7 +59,7 @@ export function buildYouTubeLocalOAuthExchangeBlockedResult() {
 }
 
 export function hasYouTubeLocalOAuthApproval(value?: string | null) {
-  return value === APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION || value === "true";
+  return value === APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION;
 }
 
 export function validateYouTubeLocalOAuthTokenFilePath(tokenFilePath: string | undefined, repoRoot = process.cwd()): TokenFilePathValidation {
