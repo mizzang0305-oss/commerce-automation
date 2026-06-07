@@ -12,6 +12,9 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.getByText(APPROVE_YOUTUBE_PRIVATE_UPLOAD)).toBeInTheDocument();
     expect(screen.getByText(/public upload is blocked/i)).toBeInTheDocument();
     expect(screen.getByText(/OAuth tokens are not entered or shown/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /YouTube Local Token Provider/i })).toBeInTheDocument();
+    expect(screen.getByText(/Token values, refresh tokens, access tokens/i)).toBeInTheDocument();
+    expect(screen.getByText(/token_file_path_missing/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Prepare request/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Execute upload/i })).toBeDisabled();
     expect(screen.queryByLabelText(/refresh token/i)).not.toBeInTheDocument();

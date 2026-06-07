@@ -69,6 +69,18 @@ export interface YouTubeUploadAdapter {
   upload(request: YouTubeUploadRequest): Promise<YouTubeUploadResult>;
 }
 
+export interface YouTubeLocalTokenProviderStatus {
+  configured: boolean;
+  token_file_path_configured: boolean;
+  token_file_inside_repo: boolean;
+  token_file_gitignored_or_outside_repo: boolean;
+  token_file_exists: boolean;
+  token_ready: boolean;
+  scopes_ready: boolean;
+  safe_summary: string;
+  blocked_reasons: string[];
+}
+
 export type YouTubeUploadRequestInput = {
   candidate_id?: unknown;
   video_path_or_url?: unknown;
