@@ -98,6 +98,7 @@ python -m compileall python-worker
 - Platform upload plans keep `uploaded=false`, `platform_api_called=false`, `token_exchanged=false`, `token_stored=false`, `db_written=false`, `queue_created=false`, `worker_job_created=false`, and `upload_package_created=false`.
 - `/uploads` is read-only and must not expose live upload, OAuth, token entry, deploy, DB write, queue creation, worker job creation, or upload package creation controls.
 - `GET /api/uploads/youtube/readiness` returns YouTube readiness booleans and blocked reasons only; it must not return client secret, access token, refresh token, or Authorization values.
+- `GET /api/uploads/youtube/token-readiness` returns local token file metadata booleans only; it must not return token file contents, access token, refresh token, client secret, or Authorization values.
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
 - YouTube adapter tests must use `MockYouTubeUploadAdapter` for upload-shaped behavior and must not report fake production success.

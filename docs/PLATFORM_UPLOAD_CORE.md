@@ -15,7 +15,7 @@ Included:
 - `GET /api/uploads/platform-readiness`.
 - `POST /api/candidates/[id]/platform-upload-plan`.
 - `/uploads` readiness page.
-- YouTube private/unlisted adapter scaffold. See `docs/YOUTUBE_UPLOAD_ADAPTER.md`.
+- YouTube private/unlisted adapter scaffold and local token metadata readiness. See `docs/YOUTUBE_UPLOAD_ADAPTER.md` and `docs/YOUTUBE_LOCAL_TOKEN_PROVIDER.md`.
 
 Not included:
 
@@ -42,7 +42,7 @@ default_visibility=private
 
 The default readiness response blocks every provider until provider configuration, token readiness, scopes, quota, account, policy, upload-enabled, and manual-only gates are satisfied by a future explicitly approved PR.
 
-The YouTube adapter adds provider-specific readiness, request preparation, and exact confirmation gates for `private` and `unlisted` visibility only. Public visibility remains blocked, OAuth token values are never accepted from the UI, and live smoke remains `NOT RUN` unless the separate smoke phrase and readiness evidence are present.
+The YouTube adapter adds provider-specific readiness, local token metadata readiness, request preparation, and exact confirmation gates for `private` and `unlisted` visibility only. Public visibility remains blocked, OAuth token values are never accepted from the UI, and live smoke remains `NOT RUN` unless the separate smoke phrase and readiness evidence are present.
 
 ## APIs
 
@@ -97,6 +97,6 @@ It must not contain a live upload button, worker execution button, deploy button
 Recommended split:
 
 1. YouTube adapter behind `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
-2. Server-only token provider or readiness mechanism.
+2. Server-only token provider execution mechanism.
 3. TikTok and Threads readiness adapters.
 4. Private/unlisted live upload smoke only after explicit operator approval and provider readiness evidence.

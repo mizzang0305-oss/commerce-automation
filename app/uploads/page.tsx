@@ -1,5 +1,9 @@
 import { buildPlatformUploadReadiness, createDefaultPlatformUploadSettings } from "@/lib/uploads";
-import { APPROVE_YOUTUBE_PRIVATE_UPLOAD, buildYouTubeUploadReadiness } from "@/lib/uploads/youtube";
+import {
+  APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+  buildYouTubeLocalTokenProviderStatus,
+  buildYouTubeUploadReadiness
+} from "@/lib/uploads/youtube";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +17,7 @@ export default async function UploadsPage() {
   const settings = createDefaultPlatformUploadSettings();
   const readiness = buildPlatformUploadReadiness(settings);
   const youtubeReadiness = buildYouTubeUploadReadiness();
+  const youtubeTokenReadiness = buildYouTubeLocalTokenProviderStatus();
 
   return (
     <div className="space-y-5">
@@ -180,6 +185,56 @@ export default async function UploadsPage() {
             Live upload smoke is not run unless token readiness, quota readiness, private/unlisted visibility, exact
             confirmation, and separate smoke approval are all present.
           </p>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">YouTube Local Token Provider</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+              Local token readiness checks only metadata and file placement. Token values, refresh tokens, access tokens,
+              client secrets, and raw authorization headers are never displayed here.
+            </p>
+          </div>
+          <a
+            href="/docs/YOUTUBE_LOCAL_TOKEN_PROVIDER.md"
+            className="text-sm font-bold text-slate-700 underline underline-offset-4"
+          >
+            Setup docs
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Token provider readiness</p>
+            <dl className="mt-3 space-y-2 text-sm">
+              <ReadinessRow label="configured" value={youtubeTokenReadiness.configured} />
+              <ReadinessRow label="token_file_path_configured" value={youtubeTokenReadiness.token_file_path_configured} />
+              <ReadinessRow label="token_file_inside_repo" value={youtubeTokenReadiness.token_file_inside_repo} />
+              <ReadinessRow
+                label="token_file_gitignored_or_outside_repo"
+                value={youtubeTokenReadiness.token_file_gitignored_or_outside_repo}
+              />
+              <ReadinessRow label="token_file_exists" value={youtubeTokenReadiness.token_file_exists} />
+              <ReadinessRow label="token_ready" value={youtubeTokenReadiness.token_ready} />
+              <ReadinessRow label="scopes_ready" value={youtubeTokenReadiness.scopes_ready} />
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Blocked reasons</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {youtubeTokenReadiness.blocked_reasons.map((reason) => (
+                <span key={reason} className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                  {reason}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 rounded-md bg-white p-3 text-sm font-semibold text-slate-700">
+              {youtubeTokenReadiness.safe_summary}
+            </p>
+          </div>
         </div>
       </section>
     </div>

@@ -60,6 +60,7 @@ Not included:
 YouTube adapter scaffold:
 
 - Server-only YouTube readiness at `/api/uploads/youtube/readiness`.
+- Local token provider metadata readiness at `/api/uploads/youtube/token-readiness`.
 - Private/unlisted request preparation at `/api/uploads/youtube/prepare`.
 - Exact confirmation gate at `/api/uploads/youtube/execute`.
 - Public visibility blocked.
@@ -69,7 +70,7 @@ YouTube adapter scaffold:
 Next milestones:
 
 1. Add TikTok and Threads readiness adapters.
-2. Add approved server-only token provider integration without client token exposure.
+2. Add approved server-only token provider execution without client token exposure.
 3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, and account evidence exist.
 4. Keep public upload as a separate explicitly reviewed milestone.
 

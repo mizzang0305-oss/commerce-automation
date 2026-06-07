@@ -14,7 +14,7 @@ It does not enable public upload. It does not run live upload smoke by default. 
 
 ## Required Readiness
 
-The readiness API returns boolean/status fields only:
+The readiness APIs return boolean/status fields only:
 
 - provider configured
 - token ready
@@ -26,7 +26,7 @@ The readiness API returns boolean/status fields only:
 - can upload
 - blocked reasons
 
-The API must not return raw client IDs, client secrets, access tokens, refresh tokens, Authorization headers, or provider response bodies.
+The APIs must not return raw client IDs, client secrets, access tokens, refresh tokens, Authorization headers, or provider response bodies.
 
 ## Request Requirements
 
@@ -51,8 +51,11 @@ Required disclosure text example:
 ## APIs
 
 - `GET /api/uploads/youtube/readiness`
+- `GET /api/uploads/youtube/token-readiness`
 - `POST /api/uploads/youtube/prepare`
 - `POST /api/uploads/youtube/execute`
+
+`token-readiness` checks local token file metadata only. It reports file placement, file existence, token readiness, and scope readiness without returning token values.
 
 `prepare` validates and returns request JSON only. It does not call YouTube.
 
@@ -64,6 +67,19 @@ Required disclosure text example:
 - required disclosure and affiliate URL
 
 Without readiness and explicit approval, it returns `BLOCKED_BY_CONFIRMATION` or `BLOCKED_BY_YOUTUBE_READINESS`.
+
+## Local Token Provider
+
+Local token provider readiness is documented in [YOUTUBE_LOCAL_TOKEN_PROVIDER.md](YOUTUBE_LOCAL_TOKEN_PROVIDER.md).
+
+The local token provider:
+
+- requires the token file path to be outside this repository
+- checks token file existence and metadata only
+- never returns token values
+- never logs token JSON
+- does not run OAuth exchange
+- does not perform upload
 
 ## Live Smoke
 
@@ -92,7 +108,7 @@ blocked_reason: BLOCKED_BY_YOUTUBE_READINESS or BLOCKED_BY_MISSING_SMOKE_APPROVA
 
 - Public upload is blocked.
 - OAuth token exchange is not implemented in this PR.
-- OAuth token storage is not implemented.
+- OAuth token storage is not implemented in the repository.
 - Access tokens and refresh tokens must never be shown in UI or logs.
 - Raw Authorization headers must never be shown.
 - Fake success is forbidden.
