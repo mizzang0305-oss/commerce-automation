@@ -106,7 +106,7 @@ The controls do not browse local files, read files, write files, run render tool
 
 Future work must stay separate and approval-gated:
 
-- actual local render execution;
+- actual local render execution with exact confirmation `APPROVE_LOCAL_SLIDESHOW_RENDER_EXECUTION` (see `docs/LOCAL_SLIDESHOW_RENDER_EXECUTION.md`);
 - local video file creation;
 - generated video metadata probing;
 - R2 generated video upload;

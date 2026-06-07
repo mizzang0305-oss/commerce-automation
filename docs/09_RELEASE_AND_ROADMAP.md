@@ -218,6 +218,10 @@ Recommended PR order:
 8. PR #57. Image QA import bridge
    - Accept manually pasted image manifest text and create an in-memory QA/import plan.
    - Produce selected image asset JSON and readiness for a future slideshow package plan.
+9. PR #61. Local slideshow render execution
+   - Execute a separately approved local slideshow render package with exact confirmation.
+   - Allow local file read/write and MP4 generation only.
+   - Keep external APIs, DB writes, R2 upload, queue rows, worker jobs, deploy, and platform upload disabled.
    - Do not read local files, write files, write DB rows, call Google Drive/R2, generate images/videos, create worker jobs, create queue rows, or deploy.
 9. PR #58. Selected image slideshow package plan
    - Turn selected image asset JSON into a copy-only 15-second slideshow package plan.

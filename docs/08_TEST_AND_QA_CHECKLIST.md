@@ -158,6 +158,12 @@ python -m compileall python-worker
 - `POST /api/candidates/[id]/local-slideshow-render-package` requires exact confirmation `PREPARE_LOCAL_SLIDESHOW_RENDER_PACKAGE` before returning a copy-only `LocalSlideshowRenderPackage`.
 - Every local slideshow render package response keeps `execution_enabled=false`, `external_api_called=false`, `deployment_triggered=false`, `image_generated=false`, `video_generated=false`, `uploaded=false`, `db_written=false`, `local_file_read=false`, `local_file_written=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
 - `/image-prompts` exposes local render package copy controls for PowerShell steps, FFmpeg preview text, MoviePy preview text, and package JSON only. It must not expose render execution, file browsing, file writes, R2 upload, upload package creation, queue creation, or worker job actions.
+- `POST /api/candidates/[id]/execute-local-slideshow-render` requires exact confirmation `APPROVE_LOCAL_SLIDESHOW_RENDER_EXECUTION`.
+- Local slideshow render execution validates allowlisted local image paths before reading files.
+- Local slideshow render execution may set `local_file_read=true`, `local_file_written=true`, `video_generated=true`, and either `ffmpeg_executed=true` or `moviepy_executed=true`.
+- Local slideshow render execution must keep `external_api_called=false`, `db_written=false`, `uploaded=false`, `r2_uploaded=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
+- Local slideshow render execution writes only local MP4/manifest/report files under `commerce-assets/output/video-packages/{candidate_id}/`; generated outputs must remain untracked.
+- `/image-prompts` exposes local render execution controls only for exact approval, engine preference, local execution, output paths, logs, and report JSON. It must not expose R2 upload, DB import, queue creation, worker job creation, deploy, or platform post controls.
 - `POST /api/candidates/[id]/generated-video-qa-import-plan` validates optional generated video manifest text and returns an in-memory `GeneratedVideoQaImportPlan`.
 - Generated video QA import manifest validation checks `candidate_id`, filename, path text, source, duration text/number, format, QA status, and QA notes without reading local files, probing video metadata, calling R2, or writing DB rows.
 - Generated video QA import plans return QA markdown, next-step JSON, missing requirements, safety flags, and `ready_for_manual_upload_package`.

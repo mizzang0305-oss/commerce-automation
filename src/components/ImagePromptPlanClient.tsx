@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/types";
 import type { ImageQaImportPlan } from "@/lib/image-qa-import/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
+import { localSlideshowExecutionConfirmationPhrase } from "@/lib/local-slideshow-execution/constants";
+import type { LocalSlideshowExecutionResult, LocalSlideshowRenderEnginePreference } from "@/lib/local-slideshow-execution/types";
 import type { LocalSlideshowRenderPackage } from "@/lib/local-slideshow-render";
 import type { SlideshowPackagePlan } from "@/lib/slideshow-package";
 import type { GeneratedVideoQaImportPlan } from "@/lib/video-qa-import";
@@ -38,6 +40,10 @@ export function ImagePromptPlanClient({
   const [importManifestText, setImportManifestText] = useState(imageQaImportPlan?.import_manifest_json ?? "");
   const [videoManifestText, setVideoManifestText] = useState(generatedVideoQaImportPlan?.import_manifest_json ?? "");
   const [localRenderConfirmation, setLocalRenderConfirmation] = useState("");
+  const [localExecutionConfirmation, setLocalExecutionConfirmation] = useState("");
+  const [localExecutionEngine, setLocalExecutionEngine] = useState<LocalSlideshowRenderEnginePreference>("auto");
+  const [localExecutionResult, setLocalExecutionResult] = useState<LocalSlideshowExecutionResult | null>(null);
+  const [localExecutionBusy, setLocalExecutionBusy] = useState(false);
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
   const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
   const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
@@ -63,6 +69,10 @@ export function ImagePromptPlanClient({
   const localSlideshowRenderPackageJson = useMemo(
     () => JSON.stringify(localSlideshowRenderPackage ?? {}, null, 2),
     [localSlideshowRenderPackage]
+  );
+  const localExecutionResultJson = useMemo(
+    () => JSON.stringify(localExecutionResult ?? {}, null, 2),
+    [localExecutionResult]
   );
   const generatedVideoNextStepJson = useMemo(
     () => JSON.stringify({
@@ -109,6 +119,38 @@ export function ImagePromptPlanClient({
         ? "Local render package preview refreshed. Execution remains disabled; no FFmpeg, MoviePy, file write, upload, queue, or worker job was started."
         : "Exact confirmation phrase is required for package preparation. Execution remains disabled."
     );
+  }
+
+  async function executeLocalSlideshowRender() {
+    if (!localSlideshowRenderPackage) {
+      setMessage("Local render package is required before execution.");
+      return;
+    }
+    setLocalExecutionBusy(true);
+    try {
+      const response = await fetch(`/api/candidates/${localSlideshowRenderPackage.candidate_id}/execute-local-slideshow-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmation: localExecutionConfirmation,
+          render_package: localSlideshowRenderPackage,
+          engine_preference: localExecutionEngine
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (payload?.result) {
+        setLocalExecutionResult(payload.result as LocalSlideshowExecutionResult);
+      }
+      setMessage(
+        response.ok
+          ? "Local slideshow render completed. Review the local report and generated mp4 before any separate QA import step."
+          : `Local slideshow render blocked: ${payload?.error_code ?? "EXECUTION_BLOCKED"}`
+      );
+    } catch {
+      setMessage("Local slideshow render request failed locally. No upload, DB write, queue, or worker job was created.");
+    } finally {
+      setLocalExecutionBusy(false);
+    }
   }
 
   return (
@@ -775,6 +817,115 @@ export function ImagePromptPlanClient({
               </pre>
             </div>
           </div>
+        </section>
+      ) : null}
+
+      {localSlideshowRenderPackage ? (
+        <section className="rounded-lg border border-orange-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-orange-700">approval-gated local execution</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Local Slideshow Render Execution</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                This step permits local file read/write and mp4 generation only after the exact approval phrase. It does not
+                deploy, upload, write DB rows, create queue rows, create worker jobs, or call external APIs.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void executeLocalSlideshowRender()}
+                disabled={localExecutionBusy}
+                className="rounded-md border border-orange-300 px-3 py-1.5 text-xs font-bold text-orange-800 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {localExecutionBusy ? "Executing..." : "Execute local render"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localExecutionResultJson, "Render report JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy render report JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localSlideshowRenderPackageJson, "Output manifest input JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy output manifest input JSON
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-bold text-orange-800">
+              confirmation_required={localSlideshowExecutionConfirmationPhrase}
+            </span>
+            <SideEffectBadge label="uploaded" value={localExecutionResult?.side_effects.uploaded ?? false} />
+            <SideEffectBadge label="db_written" value={localExecutionResult?.side_effects.db_written ?? false} />
+            <SideEffectBadge label="worker_job_created" value={localExecutionResult?.side_effects.worker_job_created ?? false} />
+            <SideEffectBadge label="queue_created" value={localExecutionResult?.side_effects.queue_created ?? false} />
+            <SideEffectBadge label="r2_uploaded" value={localExecutionResult?.side_effects.r2_uploaded ?? false} />
+          </div>
+
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            Local-only execution. The WebApp sends the approved render package to a server-only route that can run local
+            FFmpeg/MoviePy against allowlisted local paths. It never performs production deploy, DB write, R2 transfer,
+            platform posting, queue creation, or worker job creation.
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div>
+              <label htmlFor="local-execution-confirmation" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Execution approval phrase
+              </label>
+              <input
+                id="local-execution-confirmation"
+                value={localExecutionConfirmation}
+                onChange={(event) => setLocalExecutionConfirmation(event.target.value)}
+                placeholder={localSlideshowExecutionConfirmationPhrase}
+                className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700"
+              />
+            </div>
+            <div>
+              <label htmlFor="local-execution-engine" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Render engine preference
+              </label>
+              <select
+                id="local-execution-engine"
+                value={localExecutionEngine}
+                onChange={(event) => setLocalExecutionEngine(event.target.value as LocalSlideshowRenderEnginePreference)}
+                className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 p-3 text-xs font-bold text-slate-700"
+              >
+                <option value="auto">auto</option>
+                <option value="ffmpeg">ffmpeg</option>
+                <option value="moviepy">moviepy</option>
+              </select>
+            </div>
+          </div>
+
+          {localExecutionResult ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="rounded-md bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Output video path</p>
+                <p className="mt-1 break-all text-sm font-semibold text-slate-700">
+                  {localExecutionResult.output_video_path ?? "blocked"}
+                </p>
+              </div>
+              <div className="rounded-md bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Execution status</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {String(localExecutionResult.execution_succeeded)} / {localExecutionResult.render_engine}
+                </p>
+              </div>
+              <div className="rounded-md bg-slate-50 p-3 lg:col-span-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Logs preview</p>
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-700">
+                  {localExecutionResult.logs_preview.join("\n") || localExecutionResult.warnings.join("\n") || "No logs."}
+                </pre>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
