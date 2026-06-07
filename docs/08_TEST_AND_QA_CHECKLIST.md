@@ -99,6 +99,10 @@ python -m compileall python-worker
 - `/uploads` is read-only and must not expose live upload, OAuth, token entry, deploy, DB write, queue creation, worker job creation, or upload package creation controls.
 - `GET /api/uploads/youtube/readiness` returns YouTube readiness booleans and blocked reasons only; it must not return client secret, access token, refresh token, or Authorization values.
 - `GET /api/uploads/youtube/token-readiness` returns local token file metadata booleans only; it must not return token file contents, access token, refresh token, client secret, or Authorization values.
+- `node scripts/youtube-local-oauth-helper.mjs print-auth-url` is a local helper command only; it must not exchange tokens or write token files.
+- `node scripts/youtube-local-oauth-helper.mjs exchange-code` is blocked unless exact confirmation `APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION` is supplied.
+- `node scripts/youtube-local-oauth-helper.mjs validate-token-file` returns metadata only and must not print access tokens, refresh tokens, client secrets, or Authorization values.
+- The local OAuth helper must reject token file paths inside this repository.
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
 - YouTube adapter tests must use `MockYouTubeUploadAdapter` for upload-shaped behavior and must not report fake production success.
