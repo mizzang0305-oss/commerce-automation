@@ -227,6 +227,10 @@ Recommended PR order:
    - Accept manually pasted generated video manifest text and create an in-memory QA/import plan.
    - Produce QA markdown, next-step JSON, safety flags, missing requirements, and readiness for future manual upload package work.
    - Do not read local files, probe video metadata, execute FFmpeg/MoviePy, upload to R2, write DB rows, create upload packages, create worker jobs, create queue rows, or deploy.
+11. PR #60. Approval-gated local slideshow render bridge
+   - Require exact confirmation before returning copy-only local render package text.
+   - Produce PowerShell step text, local FFmpeg/MoviePy preview text, input asset checklist text, output path suggestions, and package JSON.
+   - Keep `execution_enabled=false`; do not read/write local files, execute FFmpeg/MoviePy, generate video, upload to R2, write DB rows, create upload packages, create worker jobs, create queue rows, or deploy.
 7. PR #43. Daily production planner actual use
    - Turn event windows into a daily shortlist.
    - Let operators promote selected candidates.

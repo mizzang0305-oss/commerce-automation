@@ -112,6 +112,8 @@ This is a folder convention only. Google Drive API and OAuth are not implemented
 
 `POST /api/candidates/[id]/slideshow-package-plan` turns selected image asset JSON into a copy-only `SlideshowPackagePlan`. It maps selected images into a 15-second `shorts_9_16` timeline, image sequence, overlay text, narration, subtitle lines, CTA, disclosure reminder, BGM/SFX direction, FFmpeg command preview, MoviePy script preview, and manual render checklist. The command outputs are preview text only and keep `ffmpeg_executed=false`, `moviepy_executed=false`, `video_generated=false`, `local_file_read=false`, `local_file_written=false`, `db_written=false`, `r2_uploaded=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
 
+`POST /api/candidates/[id]/local-slideshow-render-package` turns a slideshow package plan into an approval-gated `LocalSlideshowRenderPackage`. It requires the exact confirmation phrase `PREPARE_LOCAL_SLIDESHOW_RENDER_PACKAGE` and returns copy-only PowerShell steps, local FFmpeg/MoviePy preview text, input checklist text, and output path suggestions. Confirmation prepares text only; it keeps `execution_enabled=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `local_file_read=false`, `local_file_written=false`, `video_generated=false`, `upload_package_created=false`, `uploaded=false`, `db_written=false`, `worker_job_created=false`, and `queue_created=false`.
+
 `POST /api/candidates/[id]/generated-video-qa-import-plan` turns manually pasted generated video manifest text into a `GeneratedVideoQaImportPlan`. It reports video QA status, safety flags, manual checklist items, QA markdown, and `ready_for_manual_upload_package`. It validates text shape only and keeps `local_file_read=false`, `local_file_written=false`, `db_written=false`, `r2_uploaded=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `video_generated=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`.
 
 ## KPI Direction
@@ -143,7 +145,7 @@ This PR does not collect KPI data or write KPI records.
 - Image generation API.
 - Image-to-video API.
 - FFmpeg/MoviePy execution from this planning layer.
-- Local slideshow rendering.
+- Local slideshow rendering execution.
 - Generated video QA file import or metadata probing.
 - Worker job creation.
 - Queue creation.
