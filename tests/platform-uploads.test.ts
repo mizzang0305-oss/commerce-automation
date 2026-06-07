@@ -98,28 +98,34 @@ describe("platform upload core and readiness gates", () => {
     expect(JSON.stringify(payload)).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|refresh_token|Authorization: Bearer/i);
   });
 
-  test("blocks upload plan when disclosure text, affiliate URL, or video path is missing", async () => {
+  test("blocks upload plan when required title, copy, disclosure, affiliate URL, video path, provider targets, or visibility are missing", async () => {
     const repository = getAutomationRepository();
     await repository.upsertProductCandidates([
       candidateFixture({ id: "candidate-no-affiliate", selected_affiliate_url: "" })
     ]);
 
-    const missingVideo = await postPlatformUploadPlan(
+    const missingRequiredInputs = await postPlatformUploadPlan(
       new Request("http://localhost/api/candidates/candidate-no-affiliate/platform-upload-plan", {
         method: "POST",
         body: JSON.stringify({
-          disclosure_text: "Affiliate disclosure.",
-          provider_targets: ["youtube"]
+          disclosure_text: "Affiliate disclosure."
         })
       }),
       { params: Promise.resolve({ id: "candidate-no-affiliate" }) }
     );
-    const missingVideoPayload = await readJson(missingVideo);
-    expect(missingVideo.status).toBe(400);
-    expect(missingVideoPayload).toMatchObject({
+    const missingRequiredInputsPayload = await readJson(missingRequiredInputs);
+    expect(missingRequiredInputs.status).toBe(400);
+    expect(missingRequiredInputsPayload).toMatchObject({
       ok: false,
       error_code: "PLATFORM_UPLOAD_PLAN_NOT_READY",
-      missing_reasons: expect.arrayContaining(["selected_affiliate_url", "video_path_or_url"])
+      missing_reasons: expect.arrayContaining([
+        "selected_affiliate_url",
+        "video_path_or_url",
+        "title",
+        "description_or_caption",
+        "provider_targets",
+        "visibility"
+      ])
     });
 
     await repository.upsertProductCandidates([candidateFixture()]);
@@ -128,7 +134,10 @@ describe("platform upload core and readiness gates", () => {
         method: "POST",
         body: JSON.stringify({
           video_path_or_url: "commerce-assets/output/video-packages/candidate-platform-upload-001/shorts.mp4",
-          provider_targets: ["youtube"]
+          title: "Desk organizer set quick review",
+          description: "Manual upload description.",
+          provider_targets: ["youtube"],
+          visibility: "private"
         })
       }),
       { params: Promise.resolve({ id: "candidate-platform-upload-001" }) }

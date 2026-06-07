@@ -70,11 +70,14 @@ export function buildPlatformUploadJobPlan(input: PlatformUploadPlanInput):
   const settings = createDefaultPlatformUploadSettings();
   const candidate = input.candidate;
   const videoPathOrUrl = safeTrim(input.video_path_or_url);
+  const titleInput = safeTrim(input.title);
+  const descriptionInput = safeTrim(input.description);
+  const captionInput = safeTrim(input.caption);
   const disclosureText = safeTrim(input.disclosure_text);
   const selectedAffiliateUrl = candidate.selected_affiliate_url.trim();
   const productName = candidate.product_name.trim();
   const providerTargets = normalizeProviderTargets(input.provider_targets);
-  const visibility = normalizeVisibility(input.visibility, settings.default_visibility);
+  const visibility = normalizeVisibility(input.visibility);
   const missingReasons = [];
 
   if (!productName) {
@@ -86,25 +89,31 @@ export function buildPlatformUploadJobPlan(input: PlatformUploadPlanInput):
   if (!videoPathOrUrl) {
     missingReasons.push("video_path_or_url");
   }
+  if (!titleInput) {
+    missingReasons.push("title");
+  }
+  if (!descriptionInput && !captionInput) {
+    missingReasons.push("description_or_caption");
+  }
   if (!disclosureText) {
     missingReasons.push("disclosure_text");
   }
   if (providerTargets.length === 0) {
     missingReasons.push("provider_targets");
   }
+  if (!visibility) {
+    missingReasons.push("visibility");
+  }
 
   if (missingReasons.length > 0) {
     return { ok: false, missing_reasons: missingReasons };
   }
+  const safeVisibility: PlatformUploadVisibility = visibility || settings.default_visibility;
 
   const now = input.now ?? new Date().toISOString();
-  const title = safeTrim(input.title) || `${productName} manual upload draft`;
-  const description = safeTrim(input.description) || [
-    `${productName} upload plan for operator review.`,
-    `Affiliate link: ${selectedAffiliateUrl}`,
-    disclosureText
-  ].join("\n\n");
-  const caption = safeTrim(input.caption) || `${productName}\n${disclosureText}`;
+  const title = titleInput;
+  const description = descriptionInput || captionInput;
+  const caption = captionInput || descriptionInput;
 
   return {
     ok: true,
@@ -119,7 +128,7 @@ export function buildPlatformUploadJobPlan(input: PlatformUploadPlanInput):
       disclosure_text: disclosureText,
       selected_affiliate_url: selectedAffiliateUrl,
       provider_targets: providerTargets,
-      visibility,
+      visibility: safeVisibility,
       manual_upload_only: true,
       public_upload_enabled: false,
       approval_required: true,
@@ -142,7 +151,7 @@ function getProviderUploadEnabled(settings: PlatformUploadSettings, provider: Pl
 
 function normalizeProviderTargets(input: unknown): PlatformUploadProvider[] {
   if (!Array.isArray(input)) {
-    return ["youtube"];
+    return [];
   }
   const selected = input.filter((value): value is PlatformUploadProvider =>
     platformUploadProviders.includes(value as PlatformUploadProvider)
@@ -150,11 +159,14 @@ function normalizeProviderTargets(input: unknown): PlatformUploadProvider[] {
   return [...new Set(selected)];
 }
 
-function normalizeVisibility(input: unknown, fallback: PlatformUploadVisibility): PlatformUploadVisibility {
+function normalizeVisibility(input: unknown): PlatformUploadVisibility | "" {
   if (input === "unlisted") {
     return "unlisted";
   }
-  return fallback;
+  if (input === "private") {
+    return "private";
+  }
+  return "";
 }
 
 function safeTrim(value: unknown) {
