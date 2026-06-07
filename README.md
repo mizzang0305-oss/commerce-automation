@@ -220,6 +220,8 @@ Content draft generation defaults to `CONTENT_AI_PROVIDER=template`. The templat
 
 `POST /api/candidates/[id]/slideshow-package-plan` and `/image-prompts` add the selected-image slideshow package plan. It maps QA-selected image assets into a 15-second `shorts_9_16` timeline with image sequence, overlay text, narration/subtitle lines, CTA, disclosure reminder, BGM/SFX direction, FFmpeg command preview, MoviePy script preview, and a manual render checklist. It remains plan-only and copy-only: `ffmpeg_executed=false`, `moviepy_executed=false`, `video_generated=false`, `local_file_read=false`, `local_file_written=false`, `db_written=false`, `r2_uploaded=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`. See `docs/SELECTED_IMAGE_SLIDESHOW_PACKAGE_PLAN.md`.
 
+`POST /api/candidates/[id]/generated-video-qa-import-plan` and `/image-prompts` provide the copy-only bridge after a separately approved local render. Operators can paste generated video manifest text, preview QA status, copy QA markdown, and copy next-step JSON. The bridge validates text only and keeps `local_file_read=false`, `local_file_written=false`, `db_written=false`, `r2_uploaded=false`, `ffmpeg_executed=false`, `moviepy_executed=false`, `video_generated=false`, `upload_package_created=false`, `worker_job_created=false`, and `queue_created=false`. See `docs/GENERATED_VIDEO_QA_IMPORT_BRIDGE.md`.
+
 Optional provider selection is server-only:
 
 ```text

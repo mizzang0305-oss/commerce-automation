@@ -116,6 +116,8 @@ The controls do not browse local files, read files, upload files, save selected 
 
 `POST /api/candidates/[id]/slideshow-package-plan` consumes the selected image asset plan and returns a copy-only slideshow package plan. It creates timeline text, FFmpeg/MoviePy previews, and a manual checklist only. It still does not execute commands, render files, upload files, write DB rows, create worker jobs, create upload packages, or create queue rows.
 
+After a separately approved local render is completed outside the WebApp, `POST /api/candidates/[id]/generated-video-qa-import-plan` can validate manually pasted generated video manifest text and produce a copy-only video QA import plan. It still does not read local files, probe video metadata, upload to R2, create upload packages, create worker jobs, create queue rows, or post to any platform.
+
 ## Next Steps
 
 Future PRs must stay separate and approval-gated:

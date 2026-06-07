@@ -5,6 +5,7 @@ import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/
 import type { ImageQaImportPlan } from "@/lib/image-qa-import/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
 import type { SlideshowPackagePlan } from "@/lib/slideshow-package";
+import type { GeneratedVideoQaImportPlan } from "@/lib/video-qa-import";
 import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
 
 function SideEffectBadge({ label, value }: { label: string; value: boolean }) {
@@ -20,16 +21,19 @@ export function ImagePromptPlanClient({
   imageVideoPlan,
   localImagePackage,
   imageQaImportPlan,
-  slideshowPackagePlan
+  slideshowPackagePlan,
+  generatedVideoQaImportPlan
 }: {
   plan: CommerceImagePromptPlan;
   imageVideoPlan?: CommerceImageVideoPlan | null;
   localImagePackage?: LocalImageGenerationPackage | null;
   imageQaImportPlan?: ImageQaImportPlan | null;
   slideshowPackagePlan?: SlideshowPackagePlan | null;
+  generatedVideoQaImportPlan?: GeneratedVideoQaImportPlan | null;
 }) {
   const [message, setMessage] = useState("");
   const [importManifestText, setImportManifestText] = useState(imageQaImportPlan?.import_manifest_json ?? "");
+  const [videoManifestText, setVideoManifestText] = useState(generatedVideoQaImportPlan?.import_manifest_json ?? "");
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
   const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
   const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
@@ -47,6 +51,19 @@ export function ImagePromptPlanClient({
   const slideshowTimelineMarkdown = useMemo(
     () => slideshowPackagePlan?.timeline_markdown ?? "",
     [slideshowPackagePlan]
+  );
+  const generatedVideoQaImportPlanJson = useMemo(
+    () => JSON.stringify(generatedVideoQaImportPlan ?? {}, null, 2),
+    [generatedVideoQaImportPlan]
+  );
+  const generatedVideoNextStepJson = useMemo(
+    () => JSON.stringify({
+      next_step_after_qa: generatedVideoQaImportPlan?.next_step_after_qa ?? [],
+      ready_for_manual_upload_package: generatedVideoQaImportPlan?.ready_for_manual_upload_package ?? false,
+      missing_requirements: generatedVideoQaImportPlan?.missing_requirements ?? [],
+      side_effects: generatedVideoQaImportPlan?.side_effects ?? {}
+    }, null, 2),
+    [generatedVideoQaImportPlan]
   );
   const nextStepJson = useMemo(
     () => JSON.stringify({
@@ -71,6 +88,10 @@ export function ImagePromptPlanClient({
 
   function previewSlideshowPlan() {
     setMessage("Slideshow package plan preview refreshed. No FFmpeg, MoviePy, file write, upload, queue, or worker job was started.");
+  }
+
+  function previewGeneratedVideoQaPlan() {
+    setMessage("Generated video QA import plan preview refreshed. No local file was read, no DB row was written, and no upload package was created.");
   }
 
   return (
@@ -466,6 +487,141 @@ export function ImagePromptPlanClient({
                 <p className="mt-1 break-all text-xs text-slate-500">Provided path: {asset.provided_path || "not provided"}</p>
               </article>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {generatedVideoQaImportPlan ? (
+        <section className="rounded-lg border border-cyan-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-cyan-700">manual generated video QA</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Generated Video QA Import Bridge</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Paste a manually prepared video manifest to plan QA and manual upload readiness only. This bridge does not
+                read video files, inspect metadata, write database rows, upload to R2, create upload packages, or post to SNS.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={previewGeneratedVideoQaPlan}
+                className="rounded-md border border-cyan-300 px-3 py-1.5 text-xs font-bold text-cyan-800 hover:bg-cyan-50"
+              >
+                Preview video QA plan
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(generatedVideoQaImportPlan.import_manifest_json, "Video import manifest JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy video import manifest JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(generatedVideoQaImportPlan.qa_markdown, "Video QA markdown")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy video QA markdown
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(generatedVideoNextStepJson, "Video next-step JSON")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy video next-step JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(generatedVideoQaImportPlanJson, "Video QA plan JSON download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download video QA plan JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(generatedVideoQaImportPlan.qa_markdown, "Video QA markdown download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download video QA markdown
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SideEffectBadge label="external_api_called" value={generatedVideoQaImportPlan.side_effects.external_api_called} />
+            <SideEffectBadge label="scraped_live_web" value={generatedVideoQaImportPlan.side_effects.scraped_live_web} />
+            <SideEffectBadge label="image_generated" value={generatedVideoQaImportPlan.side_effects.image_generated} />
+            <SideEffectBadge label="video_generated" value={generatedVideoQaImportPlan.side_effects.video_generated} />
+            <SideEffectBadge label="uploaded" value={generatedVideoQaImportPlan.side_effects.uploaded} />
+            <SideEffectBadge label="db_written" value={generatedVideoQaImportPlan.side_effects.db_written} />
+            <SideEffectBadge label="file_uploaded" value={generatedVideoQaImportPlan.side_effects.file_uploaded} />
+            <SideEffectBadge label="local_file_read" value={generatedVideoQaImportPlan.side_effects.local_file_read} />
+            <SideEffectBadge label="local_file_written" value={generatedVideoQaImportPlan.side_effects.local_file_written} />
+            <SideEffectBadge label="google_drive_api_called" value={generatedVideoQaImportPlan.side_effects.google_drive_api_called} />
+            <SideEffectBadge label="r2_uploaded" value={generatedVideoQaImportPlan.side_effects.r2_uploaded} />
+            <SideEffectBadge label="ffmpeg_executed" value={generatedVideoQaImportPlan.side_effects.ffmpeg_executed} />
+            <SideEffectBadge label="moviepy_executed" value={generatedVideoQaImportPlan.side_effects.moviepy_executed} />
+            <SideEffectBadge label="upload_package_created" value={generatedVideoQaImportPlan.side_effects.upload_package_created} />
+            <SideEffectBadge label="worker_job_created" value={generatedVideoQaImportPlan.side_effects.worker_job_created} />
+            <SideEffectBadge label="queue_created" value={generatedVideoQaImportPlan.side_effects.queue_created} />
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              approval_required={String(generatedVideoQaImportPlan.approval_required)}
+            </span>
+            <span className="rounded-full bg-cyan-50 px-2 py-1 text-xs font-bold text-cyan-800">
+              ready_for_manual_upload_package={String(generatedVideoQaImportPlan.ready_for_manual_upload_package)}
+            </span>
+          </div>
+
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            This bridge accepts manifest text only. It does not browse local files, read video metadata, write DB rows,
+            upload to R2, create upload packages, or trigger platform posting.
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="generated-video-manifest" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Generated video manifest JSON
+            </label>
+            <textarea
+              id="generated-video-manifest"
+              value={videoManifestText}
+              onChange={(event) => setVideoManifestText(event.target.value)}
+              className="mt-2 min-h-40 w-full rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Text validation only. Duration and aspect ratio must be confirmed manually; this screen does not inspect files.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Missing requirements</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {generatedVideoQaImportPlan.missing_requirements.join(", ") || "none"}
+              </p>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Next step</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {generatedVideoQaImportPlan.next_step_after_qa[0] ?? "manual_review"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {generatedVideoQaImportPlan.videos.length > 0 ? generatedVideoQaImportPlan.videos.map((video) => (
+              <article key={video.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-cyan-700">{video.qa_status}</p>
+                <h3 className="mt-1 text-sm font-bold text-slate-950">{video.provided_filename}</h3>
+                <p className="mt-2 text-xs text-slate-500">Duration: {video.duration_sec ?? "manual review required"}</p>
+                <p className="mt-1 text-xs text-slate-500">Format: {video.format}</p>
+                <p className="mt-1 break-all text-xs text-slate-500">Provided path: {video.provided_path}</p>
+              </article>
+            )) : (
+              <p className="text-sm font-semibold text-slate-700">
+                No generated video manifest entries are ready yet. Paste a manual manifest after local video QA.
+              </p>
+            )}
           </div>
         </section>
       ) : null}

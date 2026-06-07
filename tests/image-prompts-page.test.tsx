@@ -80,12 +80,23 @@ describe("/image-prompts page", () => {
     expect(screen.getByRole("button", { name: "Copy manual render checklist" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download slideshow package JSON" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download timeline markdown" })).toBeInTheDocument();
-    expect(screen.getByText("ffmpeg_executed=false")).toBeInTheDocument();
-    expect(screen.getByText("moviepy_executed=false")).toBeInTheDocument();
-    expect(screen.getByText("upload_package_created=false")).toBeInTheDocument();
+    expect(screen.getAllByText("ffmpeg_executed=false").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("moviepy_executed=false").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("upload_package_created=false").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Generated Video QA Import Bridge" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Generated video manifest JSON")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview video QA plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy video import manifest JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy video QA markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy video next-step JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download video QA plan JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download video QA markdown" })).toBeInTheDocument();
+    expect(screen.getAllByText("ready_for_manual_upload_package=false").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("db_written=false").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("file_uploaded=false").length).toBeGreaterThan(0);
 
     const pageText = document.body.textContent ?? "";
-    expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive|Browse Local File|Read File|Import to DB|Upload to R2|Create Video File|Upload Video|Create Upload Package|Send to R2|Post to TikTok|Post to Threads/);
+    expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive|Browse Local File|Read File|Read Video Metadata|Import to DB|Upload to R2|Create Video File|Upload Video|Create Upload Package|Send to R2|Post to TikTok|Post to Threads/);
     expect(screen.queryByRole("button", { name: /^Upload$/i })).not.toBeInTheDocument();
   });
 });
