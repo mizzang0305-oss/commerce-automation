@@ -12,7 +12,7 @@ describe("platform uploads readiness page", () => {
     expect(screen.getByText("Threads")).toBeInTheDocument();
     expect(screen.getAllByText("upload_enabled=false")).toHaveLength(3);
     expect(screen.getByText(/No live platform API calls are available/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Upload/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Upload$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Generate upload/i })).not.toBeInTheDocument();
   });
 });

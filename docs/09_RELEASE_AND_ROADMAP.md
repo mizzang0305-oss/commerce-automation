@@ -57,12 +57,21 @@ Not included:
 - Public upload enablement.
 - Upload execution or upload smoke.
 
+YouTube adapter scaffold:
+
+- Server-only YouTube readiness at `/api/uploads/youtube/readiness`.
+- Private/unlisted request preparation at `/api/uploads/youtube/prepare`.
+- Exact confirmation gate at `/api/uploads/youtube/execute`.
+- Public visibility blocked.
+- Token values and Authorization headers are not exposed.
+- Live upload smoke remains blocked unless token readiness and separate smoke approval are present.
+
 Next milestones:
 
-1. Add an approval-gated YouTube private/unlisted adapter.
-2. Add server-only token readiness.
-3. Add TikTok and Threads readiness adapters.
-4. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, and account evidence exist.
+1. Add TikTok and Threads readiness adapters.
+2. Add approved server-only token provider integration without client token exposure.
+3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, and account evidence exist.
+4. Keep public upload as a separate explicitly reviewed milestone.
 
 ## v1.4 Repository Adapter Target
 

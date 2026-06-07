@@ -1,4 +1,5 @@
 import { buildPlatformUploadReadiness, createDefaultPlatformUploadSettings } from "@/lib/uploads";
+import { APPROVE_YOUTUBE_PRIVATE_UPLOAD, buildYouTubeUploadReadiness } from "@/lib/uploads/youtube";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ const providerLabels = {
 export default async function UploadsPage() {
   const settings = createDefaultPlatformUploadSettings();
   const readiness = buildPlatformUploadReadiness(settings);
+  const youtubeReadiness = buildYouTubeUploadReadiness();
 
   return (
     <div className="space-y-5">
@@ -76,6 +78,109 @@ export default async function UploadsPage() {
           <SettingRow label="default_visibility" value={settings.default_visibility} />
           <SettingRow label="max_daily_uploads" value={String(settings.max_daily_uploads)} />
         </dl>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">YouTube Upload Adapter</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+              YouTube uploads are disabled by default. This adapter only gates private/unlisted upload preparation after
+              token readiness, quota readiness, policy readiness, and exact operator confirmation. Public upload is blocked.
+            </p>
+            <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-700">
+              OAuth tokens are not entered or shown on this screen. No refresh token, access token, or raw auth header is displayed.
+            </p>
+          </div>
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+            public upload blocked
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">YouTube readiness</p>
+            <dl className="mt-3 space-y-2 text-sm">
+              <ReadinessRow label="configured" value={youtubeReadiness.configured} />
+              <ReadinessRow label="token_ready" value={youtubeReadiness.token_ready} />
+              <ReadinessRow label="scopes_ready" value={youtubeReadiness.scopes_ready} />
+              <ReadinessRow label="quota_ready" value={youtubeReadiness.quota_ready} />
+              <ReadinessRow label="account_ready" value={youtubeReadiness.account_ready} />
+              <ReadinessRow label="policy_ready" value={youtubeReadiness.policy_ready} />
+              <ReadinessRow label="upload_enabled" value={youtubeReadiness.upload_enabled} />
+              <ReadinessRow label="can_upload" value={youtubeReadiness.can_upload} />
+            </dl>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Blocked reasons</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {youtubeReadiness.blocked_reasons.map((reason) => (
+                <span key={reason} className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                  {reason}
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 rounded-md bg-white p-3 text-sm text-slate-700">
+              <p className="font-bold text-slate-950">Exact confirmation phrase</p>
+              <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
+                {APPROVE_YOUTUBE_PRIVATE_UPLOAD}
+              </code>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-slate-200 p-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-semibold text-slate-700">
+              Visibility
+              <select className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" defaultValue="private">
+                <option value="private">private</option>
+                <option value="unlisted">unlisted</option>
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Confirmation
+              <input
+                className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                placeholder={APPROVE_YOUTUBE_PRIVATE_UPLOAD}
+                aria-label="YouTube private upload confirmation"
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled
+              className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-bold text-slate-500"
+            >
+              Prepare request
+            </button>
+            <button
+              type="button"
+              disabled
+              className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-bold text-slate-500"
+            >
+              Execute upload
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+            >
+              Copy request JSON
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+            >
+              Copy blocked reasons
+            </button>
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-600">
+            Live upload smoke is not run unless token readiness, quota readiness, private/unlisted visibility, exact
+            confirmation, and separate smoke approval are all present.
+          </p>
+        </div>
       </section>
     </div>
   );

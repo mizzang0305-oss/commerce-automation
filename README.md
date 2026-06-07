@@ -6,7 +6,7 @@ Current baseline: in-house Coupang MVP with Supabase/Postgres repository state, 
 
 Public publishing to YouTube, TikTok, or Threads is not implemented. `run_mode` stays `generate_only`, `youtube_upload_enabled` stays `false`, and public upload must not be enabled by default.
 
-Platform upload core is readiness-only. `/uploads`, `GET /api/uploads/platform-readiness`, and `POST /api/candidates/[id]/platform-upload-plan` expose disabled provider defaults, blocked reasons, and copy-only upload plans without calling YouTube, TikTok, Threads, OAuth, R2, Supabase writes, queue creation, worker jobs, or public upload. See [docs/PLATFORM_UPLOAD_CORE.md](docs/PLATFORM_UPLOAD_CORE.md).
+Platform upload core is readiness-only. `/uploads`, `GET /api/uploads/platform-readiness`, and `POST /api/candidates/[id]/platform-upload-plan` expose disabled provider defaults, blocked reasons, and copy-only upload plans without calling YouTube, TikTok, Threads, OAuth, R2, Supabase writes, queue creation, worker jobs, or public upload. YouTube has a server-only private/unlisted adapter scaffold at `GET /api/uploads/youtube/readiness`, `POST /api/uploads/youtube/prepare`, and `POST /api/uploads/youtube/execute`; it remains blocked without token readiness and exact approval. See [docs/PLATFORM_UPLOAD_CORE.md](docs/PLATFORM_UPLOAD_CORE.md) and [docs/YOUTUBE_UPLOAD_ADAPTER.md](docs/YOUTUBE_UPLOAD_ADAPTER.md).
 
 ## Architecture
 
