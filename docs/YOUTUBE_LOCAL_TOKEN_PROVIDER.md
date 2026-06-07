@@ -32,11 +32,19 @@ Recommended token path:
 C:\Users\LOVE\.commerce-automation\youtube-token.json
 ```
 
-Configure the local WebApp environment with only the token file path:
+Configure the local WebApp environment with the token file path:
 
 ```text
 YOUTUBE_LOCAL_TOKEN_FILE_PATH=C:\Users\LOVE\.commerce-automation\youtube-token.json
 ```
+
+Compatibility fallback:
+
+```text
+YOUTUBE_TOKEN_FILE=C:\Users\LOVE\.commerce-automation\youtube-token.json
+```
+
+When both are configured, `YOUTUBE_LOCAL_TOKEN_FILE_PATH` takes priority.
 
 The token file must be outside the repository. A path inside `C:\Users\LOVE\MyProjects\commerce-automation` is blocked even if the file exists.
 

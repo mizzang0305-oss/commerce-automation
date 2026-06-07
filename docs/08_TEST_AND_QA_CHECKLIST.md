@@ -92,7 +92,8 @@ python -m compileall python-worker
 - `threads_upload_enabled` default is `false`.
 - `public_upload_enabled` default is `false`.
 - `manual_upload_only` remains `true` for platform upload core.
-- No real YouTube/TikTok/Threads upload code path is enabled.
+- YouTube live upload is enabled only for a server-only private/unlisted smoke when token readiness, quota readiness, account readiness, policy readiness, exact confirmation, and `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE` are all present.
+- TikTok/Threads upload code paths are not enabled.
 - `GET /api/uploads/platform-readiness` returns safe readiness booleans and blocked reasons only.
 - `POST /api/candidates/[id]/platform-upload-plan` requires `video_path_or_url`, `disclosure_text`, candidate `product_name`, candidate `selected_affiliate_url`, and provider targets.
 - Platform upload plans keep `uploaded=false`, `platform_api_called=false`, `token_exchanged=false`, `token_stored=false`, `db_written=false`, `queue_created=false`, `worker_job_created=false`, and `upload_package_created=false`.
@@ -105,7 +106,9 @@ python -m compileall python-worker
 - The local OAuth helper must reject token file paths inside this repository.
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
-- YouTube adapter tests must use `MockYouTubeUploadAdapter` for upload-shaped behavior and must not report fake production success.
+- `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
+- YouTube adapter success requires a returned YouTube video id; if no id is returned, `succeeded=false`.
+- YouTube adapter tests must mock provider HTTP calls and must not report fake production success.
 
 ## Artifact Storage QA
 

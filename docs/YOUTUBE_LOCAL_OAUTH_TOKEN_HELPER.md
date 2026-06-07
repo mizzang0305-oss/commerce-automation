@@ -22,6 +22,13 @@ C:\Users\LOVE\.commerce-automation\youtube-token.json
 
 The token file must be outside this repository. Paths inside `C:\Users\LOVE\MyProjects\commerce-automation` are blocked.
 
+The WebApp token readiness provider accepts the helper's `YOUTUBE_TOKEN_FILE` as a fallback. If both names are present, `YOUTUBE_LOCAL_TOKEN_FILE_PATH` takes priority:
+
+```text
+YOUTUBE_LOCAL_TOKEN_FILE_PATH=C:\Users\LOVE\.commerce-automation\youtube-token.json
+YOUTUBE_TOKEN_FILE=C:\Users\LOVE\.commerce-automation\youtube-token.json
+```
+
 ## Google Cloud Console Setup
 
 Before running the helper, complete these manual setup steps in Google Cloud Console:

@@ -1,8 +1,8 @@
 # YouTube Upload Adapter
 
-This adapter is an approval-gated scaffold for future YouTube private or unlisted uploads.
+This adapter is an approval-gated server-only path for YouTube private or unlisted upload smoke.
 
-It does not enable public upload. It does not run live upload smoke by default. It does not store OAuth tokens or expose token values to the client.
+It does not enable public upload. It does not run live upload smoke by default. It does not store OAuth tokens in the repository or expose token values to the client.
 
 ## Scope
 
@@ -11,6 +11,7 @@ It does not enable public upload. It does not run live upload smoke by default. 
 - Exact confirmation phrase: `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
 - Live smoke phrase: `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`.
 - Default behavior: blocked by readiness.
+- Upload method: YouTube Data API resumable `videos.insert` from a local `.mp4` file.
 
 ## Required Readiness
 
@@ -77,17 +78,18 @@ The local OAuth helper for creating an operator-owned token file is documented i
 The local token provider:
 
 - requires the token file path to be outside this repository
+- supports `YOUTUBE_LOCAL_TOKEN_FILE_PATH` first, then `YOUTUBE_TOKEN_FILE` as a fallback
 - checks token file existence and metadata only
 - never returns token values
 - never logs token JSON
 - does not run OAuth exchange
-- does not perform upload
+- provides server-only token material only to the approved upload adapter
 
 ## Live Smoke
 
 Live upload smoke is not run by default.
 
-Required conditions before any future live smoke:
+Required conditions before any live smoke:
 
 - `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`
 - `APPROVE_YOUTUBE_PRIVATE_UPLOAD`
@@ -96,6 +98,7 @@ Required conditions before any future live smoke:
 - `quota_ready=true`
 - visibility is `private` or `unlisted`
 - `video_path_or_url` exists
+- `video_path_or_url` is a local `.mp4` file
 - `disclosure_text` exists
 - `selected_affiliate_url` exists
 
@@ -119,4 +122,6 @@ blocked_reason: BLOCKED_BY_YOUTUBE_READINESS or BLOCKED_BY_MISSING_SMOKE_APPROVA
 
 ## videos.insert Boundary
 
-The adapter is structured for a future YouTube Data API `videos.insert` call, but this PR does not perform live provider calls. Any future implementation must stay server-only, private/unlisted only, approval-gated, and covered by mock tests plus a separately approved live smoke.
+The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, smoke approval, and exact confirmation pass. Success requires a returned YouTube video id. Missing video id, missing local mp4, missing token readiness, public visibility, or failed provider responses must return `succeeded=false`.
+
+See [YOUTUBE_PRIVATE_UPLOAD_SMOKE.md](YOUTUBE_PRIVATE_UPLOAD_SMOKE.md) for the smoke checklist.

@@ -46,6 +46,58 @@ describe("YouTube local token provider readiness", () => {
     expect(status.blocked_reasons).toEqual(expect.arrayContaining(["token_file_inside_repo"]));
   });
 
+  test("uses YOUTUBE_TOKEN_FILE fallback when the local token path env is not set", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-token-"));
+    const tokenPath = path.join(dir, "youtube-token.json");
+    writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        refresh_token: "refresh-secret-value",
+        access_token: "access-secret-value",
+        scope: uploadScope
+      }),
+      "utf8"
+    );
+    vi.stubEnv("YOUTUBE_TOKEN_FILE", tokenPath);
+
+    try {
+      const status = buildYouTubeLocalTokenProviderStatus();
+      expect(status).toMatchObject({
+        configured: true,
+        token_file_path_configured: true,
+        token_file_inside_repo: false,
+        token_file_exists: true,
+        token_ready: true,
+        scopes_ready: true
+      });
+      expect(JSON.stringify(status)).not.toMatch(secretNeedles);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("prefers YOUTUBE_LOCAL_TOKEN_FILE_PATH over YOUTUBE_TOKEN_FILE", () => {
+    const fallbackDir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-token-fallback-"));
+    const priorityDir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-token-priority-"));
+    const fallbackPath = path.join(fallbackDir, "youtube-token.json");
+    const priorityPath = path.join(priorityDir, "youtube-token.json");
+    writeFileSync(fallbackPath, JSON.stringify({ refresh_token: "fallback-refresh", scope: uploadScope }), "utf8");
+    writeFileSync(priorityPath, JSON.stringify({ refresh_token: "priority-refresh", scope: "https://www.googleapis.com/auth/youtube.readonly" }), "utf8");
+    vi.stubEnv("YOUTUBE_TOKEN_FILE", fallbackPath);
+    vi.stubEnv("YOUTUBE_LOCAL_TOKEN_FILE_PATH", priorityPath);
+
+    try {
+      const status = buildYouTubeLocalTokenProviderStatus();
+      expect(status.token_ready).toBe(true);
+      expect(status.scopes_ready).toBe(false);
+      expect(status.blocked_reasons).toEqual(expect.arrayContaining(["scopes_not_ready"]));
+      expect(JSON.stringify(status)).not.toMatch(/fallback-refresh|priority-refresh/);
+    } finally {
+      rmSync(fallbackDir, { recursive: true, force: true });
+      rmSync(priorityDir, { recursive: true, force: true });
+    }
+  });
+
   test("allows an outside-repo token file and never returns raw token values", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-token-"));
     const tokenPath = path.join(dir, "youtube-token.json");
