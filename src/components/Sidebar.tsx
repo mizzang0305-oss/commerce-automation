@@ -14,6 +14,7 @@ import {
   ServerCog,
   Settings,
   ShieldCheck,
+  UploadCloud,
   Webhook
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/image-prompts", label: "Image Prompts", icon: Image },
   { href: "/planner", label: "Planner", icon: CalendarClock },
   { href: "/channels", label: "Channels", icon: RadioTower },
+  { href: "/uploads", label: "Uploads", icon: UploadCloud },
   { href: "/ops/production-readiness", label: "Production Readiness", icon: ShieldCheck },
   { href: "/artifacts", label: "Artifact QA", icon: FileVideo },
   { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },

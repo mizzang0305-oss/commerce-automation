@@ -88,7 +88,15 @@ python -m compileall python-worker
 
 - `run_mode` default is `generate_only`.
 - `youtube_upload_enabled` default is `false`.
+- `tiktok_upload_enabled` default is `false`.
+- `threads_upload_enabled` default is `false`.
+- `public_upload_enabled` default is `false`.
+- `manual_upload_only` remains `true` for platform upload core.
 - No real YouTube/TikTok/Threads upload code path is enabled.
+- `GET /api/uploads/platform-readiness` returns safe readiness booleans and blocked reasons only.
+- `POST /api/candidates/[id]/platform-upload-plan` requires `video_path_or_url`, `disclosure_text`, candidate `product_name`, candidate `selected_affiliate_url`, and provider targets.
+- Platform upload plans keep `uploaded=false`, `platform_api_called=false`, `token_exchanged=false`, `token_stored=false`, `db_written=false`, `queue_created=false`, `worker_job_created=false`, and `upload_package_created=false`.
+- `/uploads` is read-only and must not expose live upload, OAuth, token entry, deploy, DB write, queue creation, worker job creation, or upload package creation controls.
 
 ## Artifact Storage QA
 
