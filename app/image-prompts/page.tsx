@@ -3,6 +3,7 @@ import { ImagePromptPlanClient } from "@/components/ImagePromptPlanClient";
 import { buildLocalImageGenerationPackage } from "@/lib/image-generation-bridge/buildLocalImageGenerationPackage";
 import { buildImageQaImportPlan } from "@/lib/image-qa-import/buildImageQaImportPlan";
 import { buildCommerceImagePromptPlan } from "@/lib/image-prompts/prompt-builder";
+import { buildLocalSlideshowRenderPackage } from "@/lib/local-slideshow-render";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { buildSlideshowPackagePlan } from "@/lib/slideshow-package";
 import { buildGeneratedVideoQaImportPlan } from "@/lib/video-qa-import";
@@ -33,6 +34,9 @@ export default async function ImagePromptsPage(
     : null;
   const generatedVideoQaImportPlan = selectedCandidate
     ? buildGeneratedVideoQaImportPlan(selectedCandidate, null)
+    : null;
+  const localSlideshowRenderPackage = selectedCandidate && slideshowPackagePlan
+    ? buildLocalSlideshowRenderPackage(selectedCandidate, slideshowPackagePlan)
     : null;
 
   return (
@@ -89,6 +93,7 @@ export default async function ImagePromptsPage(
           imageQaImportPlan={imageQaImportPlan}
           slideshowPackagePlan={slideshowPackagePlan}
           generatedVideoQaImportPlan={generatedVideoQaImportPlan}
+          localSlideshowRenderPackage={localSlideshowRenderPackage}
         />
       ) : null}
     </div>

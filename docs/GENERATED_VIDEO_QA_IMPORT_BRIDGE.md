@@ -1,6 +1,6 @@
 # Generated Video QA Import Bridge
 
-This document defines the plan-only bridge after a manually rendered video exists outside the WebApp. It helps an operator paste generated video manifest text, review QA status, and prepare manual upload package readiness notes.
+This document defines the plan-only bridge after a separately approved local render produces a video outside the WebApp. It helps an operator paste generated video manifest text, review QA status, and prepare manual upload package readiness notes.
 
 ## Principles
 
@@ -117,7 +117,7 @@ The controls do not browse local files, read files, write files, probe video met
 
 Future work must stay separate and approval-gated:
 
-- local video generation execution;
+- local video generation execution after the copy-only local slideshow render package;
 - generated video metadata probing;
 - R2 generated video upload;
 - channel upload package creation from selected generated video;

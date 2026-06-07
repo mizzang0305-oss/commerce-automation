@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { LocalImageGenerationPackage } from "@/lib/image-generation-bridge/types";
 import type { ImageQaImportPlan } from "@/lib/image-qa-import/types";
 import type { CommerceImagePromptPlan } from "@/lib/image-prompts/types";
+import type { LocalSlideshowRenderPackage } from "@/lib/local-slideshow-render";
 import type { SlideshowPackagePlan } from "@/lib/slideshow-package";
 import type { GeneratedVideoQaImportPlan } from "@/lib/video-qa-import";
 import type { CommerceImageVideoPlan } from "@/lib/video-plans/types";
@@ -22,7 +23,8 @@ export function ImagePromptPlanClient({
   localImagePackage,
   imageQaImportPlan,
   slideshowPackagePlan,
-  generatedVideoQaImportPlan
+  generatedVideoQaImportPlan,
+  localSlideshowRenderPackage
 }: {
   plan: CommerceImagePromptPlan;
   imageVideoPlan?: CommerceImageVideoPlan | null;
@@ -30,10 +32,12 @@ export function ImagePromptPlanClient({
   imageQaImportPlan?: ImageQaImportPlan | null;
   slideshowPackagePlan?: SlideshowPackagePlan | null;
   generatedVideoQaImportPlan?: GeneratedVideoQaImportPlan | null;
+  localSlideshowRenderPackage?: LocalSlideshowRenderPackage | null;
 }) {
   const [message, setMessage] = useState("");
   const [importManifestText, setImportManifestText] = useState(imageQaImportPlan?.import_manifest_json ?? "");
   const [videoManifestText, setVideoManifestText] = useState(generatedVideoQaImportPlan?.import_manifest_json ?? "");
+  const [localRenderConfirmation, setLocalRenderConfirmation] = useState("");
   const planJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
   const videoPlanJson = useMemo(() => JSON.stringify(imageVideoPlan?.video_plan ?? {}, null, 2), [imageVideoPlan]);
   const fullPlanJson = useMemo(() => JSON.stringify(imageVideoPlan ?? { image_plan: plan }, null, 2), [imageVideoPlan, plan]);
@@ -55,6 +59,10 @@ export function ImagePromptPlanClient({
   const generatedVideoQaImportPlanJson = useMemo(
     () => JSON.stringify(generatedVideoQaImportPlan ?? {}, null, 2),
     [generatedVideoQaImportPlan]
+  );
+  const localSlideshowRenderPackageJson = useMemo(
+    () => JSON.stringify(localSlideshowRenderPackage ?? {}, null, 2),
+    [localSlideshowRenderPackage]
   );
   const generatedVideoNextStepJson = useMemo(
     () => JSON.stringify({
@@ -92,6 +100,15 @@ export function ImagePromptPlanClient({
 
   function previewGeneratedVideoQaPlan() {
     setMessage("Generated video QA import plan preview refreshed. No local file was read, no DB row was written, and no upload package was created.");
+  }
+
+  function previewLocalRenderPackage() {
+    const matched = localRenderConfirmation === localSlideshowRenderPackage?.confirmation_required;
+    setMessage(
+      matched
+        ? "Local render package preview refreshed. Execution remains disabled; no FFmpeg, MoviePy, file write, upload, queue, or worker job was started."
+        : "Exact confirmation phrase is required for package preparation. Execution remains disabled."
+    );
   }
 
   return (
@@ -622,6 +639,141 @@ export function ImagePromptPlanClient({
                 No generated video manifest entries are ready yet. Paste a manual manifest after local video QA.
               </p>
             )}
+          </div>
+        </section>
+      ) : null}
+
+      {localSlideshowRenderPackage ? (
+        <section className="rounded-lg border border-emerald-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">approval-gated local bridge</p>
+              <h2 className="mt-1 text-base font-bold text-slate-950">Local Slideshow Render Package</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                This package prepares copy-only local render instructions. The WebApp does not execute FFmpeg, MoviePy,
+                read or write local files, create video files, upload artifacts, create queues, or create worker jobs.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={previewLocalRenderPackage}
+                className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-50"
+              >
+                Preview local render package
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localSlideshowRenderPackage.powershell_steps_markdown, "PowerShell steps")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy PowerShell steps
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localSlideshowRenderPackage.ffmpeg_command_preview, "Local FFmpeg command preview")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy local FFmpeg command preview
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localSlideshowRenderPackage.moviepy_script_preview, "Local MoviePy script preview")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Copy local MoviePy script preview
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(localSlideshowRenderPackageJson, "Local render package JSON download text")}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+              >
+                Download local render package JSON
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <SideEffectBadge label="external_api_called" value={localSlideshowRenderPackage.side_effects.external_api_called} />
+            <SideEffectBadge label="deployment_triggered" value={localSlideshowRenderPackage.side_effects.deployment_triggered} />
+            <SideEffectBadge label="image_generated" value={localSlideshowRenderPackage.side_effects.image_generated} />
+            <SideEffectBadge label="video_generated" value={localSlideshowRenderPackage.side_effects.video_generated} />
+            <SideEffectBadge label="uploaded" value={localSlideshowRenderPackage.side_effects.uploaded} />
+            <SideEffectBadge label="db_written" value={localSlideshowRenderPackage.side_effects.db_written} />
+            <SideEffectBadge label="local_file_read" value={localSlideshowRenderPackage.side_effects.local_file_read} />
+            <SideEffectBadge label="local_file_written" value={localSlideshowRenderPackage.side_effects.local_file_written} />
+            <SideEffectBadge label="ffmpeg_executed" value={localSlideshowRenderPackage.side_effects.ffmpeg_executed} />
+            <SideEffectBadge label="moviepy_executed" value={localSlideshowRenderPackage.side_effects.moviepy_executed} />
+            <SideEffectBadge label="upload_package_created" value={localSlideshowRenderPackage.side_effects.upload_package_created} />
+            <SideEffectBadge label="worker_job_created" value={localSlideshowRenderPackage.side_effects.worker_job_created} />
+            <SideEffectBadge label="queue_created" value={localSlideshowRenderPackage.side_effects.queue_created} />
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              execution_enabled={String(localSlideshowRenderPackage.execution_enabled)}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+              approval_required={String(localSlideshowRenderPackage.approval_required)}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-800">
+              confirmation_required={localSlideshowRenderPackage.confirmation_required}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-800">
+              confirmation_matched={String(localRenderConfirmation === localSlideshowRenderPackage.confirmation_required)}
+            </span>
+          </div>
+
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+            Copy-only bridge. Confirmation prepares a text package preview only; it does not execute local commands,
+            inspect files, write outputs, upload artifacts, or start worker processing.
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="local-render-confirmation" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Render package confirmation phrase
+            </label>
+            <input
+              id="local-render-confirmation"
+              value={localRenderConfirmation}
+              onChange={(event) => setLocalRenderConfirmation(event.target.value)}
+              placeholder={localSlideshowRenderPackage.confirmation_required}
+              className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Exact phrase gates package preparation. Execution still remains disabled after the phrase matches.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Output paths</p>
+              <ol className="mt-2 space-y-1 text-xs text-slate-600">
+                {localSlideshowRenderPackage.output_paths.map((outputPath) => (
+                  <li key={outputPath} className="break-all">{outputPath}</li>
+                ))}
+              </ol>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Input asset checklist</p>
+              <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                {localSlideshowRenderPackage.input_assets_checklist.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">local FFmpeg command preview</p>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-700">
+                {localSlideshowRenderPackage.ffmpeg_command_preview}
+              </pre>
+            </div>
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">local MoviePy script preview</p>
+              <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-white p-3 text-xs text-slate-700">
+                {localSlideshowRenderPackage.moviepy_script_preview}
+              </pre>
+            </div>
           </div>
         </section>
       ) : null}

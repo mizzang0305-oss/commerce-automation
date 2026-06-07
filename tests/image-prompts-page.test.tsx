@@ -94,6 +94,15 @@ describe("/image-prompts page", () => {
     expect(screen.getAllByText("ready_for_manual_upload_package=false").length).toBeGreaterThan(0);
     expect(screen.getAllByText("db_written=false").length).toBeGreaterThan(0);
     expect(screen.getAllByText("file_uploaded=false").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Local Slideshow Render Package" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Render package confirmation phrase")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview local render package" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy PowerShell steps" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy local FFmpeg command preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy local MoviePy script preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download local render package JSON" })).toBeInTheDocument();
+    expect(screen.getByText("execution_enabled=false")).toBeInTheDocument();
+    expect(screen.getByText("confirmation_required=PREPARE_LOCAL_SLIDESHOW_RENDER_PACKAGE")).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? "";
     expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive|Browse Local File|Read File|Read Video Metadata|Import to DB|Upload to R2|Create Video File|Upload Video|Create Upload Package|Send to R2|Post to TikTok|Post to Threads/);
