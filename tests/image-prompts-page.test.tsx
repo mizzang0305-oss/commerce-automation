@@ -103,6 +103,12 @@ describe("/image-prompts page", () => {
     expect(screen.getByRole("button", { name: "Download local render package JSON" })).toBeInTheDocument();
     expect(screen.getByText("execution_enabled=false")).toBeInTheDocument();
     expect(screen.getByText("confirmation_required=PREPARE_LOCAL_SLIDESHOW_RENDER_PACKAGE")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Local Slideshow Render Execution" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Execution approval phrase")).toBeInTheDocument();
+    expect(screen.getByLabelText("Render engine preference")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Execute local render" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy render report JSON" })).toBeInTheDocument();
+    expect(screen.getByText(/local file read\/write and mp4 generation only/)).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? "";
     expect(pageText).not.toMatch(/Generate Image|Generate Video|Run Worker|Run FFmpeg|Run MoviePy|Call Gemini|Call OpenAI|Post to YouTube|Send to Google Drive|Browse Local File|Read File|Read Video Metadata|Import to DB|Upload to R2|Create Video File|Upload Video|Create Upload Package|Send to R2|Post to TikTok|Post to Threads/);

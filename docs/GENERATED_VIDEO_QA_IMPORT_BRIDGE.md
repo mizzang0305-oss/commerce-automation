@@ -117,7 +117,7 @@ The controls do not browse local files, read files, write files, probe video met
 
 Future work must stay separate and approval-gated:
 
-- local video generation execution after the copy-only local slideshow render package;
+- local video generation execution after the copy-only local slideshow render package, using `APPROVE_LOCAL_SLIDESHOW_RENDER_EXECUTION`;
 - generated video metadata probing;
 - R2 generated video upload;
 - channel upload package creation from selected generated video;
