@@ -34,6 +34,36 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 5. Persist planner/channel edits in Supabase.
 6. Keep public upload as a separate, explicitly reviewed milestone.
 
+## v2.4 Platform Upload Core
+
+The upload layer now has a common readiness and planning model without live provider execution.
+
+Included:
+
+- `PlatformUploadProvider` for YouTube, TikTok, and Threads.
+- Default-disabled `PlatformUploadSettings`.
+- `PlatformUploadReadiness` with blocked reasons.
+- Copy-only `PlatformUploadJobPlan`.
+- `/api/uploads/platform-readiness`.
+- `/api/candidates/[id]/platform-upload-plan`.
+- `/uploads` read-only readiness page.
+
+Not included:
+
+- YouTube `videos.insert`.
+- TikTok Direct Post.
+- Threads publish.
+- OAuth token exchange or token storage.
+- Public upload enablement.
+- Upload execution or upload smoke.
+
+Next milestones:
+
+1. Add an approval-gated YouTube private/unlisted adapter.
+2. Add server-only token readiness.
+3. Add TikTok and Threads readiness adapters.
+4. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, and account evidence exist.
+
 ## v1.4 Repository Adapter Target
 
 The Supabase/Postgres repository adapter moves control-room state beyond local JSON while keeping the existing WebApp API contract.
