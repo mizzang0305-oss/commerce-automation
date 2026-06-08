@@ -36,7 +36,7 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 
 ## v2.4 Platform Upload Core
 
-The upload layer now has a common readiness and planning model without live provider execution.
+The upload layer now has a common readiness and planning model. YouTube has a server-only private/unlisted smoke path behind explicit readiness and approval gates; TikTok and Threads remain readiness-only.
 
 Included:
 
@@ -50,12 +50,11 @@ Included:
 
 Not included:
 
-- YouTube `videos.insert`.
 - TikTok Direct Post.
 - Threads publish.
-- OAuth token exchange or token storage.
+- Repository OAuth token storage.
 - Public upload enablement.
-- Upload execution or upload smoke.
+- Automatic channel publishing.
 
 YouTube adapter scaffold:
 
@@ -65,13 +64,13 @@ YouTube adapter scaffold:
 - Exact confirmation gate at `/api/uploads/youtube/execute`.
 - Public visibility blocked.
 - Token values and Authorization headers are not exposed.
-- Live upload smoke remains blocked unless token readiness and separate smoke approval are present.
+- Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present.
 
 Next milestones:
 
 1. Add TikTok and Threads readiness adapters.
-2. Add approved server-only token provider execution without client token exposure.
-3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, and account evidence exist.
+2. Add YouTube smoke result recording only after manual Studio verification policy is defined.
+3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, account, policy, and local mp4 evidence exist.
 4. Keep public upload as a separate explicitly reviewed milestone.
 
 ## v1.4 Repository Adapter Target

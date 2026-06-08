@@ -91,7 +91,7 @@ export function ProductionReadinessPanel({ readiness }: { readiness: ProductionR
             <li>Upload enabled: {String(readiness.safety.upload_enabled).toUpperCase()}</li>
             <li>Manual upload only: {String(readiness.safety.manual_upload_only).toUpperCase()}</li>
             <li>OAuth token storage enabled: {String(readiness.safety.oauth_token_storage_enabled).toUpperCase()}</li>
-            <li>videos.insert implemented: {String(readiness.safety.videos_insert_implemented).toUpperCase()}</li>
+            <li>YouTube private smoke adapter implemented: {String(readiness.safety.youtube_private_smoke_adapter_implemented).toUpperCase()}</li>
           </ul>
         </div>
         <div className="rounded-md border border-slate-200 p-3">

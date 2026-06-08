@@ -24,14 +24,15 @@ export default async function UploadsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-950">Platform Upload Readiness</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          No live platform API calls are available from this screen. Upload settings, readiness, and plan JSON are
-          approval-gated scaffolds only; YouTube, TikTok, and Threads remain disabled by default.
+          Platform uploads remain disabled by default. YouTube supports only a server-side, approval-gated private or
+          unlisted smoke path after token, quota, account, policy, local video, and exact confirmation gates pass.
+          TikTok and Threads remain readiness-only.
         </p>
       </div>
 
       <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-        Platform upload core is copy-only. It does not exchange tokens, store OAuth credentials, create upload jobs,
-        create queue rows, call provider APIs, or enable public upload.
+        This screen does not run uploads. The YouTube execute API remains server-only and approval-gated; it does not
+        create upload jobs, queue rows, DB writes, R2 uploads, or public uploads.
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -91,7 +92,8 @@ export default async function UploadsPage() {
             <h2 className="text-lg font-bold text-slate-950">YouTube Upload Adapter</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
               YouTube uploads are disabled by default. This adapter only gates private/unlisted upload preparation after
-              token readiness, quota readiness, policy readiness, and exact operator confirmation. Public upload is blocked.
+              token readiness, quota readiness, policy readiness, local mp4 readiness, separate smoke approval, and exact
+              operator confirmation. Public upload is blocked.
             </p>
             <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-700">
               OAuth tokens are not entered or shown on this screen. No refresh token, access token, or raw auth header is displayed.

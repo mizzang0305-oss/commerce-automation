@@ -6,6 +6,7 @@ import type { YouTubeLocalTokenProviderStatus } from "@/lib/uploads/youtube/type
 import { YOUTUBE_UPLOAD_SCOPE } from "@/lib/uploads/youtube/youtubeOAuthScopes";
 
 const TOKEN_FILE_ENV = "YOUTUBE_LOCAL_TOKEN_FILE_PATH";
+const FALLBACK_TOKEN_FILE_ENV = "YOUTUBE_TOKEN_FILE";
 
 type TokenFileJson = {
   access_token?: unknown;
@@ -16,7 +17,7 @@ type TokenFileJson = {
 };
 
 export function buildYouTubeLocalTokenProviderStatus(env: NodeJS.ProcessEnv = process.env): YouTubeLocalTokenProviderStatus {
-  const configuredPath = env[TOKEN_FILE_ENV]?.trim() ?? "";
+  const configuredPath = getConfiguredTokenPath(env);
   const token_file_path_configured = configuredPath.length > 0;
   const resolvedPath = token_file_path_configured ? path.resolve(/*turbopackIgnore: true*/ configuredPath) : "";
   const repoRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd());
@@ -103,7 +104,7 @@ function getScopes(tokenJson: TokenFileJson) {
 
 function buildSafeSummary(status: Pick<YouTubeLocalTokenProviderStatus, "configured" | "token_file_path_configured" | "token_file_inside_repo" | "token_file_exists" | "token_ready" | "scopes_ready">) {
   if (!status.token_file_path_configured) {
-    return `${TOKEN_FILE_ENV} is not configured.`;
+    return `${TOKEN_FILE_ENV} or ${FALLBACK_TOKEN_FILE_ENV} is not configured.`;
   }
   if (status.token_file_inside_repo) {
     return "Token file path is inside the repository and is blocked.";
@@ -115,4 +116,8 @@ function buildSafeSummary(status: Pick<YouTubeLocalTokenProviderStatus, "configu
     return "Token file metadata was found, but upload token readiness is incomplete.";
   }
   return "Local YouTube token metadata is ready for separately approved private upload smoke.";
+}
+
+function getConfiguredTokenPath(env: NodeJS.ProcessEnv) {
+  return env[TOKEN_FILE_ENV]?.trim() || env[FALLBACK_TOKEN_FILE_ENV]?.trim() || "";
 }

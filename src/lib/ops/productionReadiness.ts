@@ -146,7 +146,7 @@ export function buildProductionReadinessSummary(env: NodeJS.ProcessEnv = process
       upload_enabled: isTruthy(env.UPLOAD_ENABLED),
       manual_upload_only: manualUploadOnly,
       oauth_token_storage_enabled: false,
-      videos_insert_implemented: false
+      youtube_private_smoke_adapter_implemented: true
     },
     sections: [
       section("vercel", "Vercel", missingRequired > 0 ? "missing" : "manual_pending", "Project/env/deploy readiness is not completed."),
