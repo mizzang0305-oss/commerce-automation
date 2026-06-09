@@ -16,7 +16,7 @@ function makeValidUploadRequest(videoPath: string) {
     video_path_or_url: videoPath,
     title: "Private upload smoke",
     description: "Private smoke test.",
-    disclosure_text: "This content contains affiliate links.",
+    disclosure_text: "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.",
     selected_affiliate_url: "https://link.coupang.com/a/private-live-smoke",
     visibility: "private",
     tags: ["commerce", "private smoke"]

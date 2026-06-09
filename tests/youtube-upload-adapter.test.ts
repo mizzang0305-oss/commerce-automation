@@ -18,7 +18,7 @@ const validRequestBody = {
   title: "Desk organizer set quick review",
   description: "A private upload draft for operator review.",
   disclosure_text:
-    "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급될 수 있습니다.",
+    "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.",
   selected_affiliate_url: "https://link.coupang.com/a/candidate-youtube-upload-001",
   tags: ["desk", "organizer"],
   visibility: "private"
@@ -137,6 +137,37 @@ describe("YouTube upload adapter readiness and gates", () => {
     });
   });
 
+  test("prepare rejects garbled or incomplete Korean disclosure text before upload execution", async () => {
+    const garbledDisclosure = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        description: "Commerce Automation private upload smoke test.\n\n? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????.",
+        disclosure_text: "? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????."
+      })
+    }));
+    expect(garbledDisclosure.status).toBe(400);
+    expect(await json(garbledDisclosure)).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+      missing_reasons: expect.arrayContaining(["disclosure_text_garbled"]),
+      side_effects: youtubeUploadSafeSideEffects
+    });
+
+    const missingKoreanKeyword = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        disclosure_text: "이 콘텐츠는 제휴 활동을 포함합니다."
+      })
+    }));
+    expect(missingKoreanKeyword.status).toBe(400);
+    expect(await json(missingKoreanKeyword)).toMatchObject({
+      ok: false,
+      missing_reasons: expect.arrayContaining(["disclosure_text_missing_required_korean"])
+    });
+  });
+
   test("prepare keeps candidate_id required and accepts the documented smoke candidate payload", async () => {
     const missingCandidate = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
       method: "POST",
@@ -226,6 +257,25 @@ describe("YouTube upload adapter readiness and gates", () => {
       readiness: {
         can_upload: false
       }
+    });
+  });
+
+  test("execute rejects garbled disclosure before readiness or external upload attempts", async () => {
+    const blockedByGarbledDisclosure = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        description: "? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????.",
+        disclosure_text: "? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????."
+      })
+    }));
+    expect(blockedByGarbledDisclosure.status).toBe(400);
+    expect(await json(blockedByGarbledDisclosure)).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+      missing_reasons: expect.arrayContaining(["disclosure_text_garbled"]),
+      side_effects: youtubeUploadSafeSideEffects
     });
   });
 
