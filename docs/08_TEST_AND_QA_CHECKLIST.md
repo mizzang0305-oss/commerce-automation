@@ -1,4 +1,4 @@
-# 08 Test And QA Checklist
+﻿# 08 Test And QA Checklist
 
 ## Required Commands
 
@@ -97,7 +97,7 @@ python -m compileall python-worker
 - `GET /api/uploads/platform-readiness` returns safe readiness booleans and blocked reasons only.
 - `POST /api/candidates/[id]/platform-upload-plan` requires `video_path_or_url`, `disclosure_text`, candidate `product_name`, candidate `selected_affiliate_url`, and provider targets.
 - Platform upload plans keep `uploaded=false`, `platform_api_called=false`, `token_exchanged=false`, `token_stored=false`, `db_written=false`, `queue_created=false`, `worker_job_created=false`, and `upload_package_created=false`.
-- `/uploads` is read-only and must not expose live upload, OAuth, token entry, deploy, DB write, queue creation, worker job creation, or upload package creation controls.
+- `/uploads` is dashboard-first for the approved YouTube private smoke flow. It must not expose OAuth token entry, deploy, DB write, queue creation, worker job creation, or upload package creation controls.
 - `GET /api/uploads/youtube/readiness` returns YouTube readiness booleans and blocked reasons only; it must not return client secret, access token, refresh token, or Authorization values.
 - `GET /api/uploads/youtube/token-readiness` returns local token file metadata booleans only; it must not return token file contents, access token, refresh token, client secret, or Authorization values.
 - `node scripts/youtube-local-oauth-helper.mjs print-auth-url` is a local helper command only; it must not exchange tokens or write token files.
@@ -106,6 +106,7 @@ python -m compileall python-worker
 - The local OAuth helper must reject token file paths inside this repository.
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
+- `/uploads` must render candidate id, local mp4 path, private/unlisted visibility, UTF-8 Korean disclosure preview, prepare/execute gates, and manual Studio verification without exposing token values or invoking public upload.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
 - `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
 - When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.

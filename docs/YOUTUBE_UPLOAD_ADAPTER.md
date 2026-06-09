@@ -68,6 +68,11 @@ Required disclosure text example:
 - `POST /api/uploads/youtube/prepare`
 - `POST /api/uploads/youtube/execute`
 
+The operator-facing path is `/uploads`. The dashboard builds the UTF-8 JSON payload in the browser, runs prepare only
+from a button click, keeps execute disabled until prepare succeeds plus both exact approval phrases are entered, and
+shows a manual Studio verification card. Do not use direct PowerShell/curl prepare or execute calls for the normal
+private smoke loop.
+
 `token-readiness` checks local token file metadata only. It reports file placement, file existence, token readiness, and scope readiness without returning token values.
 
 `prepare` validates and returns request JSON only. It does not call YouTube.
