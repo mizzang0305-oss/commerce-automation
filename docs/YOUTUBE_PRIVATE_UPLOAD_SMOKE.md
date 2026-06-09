@@ -4,6 +4,25 @@ This runbook covers one approval-gated YouTube private or unlisted upload smoke 
 
 It does not enable public upload, TikTok upload, Threads upload, DB writes, R2 uploads, queue creation, worker job creation, or upload package creation.
 
+## Dashboard-first smoke path
+
+The preferred operator path is now `/uploads`, not direct PowerShell or curl calls to
+`/api/uploads/youtube/prepare` or `/api/uploads/youtube/execute`.
+
+Use the dashboard flow to:
+
+1. Check YouTube readiness and local token metadata.
+2. Confirm `candidate_id`, local mp4 path, visibility, title, description, and disclosure preview.
+3. Verify the disclosure guard shows readable `쿠팡파트너스` and `수수료` text and no garbled replacement-question-mark disclosure.
+4. Click `Prepare from dashboard`.
+5. Enter the exact approval phrases only when live private smoke is explicitly approved.
+6. Click `Execute private smoke` once through the dashboard.
+7. Complete the Studio verification card before treating the result as final.
+
+Direct PowerShell/curl prepare or execute calls are fallback diagnostics only and must not be used for the normal smoke
+loop. If the dashboard does not show the required fields and gates, stop and fix the UI before running another live
+smoke.
+
 ## Required Gates
 
 All gates must be true before `POST /api/uploads/youtube/execute` is attempted:

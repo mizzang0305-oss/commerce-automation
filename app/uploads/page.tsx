@@ -1,9 +1,12 @@
 import { buildPlatformUploadReadiness, createDefaultPlatformUploadSettings } from "@/lib/uploads";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+  YOUTUBE_PRIVATE_SMOKE_VIDEO_PATH,
   buildYouTubeLocalTokenProviderStatus,
   buildYouTubeUploadReadiness
 } from "@/lib/uploads/youtube";
+import { YouTubeDashboardSmokeFlow } from "@/components/YouTubeDashboardSmokeFlow";
+import path from "path";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,7 @@ export default async function UploadsPage() {
   const readiness = buildPlatformUploadReadiness(settings);
   const youtubeReadiness = buildYouTubeUploadReadiness();
   const youtubeTokenReadiness = buildYouTubeLocalTokenProviderStatus();
+  const defaultYouTubeSmokeVideoPath = path.join(process.cwd(), YOUTUBE_PRIVATE_SMOKE_VIDEO_PATH);
 
   return (
     <div className="space-y-5">
@@ -86,6 +90,8 @@ export default async function UploadsPage() {
         </dl>
       </section>
 
+      <YouTubeDashboardSmokeFlow defaultVideoPath={defaultYouTubeSmokeVideoPath} />
+
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -137,56 +143,10 @@ export default async function UploadsPage() {
           </div>
         </div>
 
-        <div className="mt-4 rounded-md border border-slate-200 p-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-semibold text-slate-700">
-              Visibility
-              <select className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" defaultValue="private">
-                <option value="private">private</option>
-                <option value="unlisted">unlisted</option>
-              </select>
-            </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Confirmation
-              <input
-                className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                placeholder={APPROVE_YOUTUBE_PRIVATE_UPLOAD}
-                aria-label="YouTube private upload confirmation"
-              />
-            </label>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled
-              className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-bold text-slate-500"
-            >
-              Prepare request
-            </button>
-            <button
-              type="button"
-              disabled
-              className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-bold text-slate-500"
-            >
-              Execute upload
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
-            >
-              Copy request JSON
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
-            >
-              Copy blocked reasons
-            </button>
-          </div>
-          <p className="mt-3 text-sm font-semibold text-slate-600">
-            Live upload smoke is not run unless token readiness, quota readiness, private/unlisted visibility, exact
-            confirmation, and separate smoke approval are all present.
-          </p>
+        <div className="mt-4 rounded-md border border-slate-200 p-3 text-sm font-semibold text-slate-700">
+          Use the dashboard private smoke form below for UTF-8 browser payload preparation and gated execution. Public
+          visibility remains unavailable, and live upload smoke is not attempted until readiness, exact confirmation,
+          and separate smoke approval all pass.
         </div>
       </section>
 

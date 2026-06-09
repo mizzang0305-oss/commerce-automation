@@ -46,7 +46,7 @@ Included:
 - Copy-only `PlatformUploadJobPlan`.
 - `/api/uploads/platform-readiness`.
 - `/api/candidates/[id]/platform-upload-plan`.
-- `/uploads` read-only readiness page.
+- `/uploads` dashboard-first private smoke form with readiness, UTF-8 disclosure preview, prepare/execute gates, and manual Studio verification.
 
 Not included:
 
@@ -65,7 +65,7 @@ YouTube adapter scaffold:
 - Public visibility blocked.
 - Token values and Authorization headers are not exposed.
 - Access token refresh is attempted before the resumable session when a local refresh token exists; refresh failures require reauthorization and must not fake success.
-- Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present.
+- Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present. The normal smoke path is the `/uploads` dashboard; direct PowerShell/curl prepare or execute calls are not the operator flow.
 - The first private smoke succeeded for `candidate-video-smoke-001`; result verification is manual and safe, requiring YouTube Studio checks for private visibility, title, Korean disclosure, and public-upload-blocked status.
 
 Next milestones:
