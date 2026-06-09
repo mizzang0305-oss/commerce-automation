@@ -43,6 +43,12 @@ YouTube upload request preparation requires:
 
 `public` visibility is rejected. The final description must include the affiliate disclosure text and affiliate URL.
 
+For the local private smoke, use `candidate-video-smoke-001`. That id is the
+existing dev smoke candidate created by `/api/dev/seed` with
+`mode="candidate-video-smoke"`. The YouTube adapter does not create candidates
+or write queue/job/upload-package rows; it only requires the upload payload to
+remain linked to a candidate id.
+
 Required disclosure text example:
 
 ```text

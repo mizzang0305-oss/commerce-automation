@@ -5,7 +5,9 @@ import { POST as postYouTubeExecute } from "../app/api/uploads/youtube/execute/r
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
   MockYouTubeUploadAdapter,
+  YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID,
   buildYouTubeUploadRequest,
+  buildYouTubePrivateSmokePayload,
   buildYouTubeUploadReadiness,
   youtubeUploadSafeSideEffects
 } from "@/lib/uploads/youtube";
@@ -133,6 +135,42 @@ describe("YouTube upload adapter readiness and gates", () => {
       ok: false,
       missing_reasons: expect.arrayContaining(["disclosure_text", "selected_affiliate_url"])
     });
+  });
+
+  test("prepare keeps candidate_id required and accepts the documented smoke candidate payload", async () => {
+    const missingCandidate = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        candidate_id: ""
+      })
+    }));
+    expect(missingCandidate.status).toBe(400);
+    expect(await json(missingCandidate)).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+      missing_reasons: expect.arrayContaining(["candidate_id"])
+    });
+
+    const smokePayload = buildYouTubePrivateSmokePayload({
+      video_path_or_url: "commerce-assets/output/video-packages/youtube-private-smoke-001/youtube-private-smoke-001.mp4"
+    });
+    const readySmoke = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
+      method: "POST",
+      body: JSON.stringify(smokePayload)
+    }));
+    const payload = await json(readySmoke);
+
+    expect(readySmoke.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      request: {
+        candidate_id: YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID,
+        visibility: "private"
+      },
+      side_effects: youtubeUploadSafeSideEffects
+    });
+    expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|Authorization: Bearer/i);
   });
 
   test("builds a private or unlisted request with disclosure copied into the description", () => {
