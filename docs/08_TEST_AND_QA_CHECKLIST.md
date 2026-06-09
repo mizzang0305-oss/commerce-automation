@@ -107,6 +107,7 @@ python -m compileall python-worker
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
 - `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
+- When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.
 - YouTube adapter success requires a returned YouTube video id; if no id is returned, `succeeded=false`.
 - YouTube adapter tests must mock provider HTTP calls and must not report fake production success.
 

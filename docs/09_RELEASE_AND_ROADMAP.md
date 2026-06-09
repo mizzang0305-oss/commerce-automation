@@ -64,6 +64,7 @@ YouTube adapter scaffold:
 - Exact confirmation gate at `/api/uploads/youtube/execute`.
 - Public visibility blocked.
 - Token values and Authorization headers are not exposed.
+- Access token refresh is attempted before the resumable session when a local refresh token exists; refresh failures require reauthorization and must not fake success.
 - Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present.
 
 Next milestones:

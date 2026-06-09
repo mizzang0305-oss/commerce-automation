@@ -29,6 +29,25 @@ The local token provider supports both names:
 
 Do not print token values, token JSON, client secrets, or Authorization headers.
 
+## Refresh Before Upload
+
+Before creating the YouTube resumable upload session, the server-only adapter prefers
+refreshing the local access token when a `refresh_token` is present. This prevents a
+stale `access_token` from being used blindly.
+
+Expected behavior:
+
+- Refresh is attempted before the resumable session when `refresh_token` exists.
+- The refreshed access token is used only server-side for the current request.
+- The token file may be updated atomically when it is outside the repository.
+- If token file update fails, the refreshed token may still be used for the current
+  request and a safe warning is returned.
+- If refresh fails, upload is blocked with `youtube_token_refresh_failed` and
+  `reauth_required=true`.
+- The adapter must not fall back to a stale access token after refresh failure.
+- Token values, raw Google token responses, client secrets, and Authorization headers
+  must not be printed.
+
 ## Local MP4 Preparation
 
 Preferred path:
@@ -75,6 +94,10 @@ Success requires:
 - `uploaded=true`
 
 If YouTube returns no video id, the result must be `succeeded=false`. Fake success is forbidden.
+
+If the result includes `youtube_token_refresh_failed` or `reauth_required=true`,
+re-authorize the local YouTube token before retrying. Do not retry live smoke without
+a new explicit approval.
 
 ## YouTube Studio Check
 

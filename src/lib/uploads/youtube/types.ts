@@ -63,6 +63,12 @@ export interface YouTubeUploadResult {
   blocked_reasons: string[];
   side_effects: YouTubeUploadSideEffects;
   approval_required: true;
+  token_refresh_attempted?: boolean;
+  token_refresh_succeeded?: boolean;
+  token_file_updated?: boolean;
+  token_file_update_warning?: string;
+  resumable_session_attempted?: boolean;
+  reauth_required?: boolean;
 }
 
 export interface YouTubeUploadAdapter {
