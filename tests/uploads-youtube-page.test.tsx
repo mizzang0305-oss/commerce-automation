@@ -1,10 +1,33 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import UploadsPage from "../app/uploads/page";
 import { APPROVE_YOUTUBE_PRIVATE_UPLOAD } from "@/lib/uploads/youtube";
 
+function clearYouTubeEnv() {
+  for (const name of [
+    "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
+    "YOUTUBE_TOKEN_FILE",
+    "YOUTUBE_TOKEN_PROVIDER",
+    "YOUTUBE_TOKEN_READY",
+    "YOUTUBE_SCOPES_READY",
+    "YOUTUBE_UPLOAD_ENABLED",
+    "YOUTUBE_QUOTA_READY",
+    "YOUTUBE_ACCOUNT_READY",
+    "YOUTUBE_POLICY_READY",
+    "PUBLIC_UPLOAD_ENABLED"
+  ]) {
+    vi.stubEnv(name, "");
+  }
+}
+
 describe("YouTube uploads page readiness panel", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   test("renders YouTube adapter readiness with private or unlisted gates only", async () => {
+    clearYouTubeEnv();
+
     render(await UploadsPage());
 
     expect(screen.getByRole("heading", { name: /YouTube Upload Adapter/i })).toBeInTheDocument();

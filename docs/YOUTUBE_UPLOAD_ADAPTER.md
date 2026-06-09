@@ -1,4 +1,4 @@
-# YouTube Upload Adapter
+﻿# YouTube Upload Adapter
 
 This adapter is an approval-gated server-only path for YouTube private or unlisted upload smoke.
 
@@ -46,7 +46,7 @@ YouTube upload request preparation requires:
 Required disclosure text example:
 
 ```text
-이 콘텐츠는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.
+이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급될 수 있습니다.
 ```
 
 ## APIs
@@ -85,6 +85,28 @@ The local token provider:
 - does not run OAuth exchange
 - provides server-only token material only to the approved upload adapter
 
+## Refresh Before Upload
+
+The server-only upload adapter refreshes the access token before creating the
+YouTube resumable upload session when a `refresh_token` exists in the local token
+file. This is intentionally preferred even if an `access_token` is also present,
+because the stored access token may be expired or revoked.
+
+Refresh behavior:
+
+- Refresh uses `grant_type=refresh_token` with server-only client credentials.
+- The refreshed access token is used for the resumable session request.
+- The token file is updated atomically when it is outside the repository.
+- If token file update fails, the adapter returns a safe warning and uses the
+  refreshed token only for the current request.
+- If refresh fails, the adapter returns `youtube_token_refresh_failed`,
+  `reauth_required=true`, `succeeded=false`, and does not create a resumable
+  upload session.
+- The adapter must not fall back to a stale access token after refresh failure.
+
+The adapter must never print access tokens, refresh tokens, client secrets,
+Authorization headers, or raw Google token responses.
+
 ## Live Smoke
 
 Live upload smoke is not run by default.
@@ -108,6 +130,10 @@ If any condition is missing, report:
 live_upload_smoke: NOT RUN
 blocked_reason: BLOCKED_BY_YOUTUBE_READINESS or BLOCKED_BY_MISSING_SMOKE_APPROVAL
 ```
+
+If a previous live smoke reached YouTube but returned HTTP 401, first refresh or
+re-authorize the local token. A new live smoke still requires the exact smoke
+approval phrase and exact upload confirmation.
 
 ## Safety Boundaries
 

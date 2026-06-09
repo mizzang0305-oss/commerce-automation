@@ -16,7 +16,7 @@ const validRequestBody = {
   title: "Desk organizer set quick review",
   description: "A private upload draft for operator review.",
   disclosure_text:
-    "이 콘텐츠는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.",
+    "이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급될 수 있습니다.",
   selected_affiliate_url: "https://link.coupang.com/a/candidate-youtube-upload-001",
   tags: ["desk", "organizer"],
   visibility: "private"
@@ -26,9 +26,28 @@ async function json(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+function clearYouTubeEnv() {
+  for (const name of [
+    "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
+    "YOUTUBE_TOKEN_FILE",
+    "YOUTUBE_TOKEN_PROVIDER",
+    "YOUTUBE_TOKEN_READY",
+    "YOUTUBE_SCOPES_READY",
+    "YOUTUBE_UPLOAD_ENABLED",
+    "YOUTUBE_QUOTA_READY",
+    "YOUTUBE_ACCOUNT_READY",
+    "YOUTUBE_POLICY_READY",
+    "PUBLIC_UPLOAD_ENABLED",
+    "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE"
+  ]) {
+    vi.stubEnv(name, "");
+  }
+}
+
 describe("YouTube upload adapter readiness and gates", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    clearYouTubeEnv();
   });
 
   afterEach(() => {

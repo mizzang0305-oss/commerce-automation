@@ -59,20 +59,44 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
     }
 
     const token = this.accessToken
-      ? { ok: true as const, accessToken: this.accessToken, refreshed: false }
+      ? {
+        ok: true as const,
+        accessToken: this.accessToken,
+        refreshed: false,
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
+        token_file_updated: false
+      }
       : await readYouTubeAccessTokenFromLocalFile({ env: this.env, fetchImpl: this.fetchImpl });
     if (!token.ok) {
-      return blockedYouTubeUploadResult(request.visibility, token.safe_error, token.blocked_reasons, false);
+      return blockedYouTubeUploadResult(request.visibility, token.safe_error, token.blocked_reasons, false, {
+        token_refresh_attempted: token.token_refresh_attempted,
+        token_refresh_succeeded: token.token_refresh_succeeded,
+        resumable_session_attempted: false,
+        reauth_required: token.reauth_required
+      });
     }
 
     const session = await this.startResumableSession(request, token.accessToken, localVideo.size);
     if (!session.ok) {
-      return blockedYouTubeUploadResult(request.visibility, session.safe_error, session.blocked_reasons, true);
+      return blockedYouTubeUploadResult(request.visibility, session.safe_error, session.blocked_reasons, true, {
+        token_refresh_attempted: token.token_refresh_attempted,
+        token_refresh_succeeded: token.token_refresh_succeeded,
+        token_file_updated: token.token_file_updated,
+        token_file_update_warning: token.token_file_update_warning,
+        resumable_session_attempted: true
+      });
     }
 
     const upload = await this.uploadVideoBytes(session.uploadUrl, token.accessToken, localVideo);
     if (!upload.ok) {
-      return blockedYouTubeUploadResult(request.visibility, upload.safe_error, upload.blocked_reasons, true);
+      return blockedYouTubeUploadResult(request.visibility, upload.safe_error, upload.blocked_reasons, true, {
+        token_refresh_attempted: token.token_refresh_attempted,
+        token_refresh_succeeded: token.token_refresh_succeeded,
+        token_file_updated: token.token_file_updated,
+        token_file_update_warning: token.token_file_update_warning,
+        resumable_session_attempted: true
+      });
     }
 
     return {
@@ -95,7 +119,12 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
         platform_upload_triggered: true,
         public_upload_enabled: false
       },
-      approval_required: true
+      approval_required: true,
+      token_refresh_attempted: token.token_refresh_attempted,
+      token_refresh_succeeded: token.token_refresh_succeeded,
+      token_file_updated: token.token_file_updated,
+      token_file_update_warning: token.token_file_update_warning,
+      resumable_session_attempted: true
     };
   }
 

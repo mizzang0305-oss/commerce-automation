@@ -12,6 +12,11 @@ async function json(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
+function clearYouTubeTokenEnv() {
+  vi.stubEnv("YOUTUBE_LOCAL_TOKEN_FILE_PATH", "");
+  vi.stubEnv("YOUTUBE_TOKEN_FILE", "");
+}
+
 describe("YouTube local token provider readiness", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -19,6 +24,7 @@ describe("YouTube local token provider readiness", () => {
 
   test("blocks readiness when token file path is missing", async () => {
     vi.unstubAllEnvs();
+    clearYouTubeTokenEnv();
 
     const status = buildYouTubeLocalTokenProviderStatus();
 

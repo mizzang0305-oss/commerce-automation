@@ -16,7 +16,8 @@ export function blockedYouTubeUploadResult(
   visibility: YouTubeUploadVisibility,
   safe_message: string,
   blocked_reasons: string[],
-  attempted = false
+  attempted = false,
+  extra: Partial<YouTubeUploadResult> = {}
 ): YouTubeUploadResult {
   return {
     provider: "youtube",
@@ -26,6 +27,7 @@ export function blockedYouTubeUploadResult(
     safe_message,
     blocked_reasons,
     side_effects: youtubeUploadSafeSideEffects,
-    approval_required: true
+    approval_required: true,
+    ...extra
   };
 }
