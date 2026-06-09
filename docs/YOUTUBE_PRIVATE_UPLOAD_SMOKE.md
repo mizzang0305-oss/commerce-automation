@@ -148,6 +148,36 @@ After a successful smoke, verify manually in YouTube Studio:
 
 Do not change the video to public during this smoke.
 
+## Result Verification Bridge
+
+The first private smoke succeeded with:
+
+- `candidate_id`: `candidate-video-smoke-001`
+- `youtube_video_id`: `ryZpIUWnbJA`
+- `visibility`: `private`
+- `uploaded=true`
+- `public_upload_enabled=false`
+
+Result verification is manual and safe. It records only operator checklist state
+and must not call `/api/uploads/youtube/execute`, call YouTube again, write DB
+rows, upload to R2, create queue rows, create worker jobs, or create upload
+packages.
+
+Manual result verification requires:
+
+- `candidate_id`
+- `youtube_video_id`
+- `youtube_url`
+- `visibility=private`
+- Studio visibility checked as private
+- title checked in Studio
+- Korean disclosure checked in Studio
+- public visibility was not enabled
+
+If `youtube_video_id` is missing, the result is not verified. If the Korean
+disclosure is garbled in YouTube Studio, fix the UTF-8 description path before
+any real content upload.
+
 ## Validation
 
 Recommended local validation:

@@ -40,6 +40,10 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.getByText(/token_file_path_missing/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Prepare request/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Execute upload/i })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: /Private upload result verification/i })).toBeInTheDocument();
+    expect(screen.getByText(/Studio visibility verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/Korean disclosure verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/Result tracking is manual and copy-only/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/refresh token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Public upload/i })).not.toBeInTheDocument();

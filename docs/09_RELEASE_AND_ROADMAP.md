@@ -66,11 +66,12 @@ YouTube adapter scaffold:
 - Token values and Authorization headers are not exposed.
 - Access token refresh is attempted before the resumable session when a local refresh token exists; refresh failures require reauthorization and must not fake success.
 - Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present.
+- The first private smoke succeeded for `candidate-video-smoke-001`; result verification is manual and safe, requiring YouTube Studio checks for private visibility, title, Korean disclosure, and public-upload-blocked status.
 
 Next milestones:
 
 1. Add TikTok and Threads readiness adapters.
-2. Add YouTube smoke result recording only after manual Studio verification policy is defined.
+2. Add optional persisted YouTube smoke result evidence only after DB-write scope is explicitly approved.
 3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, account, policy, and local mp4 evidence exist.
 4. Keep public upload as a separate explicitly reviewed milestone.
 
