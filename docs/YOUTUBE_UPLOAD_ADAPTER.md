@@ -29,6 +29,12 @@ The readiness APIs return boolean/status fields only:
 
 The APIs must not return raw client IDs, client secrets, access tokens, refresh tokens, Authorization headers, or provider response bodies.
 
+The upload request builder rejects garbled Korean affiliate disclosure text
+before prepare or execute can proceed. A valid YouTube upload request must keep
+the disclosure readable in UTF-8 and include `쿠팡파트너스` and `수수료`. Strings that
+look like replacement-question-mark mojibake, for example `? ????`, are blocked
+with `disclosure_text_garbled`.
+
 ## Request Requirements
 
 YouTube upload request preparation requires:

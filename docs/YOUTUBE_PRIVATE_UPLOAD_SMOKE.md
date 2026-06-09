@@ -19,6 +19,11 @@ All gates must be true before `POST /api/uploads/youtube/execute` is attempted:
 - `disclosure_text` is present.
 - `selected_affiliate_url` is present.
 
+The disclosure must be valid Korean text before prepare or execute can proceed.
+It must include `쿠팡파트너스` and `수수료`, and it must not contain replacement
+question-mark mojibake such as `? ????`. If the disclosure is garbled, prepare
+returns `YOUTUBE_UPLOAD_REQUEST_NOT_READY` and execute must not be called.
+
 ## Token File Env Compatibility
 
 The local token provider supports both names:
@@ -116,6 +121,25 @@ Run `POST /api/uploads/youtube/prepare` first. Expected side effects:
 
 If prepare fails, do not execute upload.
 
+### PowerShell UTF-8 Request Body
+
+For Korean payloads, avoid inline JSON strings in PowerShell. Build the JSON,
+encode it as UTF-8 bytes, and include `charset=utf-8`:
+
+```powershell
+$json = $payload | ConvertTo-Json -Depth 20
+$body = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod `
+  -Uri "$server/api/uploads/youtube/prepare" `
+  -Method POST `
+  -ContentType "application/json; charset=utf-8" `
+  -Body $body
+```
+
+This prepare request is still validation-only. It does not call YouTube, upload
+video bytes, write DB rows, upload to R2, create queue rows, create worker jobs,
+or create upload packages.
+
 ## Execute Request
 
 `POST /api/uploads/youtube/execute` starts a server-only YouTube Data API resumable upload only after every gate passes.
@@ -177,6 +201,12 @@ Manual result verification requires:
 If `youtube_video_id` is missing, the result is not verified. If the Korean
 disclosure is garbled in YouTube Studio, fix the UTF-8 description path before
 any real content upload.
+
+If Studio shows replacement question marks in the disclosure, keep real product
+upload blocked. Do not retry live smoke until the payload is sent with the
+UTF-8-safe request body above and a new explicit upload-smoke approval is given.
+Also verify external links directly in YouTube Studio before using the result as
+real content evidence.
 
 ## Validation
 

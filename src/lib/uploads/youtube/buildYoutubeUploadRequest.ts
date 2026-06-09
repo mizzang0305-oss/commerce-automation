@@ -3,6 +3,7 @@ import type {
   YouTubeUploadRequestInput,
   YouTubeUploadVisibility
 } from "@/lib/uploads/youtube/types";
+import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 
 export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   | { ok: true; request: YouTubeUploadRequest }
@@ -31,6 +32,12 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   }
   if (!disclosureText) {
     missingReasons.push("disclosure_text");
+  } else {
+    missingReasons.push(...validateYouTubeDisclosureText({
+      description: descriptionInput,
+      caption: captionInput,
+      disclosure_text: disclosureText
+    }));
   }
   if (!selectedAffiliateUrl) {
     missingReasons.push("selected_affiliate_url");
