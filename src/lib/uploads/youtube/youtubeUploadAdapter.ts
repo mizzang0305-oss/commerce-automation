@@ -100,14 +100,14 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   }
 
   private async startResumableSession(request: YouTubeUploadRequest, accessToken: string, fileSize: number) {
-    const response = await this.fetchImpl(new Request(YOUTUBE_VIDEO_INSERT_URL, {
+    const response = await this.fetchImpl(YOUTUBE_VIDEO_INSERT_URL, {
       method: "POST",
-      headers: {
+      headers: new Headers({
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "X-Upload-Content-Type": "video/mp4",
         "X-Upload-Content-Length": String(fileSize)
-      },
+      }),
       body: JSON.stringify({
         snippet: {
           title: request.title,
@@ -120,7 +120,7 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
           selfDeclaredMadeForKids: false
         }
       })
-    }));
+    });
 
     if (!response.ok) {
       return {
@@ -146,15 +146,15 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   }
 
   private async uploadVideoBytes(uploadUrl: string, accessToken: string, video: LocalVideoFile) {
-    const response = await this.fetchImpl(new Request(uploadUrl, {
+    const response = await this.fetchImpl(uploadUrl, {
       method: "PUT",
-      headers: {
+      headers: new Headers({
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "video/mp4",
         "Content-Length": String(video.size)
-      },
+      }),
       body: new Uint8Array(video.bytes)
-    }));
+    });
     const payload = await safeJson(response);
 
     if (!response.ok) {
