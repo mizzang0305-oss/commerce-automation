@@ -110,6 +110,11 @@ python -m compileall python-worker
 - When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.
 - YouTube adapter success requires a returned YouTube video id; if no id is returned, `succeeded=false`.
 - YouTube adapter tests must mock provider HTTP calls and must not report fake production success.
+- YouTube private smoke result verification accepts only private results with `candidate_id`, `youtube_video_id`, and `youtube_url`.
+- YouTube private smoke result verification rejects public visibility and missing `youtube_video_id`.
+- YouTube private smoke result verification remains manual/copy-only; it must not call `/api/uploads/youtube/execute`, call YouTube again, write DB rows, upload to R2, create queue rows, create worker jobs, or create upload packages.
+- YouTube Studio verification must confirm private visibility, title, Korean disclosure text, and no public conversion before a result is treated as final verified.
+- Smoke mp4 files under `commerce-assets/output/video-packages/` remain local evidence only and must not be committed.
 
 ## Artifact Storage QA
 

@@ -141,6 +141,13 @@ If a previous live smoke reached YouTube but returned HTTP 401, first refresh or
 re-authorize the local token. A new live smoke still requires the exact smoke
 approval phrase and exact upload confirmation.
 
+The first private smoke completed successfully for the documented smoke
+candidate `candidate-video-smoke-001`. Result tracking after that smoke is a
+manual verification bridge only: it records private Studio visibility, title,
+Korean disclosure, and public-upload-blocked checks without calling
+`/api/uploads/youtube/execute` again, without calling YouTube again, and without
+writing DB/R2/queue/job/upload-package state.
+
 ## Safety Boundaries
 
 - Public upload is blocked.

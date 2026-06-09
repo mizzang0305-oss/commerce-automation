@@ -193,6 +193,49 @@ export default async function UploadsPage() {
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
+            <h2 className="text-lg font-bold text-slate-950">Private upload result verification</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+              Result tracking is manual and copy-only. It records operator verification notes for a private smoke result
+              without calling YouTube again, writing DB rows, creating upload packages, or changing queue/job state.
+            </p>
+          </div>
+          <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800">
+            manual verification only
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Studio checklist</p>
+            <ul className="mt-3 space-y-2 text-sm font-semibold text-slate-700">
+              <li>Studio visibility verified as private.</li>
+              <li>Title verified in YouTube Studio.</li>
+              <li>Korean disclosure verified in the description.</li>
+              <li>Public visibility was not enabled.</li>
+            </ul>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Allowed result fields</p>
+            <dl className="mt-3 space-y-2 text-sm">
+              <SettingRow label="candidate_id" value="required" />
+              <SettingRow label="youtube_video_id" value="required" />
+              <SettingRow label="visibility" value="private only" />
+              <SettingRow label="token_exposed" value="false" />
+              <SettingRow label="authorization_exposed" value="false" />
+            </dl>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-slate-200 p-3 text-sm font-semibold text-slate-700">
+          This verification bridge cannot mark public uploads, cannot accept token fields, and cannot convert a missing
+          YouTube video id into a successful result.
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
             <h2 className="text-lg font-bold text-slate-950">YouTube Local Token Provider</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
               Local token readiness checks only metadata and file placement. Token values, refresh tokens, access tokens,

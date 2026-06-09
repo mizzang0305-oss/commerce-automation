@@ -9,3 +9,4 @@ export * from "@/lib/uploads/youtube/youtubeOAuthScopes";
 export * from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
 export * from "@/lib/uploads/youtube/youtubePrivateSmokeContract";
 export * from "@/lib/uploads/youtube/youtubeUploadAdapter";
+export * from "@/lib/uploads/youtube/youtubeUploadResultVerification";
