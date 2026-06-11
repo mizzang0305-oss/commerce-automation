@@ -27,15 +27,27 @@ const statusLabels: Record<UploadReadinessGateStatus, string> = {
   pass: "통과",
   blocked: "차단",
   warning: "주의",
-  not_configured: "미설정"
+  not_configured: "미설정",
+  manual_required: "수동 확인"
 };
 
 const statusClasses: Record<UploadReadinessGateStatus, string> = {
   pass: "border-teal-200 bg-teal-50 text-teal-800",
   blocked: "border-rose-200 bg-rose-50 text-rose-800",
   warning: "border-amber-200 bg-amber-50 text-amber-800",
-  not_configured: "border-slate-200 bg-slate-50 text-slate-700"
+  not_configured: "border-slate-200 bg-slate-50 text-slate-700",
+  manual_required: "border-sky-200 bg-sky-50 text-sky-800"
 };
+
+const youtubeEnvGuide = [
+  "YOUTUBE_TOKEN_FILE",
+  "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
+  "YOUTUBE_QUOTA_READY",
+  "YOUTUBE_ACCOUNT_READY",
+  "YOUTUBE_POLICY_READY",
+  "YOUTUBE_UPLOAD_ENABLED",
+  "PUBLIC_UPLOAD_ENABLED"
+];
 
 export default async function UploadsPage() {
   const settings = createDefaultPlatformUploadSettings();
@@ -49,13 +61,14 @@ export default async function UploadsPage() {
   });
   const youtubeSummary = buildYouTubeReadinessSummaryView(youtubeGateViews, youtubeReadiness.can_upload);
   const defaultYouTubeSmokeVideoPath = path.join(process.cwd(), YOUTUBE_PRIVATE_SMOKE_VIDEO_PATH);
+  const blockingGates = youtubeGateViews.filter((gate) => gate.status !== "pass");
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-950">업로드 준비 대시보드</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          이 화면은 YouTube 비공개 smoke readiness를 한국어로 진단하고, 실행 차단 사유와 다음 조치를 보여줍니다.
+          이 화면은 YouTube 비공개 smoke readiness를 한국어로 진단하고, 실행 차단 이유와 다음 조치를 보여줍니다.
           TikTok과 Threads는 readiness-only 상태이며 자동 업로드는 구현되어 있지 않습니다.
         </p>
       </div>
@@ -84,6 +97,59 @@ export default async function UploadsPage() {
           </span>
         </div>
 
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+            <p className="text-sm font-bold text-rose-950">왜 실행이 막혔나요?</p>
+            <p className="mt-2 text-sm text-rose-800">
+              아래 항목은 값이 아니라 안전한 상태 요약만 표시합니다. token, client secret, raw auth header는 렌더링하지 않습니다.
+            </p>
+            <ul className="mt-3 space-y-2 text-sm">
+              {blockingGates.length ? (
+                blockingGates.map((gate) => (
+                  <li key={gate.key} className="rounded bg-white px-3 py-2">
+                    <span className="font-bold text-slate-950">{gate.label_ko}</span>
+                    <span className="ml-2 text-slate-600">{gate.fix_hint_ko}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="rounded bg-white px-3 py-2 font-semibold text-teal-800">현재 서버 readiness 차단 항목이 없습니다.</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-bold text-slate-950">서버 환경 설정 안내</p>
+            <p className="mt-2 text-sm text-slate-600">
+              아래는 확인해야 하는 env name입니다. 이 화면은 값을 표시하지 않습니다.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {youtubeEnvGuide.map((name) => (
+                <code key={name} className="rounded bg-white px-2 py-1 text-xs font-bold text-slate-700">
+                  {name}
+                </code>
+              ))}
+            </div>
+            <dl className="mt-3 space-y-2 text-sm">
+              <SettingRow label="token_value_displayed" value="false" />
+              <SettingRow label="authorization_header_displayed" value="false" />
+              <SettingRow label="public_visibility_available" value="false" />
+              <SettingRow label="dashboard_creates_worker_job" value="false" />
+            </dl>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-3">
+          <p className="text-sm font-bold text-sky-950">스모크 실행 전 수동 확인</p>
+          <ul className="mt-2 grid gap-2 text-sm font-semibold text-sky-900 md:grid-cols-2">
+            <li>YouTube 계정/채널과 Studio 접근 권한 확인</li>
+            <li>YouTube Data API quota 확인</li>
+            <li>제휴 고지와 private/unlisted 정책 확인</li>
+            <li>PUBLIC_UPLOAD_ENABLED=false 유지</li>
+            <li>visibility는 private 또는 unlisted만 사용</li>
+            <li>execute는 승인 문구 입력 전까지 비활성화</li>
+          </ul>
+        </div>
+
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {youtubeGateViews.map((gate) => (
             <ReadinessGateCard key={gate.key} gate={gate} />
@@ -93,7 +159,7 @@ export default async function UploadsPage() {
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
             <p className="font-bold text-slate-950">정확한 승인 문구</p>
-            <p className="mt-2 text-slate-600">두 문구는 복사 가능한 텍스트일 뿐이며, 화면에서 직접 입력해야 합니다.</p>
+            <p className="mt-2 text-slate-600">두 문구는 복사 가능한 텍스트이며, 화면에서 직접 입력해야 합니다.</p>
             <code className="mt-3 block rounded bg-white px-2 py-1 text-xs font-bold text-slate-800">
               {RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE}
             </code>
@@ -175,7 +241,7 @@ export default async function UploadsPage() {
           <div>
             <h2 className="text-lg font-bold text-slate-950">YouTube Local Token Provider</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              로컬 토큰 provider는 파일 위치와 readiness 메타데이터만 확인합니다. refresh token, access token,
+              로컬 token provider는 파일 위치와 readiness 메타데이터만 확인합니다. refresh token, access token,
               client secret, raw auth header는 표시하지 않습니다.
             </p>
           </div>
@@ -229,18 +295,32 @@ function ReadinessGateCard({ gate }: { gate: UploadReadinessGateView }) {
           {statusLabels[gate.status]}
         </span>
       </div>
-      <p className="mt-3 text-sm font-semibold text-slate-700">{gate.operator_summary_ko}</p>
-      <p className="mt-2 text-sm text-slate-500">{gate.fix_hint_ko}</p>
-      {gate.safe_details?.length ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {gate.safe_details.map((detail) => (
-            <span key={detail} className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-              {detail}
-            </span>
-          ))}
-        </div>
-      ) : null}
+      <dl className="mt-3 space-y-2 text-sm">
+        <TextDetail label="현재 상태" value={gate.current_state_ko} />
+        <TextDetail label="차단 이유" value={gate.why_blocked_ko} />
+        <TextDetail label="다음 조치" value={gate.fix_hint_ko} />
+        <TextDetail label="설정 출처" value={gate.config_source_ko} />
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+          secret_safe={String(gate.secret_safe)}
+        </span>
+        {gate.safe_details.map((detail) => (
+          <span key={detail} className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+            {detail}
+          </span>
+        ))}
+      </div>
     </article>
+  );
+}
+
+function TextDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd className="mt-1 font-semibold text-slate-700">{value}</dd>
+    </div>
   );
 }
 

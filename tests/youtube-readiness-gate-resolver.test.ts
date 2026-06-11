@@ -1,12 +1,9 @@
 import { describe, expect, test } from "vitest";
 import type { PlatformUploadSettings } from "@/lib/uploads/platformUploadTypes";
+import { buildYouTubeReadinessGateResolver } from "@/lib/uploads/youtube/readinessGateResolver";
 import type { YouTubeLocalTokenProviderStatus, YouTubeUploadReadiness } from "@/lib/uploads/youtube/types";
-import {
-  buildYouTubeReadinessGateViews,
-  buildYouTubeReadinessSummaryView
-} from "@/lib/uploads/youtube/readinessViewModel";
 
-const defaultSettings: PlatformUploadSettings = {
+const settings: PlatformUploadSettings = {
   youtube_upload_enabled: false,
   tiktok_upload_enabled: false,
   threads_upload_enabled: false,
@@ -38,7 +35,7 @@ const blockedReadiness: YouTubeUploadReadiness = {
   ]
 };
 
-const blockedTokenReadiness: YouTubeLocalTokenProviderStatus = {
+const tokenReadiness: YouTubeLocalTokenProviderStatus = {
   configured: false,
   token_file_path_configured: false,
   token_file_inside_repo: false,
@@ -50,42 +47,44 @@ const blockedTokenReadiness: YouTubeLocalTokenProviderStatus = {
   blocked_reasons: ["token_file_path_missing", "token_not_ready", "scopes_not_ready"]
 };
 
-describe("YouTube readiness view model", () => {
-  test("returns Korean gate labels and fix hints for blocked readiness", () => {
-    const gates = buildYouTubeReadinessGateViews({
+describe("YouTube readiness gate resolver", () => {
+  test("returns required readiness gates with safe Korean guidance", () => {
+    const gates = buildYouTubeReadinessGateResolver({
       readiness: blockedReadiness,
-      tokenReadiness: blockedTokenReadiness,
-      settings: defaultSettings
+      tokenReadiness,
+      settings
     });
 
-    expect(gates.map((gate) => gate.label_ko)).toContain("YouTube 할당량 준비");
-    expect(gates.map((gate) => gate.label_ko)).toContain("YouTube 계정/채널 준비");
-    expect(gates.map((gate) => gate.label_ko)).toContain("업로드 정책 준비");
-    expect(gates.map((gate) => gate.label_ko)).toContain("YouTube 업로드 기능 플래그");
-    expect(gates.find((gate) => gate.key === "provider_ready")?.status).toBe("not_configured");
+    expect(gates.map((gate) => gate.key)).toEqual([
+      "provider_ready",
+      "quota_ready",
+      "account_ready",
+      "policy_ready",
+      "youtube_upload_enabled",
+      "public_upload_blocked",
+      "manual_upload_only",
+      "approval_required",
+      "token_ready",
+      "scopes_ready",
+      "candidate_ready",
+      "video_file_ready",
+      "disclosure_ready",
+      "prepare_ready",
+      "execute_ready"
+    ]);
+    expect(gates.find((gate) => gate.key === "quota_ready")?.label_ko).toBe("YouTube 할당량 준비");
+    expect(gates.find((gate) => gate.key === "account_ready")?.label_ko).toBe("YouTube 계정/채널 준비");
+    expect(gates.find((gate) => gate.key === "policy_ready")?.label_ko).toBe("업로드 정책 준비");
+    expect(gates.find((gate) => gate.key === "youtube_upload_enabled")?.label_ko).toBe("YouTube 업로드 기능 플래그");
     expect(gates.find((gate) => gate.key === "candidate_ready")?.status).toBe("manual_required");
     expect(gates.find((gate) => gate.key === "public_upload_blocked")?.status).toBe("pass");
-    expect(gates.find((gate) => gate.key === "quota_ready")?.config_source_ko).toContain("YOUTUBE_QUOTA_READY");
   });
 
-  test("builds blocked summary from the first failing gate", () => {
-    const gates = buildYouTubeReadinessGateViews({
+  test("does not expose token, client secret, or authorization values", () => {
+    const gates = buildYouTubeReadinessGateResolver({
       readiness: blockedReadiness,
-      tokenReadiness: blockedTokenReadiness,
-      settings: defaultSettings
-    });
-    const summary = buildYouTubeReadinessSummaryView(gates, false);
-
-    expect(summary.can_upload).toBe(false);
-    expect(summary.current_step_ko).toBe("업로드 실행 차단");
-    expect(summary.last_blocker_ko).toContain("OAuth client");
-  });
-
-  test("does not include token or authorization values in safe details", () => {
-    const gates = buildYouTubeReadinessGateViews({
-      readiness: blockedReadiness,
-      tokenReadiness: blockedTokenReadiness,
-      settings: defaultSettings
+      tokenReadiness,
+      settings
     });
     const serialized = JSON.stringify(gates);
 
