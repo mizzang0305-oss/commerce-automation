@@ -12,3 +12,4 @@ export * from "@/lib/uploads/youtube/youtubePrivateSmokeContract";
 export * from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 export * from "@/lib/uploads/youtube/youtubeUploadAdapter";
 export * from "@/lib/uploads/youtube/youtubeUploadResultVerification";
+export * from "@/lib/uploads/youtube/youtubeExecuteReadiness";

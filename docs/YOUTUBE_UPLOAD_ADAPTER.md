@@ -66,6 +66,7 @@ Required disclosure text example:
 - `GET /api/uploads/youtube/readiness`
 - `GET /api/uploads/youtube/token-readiness`
 - `POST /api/uploads/youtube/prepare`
+- `POST /api/uploads/youtube/execute-readiness`
 - `POST /api/uploads/youtube/execute`
 
 The operator-facing path is `/uploads`. The dashboard builds the UTF-8 JSON payload in the browser, runs prepare only
@@ -114,14 +115,25 @@ refresh tokens, client secret values, or Authorization headers.
 
 `prepare` validates and returns request JSON only. It does not call YouTube.
 
+`execute-readiness` is a side-effect-free dry-run for the stricter execute
+contract. It combines `readiness.can_upload`, the exact upload confirmation,
+and the live smoke approval phrase into a single `can_execute` boolean. It must
+return non-empty `blocked_reasons` when blocked, for example
+`live_smoke_approval_missing`, and it must keep all upload side effects false.
+The `/uploads` dashboard uses this endpoint to keep the execute button disabled
+when server execute gates are stricter than the top-level readiness card.
+
 `execute` requires:
 
 - exact confirmation phrase
 - readiness `can_upload=true`
+- execute readiness `can_execute=true`
 - private or unlisted visibility
 - required disclosure and affiliate URL
 
-Without readiness and explicit approval, it returns `BLOCKED_BY_CONFIRMATION` or `BLOCKED_BY_YOUTUBE_READINESS`.
+Without readiness and explicit approval, it returns `BLOCKED_BY_CONFIRMATION` or
+`BLOCKED_BY_YOUTUBE_READINESS` with a safe top-level `safe_error` and non-empty
+`blocked_reasons`.
 
 ## Local Token Provider
 
