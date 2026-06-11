@@ -87,6 +87,29 @@ Korean labels, current blocker summaries, and fix hints:
 These labels are diagnostics only. They must not expose token values, client secrets, raw Authorization headers, webhook
 URLs, or direct execution commands.
 
+## Readiness Gate Resolver
+
+The dashboard uses a dedicated readiness gate resolver so operators can see what is blocked, why it is blocked, and which
+safe configuration source to inspect. It is still read-only diagnostics. It does not run token exchange, does not call
+`/api/uploads/youtube/execute`, does not call YouTube, and does not write DB/R2/queue/job/upload-package state.
+
+Resolver gates:
+
+- `quota_ready`: YouTube 할당량 준비. Source: `YOUTUBE_QUOTA_READY`.
+- `account_ready`: YouTube 계정/채널 준비. Source: `YOUTUBE_ACCOUNT_READY`.
+- `policy_ready`: 업로드 정책 준비. Source: `YOUTUBE_POLICY_READY` plus `PUBLIC_UPLOAD_ENABLED=false`.
+- `youtube_upload_enabled`: YouTube 업로드 기능 플래그. Source: `YOUTUBE_UPLOAD_ENABLED`.
+- `public_upload_blocked`: public visibility and public upload remain blocked. Source: `PUBLIC_UPLOAD_ENABLED=false`.
+- `manual_upload_only`: manual verification remains enabled.
+- `approval_required`: exact approval phrases remain required.
+- `token_ready`: token provider metadata only. Source names: `YOUTUBE_TOKEN_FILE`, `YOUTUBE_LOCAL_TOKEN_FILE_PATH`, and token readiness metadata.
+- `scopes_ready`: `youtube.upload` scope metadata only.
+- `candidate_ready`, `video_file_ready`, `disclosure_ready`, and `prepare_ready`: dashboard form/manual checks.
+- `execute_ready`: aggregate server readiness. Execute remains blocked until `readiness.can_upload=true` plus prepare and approval phrases pass.
+
+The UI may show env names such as `YOUTUBE_CLIENT_SECRET`, but it must never show env values, token JSON, access tokens,
+refresh tokens, client secret values, or Authorization headers.
+
 `token-readiness` checks local token file metadata only. It reports file placement, file existence, token readiness, and scope readiness without returning token values.
 
 `prepare` validates and returns request JSON only. It does not call YouTube.

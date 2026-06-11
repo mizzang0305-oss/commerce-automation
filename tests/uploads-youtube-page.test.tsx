@@ -68,14 +68,19 @@ describe("YouTube uploads page readiness panel", () => {
     render(await UploadsPage());
 
     expect(screen.getByRole("heading", { name: "업로드 준비 대시보드" })).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/YouTube readiness가 아직 통과하지 않았습니다|YouTube OAuth 제공자 설정이 부족합니다/).length
-    ).toBeGreaterThan(0);
-    expect(screen.getByText("토큰 파일 경로")).toBeInTheDocument();
-    expect(screen.getByText("업로드 토큰 준비")).toBeInTheDocument();
-    expect(screen.getByText("쿼터 확인")).toBeInTheDocument();
-    expect(screen.getByText("YouTube 업로드 기능 플래그")).toBeInTheDocument();
+    expect(screen.getByText("왜 실행이 막혔나요?")).toBeInTheDocument();
+    expect(screen.getByText("서버 환경 설정 안내")).toBeInTheDocument();
+    expect(screen.getByText("스모크 실행 전 수동 확인")).toBeInTheDocument();
+    expect(screen.getAllByText("YouTube OAuth 제공자 설정").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("YouTube 할당량 준비").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("YouTube 계정/채널 준비").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("업로드 정책 준비").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("업로드 토큰 준비").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("YouTube 업로드 기능 플래그").length).toBeGreaterThan(0);
     expect(screen.getAllByText("공개 업로드 차단").length).toBeGreaterThan(0);
+    expect(screen.getByText("YOUTUBE_TOKEN_FILE")).toBeInTheDocument();
+    expect(screen.getByText("YOUTUBE_QUOTA_READY")).toBeInTheDocument();
+    expect(screen.getByText("PUBLIC_UPLOAD_ENABLED")).toBeInTheDocument();
     expect(screen.getAllByText(APPROVE_YOUTUBE_PRIVATE_UPLOAD).length).toBeGreaterThan(0);
     expect(screen.getAllByText(RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "YouTube 비공개 업로드 스모크" })).toBeInTheDocument();
@@ -92,7 +97,7 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.getByText(/YouTube readiness가 통과하지 않았습니다/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/refresh token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/client_secret/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/configured-client-secret/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Authorization: Bearer/i)).not.toBeInTheDocument();
   });
 
