@@ -107,6 +107,8 @@ python -m compileall python-worker
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
 - `/uploads` must render candidate id, local mp4 path, private/unlisted visibility, UTF-8 Korean disclosure preview, prepare/execute gates, and manual Studio verification without exposing token values or invoking public upload.
+- `/uploads` must render Korean readiness labels, current blocker summaries, and next-action hints for YouTube provider, local token file, token readiness, scopes, quota, account, policy, upload-enabled, manual-only, approval, and public-upload-blocked gates.
+- `/uploads` execute controls must remain disabled when `readiness.can_upload=false`; the UI should show safe blocked reasons rather than requiring operators to infer the blocker from raw API codes.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
 - `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
 - When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.
