@@ -73,6 +73,20 @@ from a button click, keeps execute disabled until prepare succeeds plus both exa
 shows a manual Studio verification card. Do not use direct PowerShell/curl prepare or execute calls for the normal
 private smoke loop.
 
+The `/uploads` page also renders a Korean readiness dashboard for operators. It maps each safe boolean/status gate to
+Korean labels, current blocker summaries, and fix hints:
+
+- YouTube provider configuration
+- local token file path and token readiness
+- `youtube.upload` scope readiness
+- quota, account, and policy readiness
+- `YOUTUBE_UPLOAD_ENABLED`
+- manual-only and exact-approval requirements
+- public upload blocked state
+
+These labels are diagnostics only. They must not expose token values, client secrets, raw Authorization headers, webhook
+URLs, or direct execution commands.
+
 `token-readiness` checks local token file metadata only. It reports file placement, file existence, token readiness, and scope readiness without returning token values.
 
 `prepare` validates and returns request JSON only. It does not call YouTube.

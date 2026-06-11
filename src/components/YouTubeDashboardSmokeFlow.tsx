@@ -15,6 +15,8 @@ type Visibility = "private" | "unlisted";
 
 type YouTubeSmokeFlowProps = {
   defaultVideoPath: string;
+  readinessCanUpload: boolean;
+  readinessBlockedReasons: string[];
 };
 
 type ApiState = {
@@ -43,7 +45,11 @@ const DEFAULT_DESCRIPTION = [
 ].join("\n\n");
 const DEFAULT_AFFILIATE_URL = "https://link.coupang.com/a/test-smoke";
 
-export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlowProps) {
+export function YouTubeDashboardSmokeFlow({
+  defaultVideoPath,
+  readinessCanUpload,
+  readinessBlockedReasons
+}: YouTubeSmokeFlowProps) {
   const [candidateId, setCandidateId] = useState(YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID);
   const [videoPath, setVideoPath] = useState(defaultVideoPath);
   const [visibility, setVisibility] = useState<Visibility>("private");
@@ -53,8 +59,8 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
   const [affiliateUrl, setAffiliateUrl] = useState(DEFAULT_AFFILIATE_URL);
   const [confirmation, setConfirmation] = useState("");
   const [smokeApproval, setSmokeApproval] = useState("");
-  const [prepareState, setPrepareState] = useState<ApiState>({ status: "idle", summary: "Not prepared." });
-  const [executeState, setExecuteState] = useState<ApiState>({ status: "idle", summary: "Not executed." });
+  const [prepareState, setPrepareState] = useState<ApiState>({ status: "idle", summary: "아직 prepare를 실행하지 않았습니다." });
+  const [executeState, setExecuteState] = useState<ApiState>({ status: "idle", summary: "아직 execute를 실행하지 않았습니다." });
   const [studioVisibility, setStudioVisibility] = useState(false);
   const [studioTitle, setStudioTitle] = useState(false);
   const [studioDisclosure, setStudioDisclosure] = useState(false);
@@ -72,10 +78,19 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
   const basePayloadReady = Boolean(candidateId.trim() && videoPath.trim() && title.trim() && description.trim() && affiliateUrl.trim());
   const canPrepare = basePayloadReady && disclosureReady;
   const prepareOk = prepareState.status === "success" && prepareState.details?.ok !== false;
-  const canExecute =
-    prepareOk &&
-    confirmation.trim() === APPROVE_YOUTUBE_PRIVATE_UPLOAD &&
-    smokeApproval.trim() === RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE;
+  const confirmationOk = confirmation.trim() === APPROVE_YOUTUBE_PRIVATE_UPLOAD;
+  const smokeApprovalOk = smokeApproval.trim() === RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE;
+  const canExecute = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk;
+  const executeDisabledReasons = buildExecuteDisabledReasons({
+    prepareOk,
+    readinessCanUpload,
+    readinessBlockedReasons,
+    confirmationOk,
+    smokeApprovalOk,
+    candidateId,
+    videoPath,
+    disclosureReady
+  });
   const finalVerified = Boolean(
     executeState.details?.youtube_video_id && studioVisibility && studioTitle && studioDisclosure && publicBlocked
   );
@@ -94,8 +109,8 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
   };
 
   async function submitPrepare() {
-    setPrepareState({ status: "loading", summary: "Preparing from dashboard..." });
-    setExecuteState({ status: "idle", summary: "Not executed." });
+    setPrepareState({ status: "loading", summary: "대시보드 payload로 prepare 확인 중입니다." });
+    setExecuteState({ status: "idle", summary: "아직 execute를 실행하지 않았습니다." });
     try {
       const response = await fetch("/api/uploads/youtube/prepare", {
         method: "POST",
@@ -105,11 +120,11 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
       const body = sanitizeApiBody(await response.json());
       setPrepareState({
         status: response.ok && body.ok !== false ? "success" : "blocked",
-        summary: response.ok && body.ok !== false ? "Prepare ok. Execute remains gated." : "Prepare blocked.",
+        summary: response.ok && body.ok !== false ? "Prepare 통과. Execute는 별도 readiness와 승인 문구가 필요합니다." : "Prepare가 안전하게 차단되었습니다.",
         details: body
       });
     } catch {
-      setPrepareState({ status: "blocked", summary: "Prepare failed with a safe client error." });
+      setPrepareState({ status: "blocked", summary: "Prepare 요청이 안전한 client error로 실패했습니다." });
     }
   }
 
@@ -117,11 +132,12 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
     if (!canExecute) {
       setExecuteState({
         status: "blocked",
-        summary: "Execute is blocked until prepare succeeds and both approval phrases are entered."
+        summary: "Execute는 readiness, prepare, 승인 문구가 모두 통과할 때만 가능합니다.",
+        details: { ok: false, blocked_reasons: executeDisabledReasons }
       });
       return;
     }
-    setExecuteState({ status: "loading", summary: "Executing from dashboard..." });
+    setExecuteState({ status: "loading", summary: "대시보드에서 private smoke 실행 요청 중입니다." });
     try {
       const response = await fetch("/api/uploads/youtube/execute", {
         method: "POST",
@@ -131,11 +147,11 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
       const body = sanitizeApiBody(await response.json());
       setExecuteState({
         status: response.ok && body.ok !== false ? "success" : "blocked",
-        summary: response.ok && body.ok !== false ? "Execute completed. Verify in Studio." : "Execute blocked or failed safely.",
+        summary: response.ok && body.ok !== false ? "Execute 완료. Studio에서 비공개 상태를 직접 확인하세요." : "Execute가 안전하게 차단되었거나 실패했습니다.",
         details: body
       });
     } catch {
-      setExecuteState({ status: "blocked", summary: "Execute failed with a safe client error." });
+      setExecuteState({ status: "blocked", summary: "Execute 요청이 안전한 client error로 실패했습니다." });
     }
   }
 
@@ -143,14 +159,14 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-950">YouTube dashboard private smoke</h2>
+          <h2 className="text-lg font-bold text-slate-950">YouTube 비공개 업로드 스모크</h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            Run the private smoke from this dashboard only after readiness passes. Browser fetch sends UTF-8 JSON; no
-            PowerShell direct prepare/execute call is needed.
+            브라우저 대시보드에서 UTF-8 JSON payload를 구성하고, readiness가 통과한 경우에만 승인 문구 입력 후 실행할 수
+            있습니다. 이 PR에서는 live upload smoke를 실행하지 않습니다.
           </p>
           <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-700">
-            Token values, client secrets, raw auth headers, DB writes, R2 uploads, queue rows, worker jobs, upload
-            packages, public uploads, TikTok uploads, and Threads uploads are not exposed or created here.
+            토큰 값, client secret, raw auth header, DB write, R2 upload, queue row, worker job, upload package,
+            public upload, TikTok upload, Threads upload는 표시하거나 생성하지 않습니다.
           </p>
         </div>
         <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
@@ -160,26 +176,26 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <TextInput label="candidate_id" value={candidateId} onChange={setCandidateId} />
-          <TextInput label="local mp4 path" value={videoPath} onChange={setVideoPath} />
+          <TextInput label="후보 ID" value={candidateId} onChange={setCandidateId} />
+          <TextInput label="영상 파일 경로" value={videoPath} onChange={setVideoPath} />
           <label className="text-sm font-semibold text-slate-700">
-            visibility
+            공개 범위
             <select
               className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
               value={visibility}
               onChange={(event) => setVisibility(event.target.value as Visibility)}
             >
-              <option value="private">private</option>
-              <option value="unlisted">unlisted</option>
+              <option value="private">비공개</option>
+              <option value="unlisted">일부 공개</option>
               <option value="public" disabled>
-                public disabled
+                공개 업로드 차단
               </option>
             </select>
           </label>
-          <TextInput label="title" value={title} onChange={setTitle} />
-          <TextInput label="affiliate link" value={affiliateUrl} onChange={setAffiliateUrl} />
+          <TextInput label="제목" value={title} onChange={setTitle} />
+          <TextInput label="제휴 링크" value={affiliateUrl} onChange={setAffiliateUrl} />
           <label className="text-sm font-semibold text-slate-700">
-            description
+            설명
             <textarea
               className="mt-1 block min-h-32 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
               value={description}
@@ -187,7 +203,7 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
             />
           </label>
           <label className="text-sm font-semibold text-slate-700">
-            disclosure_text preview
+            제휴 고지 미리보기
             <textarea
               className="mt-1 block min-h-20 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
               value={disclosureText}
@@ -197,12 +213,12 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
         </div>
 
         <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Disclosure guard result</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">제휴 고지 진단</p>
           <dl className="space-y-2 text-sm">
-            <StatusRow label="contains 쿠팡파트너스" value={disclosureHasCoupang} />
-            <StatusRow label="contains 수수료" value={disclosureHasFee} />
-            <StatusRow label="garbled disclosure absent" value={!disclosureLooksGarbled} />
-            <StatusRow label="UTF-8 browser payload" value />
+            <StatusRow label="쿠팡파트너스 포함" value={disclosureHasCoupang} />
+            <StatusRow label="수수료 포함" value={disclosureHasFee} />
+            <StatusRow label="깨진 물음표 패턴 없음" value={!disclosureLooksGarbled} />
+            <StatusRow label="UTF-8 브라우저 payload" value />
             <StatusRow label="public_upload_enabled" value={false} />
           </dl>
           {disclosureReasons.length > 0 ? (
@@ -211,24 +227,24 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
             </div>
           ) : (
             <div className="rounded-md border border-teal-200 bg-teal-50 p-3 text-sm font-semibold text-teal-800">
-              Korean disclosure preview is ready for prepare.
+              제휴 고지 문구가 prepare에 사용할 수 있는 상태입니다.
             </div>
           )}
 
           <TextInput
-            label="execute confirmation"
+            label="업로드 승인 문구"
             value={confirmation}
             onChange={setConfirmation}
             placeholder={APPROVE_YOUTUBE_PRIVATE_UPLOAD}
           />
           <TextInput
-            label="separate smoke approval"
+            label="스모크 실행 승인 문구"
             value={smokeApproval}
             onChange={setSmokeApproval}
             placeholder={RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE}
           />
           <div className="rounded-md bg-white p-3 text-sm text-slate-700">
-            <p className="font-bold text-slate-950">Required phrases</p>
+            <p className="font-bold text-slate-950">필수 문구</p>
             <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
               {RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE}
             </code>
@@ -243,7 +259,7 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
               onClick={submitPrepare}
               className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              Prepare from dashboard
+              업로드 준비 확인
             </button>
             <button
               type="button"
@@ -251,30 +267,40 @@ export function YouTubeDashboardSmokeFlow({ defaultVideoPath }: YouTubeSmokeFlow
               onClick={submitExecute}
               className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              Execute private smoke
+              실제 업로드 실행
             </button>
           </div>
+          {executeDisabledReasons.length > 0 ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-bold">실행 불가 사유</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 font-semibold">
+                {executeDisabledReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <ResultCard title="Prepare result" state={prepareState} />
-        <ResultCard title="Execute result" state={executeState} />
+        <ResultCard title="Prepare 결과" state={prepareState} />
+        <ResultCard title="Execute 결과" state={executeState} />
       </div>
 
       <div className="mt-4 rounded-md border border-slate-200 p-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Result verification card</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">수동 확인 카드</p>
         <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-          <CheckboxRow label="Studio visibility private" checked={studioVisibility} onChange={setStudioVisibility} />
-          <CheckboxRow label="Studio title correct" checked={studioTitle} onChange={setStudioTitle} />
-          <CheckboxRow label="Korean disclosure correct" checked={studioDisclosure} onChange={setStudioDisclosure} />
-          <CheckboxRow label="Unexpected public or scheduled absent" checked={publicBlocked} onChange={setPublicBlocked} />
+          <CheckboxRow label="Studio visibility가 private" checked={studioVisibility} onChange={setStudioVisibility} />
+          <CheckboxRow label="Studio 제목 확인 완료" checked={studioTitle} onChange={setStudioTitle} />
+          <CheckboxRow label="한국어 제휴 고지 확인 완료" checked={studioDisclosure} onChange={setStudioDisclosure} />
+          <CheckboxRow label="public 또는 예약 공개 없음" checked={publicBlocked} onChange={setPublicBlocked} />
         </div>
         <dl className="mt-3 grid gap-2 text-sm md:grid-cols-2">
           <SettingRow label="youtube_video_id" value={executeState.details?.youtube_video_id ?? "not available"} />
           <SettingRow label="youtube_url" value={executeState.details?.youtube_url ?? "not available"} />
           <SettingRow label="visibility" value={executeState.details?.visibility ?? visibility} />
-          <SettingRow label="final_verified" value={String(finalVerified)} />
+          <SettingRow label="최종 검증 완료" value={String(finalVerified)} />
         </dl>
       </div>
     </section>
@@ -368,6 +394,42 @@ function SettingRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function buildExecuteDisabledReasons(input: {
+  prepareOk: boolean;
+  readinessCanUpload: boolean;
+  readinessBlockedReasons: string[];
+  confirmationOk: boolean;
+  smokeApprovalOk: boolean;
+  candidateId: string;
+  videoPath: string;
+  disclosureReady: boolean;
+}) {
+  const reasons: string[] = [];
+  if (!input.prepareOk) {
+    reasons.push("prepare 결과가 아직 통과하지 않았습니다.");
+  }
+  if (!input.readinessCanUpload) {
+    const details = input.readinessBlockedReasons.length ? ` (${input.readinessBlockedReasons.join(", ")})` : "";
+    reasons.push(`YouTube readiness가 통과하지 않았습니다${details}.`);
+  }
+  if (!input.confirmationOk) {
+    reasons.push("APPROVE_YOUTUBE_PRIVATE_UPLOAD 승인 문구가 필요합니다.");
+  }
+  if (!input.smokeApprovalOk) {
+    reasons.push("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE 승인 문구가 필요합니다.");
+  }
+  if (!input.candidateId.trim()) {
+    reasons.push("후보 ID가 필요합니다.");
+  }
+  if (!input.videoPath.trim()) {
+    reasons.push("로컬 mp4 경로가 필요합니다.");
+  }
+  if (!input.disclosureReady) {
+    reasons.push("제휴 고지 문구가 disclosure guard를 통과해야 합니다.");
+  }
+  return reasons;
+}
+
 function sanitizeApiBody(input: unknown): SafeApiDetails {
   const redacted = redactSecrets(input);
   if (!redacted || typeof redacted !== "object" || Array.isArray(redacted)) {
@@ -377,11 +439,18 @@ function sanitizeApiBody(input: unknown): SafeApiDetails {
   const result = value.result && typeof value.result === "object" && !Array.isArray(value.result)
     ? value.result as Record<string, unknown>
     : {};
+  const readiness = value.readiness && typeof value.readiness === "object" && !Array.isArray(value.readiness)
+    ? value.readiness as Record<string, unknown>
+    : {};
   return {
     ok: value.ok === true,
     error_code: typeof value.error_code === "string" ? value.error_code : undefined,
     missing_reasons: Array.isArray(value.missing_reasons) ? value.missing_reasons.map(String) : undefined,
-    blocked_reasons: Array.isArray(value.blocked_reasons) ? value.blocked_reasons.map(String) : undefined,
+    blocked_reasons: Array.isArray(value.blocked_reasons)
+      ? value.blocked_reasons.map(String)
+      : Array.isArray(readiness.blocked_reasons)
+        ? readiness.blocked_reasons.map(String)
+        : undefined,
     youtube_video_id: typeof result.youtube_video_id === "string" ? result.youtube_video_id : undefined,
     youtube_url: typeof result.youtube_url === "string" ? result.youtube_url : undefined,
     visibility: typeof result.visibility === "string" ? result.visibility : undefined,
