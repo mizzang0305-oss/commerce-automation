@@ -10,6 +10,7 @@ export type YouTubeUploadBlockedReason =
   | "upload_disabled"
   | "public_upload_blocked"
   | "confirmation_required"
+  | "upload_confirmation_missing"
   | "live_smoke_approval_missing";
 
 export interface YouTubeUploadReadiness {
@@ -36,6 +37,7 @@ export interface YouTubeUploadRequest {
   visibility: YouTubeUploadVisibility;
   disclosure_text: string;
   selected_affiliate_url: string;
+  smoke_approval?: string;
   made_for_kids: false;
   self_declared_made_for_kids: false;
 }
@@ -98,4 +100,6 @@ export type YouTubeUploadRequestInput = {
   visibility?: unknown;
   disclosure_text?: unknown;
   selected_affiliate_url?: unknown;
+  smoke_approval?: unknown;
+  smokeApproval?: unknown;
 };

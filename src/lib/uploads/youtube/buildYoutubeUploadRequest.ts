@@ -15,6 +15,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   const captionInput = safeTrim(input.caption);
   const disclosureText = safeTrim(input.disclosure_text);
   const selectedAffiliateUrl = safeTrim(input.selected_affiliate_url);
+  const smokeApproval = safeTrim(input.smoke_approval) || safeTrim(input.smokeApproval);
   const visibility = normalizeVisibility(input.visibility);
   const missingReasons: string[] = [];
 
@@ -66,6 +67,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
       visibility: safeVisibility,
       disclosure_text: disclosureText,
       selected_affiliate_url: selectedAffiliateUrl,
+      smoke_approval: smokeApproval || undefined,
       made_for_kids: false,
       self_declared_made_for_kids: false
     }

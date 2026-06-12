@@ -56,7 +56,7 @@ export function buildYouTubeExecuteReadiness(input: {
 
   const confirmationOk = hasExactYouTubeUploadConfirmation(input.confirmation);
   if (!confirmationOk) {
-    blockedReasons.add("confirmation_required");
+    blockedReasons.add("upload_confirmation_missing" satisfies YouTubeUploadBlockedReason);
   }
   gates.push({
     key: "execute_confirmation",

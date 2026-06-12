@@ -44,7 +44,10 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   }
 
   async upload(request: YouTubeUploadRequest): Promise<YouTubeUploadResult> {
-    if (!hasExactYouTubeLiveSmokeApproval(this.env.RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE)) {
+    if (
+      !hasExactYouTubeLiveSmokeApproval(request.smoke_approval) &&
+      !hasExactYouTubeLiveSmokeApproval(this.env.RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE)
+    ) {
       return blockedYouTubeUploadResult(
         request.visibility,
         `Live YouTube upload smoke is blocked until ${RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE} is explicitly configured.`,
