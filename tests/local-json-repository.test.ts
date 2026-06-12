@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createLocalJsonAutomationRepository } from "@/lib/repositories/localJsonAutomationRepository";
-import { createDefaultSettings } from "@/lib/repositories/mockAutomationRepository";
+import {
+  createDefaultSettings,
+  createMockQueueItems
+} from "@/lib/repositories/mockAutomationRepository";
 
 let dataDir = "";
 
@@ -33,6 +36,13 @@ async function seedMinimalLocalJsonFiles() {
     writeJsonFile("channel_profiles.json", []),
     writeJsonFile("channel_upload_packages.json", [])
   ]);
+}
+
+async function seedMinimalLocalJsonFilesWithQueue() {
+  const settings = createDefaultSettings({ batch_size: 1, daily_target_count: 1 });
+  await seedMinimalLocalJsonFiles();
+  await writeJsonFile("settings.json", settings);
+  await writeJsonFile("queue.json", createMockQueueItems(settings));
 }
 
 describe("localJsonAutomationRepository", () => {
@@ -66,6 +76,7 @@ describe("localJsonAutomationRepository", () => {
   });
 
   test("persists queue item state changes", async () => {
+    await seedMinimalLocalJsonFilesWithQueue();
     const repository = createLocalJsonAutomationRepository({ dataDir });
     await repository.holdQueueItem("queue-001");
 
@@ -76,6 +87,7 @@ describe("localJsonAutomationRepository", () => {
   });
 
   test("persists appended runs", async () => {
+    await seedMinimalLocalJsonFiles();
     const repository = createLocalJsonAutomationRepository({ dataDir });
     await repository.appendRun({
       id: "run-persisted",
@@ -96,6 +108,7 @@ describe("localJsonAutomationRepository", () => {
   });
 
   test("upserts queue items and updates by raw url", async () => {
+    await seedMinimalLocalJsonFilesWithQueue();
     const repository = createLocalJsonAutomationRepository({ dataDir });
     const existing = (await repository.getQueue({ limit: 1 }))[0];
 
