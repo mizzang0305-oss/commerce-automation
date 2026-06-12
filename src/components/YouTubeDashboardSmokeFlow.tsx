@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
   RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
@@ -35,6 +35,8 @@ type SafeApiDetails = {
   visibility?: string;
   side_effects?: Record<string, unknown>;
   reauth_required?: boolean;
+  can_execute?: boolean;
+  safe_error?: string;
 };
 
 const DEFAULT_TITLE = "Commerce Automation Private Upload Smoke UTF8 Dashboard";
@@ -61,6 +63,10 @@ export function YouTubeDashboardSmokeFlow({
   const [smokeApproval, setSmokeApproval] = useState("");
   const [prepareState, setPrepareState] = useState<ApiState>({ status: "idle", summary: "아직 prepare를 실행하지 않았습니다." });
   const [executeState, setExecuteState] = useState<ApiState>({ status: "idle", summary: "아직 execute를 실행하지 않았습니다." });
+  const [executeReadinessState, setExecuteReadinessState] = useState<ApiState>({
+    status: "idle",
+    summary: "Execute readiness dry-run is waiting for prepare and approval phrases."
+  });
   const [studioVisibility, setStudioVisibility] = useState(false);
   const [studioTitle, setStudioTitle] = useState(false);
   const [studioDisclosure, setStudioDisclosure] = useState(false);
@@ -80,13 +86,16 @@ export function YouTubeDashboardSmokeFlow({
   const prepareOk = prepareState.status === "success" && prepareState.details?.ok !== false;
   const confirmationOk = confirmation.trim() === APPROVE_YOUTUBE_PRIVATE_UPLOAD;
   const smokeApprovalOk = smokeApproval.trim() === RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE;
-  const canExecute = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk;
+  const executeReadinessOk = executeReadinessState.status === "success" && executeReadinessState.details?.can_execute === true;
+  const canExecute = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk && executeReadinessOk;
   const executeDisabledReasons = buildExecuteDisabledReasons({
     prepareOk,
     readinessCanUpload,
     readinessBlockedReasons,
     confirmationOk,
     smokeApprovalOk,
+    executeReadinessOk,
+    executeReadinessBlockedReasons: executeReadinessState.details?.blocked_reasons ?? [],
     candidateId,
     videoPath,
     disclosureReady
@@ -95,7 +104,7 @@ export function YouTubeDashboardSmokeFlow({
     executeState.details?.youtube_video_id && studioVisibility && studioTitle && studioDisclosure && publicBlocked
   );
 
-  const payload = {
+  const payload = useMemo(() => ({
     candidate_id: candidateId,
     confirmation,
     video_path_or_url: videoPath,
@@ -106,9 +115,60 @@ export function YouTubeDashboardSmokeFlow({
     tags: ["commerce automation", "private smoke"],
     visibility,
     made_for_kids: false
-  };
+  }), [affiliateUrl, candidateId, confirmation, description, disclosureText, title, videoPath, visibility]);
+
+  useEffect(() => {
+    const shouldCheckExecuteReadiness = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk;
+    if (!shouldCheckExecuteReadiness) {
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/uploads/youtube/execute-readiness", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ ...payload, smoke_approval: smokeApproval })
+    })
+      .then(async (response) => {
+        const body = sanitizeApiBody(await response.json());
+        if (cancelled) {
+          return;
+        }
+        const canExecuteNow = response.ok && body.ok !== false && body.can_execute === true;
+        setExecuteReadinessState({
+          status: canExecuteNow ? "success" : "blocked",
+          summary: canExecuteNow
+            ? "Execute readiness dry-run passed. No upload was executed."
+            : "Execute readiness dry-run blocked the upload request.",
+          details: body
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExecuteReadinessState({
+            status: "blocked",
+            summary: "Execute readiness dry-run failed with a safe client error."
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    confirmationOk,
+    payload,
+    prepareOk,
+    readinessCanUpload,
+    smokeApproval,
+    smokeApprovalOk,
+  ]);
 
   async function submitPrepare() {
+    setExecuteReadinessState({
+      status: "idle",
+      summary: "Execute readiness dry-run is waiting for prepare and approval phrases."
+    });
     setPrepareState({ status: "loading", summary: "대시보드 payload로 prepare 확인 중입니다." });
     setExecuteState({ status: "idle", summary: "아직 execute를 실행하지 않았습니다." });
     try {
@@ -285,6 +345,7 @@ export function YouTubeDashboardSmokeFlow({
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <ResultCard title="Prepare 결과" state={prepareState} />
+        <ResultCard title="Execute readiness" state={executeReadinessState} />
         <ResultCard title="Execute 결과" state={executeState} />
       </div>
 
@@ -369,7 +430,9 @@ function ResultCard({ title, state }: { title: string; state: ApiState }) {
       {state.details ? (
         <dl className="mt-3 space-y-2 text-sm">
           <SettingRow label="ok" value={String(state.details.ok ?? state.status === "success")} />
+          <SettingRow label="can_execute" value={String(state.details.can_execute ?? false)} />
           <SettingRow label="error_code" value={state.details.error_code ?? "none"} />
+          <SettingRow label="safe_error" value={state.details.safe_error ?? "none"} />
           <SettingRow label="missing_reasons" value={(state.details.missing_reasons ?? []).join(", ") || "none"} />
           <SettingRow label="blocked_reasons" value={(state.details.blocked_reasons ?? []).join(", ") || "none"} />
           <SettingRow label="external_api_called" value={String(state.details.side_effects?.external_api_called ?? false)} />
@@ -400,6 +463,8 @@ function buildExecuteDisabledReasons(input: {
   readinessBlockedReasons: string[];
   confirmationOk: boolean;
   smokeApprovalOk: boolean;
+  executeReadinessOk: boolean;
+  executeReadinessBlockedReasons: string[];
   candidateId: string;
   videoPath: string;
   disclosureReady: boolean;
@@ -417,6 +482,12 @@ function buildExecuteDisabledReasons(input: {
   }
   if (!input.smokeApprovalOk) {
     reasons.push("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE 승인 문구가 필요합니다.");
+  }
+  if (input.prepareOk && input.readinessCanUpload && input.confirmationOk && input.smokeApprovalOk && !input.executeReadinessOk) {
+    const details = input.executeReadinessBlockedReasons.length
+      ? ` (${input.executeReadinessBlockedReasons.join(", ")})`
+      : "";
+    reasons.push(`Execute readiness dry-run is blocked${details}.`);
   }
   if (!input.candidateId.trim()) {
     reasons.push("후보 ID가 필요합니다.");
@@ -442,21 +513,28 @@ function sanitizeApiBody(input: unknown): SafeApiDetails {
   const readiness = value.readiness && typeof value.readiness === "object" && !Array.isArray(value.readiness)
     ? value.readiness as Record<string, unknown>
     : {};
+  const resultBlockedReasons = Array.isArray(result.blocked_reasons) ? result.blocked_reasons.map(String) : undefined;
+  const valueSideEffects = value.side_effects && typeof value.side_effects === "object"
+    ? value.side_effects as Record<string, unknown>
+    : undefined;
+  const resultSideEffects = result.side_effects && typeof result.side_effects === "object"
+    ? result.side_effects as Record<string, unknown>
+    : undefined;
   return {
     ok: value.ok === true,
     error_code: typeof value.error_code === "string" ? value.error_code : undefined,
+    safe_error: typeof value.safe_error === "string" ? value.safe_error : undefined,
+    can_execute: value.can_execute === true,
     missing_reasons: Array.isArray(value.missing_reasons) ? value.missing_reasons.map(String) : undefined,
     blocked_reasons: Array.isArray(value.blocked_reasons)
       ? value.blocked_reasons.map(String)
       : Array.isArray(readiness.blocked_reasons)
         ? readiness.blocked_reasons.map(String)
-        : undefined,
+        : resultBlockedReasons,
     youtube_video_id: typeof result.youtube_video_id === "string" ? result.youtube_video_id : undefined,
     youtube_url: typeof result.youtube_url === "string" ? result.youtube_url : undefined,
     visibility: typeof result.visibility === "string" ? result.visibility : undefined,
-    side_effects: value.side_effects && typeof value.side_effects === "object"
-      ? value.side_effects as Record<string, unknown>
-      : undefined,
+    side_effects: valueSideEffects ?? resultSideEffects,
     reauth_required: value.reauth_required === true
   };
 }

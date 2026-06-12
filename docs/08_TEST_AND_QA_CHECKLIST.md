@@ -106,12 +106,14 @@ python -m compileall python-worker
 - The local OAuth helper must reject token file paths inside this repository.
 - `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
+- `POST /api/uploads/youtube/execute-readiness` is a side-effect-free dry-run that returns `can_execute=false` and non-empty `blocked_reasons` when live smoke approval, exact confirmation, or server readiness is missing.
 - `/uploads` must render candidate id, local mp4 path, private/unlisted visibility, UTF-8 Korean disclosure preview, prepare/execute gates, and manual Studio verification without exposing token values or invoking public upload.
 - `/uploads` must render Korean readiness labels, current blocker summaries, and next-action hints for YouTube provider, local token file, token readiness, scopes, quota, account, policy, upload-enabled, manual-only, approval, and public-upload-blocked gates.
 - `/uploads` must render the readiness gate resolver panel with "왜 실행이 막혔나요?", safe env-name-only configuration guidance, and manual checks for account/channel, quota, policy/disclosure, private/unlisted visibility, and public upload blocked state.
 - The readiness gate resolver may show env names such as `YOUTUBE_TOKEN_FILE`, `YOUTUBE_QUOTA_READY`, and `YOUTUBE_CLIENT_SECRET`, but it must not show env values, token JSON, access tokens, refresh tokens, client secret values, or raw Authorization headers.
 - `/uploads` execute controls must remain disabled when `readiness.can_upload=false`; the UI should show safe blocked reasons rather than requiring operators to infer the blocker from raw API codes.
-- `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD` and `readiness.can_upload=true`; otherwise it returns blocked JSON and all side effects remain false.
+- `/uploads` execute controls must also remain disabled when `/api/uploads/youtube/execute-readiness` returns `can_execute=false`, even if the top-level readiness card shows `can_upload=true`.
+- `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD`, `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`, `readiness.can_upload=true`, and `execute-readiness.can_execute=true`; otherwise it returns blocked JSON with top-level safe error and blocked reasons, and all side effects remain false.
 - `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
 - When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.
 - YouTube adapter success requires a returned YouTube video id; if no id is returned, `succeeded=false`.
