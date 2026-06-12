@@ -191,6 +191,49 @@ After a successful smoke, verify manually in YouTube Studio:
 
 Do not change the video to public during this smoke.
 
+## Product Video Private Package Flow
+
+After the dashboard-first private smoke has been final verified, the next
+operator path is a real product video private package flow. This is still
+prepare-only until a separate live upload approval is given.
+
+Use `/uploads` and the `상품 영상 업로드 패키지` section to prepare:
+
+- candidate id
+- product name
+- selected Coupang affiliate URL
+- local mp4 path or approved video URL
+- private or unlisted visibility only
+- title and description preview
+- readable Korean Coupang Partners disclosure
+- Studio verification checklist
+
+The prepare endpoint is:
+
+```text
+POST /api/uploads/youtube/product-package/prepare
+```
+
+Expected side effects are false:
+
+```json
+{
+  "external_api_called": false,
+  "youtube_upload_executed": false,
+  "uploaded": false,
+  "db_written": false,
+  "r2_uploaded": false,
+  "queue_created": false,
+  "worker_job_created": false,
+  "upload_package_created": false
+}
+```
+
+This product package flow does not call `/api/uploads/youtube/execute`, does
+not call YouTube, does not write Supabase, does not upload to R2, and does not
+create queue, worker job, render plan, or upload package rows. Execute stays a
+separate approval-gated step.
+
 ## Result Verification Bridge
 
 The first private smoke succeeded with:

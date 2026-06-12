@@ -70,10 +70,11 @@ YouTube adapter scaffold:
 
 Next milestones:
 
-1. Add TikTok and Threads readiness adapters.
-2. Add optional persisted YouTube smoke result evidence only after DB-write scope is explicitly approved.
-3. Keep live upload smoke blocked until explicit approval, token readiness, scopes, quota, account, policy, and local mp4 evidence exist.
-4. Keep public upload as a separate explicitly reviewed milestone.
+1. Prepare real product video private packages from `/uploads` with candidate, product, affiliate URL, video path, Korean disclosure, and Studio checklist validation.
+2. Add TikTok and Threads readiness adapters.
+3. Add optional persisted YouTube smoke result evidence only after DB-write scope is explicitly approved.
+4. Keep live upload execution blocked until explicit approval, token readiness, scopes, quota, account, policy, and local mp4 evidence exist.
+5. Keep public upload as a separate explicitly reviewed milestone.
 
 ## v1.4 Repository Adapter Target
 

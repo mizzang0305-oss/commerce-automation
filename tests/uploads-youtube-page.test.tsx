@@ -93,12 +93,67 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.getAllByText(/UTF-8 브라우저 payload/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "업로드 준비 확인" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "실제 업로드 실행" })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "상품 영상 업로드 패키지" })).toBeInTheDocument();
+    expect(screen.getByLabelText("상품 후보 ID")).toHaveValue("candidate-product-video-package-001");
+    expect(screen.getByLabelText("상품명")).toHaveValue("쿠팡 상품 영상 패키지 예시");
+    expect(screen.getByLabelText("쿠팡 제휴 URL")).toHaveValue("https://link.coupang.com/a/product-video-package");
+    expect(String(screen.getByLabelText("영상 파일 또는 URL").getAttribute("value"))).toContain("youtube-private-smoke-001.mp4");
+    expect(screen.getByRole("option", { name: "public disabled" })).toBeDisabled();
+    expect(screen.getByText("쿠팡파트너스 및 수수료 고지 문구가 prepare 가능한 상태입니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "상품 패키지 prepare" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Execute disabled in this PR" })).toBeDisabled();
     expect(screen.getByText("실행 불가 사유")).toBeInTheDocument();
     expect(screen.getByText(/YouTube readiness가 통과하지 않았습니다/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/refresh token/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/access token/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/configured-client-secret/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Authorization: Bearer/i)).not.toBeInTheDocument();
+  });
+
+  test("product video package prepare is copy-only and never calls execute", async () => {
+    clearYouTubeEnv();
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("/api/uploads/youtube/product-package/prepare")) {
+        return Response.json({
+          ok: true,
+          package: {
+            package_id: "youtube-product-private-test",
+            visibility: "private",
+            side_effects: {
+              external_api_called: false,
+              youtube_upload_executed: false,
+              uploaded: false,
+              upload_package_created: false
+            }
+          },
+          side_effects: {
+            external_api_called: false,
+            youtube_upload_executed: false,
+            uploaded: false,
+            db_written: false,
+            r2_uploaded: false,
+            queue_created: false,
+            worker_job_created: false,
+            upload_package_created: false
+          },
+          execute_in_this_pr: false
+        });
+      }
+      return Response.json({ ok: false }, { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(await UploadsPage());
+
+    fireEvent.click(screen.getByRole("button", { name: "상품 패키지 prepare" }));
+
+    await waitFor(() => expect(screen.getByText("Copy-only product video package is ready. Execute remains disabled in this PR.")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/uploads/youtube/product-package/prepare");
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain("/api/uploads/youtube/execute");
+    expect(screen.getByText("youtube-product-private-test")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Execute disabled in this PR" })).toBeDisabled();
+    expect(screen.queryByText(/access_token|refresh_token|client_secret|Authorization: Bearer/i)).not.toBeInTheDocument();
   });
 
   test("blocks garbled disclosure before dashboard prepare", async () => {

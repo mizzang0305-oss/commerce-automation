@@ -68,6 +68,7 @@ Required disclosure text example:
 - `POST /api/uploads/youtube/prepare`
 - `POST /api/uploads/youtube/execute-readiness`
 - `POST /api/uploads/youtube/execute`
+- `POST /api/uploads/youtube/product-package/prepare`
 
 The operator-facing path is `/uploads`. The dashboard builds the UTF-8 JSON payload in the browser, runs prepare only
 from a button click, keeps execute disabled until prepare succeeds plus both exact approval phrases are entered, and
@@ -87,6 +88,31 @@ Korean labels, current blocker summaries, and fix hints:
 
 These labels are diagnostics only. They must not expose token values, client secrets, raw Authorization headers, webhook
 URLs, or direct execution commands.
+
+## Product Video Private Package Prepare
+
+`POST /api/uploads/youtube/product-package/prepare` builds a copy-only package
+for a real product video after the private smoke path is proven. It validates:
+
+- `candidate_id`
+- `product_name`
+- `selected_affiliate_url`
+- `video_path_or_url`
+- `title`
+- `description`
+- `disclosure_text`
+- `visibility=private|unlisted`
+
+`public` visibility is rejected. The disclosure must include readable
+`쿠팡파트너스` and `수수료` text and must not look garbled.
+
+This endpoint is prepare-only. It must return
+`external_api_called=false`, `youtube_upload_executed=false`, `uploaded=false`,
+`db_written=false`, `r2_uploaded=false`, `queue_created=false`,
+`worker_job_created=false`, and `upload_package_created=false`.
+
+The `/uploads` product package section may copy package JSON for manual review,
+but it must not call `/api/uploads/youtube/execute` in this PR.
 
 ## Readiness Gate Resolver
 
