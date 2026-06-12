@@ -119,9 +119,24 @@ refresh tokens, client secret values, or Authorization headers.
 contract. It combines `readiness.can_upload`, the exact upload confirmation,
 and the live smoke approval phrase into a single `can_execute` boolean. It must
 return non-empty `blocked_reasons` when blocked, for example
-`live_smoke_approval_missing`, and it must keep all upload side effects false.
+`upload_confirmation_missing` or `live_smoke_approval_missing`, and it must keep all upload side effects false.
 The `/uploads` dashboard uses this endpoint to keep the execute button disabled
 when server execute gates are stricter than the top-level readiness card.
+
+The dashboard sends the same approval contract to both `execute-readiness` and
+`execute`:
+
+```json
+{
+  "smoke_approval": "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE",
+  "confirmation": "APPROVE_YOUTUBE_PRIVATE_UPLOAD"
+}
+```
+
+If `execute-readiness` returns `can_execute=true`, the subsequent Execute
+request must preserve those same fields. A later `live_smoke_approval_missing`
+response means the dashboard/server contract is misaligned, not that an upload
+succeeded.
 
 `execute` requires:
 

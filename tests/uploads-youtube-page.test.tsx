@@ -263,6 +263,65 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.getAllByText(/live_smoke_approval_missing/).length).toBeGreaterThan(0);
   });
 
+  test("sends the same approval fields to execute as execute-readiness", async () => {
+    clearYouTubeEnv();
+    setReadyYouTubeEnv();
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("/api/uploads/youtube/prepare")) {
+        return Response.json({
+          ok: true,
+          side_effects: {
+            external_api_called: false,
+            youtube_upload_executed: false,
+            uploaded: false,
+            public_upload_enabled: false
+          }
+        });
+      }
+      if (String(url).includes("/api/uploads/youtube/execute-readiness")) {
+        return Response.json({
+          ok: true,
+          can_execute: true,
+          blocked_reasons: [],
+          gates: [{ key: "execute_live_smoke_approval", status: "pass", label_ko: "비공개 스모크 실행 승인" }],
+          side_effects: { external_api_called: false, youtube_upload_executed: false, uploaded: false }
+        });
+      }
+      return Response.json({
+        ok: false,
+        error_code: "TEST_BLOCKED",
+        side_effects: { external_api_called: false, youtube_upload_executed: false, uploaded: false }
+      }, { status: 400 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(await UploadsPage());
+
+    fireEvent.click(screen.getByRole("button", { name: "업로드 준비 확인" }));
+    await waitFor(() => expect(screen.getByText(/Prepare 통과/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText(APPROVE_YOUTUBE_PRIVATE_UPLOAD), {
+      target: { value: APPROVE_YOUTUBE_PRIVATE_UPLOAD }
+    });
+    fireEvent.change(screen.getByPlaceholderText(RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE), {
+      target: { value: RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE }
+    });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "실제 업로드 실행" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "실제 업로드 실행" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/uploads/youtube/execute"),
+      expect.objectContaining({ method: "POST" })
+    ));
+    const executeCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/api/uploads/youtube/execute"));
+    const executeBody = JSON.parse(String((executeCall?.[1] as RequestInit | undefined)?.body));
+    expect(executeBody).toMatchObject({
+      confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+      smoke_approval: RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
+    });
+  });
+
   test("result verification requires youtube_video_id and Korean disclosure verification", async () => {
     clearYouTubeEnv();
     render(await UploadsPage());

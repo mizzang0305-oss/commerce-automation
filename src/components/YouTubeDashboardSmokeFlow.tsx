@@ -107,6 +107,7 @@ export function YouTubeDashboardSmokeFlow({
   const payload = useMemo(() => ({
     candidate_id: candidateId,
     confirmation,
+    smoke_approval: smokeApproval,
     video_path_or_url: videoPath,
     title,
     description,
@@ -115,7 +116,7 @@ export function YouTubeDashboardSmokeFlow({
     tags: ["commerce automation", "private smoke"],
     visibility,
     made_for_kids: false
-  }), [affiliateUrl, candidateId, confirmation, description, disclosureText, title, videoPath, visibility]);
+  }), [affiliateUrl, candidateId, confirmation, description, disclosureText, smokeApproval, title, videoPath, visibility]);
 
   useEffect(() => {
     const shouldCheckExecuteReadiness = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk;
@@ -127,7 +128,7 @@ export function YouTubeDashboardSmokeFlow({
     fetch("/api/uploads/youtube/execute-readiness", {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ ...payload, smoke_approval: smokeApproval })
+      body: JSON.stringify(payload)
     })
       .then(async (response) => {
         const body = sanitizeApiBody(await response.json());

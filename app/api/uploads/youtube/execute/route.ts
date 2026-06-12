@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         result: blockedYouTubeUploadResult(
           visibility,
           "YouTube upload was not attempted because the confirmation phrase did not match.",
-          ["confirmation_required"],
+          ["upload_confirmation_missing"],
           false
         ),
         side_effects: youtubeUploadSafeSideEffects,
