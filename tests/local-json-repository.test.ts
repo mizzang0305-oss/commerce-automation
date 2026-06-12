@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createLocalJsonAutomationRepository } from "@/lib/repositories/localJsonAutomationRepository";
+import { createDefaultSettings } from "@/lib/repositories/mockAutomationRepository";
 
 let dataDir = "";
 
@@ -13,6 +14,26 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
+
+async function writeJsonFile(name: string, value: unknown) {
+  await writeFile(join(dataDir, name), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function seedMinimalLocalJsonFiles() {
+  await Promise.all([
+    writeJsonFile("settings.json", createDefaultSettings()),
+    writeJsonFile("queue.json", []),
+    writeJsonFile("contents.json", []),
+    writeJsonFile("runs.json", []),
+    writeJsonFile("worker_jobs.json", []),
+    writeJsonFile("worker_heartbeats.json", []),
+    writeJsonFile("product_candidates.json", []),
+    writeJsonFile("production_history.json", []),
+    writeJsonFile("product_assets.json", []),
+    writeJsonFile("channel_profiles.json", []),
+    writeJsonFile("channel_upload_packages.json", [])
+  ]);
+}
 
 describe("localJsonAutomationRepository", () => {
   test("creates default data when files do not exist", async () => {
@@ -33,6 +54,7 @@ describe("localJsonAutomationRepository", () => {
   });
 
   test("persists settings after a new repository instance reads the same directory", async () => {
+    await seedMinimalLocalJsonFiles();
     const repository = createLocalJsonAutomationRepository({ dataDir });
     await repository.updateSettings({ interval_hours: 3, batch_size: 2 });
 
