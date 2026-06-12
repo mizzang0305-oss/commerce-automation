@@ -9,6 +9,14 @@ npm run build
 python -m compileall python-worker
 ```
 
+## Vitest Timeout Policy
+
+- `npm run test` is the exact full-suite gate for local PR review.
+- Vitest uses a 10 second `testTimeout` and `hookTimeout` in `vitest.config.ts`.
+- Reason: Windows local jsdom full-suite runs can intermittently exceed Vitest's 5 second per-test default under CPU contention, while focused reruns and a 10 second diagnostic full run pass.
+- This timeout is not a waiver for hanging tests. If one test consistently approaches or exceeds 10 seconds, treat it as a test performance issue and either make the test cheaper or split the setup.
+- Do not replace this gate with `npm run test -- --testTimeout=10000`; the configured policy should make exact `npm run test` defensible.
+
 ## Local Console QA
 
 - Run `.\scripts\dev\powershell-utf8.ps1` before PowerShell smoke checks.
