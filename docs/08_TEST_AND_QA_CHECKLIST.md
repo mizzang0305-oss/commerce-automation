@@ -115,6 +115,11 @@ python -m compileall python-worker
 - `POST /api/uploads/youtube/prepare` rejects missing or non-server-accessible `prepared_video_asset`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
 - Local Windows paths, relative `.mp4` paths, and `/var/task/...` paths are localhost diagnostics only. They must not satisfy domain/serverless upload readiness.
 - Domain upload readiness requires `PreparedVideoAssetRef.server_accessible=true`, `mime_type=video/mp4`, and a resolvable `signed_url`, `prepared_video_asset_url`, or storage reference.
+- `POST /api/uploads/assets/prepare-video-asset` validates operator-provided prepared video asset refs without calling YouTube, Google token endpoints, R2 write APIs, Supabase writes, queue APIs, or worker job APIs.
+- Prepared video asset validation blocks `windows_local_path`, `var_task_runtime_path`, `relative_mp4_path`, `server_accessible_false`, `all_server_refs_missing`, `signed_url_expired`, `mime_type_invalid`, `size_bytes_missing`, and `size_bytes_zero`.
+- Prepared video asset responses must keep `external_api_called=false`, `r2_uploaded=false`, `db_written=false`, `queue_created=false`, and `worker_job_created=false`.
+- `/uploads` must render a separate "도메인용 영상 자산 준비" section with `asset_id`, provider, `storage_key`, `signed_url`, `prepared_video_asset_url`, `mime_type`, `size_bytes`, checksum, expiry, and `server_accessible` controls.
+- `/uploads` must mask signed URL query strings in rendered prepare results and copied safe JSON. Raw token-like query params, Authorization headers, client secrets, and OAuth tokens must not render.
 - `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
 - `POST /api/uploads/youtube/execute-readiness` is a side-effect-free dry-run that returns `can_execute=false` and non-empty `blocked_reasons` when live smoke approval, exact confirmation, or server readiness is missing.
 - Missing upload confirmation must return `upload_confirmation_missing`; missing dashboard smoke approval must return `live_smoke_approval_missing` so operators can distinguish the two gates.
