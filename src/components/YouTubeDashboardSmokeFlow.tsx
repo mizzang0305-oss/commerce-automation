@@ -54,6 +54,10 @@ export function YouTubeDashboardSmokeFlow({
 }: YouTubeSmokeFlowProps) {
   const [candidateId, setCandidateId] = useState(YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID);
   const [videoPath, setVideoPath] = useState(defaultVideoPath);
+  const [assetId, setAssetId] = useState("youtube-private-smoke-001");
+  const [assetProvider, setAssetProvider] = useState("signed_url");
+  const [preparedVideoAssetUrl, setPreparedVideoAssetUrl] = useState("");
+  const [assetServerAccessible, setAssetServerAccessible] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
@@ -81,6 +85,12 @@ export function YouTubeDashboardSmokeFlow({
   const disclosureHasFee = disclosureCompact.includes("수수료");
   const disclosureLooksGarbled = disclosureReasons.includes("disclosure_text_garbled");
   const disclosureReady = disclosureReasons.length === 0;
+  const domainAssetReady = Boolean(
+    assetId.trim() &&
+    assetProvider !== "local_dev" &&
+    preparedVideoAssetUrl.trim().startsWith("https://") &&
+    assetServerAccessible
+  );
   const basePayloadReady = Boolean(candidateId.trim() && videoPath.trim() && title.trim() && description.trim() && affiliateUrl.trim());
   const canPrepare = basePayloadReady && disclosureReady;
   const prepareOk = prepareState.status === "success" && prepareState.details?.ok !== false;
@@ -109,6 +119,14 @@ export function YouTubeDashboardSmokeFlow({
     confirmation,
     smoke_approval: smokeApproval,
     video_path_or_url: videoPath,
+    prepared_video_asset: {
+      asset_id: assetId,
+      provider: assetProvider,
+      prepared_video_asset_url: preparedVideoAssetUrl,
+      signed_url: preparedVideoAssetUrl,
+      mime_type: "video/mp4",
+      server_accessible: assetServerAccessible
+    },
     title,
     description,
     disclosure_text: disclosureText,
@@ -116,7 +134,21 @@ export function YouTubeDashboardSmokeFlow({
     tags: ["commerce automation", "private smoke"],
     visibility,
     made_for_kids: false
-  }), [affiliateUrl, candidateId, confirmation, description, disclosureText, smokeApproval, title, videoPath, visibility]);
+  }), [
+    affiliateUrl,
+    assetId,
+    assetProvider,
+    assetServerAccessible,
+    candidateId,
+    confirmation,
+    description,
+    disclosureText,
+    preparedVideoAssetUrl,
+    smokeApproval,
+    title,
+    videoPath,
+    visibility
+  ]);
 
   useEffect(() => {
     const shouldCheckExecuteReadiness = prepareOk && readinessCanUpload && confirmationOk && smokeApprovalOk;
@@ -239,6 +271,38 @@ export function YouTubeDashboardSmokeFlow({
         <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <TextInput label="후보 ID" value={candidateId} onChange={setCandidateId} />
           <TextInput label="영상 파일 경로" value={videoPath} onChange={setVideoPath} />
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-bold">Local path is diagnostic only.</p>
+            <p className="mt-1">
+              Windows or /var/task mp4 paths can support localhost checks, but domain readiness requires a
+              server-accessible prepared video asset reference.
+            </p>
+          </div>
+          <TextInput label="prepared asset id" value={assetId} onChange={setAssetId} />
+          <label className="text-sm font-semibold text-slate-700">
+            prepared asset provider
+            <select
+              aria-label="prepared asset provider"
+              className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={assetProvider}
+              onChange={(event) => setAssetProvider(event.target.value)}
+            >
+              <option value="signed_url">signed_url</option>
+              <option value="r2">r2</option>
+              <option value="supabase_storage">supabase_storage</option>
+              <option value="external_https">external_https</option>
+              <option value="local_dev">local_dev diagnostic only</option>
+            </select>
+          </label>
+          <TextInput label="prepared video asset URL" value={preparedVideoAssetUrl} onChange={setPreparedVideoAssetUrl} />
+          <label className="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={assetServerAccessible}
+              onChange={(event) => setAssetServerAccessible(event.target.checked)}
+            />
+            server_accessible asset reference
+          </label>
           <label className="text-sm font-semibold text-slate-700">
             공개 범위
             <select
@@ -281,6 +345,8 @@ export function YouTubeDashboardSmokeFlow({
             <StatusRow label="깨진 물음표 패턴 없음" value={!disclosureLooksGarbled} />
             <StatusRow label="UTF-8 브라우저 payload" value />
             <StatusRow label="public_upload_enabled" value={false} />
+            <StatusRow label="domain_asset_ready" value={domainAssetReady} />
+            <StatusRow label="local_path_only_is_domain_blocked" value={!domainAssetReady && Boolean(videoPath.trim())} />
           </dl>
           {disclosureReasons.length > 0 ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">

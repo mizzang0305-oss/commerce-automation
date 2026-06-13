@@ -40,6 +40,10 @@ export function YouTubeProductVideoPackageFlow() {
   const [productName, setProductName] = useState(DEFAULT_PRODUCT_NAME);
   const [affiliateUrl, setAffiliateUrl] = useState(DEFAULT_AFFILIATE_URL);
   const [videoPath, setVideoPath] = useState(DEFAULT_VIDEO_PATH);
+  const [assetId, setAssetId] = useState("product-private-package-001");
+  const [assetProvider, setAssetProvider] = useState("signed_url");
+  const [preparedVideoAssetUrl, setPreparedVideoAssetUrl] = useState("");
+  const [assetServerAccessible, setAssetServerAccessible] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [title, setTitle] = useState(`[${DEFAULT_PRODUCT_NAME}] 실제 구매 전 확인 포인트`);
   const [description, setDescription] = useState("");
@@ -67,6 +71,12 @@ export function YouTubeProductVideoPackageFlow() {
   const disclosureReasons = useMemo(
     () => validateYouTubeDisclosureText({ description: previewDescription, disclosure_text: disclosureText }),
     [disclosureText, previewDescription]
+  );
+  const domainAssetReady = Boolean(
+    assetId.trim() &&
+    assetProvider !== "local_dev" &&
+    preparedVideoAssetUrl.trim().startsWith("https://") &&
+    assetServerAccessible
   );
   const packageReady = Boolean(
     candidateId.trim()
@@ -98,6 +108,14 @@ export function YouTubeProductVideoPackageFlow() {
           product_source: "coupang",
           selected_affiliate_url: affiliateUrl,
           video_path_or_url: videoPath,
+          prepared_video_asset: {
+            asset_id: assetId,
+            provider: assetProvider,
+            prepared_video_asset_url: preparedVideoAssetUrl,
+            signed_url: preparedVideoAssetUrl,
+            mime_type: "video/mp4",
+            server_accessible: assetServerAccessible
+          },
           visibility,
           title,
           description: previewDescription,
@@ -159,6 +177,38 @@ export function YouTubeProductVideoPackageFlow() {
           }} />
           <TextInput label="쿠팡 제휴 URL" value={affiliateUrl} onChange={setAffiliateUrl} />
           <TextInput label="영상 파일 또는 URL" value={videoPath} onChange={setVideoPath} />
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-bold">Local path is diagnostic only.</p>
+            <p className="mt-1">
+              Product package prepare requires a server-accessible asset ref for domain readiness. Local mp4 paths are
+              retained only as localhost diagnostics.
+            </p>
+          </div>
+          <TextInput label="prepared asset id" value={assetId} onChange={setAssetId} />
+          <label className="text-sm font-semibold text-slate-700">
+            prepared asset provider
+            <select
+              aria-label="product prepared asset provider"
+              className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={assetProvider}
+              onChange={(event) => setAssetProvider(event.target.value)}
+            >
+              <option value="signed_url">signed_url</option>
+              <option value="r2">r2</option>
+              <option value="supabase_storage">supabase_storage</option>
+              <option value="external_https">external_https</option>
+              <option value="local_dev">local_dev diagnostic only</option>
+            </select>
+          </label>
+          <TextInput label="prepared video asset URL" value={preparedVideoAssetUrl} onChange={setPreparedVideoAssetUrl} />
+          <label className="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={assetServerAccessible}
+              onChange={(event) => setAssetServerAccessible(event.target.checked)}
+            />
+            server_accessible asset reference
+          </label>
           <label className="text-sm font-semibold text-slate-700">
             공개 범위
             <select
@@ -198,7 +248,9 @@ export function YouTubeProductVideoPackageFlow() {
           <dl className="space-y-2 text-sm">
             <StatusRow label="candidate_ready" value={Boolean(candidateId.trim())} />
             <StatusRow label="product_ready" value={Boolean(productName.trim())} />
-            <StatusRow label="video_ready" value={Boolean(videoPath.trim())} />
+            <StatusRow label="video_ready" value={domainAssetReady} />
+            <StatusRow label="server_accessible_asset_ready" value={domainAssetReady} />
+            <StatusRow label="local_path_only_is_domain_blocked" value={!domainAssetReady && Boolean(videoPath.trim())} />
             <StatusRow label="affiliate_url_ready" value={Boolean(affiliateUrl.trim())} />
             <StatusRow label="disclosure_ready" value={disclosureReasons.length === 0} />
             <StatusRow label="visibility_ready" value={visibility === "private" || visibility === "unlisted"} />

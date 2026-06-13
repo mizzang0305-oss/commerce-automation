@@ -3,6 +3,7 @@ import type {
   YouTubeUploadRequestInput,
   YouTubeUploadVisibility
 } from "@/lib/uploads/youtube/types";
+import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 
 export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
@@ -10,6 +11,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   | { ok: false; missing_reasons: string[] } {
   const candidateId = safeTrim(input.candidate_id);
   const videoPathOrUrl = safeTrim(input.video_path_or_url);
+  const assetReadiness = buildPreparedVideoAssetReadiness(input);
   const title = safeTrim(input.title);
   const descriptionInput = safeTrim(input.description);
   const captionInput = safeTrim(input.caption);
@@ -22,8 +24,8 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   if (!candidateId) {
     missingReasons.push("candidate_id");
   }
-  if (!videoPathOrUrl) {
-    missingReasons.push("video_path_or_url");
+  if (!assetReadiness.asset_ready) {
+    missingReasons.push(...assetReadiness.blocked_reasons);
   }
   if (!title) {
     missingReasons.push("title");
@@ -59,6 +61,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
     request: {
       provider: "youtube",
       candidate_id: candidateId,
+      prepared_video_asset: assetReadiness.asset_ref!,
       video_path_or_url: videoPathOrUrl,
       title,
       description,

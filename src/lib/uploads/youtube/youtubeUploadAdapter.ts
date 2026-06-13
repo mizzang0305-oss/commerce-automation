@@ -1,11 +1,10 @@
 import "server-only";
 
-import { readFileSync, statSync } from "node:fs";
-import path from "node:path";
 import type { YouTubeUploadAdapter, YouTubeUploadRequest, YouTubeUploadResult } from "@/lib/uploads/youtube/types";
+import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 import { RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE, hasExactYouTubeLiveSmokeApproval } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { blockedYouTubeUploadResult, youtubeUploadSafeSideEffects } from "@/lib/uploads/youtube/youtubeUploadErrors";
-import { readYouTubeAccessTokenFromLocalFile } from "@/lib/uploads/youtube/youtubeTokenFile";
 
 const YOUTUBE_VIDEO_INSERT_URL = "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType=resumable";
 
@@ -56,48 +55,58 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       );
     }
 
-    const localVideo = readLocalMp4(request.video_path_or_url);
-    if (!localVideo.ok) {
-      return blockedYouTubeUploadResult(request.visibility, localVideo.safe_error, localVideo.blocked_reasons, false);
+    const assetReadiness = buildPreparedVideoAssetReadiness({
+      prepared_video_asset: request.prepared_video_asset,
+      video_path_or_url: request.video_path_or_url
+    });
+    if (!assetReadiness.asset_ready || !assetReadiness.asset_ref) {
+      return blockedYouTubeUploadResult(
+        request.visibility,
+        "YouTube upload requires a server-accessible prepared video asset reference.",
+        assetReadiness.blocked_reasons.length ? assetReadiness.blocked_reasons : ["server_accessible_asset_required"],
+        false
+      );
     }
 
-    const token = this.accessToken
-      ? {
-        ok: true as const,
-        accessToken: this.accessToken,
-        refreshed: false,
+    if (!this.accessToken) {
+      return blockedYouTubeUploadResult(
+        request.visibility,
+        "Server-side YouTube token provider contract is not implemented for live upload execution in this PR.",
+        ["server_token_provider_contract_only"],
+        false,
+        {
+          token_refresh_attempted: false,
+          token_refresh_succeeded: false,
+          resumable_session_attempted: false,
+          reauth_required: false
+        }
+      );
+    }
+
+    const videoAsset = await this.readPreparedVideoAsset(assetReadiness.asset_ref);
+    if (!videoAsset.ok) {
+      return blockedYouTubeUploadResult(request.visibility, videoAsset.safe_error, videoAsset.blocked_reasons, false, {
         token_refresh_attempted: false,
         token_refresh_succeeded: false,
-        token_file_updated: false
-      }
-      : await readYouTubeAccessTokenFromLocalFile({ env: this.env, fetchImpl: this.fetchImpl });
-    if (!token.ok) {
-      return blockedYouTubeUploadResult(request.visibility, token.safe_error, token.blocked_reasons, false, {
-        token_refresh_attempted: token.token_refresh_attempted,
-        token_refresh_succeeded: token.token_refresh_succeeded,
         resumable_session_attempted: false,
-        reauth_required: token.reauth_required
+        reauth_required: false
       });
     }
 
-    const session = await this.startResumableSession(request, token.accessToken, localVideo.size);
+    const session = await this.startResumableSession(request, this.accessToken, videoAsset.size);
     if (!session.ok) {
       return blockedYouTubeUploadResult(request.visibility, session.safe_error, session.blocked_reasons, true, {
-        token_refresh_attempted: token.token_refresh_attempted,
-        token_refresh_succeeded: token.token_refresh_succeeded,
-        token_file_updated: token.token_file_updated,
-        token_file_update_warning: token.token_file_update_warning,
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
         resumable_session_attempted: true
       });
     }
 
-    const upload = await this.uploadVideoBytes(session.uploadUrl, token.accessToken, localVideo);
+    const upload = await this.uploadVideoBytes(session.uploadUrl, this.accessToken, videoAsset);
     if (!upload.ok) {
       return blockedYouTubeUploadResult(request.visibility, upload.safe_error, upload.blocked_reasons, true, {
-        token_refresh_attempted: token.token_refresh_attempted,
-        token_refresh_succeeded: token.token_refresh_succeeded,
-        token_file_updated: token.token_file_updated,
-        token_file_update_warning: token.token_file_update_warning,
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
         resumable_session_attempted: true
       });
     }
@@ -123,11 +132,55 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
         public_upload_enabled: false
       },
       approval_required: true,
-      token_refresh_attempted: token.token_refresh_attempted,
-      token_refresh_succeeded: token.token_refresh_succeeded,
-      token_file_updated: token.token_file_updated,
-      token_file_update_warning: token.token_file_update_warning,
+      token_refresh_attempted: false,
+      token_refresh_succeeded: false,
+      token_file_updated: false,
       resumable_session_attempted: true
+    };
+  }
+
+  private async readPreparedVideoAsset(asset: PreparedVideoAssetRef):
+    Promise<{ ok: true; bytes: ArrayBuffer; size: number } | { ok: false; blocked_reasons: string[]; safe_error: string }> {
+    const assetUrl = asset.prepared_video_asset_url || asset.signed_url;
+    if (!assetUrl || !/^https:\/\//i.test(assetUrl)) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_signed_url_required"],
+        safe_error: "Prepared video asset requires an HTTPS URL for server upload execution."
+      };
+    }
+
+    const response = await this.fetchImpl(assetUrl, { method: "GET" });
+    if (!response.ok) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_fetch_failed"],
+        safe_error: `Prepared video asset fetch failed with HTTP ${response.status}.`
+      };
+    }
+
+    const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+    if (contentType && !contentType.includes("video/mp4")) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_not_mp4"],
+        safe_error: "Prepared video asset did not return video/mp4 content."
+      };
+    }
+
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength <= 0) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_empty"],
+        safe_error: "Prepared video asset was empty."
+      };
+    }
+
+    return {
+      ok: true,
+      bytes,
+      size: bytes.byteLength
     };
   }
 
@@ -177,7 +230,7 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
     };
   }
 
-  private async uploadVideoBytes(uploadUrl: string, accessToken: string, video: LocalVideoFile) {
+  private async uploadVideoBytes(uploadUrl: string, accessToken: string, video: UploadableVideoFile) {
     const response = await this.fetchImpl(uploadUrl, {
       method: "PUT",
       headers: new Headers({
@@ -212,53 +265,10 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   }
 }
 
-type LocalVideoFile = {
-  bytes: Buffer;
+type UploadableVideoFile = {
+  bytes: ArrayBuffer;
   size: number;
 };
-
-function readLocalMp4(videoPathOrUrl: string):
-  | { ok: true; bytes: Buffer; size: number }
-  | { ok: false; blocked_reasons: string[]; safe_error: string } {
-  if (/^https?:\/\//i.test(videoPathOrUrl)) {
-    return {
-      ok: false,
-      blocked_reasons: ["local_video_file_required"],
-      safe_error: "YouTube private smoke requires a local mp4 file path."
-    };
-  }
-
-  const resolvedPath = path.resolve(/*turbopackIgnore: true*/ videoPathOrUrl);
-  if (path.extname(resolvedPath).toLowerCase() !== ".mp4") {
-    return {
-      ok: false,
-      blocked_reasons: ["video_file_not_mp4"],
-      safe_error: "YouTube private smoke requires an mp4 file."
-    };
-  }
-
-  try {
-    const stat = statSync(/*turbopackIgnore: true*/ resolvedPath);
-    if (!stat.isFile() || stat.size <= 0) {
-      return {
-        ok: false,
-        blocked_reasons: ["video_file_empty"],
-        safe_error: "YouTube private smoke video file is empty or invalid."
-      };
-    }
-    return {
-      ok: true,
-      bytes: readFileSync(/*turbopackIgnore: true*/ resolvedPath),
-      size: stat.size
-    };
-  } catch {
-    return {
-      ok: false,
-      blocked_reasons: ["video_file_missing"],
-      safe_error: "YouTube private smoke video file does not exist."
-    };
-  }
-}
 
 async function safeJson(response: Response): Promise<Record<string, unknown>> {
   try {

@@ -1,3 +1,5 @@
+import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+
 export type YouTubeUploadVisibility = "private" | "unlisted";
 
 export type YouTubeUploadBlockedReason =
@@ -29,6 +31,7 @@ export interface YouTubeUploadReadiness {
 export interface YouTubeUploadRequest {
   provider: "youtube";
   candidate_id: string;
+  prepared_video_asset: PreparedVideoAssetRef;
   video_path_or_url: string;
   title: string;
   description: string;
@@ -91,6 +94,20 @@ export interface YouTubeLocalTokenProviderStatus {
 
 export type YouTubeUploadRequestInput = {
   candidate_id?: unknown;
+  prepared_video_asset?: unknown;
+  asset_id?: unknown;
+  storage_key?: unknown;
+  signed_url?: unknown;
+  prepared_video_asset_url?: unknown;
+  mime_type?: unknown;
+  size_bytes?: unknown;
+  checksum_sha256?: unknown;
+  sha256?: unknown;
+  expires_at?: unknown;
+  provider?: unknown;
+  source?: unknown;
+  asset_provider?: unknown;
+  server_accessible?: unknown;
   video_path_or_url?: unknown;
   title?: unknown;
   description?: unknown;

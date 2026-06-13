@@ -112,13 +112,15 @@ python -m compileall python-worker
 - `node scripts/youtube-local-oauth-helper.mjs exchange-code` is blocked unless exact confirmation `APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION` is supplied.
 - `node scripts/youtube-local-oauth-helper.mjs validate-token-file` returns metadata only and must not print access tokens, refresh tokens, client secrets, or Authorization values.
 - The local OAuth helper must reject token file paths inside this repository.
-- `POST /api/uploads/youtube/prepare` rejects missing `video_path_or_url`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
+- `POST /api/uploads/youtube/prepare` rejects missing or non-server-accessible `prepared_video_asset`, missing `disclosure_text`, missing `selected_affiliate_url`, missing title/copy, and `public` visibility.
+- Local Windows paths, relative `.mp4` paths, and `/var/task/...` paths are localhost diagnostics only. They must not satisfy domain/serverless upload readiness.
+- Domain upload readiness requires `PreparedVideoAssetRef.server_accessible=true`, `mime_type=video/mp4`, and a resolvable `signed_url`, `prepared_video_asset_url`, or storage reference.
 - `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
 - `POST /api/uploads/youtube/execute-readiness` is a side-effect-free dry-run that returns `can_execute=false` and non-empty `blocked_reasons` when live smoke approval, exact confirmation, or server readiness is missing.
 - Missing upload confirmation must return `upload_confirmation_missing`; missing dashboard smoke approval must return `live_smoke_approval_missing` so operators can distinguish the two gates.
 - `/uploads` must send the same approval fields to execute-readiness and execute: `smoke_approval=RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE` and `confirmation=APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
-- `/uploads` must render candidate id, local mp4 path, private/unlisted visibility, UTF-8 Korean disclosure preview, prepare/execute gates, and manual Studio verification without exposing token values or invoking public upload.
-- `/uploads` must render the product video private package section separately from the smoke flow. It validates candidate id, product name, selected affiliate URL, video path/URL, title, description, Korean Coupang Partners disclosure, private/unlisted visibility, and Studio verification checklist.
+- `/uploads` must render candidate id, local mp4 diagnostic path, prepared video asset reference fields, private/unlisted visibility, UTF-8 Korean disclosure preview, prepare/execute gates, and manual Studio verification without exposing token values or invoking public upload.
+- `/uploads` must render the product video private package section separately from the smoke flow. It validates candidate id, product name, selected affiliate URL, server-accessible prepared video asset reference, title, description, Korean Coupang Partners disclosure, private/unlisted visibility, and Studio verification checklist.
 - `POST /api/uploads/youtube/product-package/prepare` is copy-only and must keep `external_api_called=false`, `youtube_upload_executed=false`, `uploaded=false`, `db_written=false`, `r2_uploaded=false`, `queue_created=false`, `worker_job_created=false`, and `upload_package_created=false`.
 - The product package flow must not call `/api/uploads/youtube/execute`, YouTube, Google token endpoints, Supabase writes, R2 uploads, queue/job creation, or upload-package persistence in this PR.
 - Product package final verification requires a YouTube video id plus manual Studio checks for private visibility, correct title, Korean disclosure, affiliate link text, and no public/scheduled state.
@@ -128,7 +130,7 @@ python -m compileall python-worker
 - `/uploads` execute controls must remain disabled when `readiness.can_upload=false`; the UI should show safe blocked reasons rather than requiring operators to infer the blocker from raw API codes.
 - `/uploads` execute controls must also remain disabled when `/api/uploads/youtube/execute-readiness` returns `can_execute=false`, even if the top-level readiness card shows `can_upload=true`.
 - `POST /api/uploads/youtube/execute` requires `APPROVE_YOUTUBE_PRIVATE_UPLOAD`, `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`, `readiness.can_upload=true`, and `execute-readiness.can_execute=true`; otherwise it returns blocked JSON with top-level safe error and blocked reasons, and all side effects remain false.
-- `POST /api/uploads/youtube/execute` requires an existing local `.mp4` file and must return blocked JSON when the file is missing.
+- `POST /api/uploads/youtube/execute` requires a server-accessible prepared video asset reference. It must return blocked JSON when only a local path is present and must not report domain upload success from `C:\...mp4`, relative `.mp4`, or `/var/task/...` paths.
 - When a local token file includes `refresh_token`, the server-only adapter must refresh access before creating the resumable session; refresh failure returns `youtube_token_refresh_failed`, `reauth_required=true`, and does not fall back to a stale access token.
 - YouTube adapter success requires a returned YouTube video id; if no id is returned, `succeeded=false`.
 - YouTube adapter tests must mock provider HTTP calls and must not report fake production success.

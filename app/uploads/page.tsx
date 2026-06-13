@@ -41,6 +41,9 @@ const statusClasses: Record<UploadReadinessGateStatus, string> = {
 };
 
 const youtubeEnvGuide = [
+  "YOUTUBE_TOKEN_PROVIDER",
+  "YOUTUBE_TOKEN_READY",
+  "YOUTUBE_SCOPES_READY",
   "YOUTUBE_TOKEN_FILE",
   "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
   "YOUTUBE_QUOTA_READY",
@@ -77,6 +80,15 @@ export default async function UploadsPage() {
       <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
         대시보드는 DB write, R2 upload, queue row, worker job, upload package, public upload를 만들지 않습니다. 실제
         YouTube 실행은 readiness와 두 승인 문구가 모두 통과할 때만 서버 API에서 별도 차단 게이트를 통과해야 합니다.
+      </section>
+
+      <section className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+        <p className="font-bold">Local MVP success and domain readiness are separate.</p>
+        <p className="mt-1">
+          Local Windows token files and local mp4 paths can support localhost diagnostics, but deployed/serverless
+          uploads require a server-accessible prepared video asset reference and a server-only token provider contract.
+          Token values, client secrets, refresh tokens, and raw auth headers are never rendered in this UI.
+        </p>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">

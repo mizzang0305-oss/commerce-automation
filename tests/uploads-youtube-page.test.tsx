@@ -44,6 +44,9 @@ function setReadyYouTubeEnv() {
 
   vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
   vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
+  vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "server");
+  vi.stubEnv("YOUTUBE_TOKEN_READY", "true");
+  vi.stubEnv("YOUTUBE_SCOPES_READY", "true");
   vi.stubEnv("YOUTUBE_TOKEN_FILE", tokenFile);
   vi.stubEnv("YOUTUBE_UPLOAD_ENABLED", "true");
   vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
@@ -68,6 +71,10 @@ describe("YouTube uploads page readiness panel", () => {
     render(await UploadsPage());
 
     expect(screen.getByRole("heading", { name: "업로드 준비 대시보드" })).toBeInTheDocument();
+    expect(screen.getByText("Local MVP success and domain readiness are separate.")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("prepared video asset URL").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("server_accessible asset reference").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("domain_asset_ready").length).toBeGreaterThan(0);
     expect(screen.getByText("왜 실행이 막혔나요?")).toBeInTheDocument();
     expect(screen.getByText("서버 환경 설정 안내")).toBeInTheDocument();
     expect(screen.getByText("스모크 실행 전 수동 확인")).toBeInTheDocument();

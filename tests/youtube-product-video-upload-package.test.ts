@@ -12,6 +12,15 @@ const validProductPackageInput = {
   product_source: "coupang",
   selected_affiliate_url: "https://link.coupang.com/a/product-video-001",
   video_path_or_url: "C:\\Users\\LOVE\\MyProjects\\commerce-automation\\commerce-assets\\output\\video-packages\\product-video-001.mp4",
+  prepared_video_asset: {
+    asset_id: "asset-product-video-001",
+    provider: "signed_url",
+    signed_url: "https://assets.example.test/product-video-001.mp4",
+    prepared_video_asset_url: "https://assets.example.test/product-video-001.mp4",
+    mime_type: "video/mp4",
+    size_bytes: 1024,
+    server_accessible: true
+  },
   visibility: "private",
   title: "[무선 미니 청소기] 실제 구매 전 확인 포인트",
   description: [
@@ -84,7 +93,7 @@ describe("YouTube product video private upload package", () => {
     ["candidate_id", { candidate_id: "" }],
     ["product_name", { product_name: "" }],
     ["selected_affiliate_url", { selected_affiliate_url: "" }],
-    ["video_path_or_url", { video_path_or_url: "" }],
+    ["prepared_video_asset_ref", { video_path_or_url: "", prepared_video_asset: null }],
     ["title", { title: "" }],
     ["description", { description: "", disclosure_text: "" }]
   ])("missing %s blocks prepare", async (expectedReason, patch) => {

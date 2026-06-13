@@ -1,22 +1,21 @@
 import "server-only";
 
 import type { YouTubeUploadBlockedReason, YouTubeUploadReadiness } from "@/lib/uploads/youtube/types";
-import { buildYouTubeLocalTokenProviderStatus } from "@/lib/uploads/youtube/youtubeLocalTokenProvider";
+import { buildYouTubeTokenProviderReadiness } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
 import { readBooleanEnv } from "@/lib/uploads/youtube/youtubeUploadGuards";
 
 export function buildYouTubeUploadReadiness(): YouTubeUploadReadiness {
   const hasClientId = Boolean(process.env.YOUTUBE_CLIENT_ID?.trim());
   const hasClientSecret = Boolean(process.env.YOUTUBE_CLIENT_SECRET?.trim());
-  const hasTokenProvider = Boolean(process.env.YOUTUBE_TOKEN_PROVIDER?.trim());
-  const localTokenProvider = buildYouTubeLocalTokenProviderStatus();
+  const tokenProvider = buildYouTubeTokenProviderReadiness();
   const upload_enabled = readBooleanEnv("YOUTUBE_UPLOAD_ENABLED");
   const publicUploadEnabled = readBooleanEnv("PUBLIC_UPLOAD_ENABLED");
-  const token_ready = (hasTokenProvider && readBooleanEnv("YOUTUBE_TOKEN_READY")) || localTokenProvider.token_ready;
-  const scopes_ready = readBooleanEnv("YOUTUBE_SCOPES_READY") || localTokenProvider.scopes_ready;
-  const quota_ready = readBooleanEnv("YOUTUBE_QUOTA_READY");
-  const account_ready = readBooleanEnv("YOUTUBE_ACCOUNT_READY");
-  const policy_ready = readBooleanEnv("YOUTUBE_POLICY_READY") && !publicUploadEnabled;
-  const configured = hasClientId && hasClientSecret && (hasTokenProvider || localTokenProvider.configured);
+  const token_ready = tokenProvider.token_ready;
+  const scopes_ready = tokenProvider.scopes_ready;
+  const quota_ready = tokenProvider.quota_ready;
+  const account_ready = tokenProvider.account_ready;
+  const policy_ready = tokenProvider.policy_ready && !publicUploadEnabled;
+  const configured = hasClientId && hasClientSecret && tokenProvider.provider_configured;
 
   const blocked_reasons: YouTubeUploadBlockedReason[] = [];
   if (!configured) {

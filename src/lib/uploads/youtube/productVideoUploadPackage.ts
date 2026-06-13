@@ -4,6 +4,8 @@ import {
   RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
 } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
+import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export type YouTubeProductVideoSource = "coupang" | "manual" | "mock";
 
@@ -12,6 +14,7 @@ export type YouTubeProductVideoUploadPackageInput = {
   product_name?: unknown;
   product_source?: unknown;
   selected_affiliate_url?: unknown;
+  prepared_video_asset?: unknown;
   video_path_or_url?: unknown;
   visibility?: unknown;
   title?: unknown;
@@ -43,6 +46,9 @@ export type YouTubeProductVideoUploadPackageReadiness = {
   title_ready: boolean;
   description_ready: boolean;
   public_upload_blocked: boolean;
+  server_accessible_asset_ready: boolean;
+  domain_ready: boolean;
+  local_dev_path_only: boolean;
 };
 
 export type YouTubeProductVideoUploadPackage = {
@@ -51,6 +57,7 @@ export type YouTubeProductVideoUploadPackage = {
   product_name: string;
   product_source: YouTubeProductVideoSource;
   selected_affiliate_url: string;
+  prepared_video_asset: PreparedVideoAssetRef;
   video_path_or_url: string;
   visibility: YouTubeUploadVisibility;
   title: string;
@@ -94,6 +101,7 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
   const productName = safeTrim(input.product_name);
   const selectedAffiliateUrl = safeTrim(input.selected_affiliate_url);
   const videoPathOrUrl = safeTrim(input.video_path_or_url);
+  const assetReadiness = buildPreparedVideoAssetReadiness(input);
   const visibility = normalizeVisibility(input.visibility);
   const disclosureText = safeTrim(input.disclosure_text);
   const title = safeTrim(input.title);
@@ -111,15 +119,18 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
   const readiness: YouTubeProductVideoUploadPackageReadiness = {
     candidate_ready: Boolean(candidateId),
     product_ready: Boolean(productName),
-    video_ready: Boolean(videoPathOrUrl),
+    video_ready: assetReadiness.asset_ready,
     affiliate_url_ready: Boolean(selectedAffiliateUrl),
     disclosure_ready: disclosureReasons.length === 0,
     visibility_ready: Boolean(visibility),
     title_ready: Boolean(title),
     description_ready: Boolean(descriptionInput),
-    public_upload_blocked: input.visibility !== "public"
+    public_upload_blocked: input.visibility !== "public",
+    server_accessible_asset_ready: assetReadiness.server_accessible && assetReadiness.asset_ready,
+    domain_ready: assetReadiness.domain_ready,
+    local_dev_path_only: assetReadiness.local_dev_path_only
   };
-  const blockedReasons = buildBlockedReasons(readiness, disclosureReasons, input.visibility);
+  const blockedReasons = buildBlockedReasons(readiness, disclosureReasons, input.visibility, assetReadiness.blocked_reasons);
 
   if (blockedReasons.length > 0) {
     return {
@@ -138,6 +149,7 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
       product_name: productName,
       product_source: normalizeProductSource(input.product_source),
       selected_affiliate_url: selectedAffiliateUrl,
+      prepared_video_asset: assetReadiness.asset_ref as PreparedVideoAssetRef,
       video_path_or_url: videoPathOrUrl,
       visibility: visibility || "private",
       title,
@@ -218,12 +230,13 @@ export function verifyYouTubeProductVideoUploadPackage(input: {
 function buildBlockedReasons(
   readiness: YouTubeProductVideoUploadPackageReadiness,
   disclosureReasons: string[],
-  rawVisibility: unknown
+  rawVisibility: unknown,
+  assetBlockedReasons: string[]
 ) {
   const reasons: string[] = [];
   if (!readiness.candidate_ready) reasons.push("candidate_id");
   if (!readiness.product_ready) reasons.push("product_name");
-  if (!readiness.video_ready) reasons.push("video_path_or_url");
+  if (!readiness.video_ready) reasons.push(...assetBlockedReasons);
   if (!readiness.affiliate_url_ready) reasons.push("selected_affiliate_url");
   if (!readiness.visibility_ready) reasons.push(rawVisibility === "public" ? "visibility_public_blocked" : "visibility");
   if (!readiness.title_ready) reasons.push("title");
