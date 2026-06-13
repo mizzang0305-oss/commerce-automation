@@ -64,13 +64,15 @@ YouTube adapter scaffold:
 - Exact confirmation gate at `/api/uploads/youtube/execute`.
 - Public visibility blocked.
 - Token values and Authorization headers are not exposed.
+- Domain-ready upload requires a server-accessible prepared video asset reference and a server-only token provider contract.
+- Local Windows mp4 paths and local token files remain localhost diagnostics, not deployed-domain readiness evidence.
 - Access token refresh is attempted before the resumable session when a local refresh token exists; refresh failures require reauthorization and must not fake success.
-- Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, local mp4 readiness, exact confirmation, and separate smoke approval are present. The normal smoke path is the `/uploads` dashboard; direct PowerShell/curl prepare or execute calls are not the operator flow.
+- Live YouTube upload smoke remains blocked unless token readiness, quota/account/policy readiness, server-accessible prepared video asset readiness, exact confirmation, and separate smoke approval are present. The normal smoke path is the `/uploads` dashboard; direct PowerShell/curl prepare or execute calls are not the operator flow.
 - The first private smoke succeeded for `candidate-video-smoke-001`; result verification is manual and safe, requiring YouTube Studio checks for private visibility, title, Korean disclosure, and public-upload-blocked status.
 
 Next milestones:
 
-1. Prepare real product video private packages from `/uploads` with candidate, product, affiliate URL, video path, Korean disclosure, and Studio checklist validation.
+1. Prepare real product video private packages from `/uploads` with candidate, product, affiliate URL, prepared video asset reference, Korean disclosure, and Studio checklist validation.
 2. Add TikTok and Threads readiness adapters.
 3. Add optional persisted YouTube smoke result evidence only after DB-write scope is explicitly approved.
 4. Keep live upload execution blocked until explicit approval, token readiness, scopes, quota, account, policy, and local mp4 evidence exist.

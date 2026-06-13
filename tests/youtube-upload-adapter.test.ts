@@ -6,7 +6,6 @@ import { POST as postYouTubeExecuteReadiness } from "../app/api/uploads/youtube/
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
   MockYouTubeUploadAdapter,
-  YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID,
   buildYouTubeUploadRequest,
   buildYouTubePrivateSmokePayload,
   buildYouTubeUploadReadiness,
@@ -16,6 +15,15 @@ import {
 const validRequestBody = {
   candidate_id: "candidate-youtube-upload-001",
   video_path_or_url: "commerce-assets/output/video-packages/candidate-youtube-upload-001/shorts.mp4",
+  prepared_video_asset: {
+    asset_id: "asset-candidate-youtube-upload-001",
+    provider: "signed_url",
+    signed_url: "https://assets.example.test/candidate-youtube-upload-001.mp4",
+    prepared_video_asset_url: "https://assets.example.test/candidate-youtube-upload-001.mp4",
+    mime_type: "video/mp4",
+    size_bytes: 1024,
+    server_accessible: true
+  },
   title: "Desk organizer set quick review",
   description: "A private upload draft for operator review.",
   disclosure_text:
@@ -99,14 +107,15 @@ describe("YouTube upload adapter readiness and gates", () => {
       method: "POST",
       body: JSON.stringify({
         ...validRequestBody,
-        video_path_or_url: ""
+        video_path_or_url: "",
+        prepared_video_asset: null
       })
     }));
     expect(missingVideo.status).toBe(400);
     expect(await json(missingVideo)).toMatchObject({
       ok: false,
       error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
-      missing_reasons: expect.arrayContaining(["video_path_or_url"])
+      missing_reasons: expect.arrayContaining(["prepared_video_asset_ref"])
     });
 
     const publicVisibility = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
@@ -169,7 +178,7 @@ describe("YouTube upload adapter readiness and gates", () => {
     });
   });
 
-  test("prepare keeps candidate_id required and accepts the documented smoke candidate payload", async () => {
+  test("prepare keeps candidate_id required and blocks local-path-only smoke candidate payload for domain readiness", async () => {
     const missingCandidate = await postYouTubePrepare(new Request("http://localhost/api/uploads/youtube/prepare", {
       method: "POST",
       body: JSON.stringify({
@@ -193,13 +202,10 @@ describe("YouTube upload adapter readiness and gates", () => {
     }));
     const payload = await json(readySmoke);
 
-    expect(readySmoke.status).toBe(200);
+    expect(readySmoke.status).toBe(400);
     expect(payload).toMatchObject({
-      ok: true,
-      request: {
-        candidate_id: YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID,
-        visibility: "private"
-      },
+      ok: false,
+      missing_reasons: expect.arrayContaining(["server_accessible_asset_required"]),
       side_effects: youtubeUploadSafeSideEffects
     });
     expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|Authorization: Bearer/i);
@@ -356,7 +362,7 @@ describe("YouTube upload adapter readiness and gates", () => {
     expect(payload).toMatchObject({
       ok: false,
       error_code: "BLOCKED_BY_YOUTUBE_READINESS",
-      blocked_reasons: expect.arrayContaining(["video_file_missing"]),
+      blocked_reasons: expect.arrayContaining(["server_token_provider_contract_only"]),
       side_effects: youtubeUploadSafeSideEffects
     });
     expect(payload.blocked_reasons).not.toContain("live_smoke_approval_missing");

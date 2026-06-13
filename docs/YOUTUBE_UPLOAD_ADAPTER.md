@@ -11,7 +11,8 @@ It does not enable public upload. It does not run live upload smoke by default. 
 - Exact confirmation phrase: `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
 - Live smoke phrase: `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`.
 - Default behavior: blocked by readiness.
-- Upload method: YouTube Data API resumable `videos.insert` from a local `.mp4` file.
+- Upload method: YouTube Data API resumable `videos.insert` from a server-accessible prepared video asset reference.
+- Local `.mp4` paths are localhost diagnostics only and do not satisfy domain/serverless readiness.
 
 ## Required Readiness
 
@@ -40,7 +41,7 @@ with `disclosure_text_garbled`.
 YouTube upload request preparation requires:
 
 - `candidate_id`
-- `video_path_or_url`
+- `prepared_video_asset`
 - `title`
 - `description` or `caption`
 - `disclosure_text`
@@ -48,6 +49,14 @@ YouTube upload request preparation requires:
 - `visibility` as `private` or `unlisted`
 
 `public` visibility is rejected. The final description must include the affiliate disclosure text and affiliate URL.
+
+`video_path_or_url` is deprecated for domain readiness. It may remain in a
+localhost diagnostic payload, but a Windows path such as `C:\...\video.mp4`, a
+relative local `.mp4` path, or a serverless `/var/task/...` path must not be
+treated as upload-ready. Domain readiness requires a `PreparedVideoAssetRef`
+with `server_accessible=true`, `mime_type=video/mp4`, and a resolvable
+`signed_url`, `prepared_video_asset_url`, or storage reference. See
+[UPLOAD_ASSET_PROVIDER_CONTRACT.md](UPLOAD_ASSET_PROVIDER_CONTRACT.md).
 
 For the local private smoke, use `candidate-video-smoke-001`. That id is the
 existing dev smoke candidate created by `/api/dev/seed` with
@@ -98,6 +107,7 @@ for a real product video after the private smoke path is proven. It validates:
 - `product_name`
 - `selected_affiliate_url`
 - `video_path_or_url`
+- `prepared_video_asset`
 - `title`
 - `description`
 - `disclosure_text`
@@ -105,6 +115,11 @@ for a real product video after the private smoke path is proven. It validates:
 
 `public` visibility is rejected. The disclosure must include readable
 `쿠팡파트너스` and `수수료` text and must not look garbled.
+
+The product package endpoint distinguishes localhost diagnostics from domain
+readiness. A local path only returns a blocked package state. A package is
+domain-ready only when it includes a server-accessible prepared video asset
+reference.
 
 This endpoint is prepare-only. It must return
 `external_api_called=false`, `youtube_upload_executed=false`, `uploaded=false`,
@@ -130,6 +145,7 @@ Resolver gates:
 - `manual_upload_only`: manual verification remains enabled.
 - `approval_required`: exact approval phrases remain required.
 - `token_ready`: token provider metadata only. Source names: `YOUTUBE_TOKEN_FILE`, `YOUTUBE_LOCAL_TOKEN_FILE_PATH`, and token readiness metadata.
+- domain token provider readiness: `YOUTUBE_TOKEN_PROVIDER` plus safe readiness booleans such as `YOUTUBE_TOKEN_READY` and `YOUTUBE_SCOPES_READY`; local token files remain localhost diagnostics.
 - `scopes_ready`: `youtube.upload` scope metadata only.
 - `candidate_ready`, `video_file_ready`, `disclosure_ready`, and `prepare_ready`: dashboard form/manual checks.
 - `execute_ready`: aggregate server readiness. Execute remains blocked until `readiness.can_upload=true` plus prepare and approval phrases pass.
@@ -190,26 +206,23 @@ The local token provider:
 - never returns token values
 - never logs token JSON
 - does not run OAuth exchange
-- provides server-only token material only to the approved upload adapter
+- remains localhost diagnostic metadata only for domain readiness
 
 ## Refresh Before Upload
 
-The server-only upload adapter refreshes the access token before creating the
-YouTube resumable upload session when a `refresh_token` exists in the local token
-file. This is intentionally preferred even if an `access_token` is also present,
-because the stored access token may be expired or revoked.
+PR #80 changes the domain upload contract so the server-only adapter no longer
+treats a local token file as the production/domain token source. Local token
+files remain useful for localhost diagnostics, but deployed-domain readiness
+requires a server-only token provider contract.
 
-Refresh behavior:
+Current contract behavior:
 
-- Refresh uses `grant_type=refresh_token` with server-only client credentials.
-- The refreshed access token is used for the resumable session request.
-- The token file is updated atomically when it is outside the repository.
-- If token file update fails, the adapter returns a safe warning and uses the
-  refreshed token only for the current request.
-- If refresh fails, the adapter returns `youtube_token_refresh_failed`,
-  `reauth_required=true`, `succeeded=false`, and does not create a resumable
-  upload session.
-- The adapter must not fall back to a stale access token after refresh failure.
+- `YOUTUBE_TOKEN_PROVIDER` must point to a server-accessible provider contract.
+- readiness returns booleans, blockers, and safe messages only.
+- token/client secret/raw Authorization values are never returned to the client.
+- if no server token implementation is available, execute returns
+  `server_token_provider_contract_only` instead of falling back to a local token
+  file.
 
 The adapter must never print access tokens, refresh tokens, client secrets,
 Authorization headers, or raw Google token responses.
@@ -226,8 +239,9 @@ Required conditions before any live smoke:
 - `token_ready=true`
 - `quota_ready=true`
 - visibility is `private` or `unlisted`
-- `video_path_or_url` exists
-- `video_path_or_url` is a local `.mp4` file
+- `prepared_video_asset` exists
+- `prepared_video_asset.server_accessible=true`
+- `prepared_video_asset.mime_type=video/mp4`
 - `disclosure_text` exists
 - `selected_affiliate_url` exists
 
@@ -239,8 +253,8 @@ blocked_reason: BLOCKED_BY_YOUTUBE_READINESS or BLOCKED_BY_MISSING_SMOKE_APPROVA
 ```
 
 If a previous live smoke reached YouTube but returned HTTP 401, first refresh or
-re-authorize the local token. A new live smoke still requires the exact smoke
-approval phrase and exact upload confirmation.
+re-authorize the server token provider outside the client. A new live smoke
+still requires the exact smoke approval phrase and exact upload confirmation.
 
 The first private smoke completed successfully for the documented smoke
 candidate `candidate-video-smoke-001`. Result tracking after that smoke is a
@@ -262,6 +276,6 @@ writing DB/R2/queue/job/upload-package state.
 
 ## videos.insert Boundary
 
-The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, smoke approval, and exact confirmation pass. Success requires a returned YouTube video id. Missing video id, missing local mp4, missing token readiness, public visibility, or failed provider responses must return `succeeded=false`.
+The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, smoke approval, and exact confirmation pass. Success requires a returned YouTube video id. Missing video id, missing server-accessible asset reference, missing token readiness, public visibility, or failed provider responses must return `succeeded=false`.
 
 See [YOUTUBE_PRIVATE_UPLOAD_SMOKE.md](YOUTUBE_PRIVATE_UPLOAD_SMOKE.md) for the smoke checklist.
