@@ -78,6 +78,7 @@ Required disclosure text example:
 - `POST /api/uploads/youtube/execute-readiness`
 - `POST /api/uploads/youtube/execute`
 - `POST /api/uploads/youtube/product-package/prepare`
+- `POST /api/uploads/assets/prepare-video-asset`
 
 The operator-facing path is `/uploads`. The dashboard builds the UTF-8 JSON payload in the browser, runs prepare only
 from a button click, keeps execute disabled until prepare succeeds plus both exact approval phrases are entered, and
@@ -97,6 +98,28 @@ Korean labels, current blocker summaries, and fix hints:
 
 These labels are diagnostics only. They must not expose token values, client secrets, raw Authorization headers, webhook
 URLs, or direct execution commands.
+
+## Prepared Video Asset Prepare
+
+`POST /api/uploads/assets/prepare-video-asset` validates an operator-provided
+domain video asset reference before it is used by the product package flow. It
+supports:
+
+- `signed_url` with a future `expires_at`
+- `prepared_video_asset_url`
+- storage-backed `storage_key` for future R2/Supabase Storage adapters
+
+It blocks Windows `C:\...` paths, serverless `/var/task/...` paths, relative
+`.mp4` paths, missing `server_accessible=true`, missing/zero `size_bytes`,
+invalid MIME types, and expired signed URLs. It returns safe blocker names and
+masked display strings only. Signed URL query strings must render as
+`?[redacted]`.
+
+This endpoint is prepare-only. It must keep `external_api_called=false`,
+`r2_uploaded=false`, `db_written=false`, `queue_created=false`, and
+`worker_job_created=false`. It does not call `/api/uploads/youtube/execute`,
+Google OAuth token endpoints, YouTube `videos.insert`, R2 write APIs, or
+Supabase write APIs.
 
 ## Product Video Private Package Prepare
 

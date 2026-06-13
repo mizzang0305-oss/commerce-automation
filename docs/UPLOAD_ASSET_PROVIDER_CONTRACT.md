@@ -38,10 +38,55 @@ Domain readiness requires:
   - `signed_url`
   - `prepared_video_asset_url`
   - or a storage-backed `storage_key` that a server adapter can resolve
-- `expires_at` is absent or still in the future
+- when `signed_url` is used, `expires_at` is present and still in the future
 
 If only a local path exists, readiness must stay blocked with
 `server_accessible_asset_required`.
+
+## Prepared Video Asset Provider Flow
+
+`POST /api/uploads/assets/prepare-video-asset` is a prepare-only contract
+validator for operator-provided domain assets. It accepts manual signed URL,
+external HTTPS URL, R2, or Supabase Storage references and returns a sanitized
+summary that can be copied into the product package prepare flow.
+
+It does not:
+
+- upload to R2 or any other storage provider
+- write to Supabase or another database
+- create queue rows or worker jobs
+- call YouTube, Google OAuth, TikTok, or Threads
+- return raw tokens, client secrets, Authorization headers, or unmasked signed
+  URL query parameters
+
+The response always includes explicit side effects:
+
+```json
+{
+  "side_effects": {
+    "external_api_called": false,
+    "r2_uploaded": false,
+    "db_written": false,
+    "queue_created": false,
+    "worker_job_created": false
+  }
+}
+```
+
+Blocked examples:
+
+- `windows_local_path`
+- `var_task_runtime_path`
+- `relative_mp4_path`
+- `server_accessible_false`
+- `all_server_refs_missing`
+- `signed_url_expired`
+- `mime_type_invalid`
+- `size_bytes_missing`
+- `size_bytes_zero`
+
+Signed URLs are allowed as input, but UI/API display must mask query strings,
+for example `https://assets.example.test/video.mp4?[redacted]`.
 
 ## Token Provider Contract
 

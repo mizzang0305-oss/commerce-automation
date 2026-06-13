@@ -163,6 +163,75 @@ describe("YouTube uploads page readiness panel", () => {
     expect(screen.queryByText(/access_token|refresh_token|client_secret|Authorization: Bearer/i)).not.toBeInTheDocument();
   });
 
+  test("renders domain prepared video asset setup and calls prepare-only asset API with masked output", async () => {
+    clearYouTubeEnv();
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("/api/uploads/assets/prepare-video-asset")) {
+        return Response.json({
+          ok: true,
+          asset_ref: {
+            asset_id: "asset-domain-ui-001",
+            provider: "signed_url",
+            server_accessible: true,
+            mime_type: "video/mp4",
+            size_bytes: 123456,
+            signed_url_present: true,
+            prepared_video_asset_url_present: false,
+            storage_key_present: false
+          },
+          safe_display: {
+            signed_url: "https://assets.example.test/domain-ui.mp4?[redacted]",
+            signed_url_present: true,
+            prepared_video_asset_url_present: false,
+            storage_key_present: false
+          },
+          side_effects: {
+            external_api_called: false,
+            r2_uploaded: false,
+            db_written: false,
+            queue_created: false,
+            worker_job_created: false
+          }
+        });
+      }
+      return Response.json({ ok: false }, { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(await UploadsPage());
+
+    expect(screen.getByRole("heading", { name: "도메인용 영상 자산 준비" })).toBeInTheDocument();
+    expect(screen.getByLabelText("asset_id")).toBeInTheDocument();
+    expect(screen.getByLabelText("storage_key")).toBeInTheDocument();
+    expect(screen.getByLabelText("signed_url")).toBeInTheDocument();
+    expect(screen.getByLabelText("prepared_video_asset_url")).toBeInTheDocument();
+    expect(screen.getByLabelText("mime_type")).toHaveValue("video/mp4");
+    expect(screen.getByLabelText("size_bytes")).toBeInTheDocument();
+    expect(screen.getByLabelText("checksum_sha256")).toBeInTheDocument();
+    expect(screen.getByLabelText("expires_at")).toBeInTheDocument();
+    expect(screen.getByLabelText("server_accessible")).toBeInTheDocument();
+    expect(screen.getByText(/Windows C:\\ path is blocked/i)).toBeInTheDocument();
+    expect(screen.getByText(/\/var\/task path is blocked/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("asset_id"), { target: { value: "asset-domain-ui-001" } });
+    fireEvent.change(screen.getByLabelText("signed_url"), {
+      target: { value: "https://assets.example.test/domain-ui.mp4?token=secret-token" }
+    });
+    fireEvent.change(screen.getByLabelText("size_bytes"), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("expires_at"), { target: { value: new Date(Date.now() + 60_000).toISOString() } });
+    fireEvent.click(screen.getByLabelText("server_accessible"));
+    fireEvent.click(screen.getByRole("button", { name: "도메인 자산 prepare 검증" }));
+
+    await waitFor(() => expect(screen.getByText("PreparedVideoAssetRef 검증 통과")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/uploads/assets/prepare-video-asset"),
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(screen.getByText("https://assets.example.test/domain-ui.mp4?[redacted]")).toBeInTheDocument();
+    expect(screen.getByText("asset-domain-ui-001")).toBeInTheDocument();
+    expect(screen.queryByText(/secret-token|access_token|refresh_token|client_secret|Authorization: Bearer/i)).not.toBeInTheDocument();
+  });
+
   test("blocks garbled disclosure before dashboard prepare", async () => {
     clearYouTubeEnv();
 
