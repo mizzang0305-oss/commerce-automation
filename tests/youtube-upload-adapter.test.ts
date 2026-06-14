@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 import { GET as getYouTubeReadiness } from "../app/api/uploads/youtube/readiness/route";
 import { POST as postYouTubePrepare } from "../app/api/uploads/youtube/prepare/route";
@@ -367,6 +370,112 @@ describe("YouTube upload adapter readiness and gates", () => {
     });
     expect(payload.blocked_reasons).not.toContain("live_smoke_approval_missing");
     expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
+  });
+
+  test("execute readiness blocks contract-only token provider before dashboard can execute", async () => {
+    vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
+    vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
+    vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "configured-provider");
+    vi.stubEnv("YOUTUBE_TOKEN_READY", "true");
+    vi.stubEnv("YOUTUBE_SCOPES_READY", "true");
+    vi.stubEnv("YOUTUBE_UPLOAD_ENABLED", "true");
+    vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
+    vi.stubEnv("YOUTUBE_ACCOUNT_READY", "true");
+    vi.stubEnv("YOUTUBE_POLICY_READY", "true");
+    vi.stubEnv("PUBLIC_UPLOAD_ENABLED", "false");
+
+    const response = await postYouTubeExecuteReadiness(new Request("http://localhost/api/uploads/youtube/execute-readiness", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        smoke_approval: "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE"
+      })
+    }));
+    const payload = await json(response);
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      can_execute: false,
+      blocked_reasons: expect.arrayContaining(["server_token_provider_contract_only"]),
+      side_effects: youtubeUploadSafeSideEffects
+    });
+    expect(JSON.stringify(payload)).toContain("execute_token_provider");
+    expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
+  });
+
+  test("execute route uses outside-repo local token file provider for mocked private upload", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-execute-token-"));
+    const tokenPath = path.join(dir, "youtube-token.json");
+    writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        access_token: "access-secret-value",
+        scope: "https://www.googleapis.com/auth/youtube.upload"
+      }),
+      "utf8"
+    );
+    vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
+    vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
+    vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "configured-provider");
+    vi.stubEnv("YOUTUBE_LOCAL_TOKEN_FILE_PATH", tokenPath);
+    vi.stubEnv("YOUTUBE_TOKEN_READY", "true");
+    vi.stubEnv("YOUTUBE_SCOPES_READY", "true");
+    vi.stubEnv("YOUTUBE_UPLOAD_ENABLED", "true");
+    vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
+    vi.stubEnv("YOUTUBE_ACCOUNT_READY", "true");
+    vi.stubEnv("YOUTUBE_POLICY_READY", "true");
+    vi.stubEnv("PUBLIC_UPLOAD_ENABLED", "false");
+    vi.stubEnv("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE", "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" }
+      }))
+      .mockResolvedValueOnce(new Response(null, {
+        status: 200,
+        headers: { Location: "https://upload.youtube.test/resumable-session" }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "youtube-video-route-token-provider",
+        status: { privacyStatus: "private" }
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          ...validRequestBody,
+          confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+          smoke_approval: "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE"
+        })
+      }));
+      const payload = await json(response);
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        ok: true,
+        blocked_reasons: [],
+        result: {
+          succeeded: true,
+          youtube_video_id: "youtube-video-route-token-provider",
+          token_refresh_attempted: false,
+          side_effects: {
+            external_api_called: true,
+            youtube_upload_executed: true,
+            uploaded: true,
+            public_upload_enabled: false
+          }
+        }
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("execute readiness block returns top-level safe error and non-empty reasons", async () => {

@@ -168,6 +168,55 @@ describe("private YouTube live adapter readiness", () => {
     expect(JSON.stringify(result)).not.toMatch(secretNeedles);
   });
 
+  test("uses server-only token provider callback for mocked private upload without exposing token", async () => {
+    vi.stubEnv("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE", "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
+    const request = makeValidUploadRequest();
+    const tokenProvider = vi.fn().mockResolvedValue({
+      ok: true,
+      accessToken: "access-secret-value",
+      token_refresh_attempted: true,
+      token_refresh_succeeded: true,
+      token_file_updated: false
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" }
+      }))
+      .mockResolvedValueOnce(new Response(null, {
+        status: 200,
+        headers: { Location: "https://upload.youtube.test/resumable-session" }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "youtube-video-from-provider",
+        status: { privacyStatus: "private" }
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const result = await new ServerYouTubeUploadAdapter({
+      accessTokenProvider: tokenProvider,
+      fetchImpl: fetchMock
+    }).upload(request);
+
+    expect(result).toMatchObject({
+      attempted: true,
+      succeeded: true,
+      youtube_video_id: "youtube-video-from-provider",
+      token_refresh_attempted: true,
+      token_refresh_succeeded: true,
+      token_file_updated: false,
+      side_effects: {
+        external_api_called: true,
+        youtube_upload_executed: true,
+        uploaded: true,
+        public_upload_enabled: false
+      }
+    });
+    expect(tokenProvider).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(result)).not.toMatch(secretNeedles);
+  });
+
   test("does not report success when YouTube returns no video id", async () => {
     vi.stubEnv("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE", "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
     const request = makeValidUploadRequest();

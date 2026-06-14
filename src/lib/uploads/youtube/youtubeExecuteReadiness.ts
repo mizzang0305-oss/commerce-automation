@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { YouTubeUploadBlockedReason, YouTubeUploadReadiness } from "@/lib/uploads/youtube/types";
+import { buildYouTubeExecuteTokenProviderReadiness } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
 import { buildYouTubeUploadReadiness } from "@/lib/uploads/youtube/youtubeReadiness";
 import {
   RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE,
@@ -24,6 +25,7 @@ export type YouTubeExecuteReadiness = {
   blocked_reasons: string[];
   gates: YouTubeExecuteReadinessGate[];
   readiness: YouTubeUploadReadiness;
+  token_provider: ReturnType<typeof buildYouTubeExecuteTokenProviderReadiness>;
   side_effects: typeof youtubeUploadSafeSideEffects;
 };
 
@@ -33,7 +35,8 @@ export function buildYouTubeExecuteReadiness(input: {
   env?: NodeJS.ProcessEnv;
 } = {}): YouTubeExecuteReadiness {
   const env = input.env ?? process.env;
-  const readiness = buildYouTubeUploadReadiness();
+  const readiness = buildYouTubeUploadReadiness(env);
+  const tokenProvider = buildYouTubeExecuteTokenProviderReadiness(env);
   const gates: YouTubeExecuteReadinessGate[] = [];
   const blockedReasons = new Set<string>();
 
@@ -51,6 +54,22 @@ export function buildYouTubeExecuteReadiness(input: {
     fix_hint_ko: readiness.can_upload
       ? "다음 실행 게이트를 확인하세요."
       : "readiness.blocked_reasons를 해결한 뒤 다시 확인하세요.",
+    secret_safe: true
+  });
+
+  for (const reason of tokenProvider.blockers) {
+    blockedReasons.add(reason);
+  }
+  gates.push({
+    key: "execute_token_provider",
+    status: tokenProvider.can_provide_upload_token ? "pass" : "blocked",
+    label_ko: "YouTube server-only token provider",
+    safe_error: tokenProvider.can_provide_upload_token
+      ? "Server-only token provider can supply an upload token without exposing it to the client."
+      : tokenProvider.safe_message,
+    fix_hint_ko: tokenProvider.provider_mode === "contract_only"
+      ? "Set YOUTUBE_TOKEN_PROVIDER_MODE=local_file for an approved localhost smoke or implement server_secret provider before domain execute."
+      : "Check token provider mode, token file location, upload scope, and server-only configuration.",
     secret_safe: true
   });
 
@@ -92,6 +111,7 @@ export function buildYouTubeExecuteReadiness(input: {
     blocked_reasons: Array.from(blockedReasons),
     gates,
     readiness,
+    token_provider: tokenProvider,
     side_effects: youtubeUploadSafeSideEffects
   };
 }

@@ -1,6 +1,9 @@
 import "server-only";
 
+import { buildYouTubeLocalTokenProviderStatus } from "@/lib/uploads/youtube/youtubeLocalTokenProvider";
+
 export type YouTubeTokenProviderKind = "none" | "local_dev" | "server";
+export type YouTubeTokenProviderMode = "contract_only" | "local_file" | "server_secret";
 
 export type YouTubeTokenReadiness = {
   provider_configured: boolean;
@@ -13,6 +16,34 @@ export type YouTubeTokenReadiness = {
   blockers: string[];
   safe_message: string;
 };
+
+export type YouTubeExecuteTokenProviderReadiness = {
+  provider_mode: YouTubeTokenProviderMode;
+  can_provide_upload_token: boolean;
+  token_source: "none" | "local_file" | "server_secret";
+  blockers: string[];
+  safe_message: string;
+  secret_safe: true;
+};
+
+export type YouTubeUploadAccessTokenResult =
+  | {
+    ok: true;
+    accessToken: string;
+    token_refresh_attempted?: boolean;
+    token_refresh_succeeded?: boolean;
+    token_file_updated?: boolean;
+    token_file_update_warning?: string;
+  }
+  | {
+    ok: false;
+    blocked_reasons: string[];
+    safe_error: string;
+    external_api_called: boolean;
+    token_refresh_attempted?: boolean;
+    token_refresh_succeeded?: boolean;
+    reauth_required?: boolean;
+  };
 
 export interface YouTubeTokenProvider {
   getReadiness(): Promise<YouTubeTokenReadiness>;
@@ -63,6 +94,80 @@ export function buildYouTubeTokenProviderReadiness(env: NodeJS.ProcessEnv = proc
   };
 }
 
+export function buildYouTubeExecuteTokenProviderReadiness(env: NodeJS.ProcessEnv = process.env): YouTubeExecuteTokenProviderReadiness {
+  const providerMode = normalizeTokenProviderMode(env);
+
+  if (providerMode === "contract_only") {
+    return {
+      provider_mode: "contract_only",
+      can_provide_upload_token: false,
+      token_source: "none",
+      blockers: ["server_token_provider_contract_only"],
+      safe_message: "Server-side YouTube token provider is contract-only and cannot execute live uploads.",
+      secret_safe: true
+    };
+  }
+
+  if (providerMode === "server_secret") {
+    return {
+      provider_mode: "server_secret",
+      can_provide_upload_token: false,
+      token_source: "server_secret",
+      blockers: ["server_token_provider_not_configured"],
+      safe_message: "Server-secret YouTube token provider is not configured for live upload execution.",
+      secret_safe: true
+    };
+  }
+
+  const localStatus = buildYouTubeLocalTokenProviderStatus(env);
+  return {
+    provider_mode: "local_file",
+    can_provide_upload_token: localStatus.configured && localStatus.token_ready && localStatus.scopes_ready,
+    token_source: "local_file",
+    blockers: localStatus.blocked_reasons,
+    safe_message: localStatus.safe_summary,
+    secret_safe: true
+  };
+}
+
+export async function getYouTubeUploadAccessTokenForServerUpload(options: {
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+} = {}): Promise<YouTubeUploadAccessTokenResult> {
+  const env = options.env ?? process.env;
+  const providerMode = normalizeTokenProviderMode(env);
+
+  if (providerMode === "local_file") {
+    const { readYouTubeAccessTokenFromLocalFile } = await import("@/lib/uploads/youtube/youtubeTokenFile");
+    return readYouTubeAccessTokenFromLocalFile({
+      env,
+      fetchImpl: options.fetchImpl
+    });
+  }
+
+  if (providerMode === "server_secret") {
+    return {
+      ok: false,
+      blocked_reasons: ["server_token_provider_not_configured"],
+      safe_error: "Server-secret YouTube token provider is not configured for live upload execution.",
+      external_api_called: false,
+      token_refresh_attempted: false,
+      token_refresh_succeeded: false,
+      reauth_required: false
+    };
+  }
+
+  return {
+    ok: false,
+    blocked_reasons: ["server_token_provider_contract_only"],
+    safe_error: "Server-side YouTube token provider is contract-only and cannot execute live uploads.",
+    external_api_called: false,
+    token_refresh_attempted: false,
+    token_refresh_succeeded: false,
+    reauth_required: false
+  };
+}
+
 export class LocalDevYouTubeTokenProvider implements YouTubeTokenProvider {
   async getReadiness(): Promise<YouTubeTokenReadiness> {
     return {
@@ -102,6 +207,36 @@ function normalizeTokenProvider(value: unknown): YouTubeTokenProviderKind {
     return "local_dev";
   }
   return "server";
+}
+
+function normalizeTokenProviderMode(env: NodeJS.ProcessEnv): YouTubeTokenProviderMode {
+  const explicitMode = typeof env.YOUTUBE_TOKEN_PROVIDER_MODE === "string"
+    ? env.YOUTUBE_TOKEN_PROVIDER_MODE.trim().toLowerCase()
+    : "";
+  if (["local", "local_dev", "local_file"].includes(explicitMode)) {
+    return "local_file";
+  }
+  if (["server", "server_secret"].includes(explicitMode)) {
+    return "server_secret";
+  }
+  if (["contract", "contract_only", "disabled", "none"].includes(explicitMode)) {
+    return "contract_only";
+  }
+
+  if (hasConfiguredLocalTokenPath(env)) {
+    return "local_file";
+  }
+
+  const legacyProvider = normalizeTokenProvider(env.YOUTUBE_TOKEN_PROVIDER);
+  if (legacyProvider === "local_dev") {
+    return "local_file";
+  }
+
+  return "contract_only";
+}
+
+function hasConfiguredLocalTokenPath(env: NodeJS.ProcessEnv) {
+  return Boolean(env.YOUTUBE_LOCAL_TOKEN_FILE_PATH?.trim() || env.YOUTUBE_TOKEN_FILE?.trim());
 }
 
 function readBooleanEnvValue(value: unknown) {
