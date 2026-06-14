@@ -2,6 +2,7 @@ import "server-only";
 
 import type { YouTubeUploadAdapter, YouTubeUploadRequest, YouTubeUploadResult } from "@/lib/uploads/youtube/types";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import type { YouTubeUploadAccessTokenResult } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
 import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 import { RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE, hasExactYouTubeLiveSmokeApproval } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { blockedYouTubeUploadResult, youtubeUploadSafeSideEffects } from "@/lib/uploads/youtube/youtubeUploadErrors";
@@ -10,6 +11,7 @@ const YOUTUBE_VIDEO_INSERT_URL = "https://www.googleapis.com/upload/youtube/v3/v
 
 type ServerYouTubeUploadAdapterOptions = {
   accessToken?: string;
+  accessTokenProvider?: () => Promise<YouTubeUploadAccessTokenResult>;
   fetchImpl?: typeof fetch;
   env?: NodeJS.ProcessEnv;
 };
@@ -33,11 +35,13 @@ export class MockYouTubeUploadAdapter implements YouTubeUploadAdapter {
 
 export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   private readonly accessToken?: string;
+  private readonly accessTokenProvider?: () => Promise<YouTubeUploadAccessTokenResult>;
   private readonly fetchImpl: typeof fetch;
   private readonly env: NodeJS.ProcessEnv;
 
   constructor(options: ServerYouTubeUploadAdapterOptions = {}) {
     this.accessToken = options.accessToken;
+    this.accessTokenProvider = options.accessTokenProvider;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.env = options.env ?? process.env;
   }
@@ -68,17 +72,18 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       );
     }
 
-    if (!this.accessToken) {
+    const token = await this.resolveUploadAccessToken();
+    if (!token.ok) {
       return blockedYouTubeUploadResult(
         request.visibility,
-        "Server-side YouTube token provider contract is not implemented for live upload execution in this PR.",
-        ["server_token_provider_contract_only"],
-        false,
+        token.safe_error,
+        token.blocked_reasons,
+        token.external_api_called,
         {
-          token_refresh_attempted: false,
-          token_refresh_succeeded: false,
+          token_refresh_attempted: token.token_refresh_attempted ?? false,
+          token_refresh_succeeded: token.token_refresh_succeeded ?? false,
           resumable_session_attempted: false,
-          reauth_required: false
+          reauth_required: token.reauth_required ?? false
         }
       );
     }
@@ -93,20 +98,20 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       });
     }
 
-    const session = await this.startResumableSession(request, this.accessToken, videoAsset.size);
+    const session = await this.startResumableSession(request, token.accessToken, videoAsset.size);
     if (!session.ok) {
       return blockedYouTubeUploadResult(request.visibility, session.safe_error, session.blocked_reasons, true, {
-        token_refresh_attempted: false,
-        token_refresh_succeeded: false,
+        token_refresh_attempted: token.token_refresh_attempted ?? false,
+        token_refresh_succeeded: token.token_refresh_succeeded ?? false,
         resumable_session_attempted: true
       });
     }
 
-    const upload = await this.uploadVideoBytes(session.uploadUrl, this.accessToken, videoAsset);
+    const upload = await this.uploadVideoBytes(session.uploadUrl, token.accessToken, videoAsset);
     if (!upload.ok) {
       return blockedYouTubeUploadResult(request.visibility, upload.safe_error, upload.blocked_reasons, true, {
-        token_refresh_attempted: false,
-        token_refresh_succeeded: false,
+        token_refresh_attempted: token.token_refresh_attempted ?? false,
+        token_refresh_succeeded: token.token_refresh_succeeded ?? false,
         resumable_session_attempted: true
       });
     }
@@ -132,11 +137,52 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
         public_upload_enabled: false
       },
       approval_required: true,
-      token_refresh_attempted: false,
-      token_refresh_succeeded: false,
-      token_file_updated: false,
+      token_refresh_attempted: token.token_refresh_attempted ?? false,
+      token_refresh_succeeded: token.token_refresh_succeeded ?? false,
+      token_file_updated: token.token_file_updated ?? false,
       resumable_session_attempted: true
     };
+  }
+
+  private async resolveUploadAccessToken(): Promise<YouTubeUploadAccessTokenResult> {
+    if (this.accessToken) {
+      return {
+        ok: true,
+        accessToken: this.accessToken,
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
+        token_file_updated: false
+      };
+    }
+
+    if (!this.accessTokenProvider) {
+      return {
+        ok: false,
+        safe_error: "Server-side YouTube token provider contract is not implemented for live upload execution in this PR.",
+        blocked_reasons: ["server_token_provider_contract_only"],
+        external_api_called: false,
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
+        reauth_required: false
+      };
+    }
+
+    const token = await this.accessTokenProvider();
+    if (!token.ok || !token.accessToken.trim()) {
+      return token.ok
+        ? {
+          ok: false,
+          safe_error: "Server-side YouTube token provider did not return an upload token.",
+          blocked_reasons: ["token_not_ready"],
+          external_api_called: false,
+          token_refresh_attempted: token.token_refresh_attempted ?? false,
+          token_refresh_succeeded: token.token_refresh_succeeded ?? false,
+          reauth_required: false
+        }
+        : token;
+    }
+
+    return token;
   }
 
   private async readPreparedVideoAsset(asset: PreparedVideoAssetRef):

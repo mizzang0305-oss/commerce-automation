@@ -4,6 +4,7 @@ import {
   buildYouTubeExecuteReadiness,
   buildYouTubeUploadReadiness,
   buildYouTubeUploadRequest,
+  getYouTubeUploadAccessTokenForServerUpload,
   hasExactYouTubeUploadConfirmation,
   youtubeUploadSafeSideEffects
 } from "@/lib/uploads/youtube";
@@ -104,7 +105,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await new ServerYouTubeUploadAdapter().upload(requestResult.request);
+  const result = await new ServerYouTubeUploadAdapter({
+    accessTokenProvider: () => getYouTubeUploadAccessTokenForServerUpload()
+  }).upload(requestResult.request);
   const resultBlockedReasons = result.blocked_reasons.length ? result.blocked_reasons : ["youtube_upload_blocked"];
   return NextResponse.json(
     {
