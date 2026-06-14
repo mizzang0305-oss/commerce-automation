@@ -149,6 +149,45 @@ describe("real product auto pilot builder", () => {
     expect(result.error_code).toBe("AUTO_VIDEO_ASSET_REQUIRED");
   });
 
+  it("accepts signed_url and storage_key prepared asset contracts from asset metadata", () => {
+    const signedUrlResult = buildRealProductAutoPilot({
+      candidates: [candidate()],
+      queueItems: [queue()],
+      productAssets: [
+        videoAsset({
+          url: "",
+          render_qa_metadata: {
+            signed_url: "https://signed.example.com/videos/real-product.mp4?signature=private",
+            mime_type: "video/mp4",
+            size_bytes: 1234567,
+            expires_at: "2099-01-01T00:00:00.000Z",
+          },
+        }),
+      ],
+    });
+    const storageKeyResult = buildRealProductAutoPilot({
+      candidates: [candidate()],
+      queueItems: [queue()],
+      productAssets: [
+        videoAsset({
+          url: "",
+          bucket: "r2-videos",
+          render_qa_metadata: {
+            storage_key: "videos/real-product.mp4",
+            mime_type: "video/mp4",
+            size_bytes: 1234567,
+          },
+        }),
+      ],
+    });
+
+    expect(signedUrlResult.ok).toBe(true);
+    expect(signedUrlResult.prepared_video_asset_ref?.signed_url_present).toBe(true);
+    expect(JSON.stringify(signedUrlResult)).not.toContain("signature=private");
+    expect(storageKeyResult.ok).toBe(true);
+    expect(storageKeyResult.prepared_video_asset_ref?.storage_key).toBe("videos/real-product.mp4");
+  });
+
   it("masks signed URL query secrets and never exposes token or authorization material", () => {
     const result = buildRealProductAutoPilot({
       mode: "prepare_only",

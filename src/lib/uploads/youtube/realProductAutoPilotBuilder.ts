@@ -305,19 +305,22 @@ function findBestPreparedVideoAsset(queueId: string | null | undefined, productA
 function normalizeProductAssetToPreparedVideoAsset(asset: ProductAsset) {
   const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
   const assetUrl = safeTrim(asset.url);
+  const storageKey = safeTrim(metadata.storage_key) || null;
+  const signedUrl = safeTrim(metadata.signed_url) || null;
+  const preparedVideoAssetUrl = safeTrim(metadata.prepared_video_asset_url) || (isHttpsUrl(assetUrl) ? assetUrl : null);
   const provider = inferAssetProvider(asset, assetUrl);
   return {
     asset_id: asset.id,
     provider,
-    storage_key: safeTrim((metadata.storage_key ?? (asset as unknown as { storage_key?: unknown }).storage_key) as unknown) || null,
-    prepared_video_asset_url: isHttpsUrl(assetUrl) ? assetUrl : null,
-    signed_url: null,
-    video_path_or_url: isHttpsUrl(assetUrl) ? null : assetUrl,
+    storage_key: storageKey,
+    prepared_video_asset_url: preparedVideoAssetUrl,
+    signed_url: signedUrl,
+    video_path_or_url: isHttpsUrl(assetUrl) || signedUrl || preparedVideoAssetUrl || storageKey ? null : assetUrl,
     mime_type: safeTrim(metadata.mime_type) || inferMimeType(assetUrl),
     size_bytes: normalizeOptionalPositiveNumber(metadata.size_bytes ?? (asset as unknown as { size_bytes?: unknown }).size_bytes),
     checksum_sha256: safeTrim(metadata.checksum_sha256 ?? metadata.sha256) || null,
     expires_at: safeTrim(metadata.expires_at) || null,
-    server_accessible: isServerAccessibleProvider(provider) && isHttpsUrl(assetUrl)
+    server_accessible: isServerAccessibleProvider(provider) && Boolean(storageKey || isHttpsUrl(signedUrl) || isHttpsUrl(preparedVideoAssetUrl))
   };
 }
 
