@@ -1,4 +1,8 @@
 import type { ProductAsset, ProductCandidate, ProductQueueItem } from "@/types/automation";
+import type {
+  CoupangScoutClassification,
+  CoupangScoutDiagnostic
+} from "@/lib/coupang/scoutCompatibility";
 import {
   validatePreparedVideoAssetRef,
   toPreparedVideoAssetApiSummary
@@ -29,6 +33,7 @@ export type RealProductAutoPilotInput = {
   candidates: ProductCandidate[];
   queueItems: ProductQueueItem[];
   productAssets: ProductAsset[];
+  scout_diagnostic?: CoupangScoutDiagnostic | null;
 };
 
 export type RealProductAutoPilotSelectedProduct = {
@@ -50,7 +55,8 @@ export type RealProductAutoPilotResult = {
     | "AUTO_REAL_PRODUCT_REQUIRED"
     | "AUTO_VIDEO_ASSET_REQUIRED"
     | "PUBLIC_UPLOAD_BLOCKED"
-    | "AUTO_PACKAGE_PREPARE_BLOCKED";
+    | "AUTO_PACKAGE_PREPARE_BLOCKED"
+    | Exclude<CoupangScoutClassification, "COUPANG_SCOUT_READY">;
   message: string;
   mode: RealProductAutoPilotMode;
   selected_product: RealProductAutoPilotSelectedProduct | null;
@@ -117,6 +123,15 @@ export function buildRealProductAutoPilot(input: RealProductAutoPilotInput): Rea
 
   const selected = selectBestCandidate(input.candidates, input.queueItems);
   if (!selected) {
+    if (input.scout_diagnostic && !input.scout_diagnostic.ok) {
+      return blockedResult({
+        mode,
+        error_code: input.scout_diagnostic.classification as Exclude<CoupangScoutClassification, "COUPANG_SCOUT_READY">,
+        message: input.scout_diagnostic.safe_error ?? "Coupang scout request failed with a safe classified error.",
+        blocked_reasons: input.scout_diagnostic.blocked_reasons,
+        next_auto_action: input.scout_diagnostic.next_auto_action ?? "FIX_COUPANG_SCOUT_REQUEST_CONTRACT"
+      });
+    }
     return blockedResult({
       mode,
       error_code: "AUTO_REAL_PRODUCT_REQUIRED",
