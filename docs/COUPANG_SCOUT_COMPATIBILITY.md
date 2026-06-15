@@ -56,6 +56,16 @@ This keeps the next action precise:
 - scout contract failure -> fix endpoint/keyword/auth compatibility;
 - no candidate after a successful scout -> collect or import a valid candidate.
 
+After a scout succeeds and a candidate has been imported, importer-shape failures are also reported separately from `AUTO_REAL_PRODUCT_REQUIRED`.
+
+- `COUPANG_IMPORT_AFFILIATE_URL_FIELD_MISSING`
+- `COUPANG_IMPORT_AFFILIATE_URL_INVALID`
+- `COUPANG_IMPORT_IMAGE_URL_FIELD_MISSING`
+- `COUPANG_IMPORT_IMAGE_URL_INVALID`
+- `COUPANG_IMPORT_RESPONSE_SHAPE_UNSUPPORTED`
+
+These safe responses expose field-presence summaries and blocked reasons only. They must not print raw affiliate URLs, raw image URLs, Coupang access keys, Authorization headers, HMAC material, or full request URLs.
+
 ## Live Diagnostic Gate
 
 Live Coupang scout compatibility diagnostics are not run by default. Use a separate explicit operator approval before any live call:

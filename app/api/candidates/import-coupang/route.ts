@@ -70,7 +70,19 @@ function toCandidateInput(body: unknown): CoupangCandidateInput {
     product_name: record.product_name,
     raw_coupang_url: record.raw_coupang_url,
     selected_affiliate_url: record.selected_affiliate_url,
+    affiliate_url: record.affiliate_url,
+    landing_url: record.landing_url,
+    product_url: record.product_url,
+    productUrl: record.productUrl,
+    deeplink_url: record.deeplink_url,
+    shorten_url: record.shorten_url,
     thumbnail_url: record.thumbnail_url,
+    image_url: record.image_url,
+    product_image_url: record.product_image_url,
+    productImage: record.productImage,
+    productImageUrl: record.productImageUrl,
+    imagePath: record.imagePath,
+    image_path: record.image_path,
     price_now_text: record.price_now_text,
     category_path: record.category_path,
     source_type: record.source_type,
@@ -78,6 +90,6 @@ function toCandidateInput(body: unknown): CoupangCandidateInput {
     itemId: record.itemId,
     vendor_item_id: record.vendor_item_id,
     vendorItemId: record.vendorItemId,
-    source: "coupang_manual"
+    source: record.source ?? "coupang_manual"
   };
 }

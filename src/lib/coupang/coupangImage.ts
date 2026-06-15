@@ -18,14 +18,18 @@ const IMAGE_EXTENSION_PATTERN = /\.(?:jpe?g|png|webp)(?:$|[?#])/i;
 const TRUSTED_EXTENSIONLESS_IMAGE_HOSTS = [
   "picsum.photos",
   "images.unsplash.com",
+  "ads-partners.coupang.com",
   "image.coupangcdn.com",
   "thumbnail.coupangcdn.com"
 ];
 
 export function normalizeImageUrl(value: string): string {
-  const trimmed = value.trim();
+  let trimmed = value.trim();
   if (!trimmed) {
     return "";
+  }
+  if (trimmed.startsWith("//")) {
+    trimmed = `https:${trimmed}`;
   }
 
   try {
@@ -52,7 +56,11 @@ export function validateCandidateImageUrl(value: string): CandidateImageValidati
     }
 
     const hostname = url.hostname.toLowerCase();
-    if (IMAGE_EXTENSION_PATTERN.test(url.pathname) || TRUSTED_EXTENSIONLESS_IMAGE_HOSTS.includes(hostname)) {
+    if (
+      IMAGE_EXTENSION_PATTERN.test(url.pathname) ||
+      TRUSTED_EXTENSIONLESS_IMAGE_HOSTS.includes(hostname) ||
+      hostname.endsWith(".coupangcdn.com")
+    ) {
       return { ok: true, normalized_url: normalized };
     }
 
@@ -71,6 +79,12 @@ export function pickBestCandidateImage(candidateOrQueue: ProductCandidate | Prod
     directImage,
     readString(payload, "thumbnail_url"),
     readString(payload, "image_url"),
+    readString(payload, "source_image_url"),
+    readString(payload, "product_image_url"),
+    readString(payload, "productImage"),
+    readString(payload, "productImageUrl"),
+    readString(payload, "imagePath"),
+    readString(payload, "image_path"),
     readString(payload, "image"),
     readString(payload, "thumbnail"),
     readFirstString(payload, "images")

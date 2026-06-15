@@ -17,7 +17,15 @@ type CandidateRow = Record<string, string>;
 
 const NAME_HEADERS = ["product_name", "name", "title"];
 const URL_HEADERS = ["url", "product_url", "raw_coupang_url", "source_url"];
-const AFFILIATE_HEADERS = ["selected_affiliate_url", "affiliate_url"];
+const AFFILIATE_HEADERS = [
+  "selected_affiliate_url",
+  "affiliate_url",
+  "landing_url",
+  "product_url",
+  "productUrl",
+  "deeplink_url",
+  "shorten_url"
+];
 
 export function parseCandidateCsv(csv: string, options: CandidateImportOptions): CandidateImportResult {
   const rows = parseCsv(csv);
@@ -50,7 +58,13 @@ export function parseCandidateCsv(csv: string, options: CandidateImportOptions):
           product_name: productName,
           raw_coupang_url: sourceUrl,
           selected_affiliate_url: affiliateUrl,
-          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "image"]),
+          thumbnail_url: pick(row, ["thumbnail_url", "image_url", "product_image_url", "productImage", "productImageUrl", "imagePath", "image_path", "image"]),
+          image_url: pick(row, ["image_url"]),
+          product_image_url: pick(row, ["product_image_url"]),
+          productImage: pick(row, ["productImage"]),
+          productImageUrl: pick(row, ["productImageUrl"]),
+          imagePath: pick(row, ["imagePath"]),
+          image_path: pick(row, ["image_path"]),
           price_now_text: pick(row, ["price_now_text", "price"]),
           category_path: pick(row, ["category_path", "category"]),
           source_type: pick(row, ["source_type", "type"]),

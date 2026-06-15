@@ -16,7 +16,19 @@ export type CoupangCandidateInput = {
   product_name?: unknown;
   raw_coupang_url?: unknown;
   selected_affiliate_url?: unknown;
+  affiliate_url?: unknown;
+  landing_url?: unknown;
+  product_url?: unknown;
+  productUrl?: unknown;
+  deeplink_url?: unknown;
+  shorten_url?: unknown;
   thumbnail_url?: unknown;
+  image_url?: unknown;
+  product_image_url?: unknown;
+  productImage?: unknown;
+  productImageUrl?: unknown;
+  imagePath?: unknown;
+  image_path?: unknown;
   price_now_text?: unknown;
   category_path?: unknown;
   source_type?: unknown;
@@ -33,6 +45,8 @@ export type CoupangCandidateReadiness = {
   affiliate_validation_reason: string;
   image_readiness_status: ImageReadinessStatus;
   image_url: string;
+  import_error_code: CoupangImportReadinessErrorCode | null;
+  import_blocked_reasons: string[];
   duplicate_status: ProductCandidate["duplicate_status"];
   promotion_status: ProductCandidate["promotion_status"];
   candidate_score: number;
@@ -53,6 +67,65 @@ export class CoupangCandidateImportError extends Error {
     this.name = "CoupangCandidateImportError";
   }
 }
+
+export type CoupangImportReadinessErrorCode =
+  | "COUPANG_IMPORT_AFFILIATE_URL_FIELD_MISSING"
+  | "COUPANG_IMPORT_AFFILIATE_URL_INVALID"
+  | "COUPANG_IMPORT_IMAGE_URL_FIELD_MISSING"
+  | "COUPANG_IMPORT_IMAGE_URL_INVALID"
+  | "COUPANG_IMPORT_RESPONSE_SHAPE_UNSUPPORTED";
+
+export type CoupangImportReadinessClassification = {
+  ok: boolean;
+  error_code: CoupangImportReadinessErrorCode | null;
+  blocked_reasons: string[];
+  next_auto_action: "FIX_COUPANG_PARTNERS_IMPORT_MAPPING" | null;
+  safe_summary: {
+    selected_affiliate_url_present: boolean;
+    affiliate_url_present: boolean;
+    product_url_present: boolean;
+    landing_url_present: boolean;
+    deeplink_url_present: boolean;
+    shorten_url_present: boolean;
+    image_url_present: boolean;
+    product_image_present: boolean;
+    image_path_present: boolean;
+    affiliate_validation_status: AffiliateValidationStatus | "unknown";
+    image_readiness_status: ImageReadinessStatus | "unknown";
+  };
+  side_effects: typeof COUPANG_IMPORT_SIDE_EFFECTS;
+};
+
+export const COUPANG_IMPORT_SIDE_EFFECTS = {
+  youtube_execute_called: false,
+  youtube_upload_executed: false,
+  videos_insert_called: false,
+  db_written: false,
+  r2_uploaded: false,
+  queue_created: false,
+  worker_job_created: false,
+  upload_package_created: false
+} as const;
+
+const AFFILIATE_URL_FIELDS = [
+  "selected_affiliate_url",
+  "affiliate_url",
+  "landing_url",
+  "product_url",
+  "productUrl",
+  "deeplink_url",
+  "shorten_url"
+] as const;
+
+const IMAGE_URL_FIELDS = [
+  "thumbnail_url",
+  "image_url",
+  "product_image_url",
+  "productImage",
+  "productImageUrl",
+  "imagePath",
+  "image_path"
+] as const;
 
 export function buildCoupangCandidate(
   input: CoupangCandidateInput,
@@ -77,7 +150,8 @@ export function buildCoupangCandidate(
   const itemId = text(input.item_id) || text(input.itemId) || urlIds.item_id;
   const vendorItemId = text(input.vendor_item_id) || text(input.vendorItemId) || urlIds.vendor_item_id;
   const normalizedRawUrl = normalizeCoupangUrl(withCoupangIds(rawUrl, itemId, vendorItemId));
-  const affiliate = validateAffiliateUrl(text(input.selected_affiliate_url));
+  const affiliateInput = pickFirstText(input, AFFILIATE_URL_FIELDS);
+  const affiliate = validateAffiliateUrl(affiliateInput);
   const productKey = buildCoupangProductKey({
     raw_coupang_url: normalizedRawUrl,
     product_id: extractCoupangProductId(normalizedRawUrl),
@@ -87,7 +161,7 @@ export function buildCoupangCandidate(
   const now = new Date().toISOString();
   const categoryPath = text(input.category_path);
   const sourceType = text(input.source_type) || "manual_url";
-  const thumbnailUrl = normalizeImageUrl(text(input.thumbnail_url));
+  const thumbnailUrl = normalizeImageUrl(pickFirstText(input, IMAGE_URL_FIELDS));
   const priceNowText = text(input.price_now_text);
 
   let candidate = enrichProductCandidate(
@@ -111,6 +185,8 @@ export function buildCoupangCandidate(
         vendorItemId,
         category_path: categoryPath,
         thumbnail_url: thumbnailUrl,
+        image_url: thumbnailUrl,
+        source_image_url: thumbnailUrl,
         price_now_text: priceNowText,
         affiliate_validation_status: affiliate.status,
         affiliate_validation_reason: affiliate.reason
@@ -174,6 +250,18 @@ export function buildCoupangCandidate(
       risk_flags: riskFlags
     }
   };
+  const importReadiness = classifyCoupangImportReadiness(candidate);
+  candidate = {
+    ...candidate,
+    payload: {
+      ...candidate.payload,
+      score_breakdown: {
+        ...(isRecord(candidate.payload.score_breakdown) ? candidate.payload.score_breakdown : {}),
+        import_error_code: importReadiness.error_code,
+        import_blocked_reasons: importReadiness.blocked_reasons
+      }
+    }
+  };
 
   return {
     candidate,
@@ -183,10 +271,70 @@ export function buildCoupangCandidate(
       affiliate_validation_reason: affiliate.reason,
       image_readiness_status: imageReadiness.status,
       image_url: imageReadiness.image_url,
+      import_error_code: importReadiness.error_code,
+      import_blocked_reasons: importReadiness.blocked_reasons,
       duplicate_status: candidate.duplicate_status,
       promotion_status: candidate.promotion_status,
       candidate_score: candidate.candidate_score ?? 0
     }
+  };
+}
+
+export function classifyCoupangImportReadiness(candidate: ProductCandidate): CoupangImportReadinessClassification {
+  const payload = isRecord(candidate.payload) ? candidate.payload : {};
+  const scoreBreakdown = isRecord(payload.score_breakdown) ? payload.score_breakdown : {};
+  const affiliateValidationStatus = readAffiliateStatus(
+    readString(payload, "affiliate_validation_status") ||
+    readString(scoreBreakdown, "affiliate_validation_status")
+  );
+  const imageReadinessStatus = readImageStatus(
+    readString(payload, "image_readiness_status") ||
+    readString(scoreBreakdown, "image_readiness_status")
+  );
+  const safeSummary = {
+    selected_affiliate_url_present: Boolean(text(candidate.selected_affiliate_url)),
+    affiliate_url_present: Boolean(readString(payload, "affiliate_url")),
+    product_url_present: Boolean(readString(payload, "product_url") || readString(payload, "productUrl")),
+    landing_url_present: Boolean(readString(payload, "landing_url")),
+    deeplink_url_present: Boolean(readString(payload, "deeplink_url")),
+    shorten_url_present: Boolean(readString(payload, "shorten_url")),
+    image_url_present: Boolean(readString(payload, "image_url") || readString(payload, "thumbnail_url")),
+    product_image_present: Boolean(readString(payload, "product_image_url") || readString(payload, "productImage") || readString(payload, "productImageUrl")),
+    image_path_present: Boolean(readString(payload, "imagePath") || readString(payload, "image_path")),
+    affiliate_validation_status: affiliateValidationStatus,
+    image_readiness_status: imageReadinessStatus
+  };
+
+  if (affiliateValidationStatus === "missing") {
+    return importBlocked("COUPANG_IMPORT_AFFILIATE_URL_FIELD_MISSING", ["imported_candidate_affiliate_url_missing"], safeSummary);
+  }
+  if (affiliateValidationStatus === "invalid") {
+    return importBlocked("COUPANG_IMPORT_AFFILIATE_URL_INVALID", ["imported_candidate_affiliate_url_invalid"], safeSummary);
+  }
+  if (imageReadinessStatus === "missing_image") {
+    return importBlocked("COUPANG_IMPORT_IMAGE_URL_FIELD_MISSING", ["imported_candidate_image_url_missing"], safeSummary);
+  }
+  if (imageReadinessStatus === "invalid_image_url") {
+    return importBlocked("COUPANG_IMPORT_IMAGE_URL_INVALID", ["imported_candidate_image_url_invalid"], safeSummary);
+  }
+  if (affiliateValidationStatus === "unknown" || imageReadinessStatus === "unknown") {
+    return {
+      ok: true,
+      error_code: null,
+      blocked_reasons: [],
+      next_auto_action: null,
+      safe_summary: safeSummary,
+      side_effects: COUPANG_IMPORT_SIDE_EFFECTS
+    };
+  }
+
+  return {
+    ok: true,
+    error_code: null,
+    blocked_reasons: [],
+    next_auto_action: null,
+    safe_summary: safeSummary,
+    side_effects: COUPANG_IMPORT_SIDE_EFFECTS
   };
 }
 
@@ -224,6 +372,21 @@ function buildRiskFlags(
     flags.add("low_content_angle");
   }
   return [...flags];
+}
+
+function importBlocked(
+  errorCode: CoupangImportReadinessErrorCode,
+  blockedReasons: string[],
+  safeSummary: CoupangImportReadinessClassification["safe_summary"]
+): CoupangImportReadinessClassification {
+  return {
+    ok: false,
+    error_code: errorCode,
+    blocked_reasons: blockedReasons,
+    next_auto_action: "FIX_COUPANG_PARTNERS_IMPORT_MAPPING",
+    safe_summary: safeSummary,
+    side_effects: COUPANG_IMPORT_SIDE_EFFECTS
+  };
 }
 
 function estimateDemandScore(sourceType: string, scoreReason: string) {
@@ -272,4 +435,31 @@ function createCandidateId(productKey: string) {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function pickFirstText<T extends readonly string[]>(input: CoupangCandidateInput, fields: T): string {
+  const record = input as Record<string, unknown>;
+  for (const field of fields) {
+    const value = text(record[field]);
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function readString(record: Record<string, unknown>, key: string): string {
+  return text(record[key]);
+}
+
+function readAffiliateStatus(value: string): AffiliateValidationStatus | "unknown" {
+  return value === "valid" || value === "missing" || value === "invalid" ? value : "unknown";
+}
+
+function readImageStatus(value: string): ImageReadinessStatus | "unknown" {
+  return value === "ready" || value === "missing_image" || value === "invalid_image_url" ? value : "unknown";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
