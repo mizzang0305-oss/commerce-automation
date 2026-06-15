@@ -160,10 +160,12 @@ approval-gated bridge between a candidate-only real product and the
 server-accessible `video/mp4` asset required by real product auto pilot.
 
 It validates one candidate id at a time, blocks smoke/test candidates, requires
-affiliate and image readiness, and keeps local video generation local-only until
-an approved server asset registration contract is provided. `register_server_asset`
-validates the prepared asset reference and returns a one-row `product_assets`
-write plan, but this endpoint does not persist the row in this PR.
+affiliate and image readiness, and can call the approval-gated local-only video
+generator for `generate_local_only`. The generated mp4 remains local evidence:
+`local_only=true`, `domain_ready=false`, no raw source URL in the response, and
+no R2/DB/upload side effects. `register_server_asset` validates the prepared
+asset reference and returns a one-row `product_assets` write plan, but this
+endpoint does not persist the row in this PR.
 
 The endpoint and `/uploads` UI must keep all YouTube execution, public upload,
 R2 upload, DB write, queue/job creation, upload-package persistence, and raw URL

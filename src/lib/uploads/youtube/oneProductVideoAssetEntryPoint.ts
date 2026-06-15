@@ -18,6 +18,7 @@ export type GeneratedProductVideoAsset = {
   size_bytes: number;
   duration_seconds?: number | null;
   checksum_sha256?: string | null;
+  black_screen_detected?: boolean | null;
   generated_this_run: boolean;
   local_only: true;
 };
@@ -394,6 +395,7 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     size_bytes: asset.size_bytes,
     duration_seconds: asset.duration_seconds ?? null,
     checksum_sha256: asset.checksum_sha256 ?? null,
+    black_screen_detected: asset.black_screen_detected ?? null,
     generated_this_run: asset.generated_this_run,
     local_only: true,
     domain_ready: false
