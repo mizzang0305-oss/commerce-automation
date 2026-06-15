@@ -4,6 +4,11 @@ import type {
   CoupangScoutDiagnostic
 } from "@/lib/coupang/scoutCompatibility";
 import {
+  classifyCoupangImportReadiness,
+  type CoupangImportReadinessClassification,
+  type CoupangImportReadinessErrorCode
+} from "@/lib/coupang/coupangCandidateImport";
+import {
   validatePreparedVideoAssetRef,
   toPreparedVideoAssetApiSummary
 } from "@/lib/uploads/assets/preparedVideoAssetValidator";
@@ -56,6 +61,7 @@ export type RealProductAutoPilotResult = {
     | "AUTO_VIDEO_ASSET_REQUIRED"
     | "PUBLIC_UPLOAD_BLOCKED"
     | "AUTO_PACKAGE_PREPARE_BLOCKED"
+    | CoupangImportReadinessErrorCode
     | Exclude<CoupangScoutClassification, "COUPANG_SCOUT_READY">;
   message: string;
   mode: RealProductAutoPilotMode;
@@ -96,6 +102,11 @@ type CandidateEvaluation = {
   reasons: string[];
 };
 
+type CoupangImportBlocker = CoupangImportReadinessClassification & {
+  ok: false;
+  error_code: CoupangImportReadinessErrorCode;
+};
+
 export const REAL_PRODUCT_AUTO_PILOT_SIDE_EFFECTS: RealProductAutoPilotSideEffects = {
   youtube_execute_called: false,
   youtube_upload_executed: false,
@@ -130,6 +141,16 @@ export function buildRealProductAutoPilot(input: RealProductAutoPilotInput): Rea
         message: input.scout_diagnostic.safe_error ?? "Coupang scout request failed with a safe classified error.",
         blocked_reasons: input.scout_diagnostic.blocked_reasons,
         next_auto_action: input.scout_diagnostic.next_auto_action ?? "FIX_COUPANG_SCOUT_REQUEST_CONTRACT"
+      });
+    }
+    const importBlocker = findCoupangImportBlocker(input.candidates);
+    if (importBlocker) {
+      return blockedResult({
+        mode,
+        error_code: importBlocker.error_code,
+        message: "Imported Coupang candidate mapping is not ready.",
+        blocked_reasons: importBlocker.blocked_reasons,
+        next_auto_action: "FIX_COUPANG_PARTNERS_IMPORT_MAPPING"
       });
     }
     return blockedResult({
@@ -221,6 +242,27 @@ function selectBestCandidate(candidates: ProductCandidate[], queueItems: Product
   return evaluations
     .filter((item) => !item.hard_blocked)
     .sort((left, right) => right.score - left.score)[0] ?? null;
+}
+
+function findCoupangImportBlocker(candidates: ProductCandidate[]): CoupangImportBlocker | null {
+  for (const candidate of candidates) {
+    const classification = classifyCoupangImportReadiness(candidate);
+    if (!classification.ok && classification.error_code && hasExplicitCoupangImportStatus(candidate)) {
+      return classification as CoupangImportBlocker;
+    }
+  }
+  return null;
+}
+
+function hasExplicitCoupangImportStatus(candidate: ProductCandidate) {
+  const payload = isRecord(candidate.payload) ? candidate.payload : {};
+  const scoreBreakdown = isRecord(payload.score_breakdown) ? payload.score_breakdown : {};
+  return Boolean(
+    safeTrim(payload.affiliate_validation_status) ||
+    safeTrim(payload.image_readiness_status) ||
+    safeTrim(scoreBreakdown.affiliate_validation_status) ||
+    safeTrim(scoreBreakdown.image_readiness_status)
+  );
 }
 
 function evaluateCandidate(candidate: ProductCandidate, queueItems: ProductQueueItem[]): CandidateEvaluation {

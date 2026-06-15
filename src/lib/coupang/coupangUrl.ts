@@ -97,16 +97,19 @@ export function validateAffiliateUrl(value: string): AffiliateValidationResult {
   try {
     const url = new URL(trimmed);
     const host = url.hostname.toLowerCase();
-    const isValid =
-      url.protocol === "https:" &&
-      host === "link.coupang.com" &&
-      /^\/a\/[A-Za-z0-9_-]+/.test(url.pathname);
+    const isValidProtocol = url.protocol === "https:" || url.protocol === "http:";
+    const isCoupangHost = host === "link.coupang.com";
+    const hasPath = url.pathname.trim() !== "" && url.pathname !== "/";
+    const isValid = isValidProtocol && isCoupangHost && hasPath;
+    if (isValid && url.protocol === "http:") {
+      url.protocol = "https:";
+    }
 
     return {
       ok: isValid,
       status: isValid ? "valid" : "invalid",
       normalized_url: isValid ? url.toString().replace(/\/+$/, "") : trimmed,
-      reason: isValid ? "affiliate link validated" : "affiliate link must use link.coupang.com/a"
+      reason: isValid ? "affiliate link validated" : "affiliate link must use link.coupang.com"
     };
   } catch {
     return {

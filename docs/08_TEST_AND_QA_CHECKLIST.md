@@ -169,7 +169,10 @@ python -m compileall python-worker
 - `score_breakdown` includes `demand_score`, `price_score`, `content_angle_score`, `risk_penalty`, `duplicate_penalty`, and `final_score`.
 - `source_trace` includes `source_platform`, `source_keyword`, `collected_mode`, `collected_at`, and `collector_version` without secrets.
 - `product_key` generation must not include secret-like payload keys or token values.
-- `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional `link.coupang.com/a/...` affiliate links, and returns no queue, worker, or upload side effects.
+- `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional Coupang Partners affiliate URLs, and returns no queue, worker, or upload side effects.
+- Live Coupang Partners import mapping must normalize `selected_affiliate_url`, `affiliate_url`, `landing_url`, `product_url`, `productUrl`, `deeplink_url`, and `shorten_url` into `selected_affiliate_url` when the selected value is a safe `link.coupang.com` Partners URL.
+- Live Coupang Partners import mapping must normalize `thumbnail_url`, `image_url`, `product_image_url`, `productImage`, `productImageUrl`, `imagePath`, and `image_path` into the product image readiness path, including protocol-relative image URLs.
+- Import mapping blockers such as `COUPANG_IMPORT_AFFILIATE_URL_INVALID` and `COUPANG_IMPORT_IMAGE_URL_INVALID` must not collapse into generic `AUTO_REAL_PRODUCT_REQUIRED`.
 - Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.
 - Coupang candidate image URLs accept only usable `http`/`https` image sources; empty, `file:`, `javascript:`, and other unsafe schemes are blocked from render readiness.
 - Missing `selected_affiliate_url` maps to `blocked_missing_affiliate`; missing `product_name` maps to `blocked_missing_name`.
