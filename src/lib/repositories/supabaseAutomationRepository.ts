@@ -1098,6 +1098,19 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapAssetRow));
   }
 
+  async upsertProductAsset(asset: ProductAsset) {
+    const { data, error } = await this.client
+      .from("product_assets")
+      .upsert(stripUndefined({
+        ...asset,
+        updated_at: nowIso()
+      }), { onConflict: "id" })
+      .select("*")
+      .maybeSingle();
+    throwIfSupabaseError(error, "upsertProductAsset");
+    return data ? clone(mapAssetRow(data as Record<string, unknown>)) : clone(asset);
+  }
+
   async updateProductAssetQa(
     id: string,
     patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }

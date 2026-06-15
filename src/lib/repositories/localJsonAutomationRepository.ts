@@ -634,6 +634,27 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
   }
 
+  async upsertProductAsset(asset: ProductAsset) {
+    await this.ensureInitialized();
+    const assets = await readJson<ProductAsset[]>(this.paths.productAssets);
+    const normalized: ProductAsset = {
+      ...asset,
+      updated_at: nowIso()
+    };
+    const index = assets.findIndex((item) => item.id === normalized.id);
+    if (index === -1) {
+      assets.push(normalized);
+    } else {
+      assets[index] = {
+        ...assets[index],
+        ...normalized,
+        created_at: assets[index].created_at || normalized.created_at
+      };
+    }
+    await atomicWriteJson(this.paths.productAssets, assets);
+    return clone(index === -1 ? normalized : assets[index]);
+  }
+
   async updateProductAssetQa(
     id: string,
     patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }

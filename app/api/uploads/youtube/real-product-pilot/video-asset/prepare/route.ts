@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { getOneProductLocalVideoGenerator } from "@/lib/uploads/videoAssets/oneProductLocalVideoGenerator";
+import { createOneProductServerAssetRegistrar } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import {
   buildOneProductVideoAssetEntryPoint,
   ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS,
@@ -54,7 +55,8 @@ export async function POST(request: Request) {
       candidates,
       productAssets,
       prepared_video_asset: body.prepared_video_asset,
-      localVideoGenerator: getOneProductLocalVideoGenerator()
+      localVideoGenerator: getOneProductLocalVideoGenerator(),
+      serverAssetRegistrar: createOneProductServerAssetRegistrar(repository)
     });
 
     return NextResponse.json(result, { status: result.ok ? 200 : statusForError(result.error_code) });

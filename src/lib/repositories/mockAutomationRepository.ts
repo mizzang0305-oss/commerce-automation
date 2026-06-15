@@ -812,6 +812,24 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(assets);
   }
 
+  async upsertProductAsset(asset: ProductAsset) {
+    const normalized: ProductAsset = {
+      ...asset,
+      updated_at: nowIso()
+    };
+    const index = this.productAssets.findIndex((item) => item.id === normalized.id);
+    if (index === -1) {
+      this.productAssets.push(normalized);
+    } else {
+      this.productAssets[index] = {
+        ...this.productAssets[index],
+        ...normalized,
+        created_at: this.productAssets[index].created_at || normalized.created_at
+      };
+    }
+    return clone(index === -1 ? normalized : this.productAssets[index]);
+  }
+
   async updateProductAssetQa(
     id: string,
     patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }
