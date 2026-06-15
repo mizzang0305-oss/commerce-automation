@@ -84,16 +84,22 @@ Supported modes:
 - `dry_run`: validates that the candidate is real, has a valid affiliate URL,
   has a ready product image, and is not a smoke/test candidate.
 - `generate_local_only`: requires `RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION`.
+  When the approved local generator adapter is configured, it may write one
+  local mp4 under `commerce-assets/output/video-packages/real-product-{id}/`.
   Local video output is local-only and must not be treated as domain-ready.
 - `register_server_asset`: requires
   `APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION`, validates a
   server-accessible `PreparedVideoAssetRef`, and returns a one-row
   `product_assets` write plan.
 
-This entrypoint currently returns contract metadata only. It must not upload to
-R2, write `product_assets`, create queue rows, create worker jobs, persist upload
-packages, call YouTube, or expose raw affiliate URLs, image URLs, signed URLs,
-prepared asset URLs, tokens, client secrets, or Authorization headers.
+This entrypoint keeps generation and registration separate. Local generation
+may set `video_generated=true` and `local_file_written=true` only after exact
+approval, but it must still return `domain_ready=false` until an approved
+server-accessible asset registration step supplies a valid `PreparedVideoAssetRef`.
+It must not upload to R2, write `product_assets`, create queue rows, create
+worker jobs, persist upload packages, call YouTube, or expose raw affiliate
+URLs, image URLs, signed URLs, prepared asset URLs, tokens, client secrets, or
+Authorization headers.
 
 Candidate-linked server assets can be detected by real product auto pilot when a
 `video` product asset includes `render_qa_metadata.product_candidate_id` matching

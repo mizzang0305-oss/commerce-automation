@@ -15,9 +15,14 @@ type TestRepository = {
 };
 
 let mockRepository: TestRepository;
+const mockLocalVideoGenerator = vi.fn();
 
 vi.mock("@/lib/repositories/automationRepository", () => ({
   getAutomationRepository: () => mockRepository
+}));
+
+vi.mock("@/lib/uploads/videoAssets/oneProductLocalVideoGenerator", () => ({
+  getOneProductLocalVideoGenerator: () => mockLocalVideoGenerator
 }));
 
 const now = "2026-06-15T00:00:00.000Z";
@@ -61,6 +66,10 @@ function candidateLinkedVideoAsset(overrides: Partial<ProductAsset> & Record<str
 }
 
 describe("one-product video asset entrypoint", () => {
+  beforeEach(() => {
+    mockLocalVideoGenerator.mockReset();
+  });
+
   it("blocks missing, smoke, affiliate-missing, and image-not-ready candidates", async () => {
     const missing = await buildOneProductVideoAssetEntryPoint({
       mode: "dry_run",
@@ -117,6 +126,7 @@ describe("one-product video asset entrypoint", () => {
         size_bytes: 4096,
         duration_seconds: 15,
         checksum_sha256: "b".repeat(64),
+        black_screen_detected: null,
         generated_this_run: true,
         local_only: true
       })
@@ -230,5 +240,67 @@ describe("one-product video asset entrypoint", () => {
     expect(body.side_effects.r2_uploaded).toBe(false);
     expect(body.side_effects.youtube_execute_called).toBe(false);
     expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token|client_secret|Authorization|Bearer|link\.coupang\.com/i);
+  });
+
+  it("connects the route to a configured local-only video generator under exact approval", async () => {
+    mockRepository = {
+      getProductCandidates: vi.fn(async () => [candidate()]),
+      getProductAssets: vi.fn(async () => [])
+    };
+    mockLocalVideoGenerator.mockResolvedValue({
+      candidate_id: "candidate-real-asset-001",
+      local_video_path: "C:\\Users\\LOVE\\MyProjects\\commerce-automation\\commerce-assets\\output\\video-packages\\real-product-candidate-real-asset-001\\candidate-real-asset-001.mp4",
+      mime_type: "video/mp4",
+      size_bytes: 8192,
+      duration_seconds: 12,
+      checksum_sha256: "d".repeat(64),
+      black_screen_detected: null,
+      generated_this_run: true,
+      local_only: true
+    });
+    const { POST } = await import("../app/api/uploads/youtube/real-product-pilot/video-asset/prepare/route");
+
+    const response = await POST(new Request("http://localhost/api/uploads/youtube/real-product-pilot/video-asset/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: "generate_local_only",
+        candidate_id: "candidate-real-asset-001",
+        approval: RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION
+      })
+    }));
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(mockLocalVideoGenerator).toHaveBeenCalledTimes(1);
+    expect(body.ok).toBe(true);
+    expect(body.error_code).toBeNull();
+    expect(body.generated_video_asset).toMatchObject({
+      candidate_id: "candidate-real-asset-001",
+      local_video_path_present: true,
+      local_only: true,
+      domain_ready: false,
+      mime_type: "video/mp4",
+      size_bytes: 8192,
+      generated_this_run: true
+    });
+    expect(body.prepared_video_asset_ref).toBeNull();
+    expect(body.next_action).toBe("REGISTER_SERVER_ACCESSIBLE_VIDEO_ASSET");
+    expect(body.side_effects).toMatchObject({
+      video_generated: true,
+      local_file_written: true,
+      r2_uploaded: false,
+      db_written: false,
+      product_assets_written: false,
+      queue_created: false,
+      worker_job_created: false,
+      upload_package_created: false,
+      youtube_execute_called: false,
+      youtube_upload_executed: false,
+      videos_insert_called: false,
+      public_upload_enabled: false
+    });
+    expect(serialized).not.toContain("commerce-assets");
+    expect(serialized).not.toMatch(/link\.coupang\.com|product\.jpg|access_token|refresh_token|client_secret|Authorization|Bearer/i);
   });
 });
