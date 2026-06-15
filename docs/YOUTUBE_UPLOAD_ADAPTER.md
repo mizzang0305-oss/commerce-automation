@@ -79,6 +79,7 @@ Required disclosure text example:
 - `POST /api/uploads/youtube/execute`
 - `POST /api/uploads/youtube/product-package/prepare`
 - `POST /api/uploads/assets/prepare-video-asset`
+- `POST /api/uploads/youtube/real-product-pilot/video-asset/prepare`
 
 The operator-facing path is `/uploads`. The dashboard builds the UTF-8 JSON payload in the browser, runs prepare only
 from a button click, keeps execute disabled until prepare succeeds plus both exact approval phrases are entered, and
@@ -151,6 +152,22 @@ This endpoint is prepare-only. It must return
 
 The `/uploads` product package section may copy package JSON for manual review,
 but it must not call `/api/uploads/youtube/execute` in this PR.
+
+## One-product Real Product Video Asset Entrypoint
+
+`POST /api/uploads/youtube/real-product-pilot/video-asset/prepare` adds the
+approval-gated bridge between a candidate-only real product and the
+server-accessible `video/mp4` asset required by real product auto pilot.
+
+It validates one candidate id at a time, blocks smoke/test candidates, requires
+affiliate and image readiness, and keeps local video generation local-only until
+an approved server asset registration contract is provided. `register_server_asset`
+validates the prepared asset reference and returns a one-row `product_assets`
+write plan, but this endpoint does not persist the row in this PR.
+
+The endpoint and `/uploads` UI must keep all YouTube execution, public upload,
+R2 upload, DB write, queue/job creation, upload-package persistence, and raw URL
+or secret display disabled.
 
 ## Readiness Gate Resolver
 

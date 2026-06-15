@@ -73,6 +73,33 @@ The response always includes explicit side effects:
 }
 ```
 
+## One-product Video Asset Entrypoint
+
+`POST /api/uploads/youtube/real-product-pilot/video-asset/prepare` is the
+candidate-only bridge before real product auto pilot package preparation. It is
+approval-gated and scoped to one candidate at a time.
+
+Supported modes:
+
+- `dry_run`: validates that the candidate is real, has a valid affiliate URL,
+  has a ready product image, and is not a smoke/test candidate.
+- `generate_local_only`: requires `RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION`.
+  Local video output is local-only and must not be treated as domain-ready.
+- `register_server_asset`: requires
+  `APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION`, validates a
+  server-accessible `PreparedVideoAssetRef`, and returns a one-row
+  `product_assets` write plan.
+
+This entrypoint currently returns contract metadata only. It must not upload to
+R2, write `product_assets`, create queue rows, create worker jobs, persist upload
+packages, call YouTube, or expose raw affiliate URLs, image URLs, signed URLs,
+prepared asset URLs, tokens, client secrets, or Authorization headers.
+
+Candidate-linked server assets can be detected by real product auto pilot when a
+`video` product asset includes `render_qa_metadata.product_candidate_id` matching
+the selected candidate id and the asset validates as server-accessible
+`video/mp4`.
+
 Blocked examples:
 
 - `windows_local_path`
