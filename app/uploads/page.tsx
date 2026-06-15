@@ -1,6 +1,7 @@
 import { YouTubeDashboardSmokeFlow } from "@/components/YouTubeDashboardSmokeFlow";
 import { YouTubeProductVideoPackageFlow } from "@/components/YouTubeProductVideoPackageFlow";
 import { RealProductAutoPilotFlow } from "@/components/RealProductAutoPilotFlow";
+import { RealProductVideoAssetEntryPointPanel } from "@/components/RealProductVideoAssetEntryPointPanel";
 import { buildPlatformUploadReadiness, createDefaultPlatformUploadSettings } from "@/lib/uploads";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
@@ -253,6 +254,8 @@ export default async function UploadsPage() {
       <YouTubeProductVideoPackageFlow />
 
       <RealProductAutoPilotFlow />
+
+      <RealProductVideoAssetEntryPointPanel />
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

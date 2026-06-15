@@ -162,7 +162,11 @@ export function buildRealProductAutoPilot(input: RealProductAutoPilotInput): Rea
     });
   }
 
-  const asset = findBestPreparedVideoAsset(selected.queue?.id, input.productAssets);
+  const asset = findBestPreparedVideoAsset({
+    queueId: selected.queue?.id,
+    candidateId: selected.candidate.id,
+    productAssets: input.productAssets
+  });
   const selectedProduct = toSelectedProduct(selected);
   if (!asset) {
     return {
@@ -333,13 +337,13 @@ function findQueueForCandidate(candidate: ProductCandidate, queueItems: ProductQ
   ) ?? null;
 }
 
-function findBestPreparedVideoAsset(queueId: string | null | undefined, productAssets: ProductAsset[]) {
-  if (!queueId) {
-    return null;
-  }
-
-  for (const asset of productAssets) {
-    if (asset.product_queue_id !== queueId || asset.asset_type !== "video") {
+function findBestPreparedVideoAsset(input: {
+  queueId: string | null | undefined;
+  candidateId: string;
+  productAssets: ProductAsset[];
+}) {
+  for (const asset of input.productAssets) {
+    if (asset.asset_type !== "video" || !isProductAssetLinkedToSelectedProduct(asset, input)) {
       continue;
     }
     const candidate = normalizeProductAssetToPreparedVideoAsset(asset);
@@ -357,6 +361,17 @@ function findBestPreparedVideoAsset(queueId: string | null | undefined, productA
   }
 
   return null;
+}
+
+function isProductAssetLinkedToSelectedProduct(
+  asset: ProductAsset,
+  input: { queueId: string | null | undefined; candidateId: string }
+) {
+  if (input.queueId && asset.product_queue_id === input.queueId) {
+    return true;
+  }
+  const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
+  return safeTrim(metadata.product_candidate_id) === input.candidateId;
 }
 
 function normalizeProductAssetToPreparedVideoAsset(asset: ProductAsset) {
