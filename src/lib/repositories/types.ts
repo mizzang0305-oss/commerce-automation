@@ -98,6 +98,7 @@ export interface AutomationRepository {
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
+  upsertProductAsset(asset: ProductAsset): Promise<ProductAsset>;
   updateProductAssetQa(
     id: string,
     patch: Pick<ProductAsset, "qa_status" | "qa_note"> & { render_qa_metadata?: ProductAsset["render_qa_metadata"] }

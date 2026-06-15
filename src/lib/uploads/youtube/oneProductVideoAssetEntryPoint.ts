@@ -3,6 +3,10 @@ import {
   toPreparedVideoAssetApiSummary,
   validatePreparedVideoAssetRef
 } from "@/lib/uploads/assets/preparedVideoAssetValidator";
+import type {
+  OneProductServerAssetRegistrationErrorCode,
+  ServerVideoAssetRegistrar
+} from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
@@ -60,7 +64,7 @@ export type OneProductVideoAssetRegistrationPlan = {
   asset_type: "video";
   max_rows: 1;
   persistence_required: true;
-  write_executed: false;
+  write_executed: boolean;
 };
 
 export type SanitizedPreparedVideoAssetRef = Omit<PreparedVideoAssetRef, "signed_url" | "prepared_video_asset_url"> & {
@@ -80,7 +84,8 @@ export type OneProductVideoAssetResult = {
     | "LOCAL_VIDEO_GENERATION_ADAPTER_NOT_CONFIGURED"
     | "LOCAL_VIDEO_GENERATION_FAILED"
     | "VIDEO_ASSET_REGISTRATION_APPROVAL_REQUIRED"
-    | "VIDEO_ASSET_REGISTRATION_NOT_READY";
+    | "VIDEO_ASSET_REGISTRATION_NOT_READY"
+    | OneProductServerAssetRegistrationErrorCode;
   message: string;
   mode: OneProductVideoAssetMode;
   candidate: OneProductVideoAssetCandidateSummary | null;
@@ -104,6 +109,7 @@ export type OneProductVideoAssetInput = {
   productAssets?: ProductAsset[];
   prepared_video_asset?: unknown;
   localVideoGenerator?: LocalVideoGenerator;
+  serverAssetRegistrar?: ServerVideoAssetRegistrar;
 };
 
 export const ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS: OneProductVideoAssetSideEffects = {
@@ -240,6 +246,69 @@ export async function buildOneProductVideoAssetEntryPoint(
     });
   }
 
+  if (input.serverAssetRegistrar) {
+    try {
+      const registered = await input.serverAssetRegistrar({
+        candidate: candidate!,
+        prepared_video_asset: input.prepared_video_asset
+      });
+      if (!registered.ok) {
+        return blockedResult({
+          mode,
+          error_code: registered.error_code,
+          message: registered.message,
+          candidate: validation.candidate,
+          blocked_reasons: registered.blocked_reasons,
+          next_action: nextActionForRegistrationError(registered.error_code)
+        });
+      }
+
+      const registeredValidation = validatePreparedVideoAssetRef(registered.asset_ref);
+      return {
+        ok: true,
+        error_code: null,
+        message: registered.registration_source === "r2_upload"
+          ? "Server-accessible product video asset was uploaded and registered."
+          : "Server-accessible product video asset was registered.",
+        mode,
+        candidate: validation.candidate,
+        generated_video_asset: null,
+        prepared_video_asset_ref: sanitizeAssetRef(registered.asset_ref),
+        prepared_video_asset_summary: sanitizePreparedVideoAssetSummary(
+          registered.asset_ref,
+          registeredValidation.safe_display
+        ),
+        registration_plan: {
+          product_candidate_id: candidate!.id,
+          product_assets_rows_planned: 1,
+          asset_type: "video",
+          max_rows: 1,
+          persistence_required: true,
+          write_executed: true
+        },
+        existing_server_asset_ready: true,
+        blocked_reasons: [],
+        next_action: "RUN_REAL_PRODUCT_AUTO_PILOT_DRY_RUN",
+        side_effects: {
+          ...ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS,
+          r2_uploaded: registered.r2_uploaded,
+          db_written: registered.db_written,
+          product_assets_written: true,
+          rows_inserted_or_upserted: registered.rows_inserted_or_upserted
+        }
+      };
+    } catch {
+      return blockedResult({
+        mode,
+        error_code: "PRODUCT_ASSET_PERSISTENCE_FAILED",
+        message: "Server-accessible video asset registration failed with a safe server error.",
+        candidate: validation.candidate,
+        blocked_reasons: ["server_asset_registration_failed"],
+        next_action: "CHECK_SERVER_ASSET_REGISTRATION_LOGS"
+      });
+    }
+  }
+
   const validated = validatePreparedVideoAssetRef(input.prepared_video_asset);
   if (!validated.ok) {
     return blockedResult({
@@ -274,6 +343,22 @@ export async function buildOneProductVideoAssetEntryPoint(
     next_action: "RUN_REAL_PRODUCT_AUTO_PILOT_DRY_RUN_AFTER_APPROVED_PERSISTENCE",
     side_effects: { ...ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS }
   };
+}
+
+function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
+  if (errorCode === "LOCAL_VIDEO_ARTIFACT_MISSING") {
+    return "GENERATE_LOCAL_ONLY_VIDEO_ASSET";
+  }
+  if (errorCode === "R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED") {
+    return "CONFIGURE_SERVER_ACCESSIBLE_VIDEO_ASSET_PROVIDER_OR_PROVIDE_ASSET_REF";
+  }
+  if (errorCode === "PRODUCT_ASSET_PERSISTENCE_FAILED") {
+    return "CHECK_PRODUCT_ASSETS_SCHEMA_AND_REGISTRATION_GATE";
+  }
+  if (errorCode === "SERVER_VIDEO_ASSET_UPLOAD_FAILED") {
+    return "CHECK_R2_UPLOAD_PROVIDER_WITHOUT_PRINTING_SECRETS";
+  }
+  return "PROVIDE_SERVER_ACCESSIBLE_VIDEO_MP4_ASSET_REF";
 }
 
 function validateRealProductCandidate(candidate: ProductCandidate | null):

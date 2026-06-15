@@ -12,6 +12,7 @@ import type { ProductAsset, ProductCandidate } from "@/types/automation";
 type TestRepository = {
   getProductCandidates: () => Promise<ProductCandidate[]>;
   getProductAssets: () => Promise<ProductAsset[]>;
+  upsertProductAsset?: (asset: ProductAsset) => Promise<ProductAsset>;
 };
 
 let mockRepository: TestRepository;
@@ -198,6 +199,98 @@ describe("one-product video asset entrypoint", () => {
     expect(serialized).not.toContain("https://cdn.example.com/videos/real-product.mp4");
     expect(serialized).toContain("[redacted-url-present]");
     expect(serialized).not.toMatch(/access_token|refresh_token|client_secret|Authorization|Bearer/i);
+  });
+
+  it("registers one approved server asset through the route without queue, worker, or YouTube side effects", async () => {
+    const upsertProductAsset = vi.fn(async (asset: ProductAsset) => asset);
+    mockRepository = {
+      getProductCandidates: vi.fn(async () => [candidate()]),
+      getProductAssets: vi.fn(async () => []),
+      upsertProductAsset
+    };
+    const { POST } = await import("../app/api/uploads/youtube/real-product-pilot/video-asset/prepare/route");
+
+    const response = await POST(new Request("http://localhost/api/uploads/youtube/real-product-pilot/video-asset/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: "register_server_asset",
+        candidate_id: "candidate-real-asset-001",
+        approval: APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION,
+        prepared_video_asset: {
+          asset_id: "asset-server-route-001",
+          provider: "external_https",
+          prepared_video_asset_url: "https://cdn.example.com/videos/real-product.mp4?signature=route-private-token",
+          mime_type: "video/mp4",
+          size_bytes: 1234567,
+          checksum_sha256: "e".repeat(64),
+          server_accessible: true
+        }
+      })
+    }));
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.registration_plan.write_executed).toBe(true);
+    expect(body.side_effects).toMatchObject({
+      db_written: true,
+      product_assets_written: true,
+      rows_inserted_or_upserted: 1,
+      queue_created: false,
+      worker_job_created: false,
+      upload_package_created: false,
+      youtube_execute_called: false,
+      youtube_upload_executed: false,
+      videos_insert_called: false,
+      public_upload_enabled: false
+    });
+    expect(upsertProductAsset).toHaveBeenCalledTimes(1);
+    const [asset] = upsertProductAsset.mock.calls[0] as [ProductAsset];
+    expect(asset).toMatchObject({
+      id: "asset-real-product-candidate-real-asset-001-video",
+      product_queue_id: "",
+      worker_job_id: "",
+      asset_type: "video",
+      bucket: "external_https"
+    });
+    expect(asset.render_qa_metadata).toMatchObject({
+      product_candidate_id: "candidate-real-asset-001",
+      mime_type: "video/mp4",
+      server_accessible: true,
+      registration_source: "provided_asset_ref"
+    });
+    expect(serialized).not.toContain("route-private-token");
+    expect(serialized).not.toContain("https://cdn.example.com/videos/real-product.mp4");
+    expect(serialized).not.toMatch(/access_token|refresh_token|client_secret|Authorization|Bearer/i);
+  });
+
+  it("keeps server registration blocked when the registrar reports storage provider not configured", async () => {
+    const result = await buildOneProductVideoAssetEntryPoint({
+      mode: "register_server_asset",
+      candidate_id: "candidate-real-asset-001",
+      approval: APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION,
+      candidates: [candidate()],
+      serverAssetRegistrar: async () => ({
+        ok: false,
+        error_code: "R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED",
+        message: "Server-accessible storage provider is not configured.",
+        blocked_reasons: ["r2_endpoint_missing"],
+        r2_uploaded: false,
+        db_written: false,
+        rows_inserted_or_upserted: 0
+      })
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED");
+    expect(result.blocked_reasons).toEqual(["r2_endpoint_missing"]);
+    expect(result.side_effects.r2_uploaded).toBe(false);
+    expect(result.side_effects.db_written).toBe(false);
+    expect(result.side_effects.product_assets_written).toBe(false);
+    expect(result.side_effects.rows_inserted_or_upserted).toBe(0);
+    expect(result.side_effects.youtube_execute_called).toBe(false);
+    expect(result.next_action).toBe("CONFIGURE_SERVER_ACCESSIBLE_VIDEO_ASSET_PROVIDER_OR_PROVIDE_ASSET_REF");
   });
 
   it("lets auto pilot become package-ready when a candidate-linked server asset exists", () => {
