@@ -52,6 +52,8 @@ const defaultCandidateId = "candidate-490aa6d25e8ea89d";
 
 export function RealProductVideoAssetEntryPointPanel() {
   const [candidateId, setCandidateId] = useState(defaultCandidateId);
+  const [generationApproval, setGenerationApproval] = useState("");
+  const [registrationApproval, setRegistrationApproval] = useState("");
   const [state, setState] = useState<VideoAssetState>({
     status: "idle",
     summary: "No one-product video asset check has run yet."
@@ -63,9 +65,9 @@ export function RealProductVideoAssetEntryPointPanel() {
       summary: "Checking one-product video asset readiness without upload execution."
     });
     const approval = mode === "generate_local_only"
-      ? RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION
+      ? generationApproval.trim()
       : mode === "register_server_asset"
-        ? APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION
+        ? registrationApproval.trim()
         : "";
     try {
       const response = await fetch("/api/uploads/youtube/real-product-pilot/video-asset/prepare", {
@@ -136,6 +138,39 @@ export function RealProductVideoAssetEntryPointPanel() {
         className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
       />
 
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div>
+          <label className="block text-sm font-bold text-slate-700" htmlFor="one-product-video-generation-approval">
+            generation approval phrase
+          </label>
+          <p className="mt-1 text-xs text-slate-500">
+            Type <code>{RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION}</code> to enable local-only generation.
+          </p>
+          <input
+            id="one-product-video-generation-approval"
+            aria-label="generation approval phrase"
+            value={generationApproval}
+            onChange={(event) => setGenerationApproval(event.target.value)}
+            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-bold text-slate-700" htmlFor="one-product-video-registration-approval">
+            registration approval phrase
+          </label>
+          <p className="mt-1 text-xs text-slate-500">
+            Type <code>{APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION}</code> to enable registration checks.
+          </p>
+          <input
+            id="one-product-video-registration-approval"
+            aria-label="registration approval phrase"
+            value={registrationApproval}
+            onChange={(event) => setRegistrationApproval(event.target.value)}
+            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
@@ -148,7 +183,7 @@ export function RealProductVideoAssetEntryPointPanel() {
         <button
           type="button"
           onClick={() => run("generate_local_only")}
-          disabled={state.status === "loading"}
+          disabled={state.status === "loading" || generationApproval.trim() !== RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
         >
           Generate local-only video contract
@@ -156,7 +191,7 @@ export function RealProductVideoAssetEntryPointPanel() {
         <button
           type="button"
           onClick={() => run("register_server_asset")}
-          disabled={state.status === "loading"}
+          disabled={state.status === "loading" || registrationApproval.trim() !== APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
         >
           Register server asset contract
