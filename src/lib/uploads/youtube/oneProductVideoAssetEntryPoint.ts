@@ -259,7 +259,13 @@ export async function buildOneProductVideoAssetEntryPoint(
           message: registered.message,
           candidate: validation.candidate,
           blocked_reasons: registered.blocked_reasons,
-          next_action: nextActionForRegistrationError(registered.error_code)
+          next_action: nextActionForRegistrationError(registered.error_code),
+          side_effects: {
+            r2_uploaded: registered.r2_uploaded,
+            db_written: false,
+            product_assets_written: false,
+            rows_inserted_or_upserted: 0
+          }
         });
       }
 
@@ -354,6 +360,12 @@ function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistra
   }
   if (errorCode === "PRODUCT_ASSET_PERSISTENCE_FAILED") {
     return "CHECK_PRODUCT_ASSETS_SCHEMA_AND_REGISTRATION_GATE";
+  }
+  if (errorCode === "PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID") {
+    return "APPLY_APPROVED_PRODUCT_ASSETS_CANDIDATE_LINK_MIGRATION";
+  }
+  if (errorCode === "PRODUCT_ASSET_PERSISTENCE_PRECHECK_FAILED") {
+    return "CHECK_PRODUCT_ASSETS_SCHEMA_WITHOUT_RETRYING_UPLOAD";
   }
   if (errorCode === "SERVER_VIDEO_ASSET_UPLOAD_FAILED") {
     return "CHECK_R2_UPLOAD_PROVIDER_WITHOUT_PRINTING_SECRETS";
@@ -524,6 +536,7 @@ function blockedResult(input: {
   candidate: OneProductVideoAssetCandidateSummary | null;
   blocked_reasons: string[];
   next_action: string;
+  side_effects?: Partial<OneProductVideoAssetSideEffects>;
 }): OneProductVideoAssetResult {
   return {
     ok: false,
@@ -538,7 +551,7 @@ function blockedResult(input: {
     existing_server_asset_ready: false,
     blocked_reasons: input.blocked_reasons,
     next_action: input.next_action,
-    side_effects: { ...ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS }
+    side_effects: { ...ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS, ...(input.side_effects ?? {}) }
   };
 }
 

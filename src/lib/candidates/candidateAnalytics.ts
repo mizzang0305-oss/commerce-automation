@@ -579,7 +579,10 @@ function keywordQaPassRate(candidates: ProductCandidate[], queueAssetGroups: Map
 }
 
 function groupAssetsByQueueId(assets: ProductAsset[]) {
-  return groupBy(assets, (asset) => asset.product_queue_id);
+  return groupBy(
+    assets.filter((asset) => typeof asset.product_queue_id === "string" && asset.product_queue_id.trim()),
+    (asset) => asset.product_queue_id ?? ""
+  );
 }
 
 function groupBy<T>(items: T[], getKey: (item: T) => string) {

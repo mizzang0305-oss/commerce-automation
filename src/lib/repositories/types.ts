@@ -51,6 +51,13 @@ export type SettingsValidationResult =
   | { ok: true; value: Partial<AutomationSettings> }
   | { ok: false; message: string; field?: keyof AutomationSettings };
 
+export type ProductAssetPersistenceCapabilities = {
+  candidate_linked_assets_supported: boolean;
+  product_queue_id_nullable: boolean;
+  product_candidate_id_available: boolean;
+  blocked_reasons: string[];
+};
+
 export interface AutomationRepository {
   getSettings(): Promise<AutomationSettings>;
   updateSettings(input: Partial<AutomationSettings>): Promise<AutomationSettings>;
@@ -98,6 +105,7 @@ export interface AutomationRepository {
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;
+  getProductAssetPersistenceCapabilities?(): Promise<ProductAssetPersistenceCapabilities>;
   upsertProductAsset(asset: ProductAsset): Promise<ProductAsset>;
   updateProductAssetQa(
     id: string,

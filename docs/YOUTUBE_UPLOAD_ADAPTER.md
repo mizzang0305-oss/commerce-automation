@@ -164,12 +164,20 @@ affiliate and image readiness, and can call the approval-gated local-only video
 generator for `generate_local_only`. The generated mp4 remains local evidence:
 `local_only=true`, `domain_ready=false`, no raw source URL in the response, and
 no R2/DB/upload side effects. `register_server_asset` validates the prepared
-asset reference and returns a one-row `product_assets` write plan, but this
-endpoint does not persist the row in this PR.
+asset reference and persists one candidate-linked `product_assets` row only after
+the schema capability precheck passes.
+
+Candidate-only persistence requires
+`supabase/migrations/009_candidate_linked_product_assets.sql`: `product_queue_id`
+must be nullable and `product_candidate_id` must exist. If this schema is not
+ready, the endpoint returns `PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID` before any
+R2/S3 upload is attempted. It must never write `product_queue_id=""`. If storage
+upload succeeds but the DB write fails, the response must include
+`product_asset_orphan_object_possible` and keep `product_assets_written=false`.
 
 The endpoint and `/uploads` UI must keep all YouTube execution, public upload,
-R2 upload, DB write, queue/job creation, upload-package persistence, and raw URL
-or secret display disabled.
+queue/job creation, upload-package persistence, and raw URL or secret display
+disabled outside the exact server asset registration path.
 
 ## Readiness Gate Resolver
 

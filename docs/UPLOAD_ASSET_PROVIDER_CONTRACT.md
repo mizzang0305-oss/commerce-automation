@@ -102,9 +102,23 @@ URLs, image URLs, signed URLs, prepared asset URLs, tokens, client secrets, or
 Authorization headers.
 
 Candidate-linked server assets can be detected by real product auto pilot when a
-`video` product asset includes `render_qa_metadata.product_candidate_id` matching
-the selected candidate id and the asset validates as server-accessible
-`video/mp4`.
+`video` product asset includes `product_candidate_id` or
+`render_qa_metadata.product_candidate_id` matching the selected candidate id and
+the asset validates as server-accessible `video/mp4`.
+
+Candidate-only registration must never write `product_queue_id=""`. The
+approved schema shape is `product_queue_id=null` plus a non-empty
+`product_candidate_id`. Supabase environments must apply
+`supabase/migrations/009_candidate_linked_product_assets.sql` before candidate
+video asset persistence is enabled.
+
+If the schema precheck cannot confirm candidate-linked persistence, registration
+must return `PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID` or
+`PRODUCT_ASSET_PERSISTENCE_PRECHECK_FAILED` before any R2/S3 upload is attempted.
+If an upload succeeds and the subsequent `product_assets` upsert fails, the API
+must return `PRODUCT_ASSET_PERSISTENCE_FAILED` with
+`product_asset_orphan_object_possible` so operators can reconcile storage without
+pretending the DB write succeeded.
 
 Blocked examples:
 

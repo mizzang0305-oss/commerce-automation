@@ -370,6 +370,9 @@ function isProductAssetLinkedToSelectedProduct(
   if (input.queueId && asset.product_queue_id === input.queueId) {
     return true;
   }
+  if (safeTrim(asset.product_candidate_id) === input.candidateId) {
+    return true;
+  }
   const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
   return safeTrim(metadata.product_candidate_id) === input.candidateId;
 }
