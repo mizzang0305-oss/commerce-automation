@@ -120,7 +120,7 @@ python -m compileall python-worker
 - Prepared video asset responses must keep `external_api_called=false`, `r2_uploaded=false`, `db_written=false`, `queue_created=false`, and `worker_job_created=false`.
 - `/uploads` must render a separate "도메인용 영상 자산 준비" section with `asset_id`, provider, `storage_key`, `signed_url`, `prepared_video_asset_url`, `mime_type`, `size_bytes`, checksum, expiry, and `server_accessible` controls.
 - `/uploads` must mask signed URL query strings in rendered prepare results and copied safe JSON. Raw token-like query params, Authorization headers, client secrets, and OAuth tokens must not render.
-- `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스` and `수수료`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
+- `POST /api/uploads/youtube/prepare` rejects garbled Korean disclosure text before execute. Required disclosure text includes `쿠팡파트너스`, `활동의 일환`, and `수수료`/`제공받을 수 있습니다`, and replacement-question-mark mojibake such as `? ????` must return `disclosure_text_garbled`.
 - `POST /api/uploads/youtube/execute-readiness` is a side-effect-free dry-run that returns `can_execute=false` and non-empty `blocked_reasons` when live smoke approval, exact confirmation, or server readiness is missing.
 - Missing upload confirmation must return `upload_confirmation_missing`; missing dashboard smoke approval must return `live_smoke_approval_missing` so operators can distinguish the two gates.
 - `/uploads` must send the same approval fields to execute-readiness and execute: `smoke_approval=RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE` and `confirmation=APPROVE_YOUTUBE_PRIVATE_UPLOAD`.

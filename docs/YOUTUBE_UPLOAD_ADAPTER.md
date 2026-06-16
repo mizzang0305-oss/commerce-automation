@@ -32,9 +32,10 @@ The APIs must not return raw client IDs, client secrets, access tokens, refresh 
 
 The upload request builder rejects garbled Korean affiliate disclosure text
 before prepare or execute can proceed. A valid YouTube upload request must keep
-the disclosure readable in UTF-8 and include `쿠팡파트너스` and `수수료`. Strings that
-look like replacement-question-mark mojibake, for example `? ????`, are blocked
-with `disclosure_text_garbled`.
+the disclosure readable in UTF-8 and include three Korean disclosure axes:
+`쿠팡파트너스`, `활동의 일환`, and `수수료`/`제공받을 수 있습니다`. Strings that look
+like replacement-question-mark mojibake, for example `? ????`, are blocked with
+`disclosure_text_garbled`.
 
 ## Request Requirements
 
@@ -67,7 +68,7 @@ remain linked to a candidate id.
 Required disclosure text example:
 
 ```text
-이 콘텐츠는 제휴마케팅 활동을 포함하며, 링크를 통한 구매가 발생하면 작성자에게 수수료가 지급될 수 있습니다.
+※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.
 ```
 
 ## APIs
@@ -138,7 +139,8 @@ for a real product video after the private smoke path is proven. It validates:
 - `visibility=private|unlisted`
 
 `public` visibility is rejected. The disclosure must include readable
-`쿠팡파트너스` and `수수료` text and must not look garbled.
+`쿠팡파트너스`, `활동의 일환`, and `수수료`/`제공받을 수 있습니다` text and must not
+look garbled.
 
 The product package endpoint distinguishes localhost diagnostics from domain
 readiness. A local path only returns a blocked package state. A package is
