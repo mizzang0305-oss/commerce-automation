@@ -6,6 +6,7 @@ import {
   buildOneProductVideoAssetEntryPoint,
   ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS
 } from "@/lib/uploads/youtube/oneProductVideoAssetEntryPoint";
+import { createOneProductServerAssetRegistrar } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import { buildRealProductAutoPilot } from "@/lib/uploads/youtube/realProductAutoPilotBuilder";
 import type { ProductAsset, ProductCandidate } from "@/types/automation";
 
@@ -49,7 +50,8 @@ function candidate(overrides: Partial<ProductCandidate> & Record<string, unknown
 function candidateLinkedVideoAsset(overrides: Partial<ProductAsset> & Record<string, unknown> = {}): ProductAsset {
   return {
     id: "asset-candidate-video-001",
-    product_queue_id: "",
+    product_queue_id: null,
+    product_candidate_id: "candidate-real-asset-001",
     worker_job_id: "",
     asset_type: "video",
     bucket: "r2-videos",
@@ -247,9 +249,10 @@ describe("one-product video asset entrypoint", () => {
     });
     expect(upsertProductAsset).toHaveBeenCalledTimes(1);
     const [asset] = upsertProductAsset.mock.calls[0] as [ProductAsset];
+    expect(asset.id).toBe("asset-real-product-candidate-real-asset-001-video");
+    expect(asset.product_queue_id).toBeNull();
+    expect(asset.product_candidate_id).toBe("candidate-real-asset-001");
     expect(asset).toMatchObject({
-      id: "asset-real-product-candidate-real-asset-001-video",
-      product_queue_id: "",
       worker_job_id: "",
       asset_type: "video",
       bucket: "external_https"
@@ -263,6 +266,158 @@ describe("one-product video asset entrypoint", () => {
     expect(serialized).not.toContain("route-private-token");
     expect(serialized).not.toContain("https://cdn.example.com/videos/real-product.mp4");
     expect(serialized).not.toMatch(/access_token|refresh_token|client_secret|Authorization|Bearer/i);
+  });
+
+  it("prechecks candidate-only persistence support before attempting R2 upload", async () => {
+    const uploadVideo = vi.fn(async () => ({
+      ok: true as const,
+      asset_ref: {
+        asset_id: "asset-should-not-upload",
+        provider: "r2" as const,
+        storage_key: "real-products/candidate-real-asset-001/video.mp4",
+        prepared_video_asset_url: "https://cdn.example.com/videos/should-not-upload.mp4",
+        signed_url: null,
+        mime_type: "video/mp4" as const,
+        size_bytes: 4096,
+        checksum_sha256: "f".repeat(64),
+        expires_at: null,
+        server_accessible: true
+      }
+    }));
+    const upsertProductAsset = vi.fn(async (asset: ProductAsset) => asset);
+    const registrar = createOneProductServerAssetRegistrar(
+      {
+        upsertProductAsset,
+        getProductAssetPersistenceCapabilities: vi.fn(async () => ({
+          candidate_linked_assets_supported: false,
+          product_queue_id_nullable: false,
+          product_candidate_id_available: false,
+          blocked_reasons: ["product_assets_product_queue_id_required"]
+        }))
+      },
+      {
+        stat: vi.fn(async () => ({
+          isFile: () => true,
+          size: 4096
+        })) as never,
+        readFile: vi.fn(async () => Buffer.from("video")),
+        uploadVideo
+      }
+    );
+
+    const result = await registrar({ candidate: candidate() });
+
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID");
+    expect(result.blocked_reasons).toContain("product_assets_product_queue_id_required");
+    expect(uploadVideo).not.toHaveBeenCalled();
+    expect(upsertProductAsset).not.toHaveBeenCalled();
+    expect(result.r2_uploaded).toBe(false);
+    expect(result.db_written).toBe(false);
+  });
+
+  it("writes candidate-linked assets with null queue id when schema supports it", async () => {
+    const uploadVideo = vi.fn(async () => ({
+      ok: true as const,
+      asset_ref: {
+        asset_id: "asset-r2-candidate-linked",
+        provider: "r2" as const,
+        storage_key: "real-products/candidate-real-asset-001/video.mp4",
+        prepared_video_asset_url: "https://cdn.example.com/videos/candidate-linked.mp4",
+        signed_url: null,
+        mime_type: "video/mp4" as const,
+        size_bytes: 4096,
+        checksum_sha256: "f".repeat(64),
+        expires_at: null,
+        server_accessible: true
+      }
+    }));
+    const upsertProductAsset = vi.fn(async (asset: ProductAsset) => asset);
+    const registrar = createOneProductServerAssetRegistrar(
+      {
+        upsertProductAsset,
+        getProductAssetPersistenceCapabilities: vi.fn(async () => ({
+          candidate_linked_assets_supported: true,
+          product_queue_id_nullable: true,
+          product_candidate_id_available: true,
+          blocked_reasons: []
+        }))
+      },
+      {
+        stat: vi.fn(async () => ({
+          isFile: () => true,
+          size: 4096
+        })) as never,
+        readFile: vi.fn(async () => Buffer.from("video")),
+        uploadVideo
+      }
+    );
+
+    const result = await registrar({ candidate: candidate() });
+
+    expect(result.ok).toBe(true);
+    expect(uploadVideo).toHaveBeenCalledTimes(1);
+    expect(upsertProductAsset).toHaveBeenCalledTimes(1);
+    const [asset] = upsertProductAsset.mock.calls[0] as [ProductAsset];
+    expect(asset.product_queue_id).toBeNull();
+    expect(asset.product_candidate_id).toBe("candidate-real-asset-001");
+    expect(asset.render_qa_metadata).toMatchObject({
+      product_candidate_id: "candidate-real-asset-001",
+      registration_source: "r2_upload"
+    });
+    expect(JSON.stringify(asset)).not.toContain("\"product_queue_id\":\"\"");
+  });
+
+  it("reports persistence failure and possible orphan object after successful R2 upload", async () => {
+    const uploadVideo = vi.fn(async () => ({
+      ok: true as const,
+      asset_ref: {
+        asset_id: "asset-r2-orphan-possible",
+        provider: "r2" as const,
+        storage_key: "real-products/candidate-real-asset-001/video.mp4",
+        prepared_video_asset_url: "https://cdn.example.com/videos/orphan-possible.mp4",
+        signed_url: null,
+        mime_type: "video/mp4" as const,
+        size_bytes: 4096,
+        checksum_sha256: "f".repeat(64),
+        expires_at: null,
+        server_accessible: true
+      }
+    }));
+    const upsertProductAsset = vi.fn(async () => {
+      throw new Error("mock persistence failure");
+    });
+    const registrar = createOneProductServerAssetRegistrar(
+      {
+        upsertProductAsset,
+        getProductAssetPersistenceCapabilities: vi.fn(async () => ({
+          candidate_linked_assets_supported: true,
+          product_queue_id_nullable: true,
+          product_candidate_id_available: true,
+          blocked_reasons: []
+        }))
+      },
+      {
+        stat: vi.fn(async () => ({
+          isFile: () => true,
+          size: 4096
+        })) as never,
+        readFile: vi.fn(async () => Buffer.from("video")),
+        uploadVideo
+      }
+    );
+
+    const result = await registrar({ candidate: candidate() });
+
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("PRODUCT_ASSET_PERSISTENCE_FAILED");
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "product_asset_persistence_failed",
+      "product_asset_orphan_object_possible"
+    ]));
+    expect(result.r2_uploaded).toBe(true);
+    expect(result.db_written).toBe(false);
+    expect(result.orphan_object_possible).toBe(true);
   });
 
   it("keeps server registration blocked when the registrar reports storage provider not configured", async () => {

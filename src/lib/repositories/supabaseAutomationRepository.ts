@@ -20,6 +20,7 @@ import type {
 } from "@/types/automation";
 import type {
   MutableMockAutomationRepository,
+  ProductAssetPersistenceCapabilities,
   QueueFilters,
   QueueSummary
 } from "@/lib/repositories/types";
@@ -405,7 +406,8 @@ function mapCandidateRow(row: Record<string, unknown>): ProductCandidate {
 function mapAssetRow(row: Record<string, unknown>): ProductAsset {
   return {
     id: emptyString(row.id),
-    product_queue_id: emptyString(row.product_queue_id),
+    product_queue_id: row.product_queue_id === null ? null : emptyString(row.product_queue_id),
+    product_candidate_id: row.product_candidate_id === null ? null : emptyString(row.product_candidate_id),
     worker_job_id: emptyString(row.worker_job_id),
     asset_type: emptyString(row.asset_type) as ProductAsset["asset_type"],
     bucket: emptyString(row.bucket),
@@ -1096,6 +1098,46 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     const { data, error } = await query.order("created_at", { ascending: true });
     throwIfSupabaseError(error, "getProductAssets");
     return clone(((data ?? []) as Record<string, unknown>[]).map(mapAssetRow));
+  }
+
+  async getProductAssetPersistenceCapabilities(): Promise<ProductAssetPersistenceCapabilities> {
+    const { error } = await this.client
+      .from("product_assets")
+      .select("id,product_queue_id,product_candidate_id", { head: true })
+      .limit(0);
+
+    if (error) {
+      const supabaseError = error as SupabaseQueryError;
+      const message = `${supabaseError.code ?? ""} ${supabaseError.message ?? ""} ${supabaseError.detail ?? supabaseError.details ?? ""}`.toLowerCase();
+      const missingCandidateColumn =
+        supabaseError.code === "PGRST204" ||
+        supabaseError.code === "42703" ||
+        message.includes("product_candidate_id") ||
+        message.includes("could not find");
+      if (!missingCandidateColumn) {
+        console.error("[supabase-repository] product asset persistence precheck failed", {
+          code: supabaseError.code ?? "",
+          message: sanitizeSupabaseDiagnostic(supabaseError.message),
+          detail: sanitizeSupabaseDiagnostic(supabaseError.detail ?? supabaseError.details),
+          hint: sanitizeSupabaseDiagnostic(supabaseError.hint)
+        });
+      }
+      return {
+        candidate_linked_assets_supported: false,
+        product_queue_id_nullable: false,
+        product_candidate_id_available: false,
+        blocked_reasons: missingCandidateColumn
+          ? ["product_assets_product_candidate_id_missing", "product_assets_product_queue_id_required"]
+          : ["product_assets_persistence_capability_check_failed"]
+      };
+    }
+
+    return {
+      candidate_linked_assets_supported: true,
+      product_queue_id_nullable: true,
+      product_candidate_id_available: true,
+      blocked_reasons: []
+    };
   }
 
   async upsertProductAsset(asset: ProductAsset) {

@@ -16,6 +16,8 @@ export type OneProductServerAssetRegistrationErrorCode =
   | "LOCAL_VIDEO_ARTIFACT_MISSING"
   | "R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED"
   | "SERVER_VIDEO_ASSET_UPLOAD_FAILED"
+  | "PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID"
+  | "PRODUCT_ASSET_PERSISTENCE_PRECHECK_FAILED"
   | "PRODUCT_ASSET_PERSISTENCE_FAILED";
 
 export type OneProductServerAssetRegistrationResult =
@@ -29,14 +31,17 @@ export type OneProductServerAssetRegistrationResult =
       rows_inserted_or_upserted: 1;
       blocked_reasons: [];
     }
-  | {
+  | OneProductServerAssetRegistrationFailure;
+
+type OneProductServerAssetRegistrationFailure = {
       ok: false;
       error_code: OneProductServerAssetRegistrationErrorCode;
       message: string;
       blocked_reasons: string[];
-      r2_uploaded: false;
+      r2_uploaded: boolean;
       db_written: false;
       rows_inserted_or_upserted: 0;
+      orphan_object_possible?: boolean;
     };
 
 export type ServerVideoAssetRegistrar = (input: {
@@ -73,7 +78,7 @@ export type OneProductServerAssetRegistrationDependencies = {
 };
 
 export function createOneProductServerAssetRegistrar(
-  repository: Pick<AutomationRepository, "upsertProductAsset">,
+  repository: Pick<AutomationRepository, "upsertProductAsset" | "getProductAssetPersistenceCapabilities">,
   dependencies: OneProductServerAssetRegistrationDependencies = {}
 ): ServerVideoAssetRegistrar {
   const cwd = dependencies.cwd ?? process.cwd();
@@ -91,6 +96,10 @@ export function createOneProductServerAssetRegistrar(
           message: "Provided server-accessible video asset ref is not ready.",
           blocked_reasons: validation.blocked_reasons
         });
+      }
+      const precheck = await verifyCandidateLinkedPersistence(repository);
+      if (!precheck.ok) {
+        return precheck.result;
       }
       return persistAssetRef({
         repository,
@@ -122,6 +131,11 @@ export function createOneProductServerAssetRegistrar(
         message: "Expected local video artifact is not available for registration.",
         blocked_reasons: ["local_video_artifact_missing"]
       });
+    }
+
+    const precheck = await verifyCandidateLinkedPersistence(repository);
+    if (!precheck.ok) {
+      return precheck.result;
     }
 
     const checksum = createHash("sha256").update(fileBuffer).digest("hex");
@@ -174,7 +188,8 @@ async function persistAssetRef(input: {
   const nowIso = input.now();
   const productAsset: ProductAsset = {
     id: buildProductAssetId(input.candidate.id),
-    product_queue_id: "",
+    product_queue_id: null,
+    product_candidate_id: input.candidate.id,
     worker_job_id: "",
     asset_type: "video",
     bucket: inferProductAssetBucket(input.asset_ref),
@@ -215,8 +230,49 @@ async function persistAssetRef(input: {
     return blockedResult({
       error_code: "PRODUCT_ASSET_PERSISTENCE_FAILED",
       message: "Product asset persistence failed with a safe server error.",
-      blocked_reasons: ["product_asset_persistence_failed"]
+      blocked_reasons: input.r2_uploaded
+        ? ["product_asset_persistence_failed", "product_asset_orphan_object_possible"]
+        : ["product_asset_persistence_failed"],
+      r2_uploaded: input.r2_uploaded,
+      orphan_object_possible: input.r2_uploaded
     });
+  }
+}
+
+async function verifyCandidateLinkedPersistence(
+  repository: Pick<AutomationRepository, "getProductAssetPersistenceCapabilities">
+): Promise<
+  | { ok: true }
+  | { ok: false; result: OneProductServerAssetRegistrationFailure }
+> {
+  if (!repository.getProductAssetPersistenceCapabilities) {
+    return { ok: true };
+  }
+
+  try {
+    const capabilities = await repository.getProductAssetPersistenceCapabilities();
+    if (capabilities.candidate_linked_assets_supported) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      result: blockedResult({
+        error_code: "PRODUCT_ASSETS_SCHEMA_REQUIRES_QUEUE_ID",
+        message: "Product asset schema does not support candidate-linked assets without a queue row.",
+        blocked_reasons: capabilities.blocked_reasons.length > 0
+          ? capabilities.blocked_reasons
+          : ["product_assets_candidate_link_schema_not_ready"]
+      })
+    };
+  } catch {
+    return {
+      ok: false,
+      result: blockedResult({
+        error_code: "PRODUCT_ASSET_PERSISTENCE_PRECHECK_FAILED",
+        message: "Product asset persistence precheck failed with a safe server error.",
+        blocked_reasons: ["product_asset_persistence_precheck_failed"]
+      })
+    };
   }
 }
 
@@ -479,14 +535,17 @@ function blockedResult(input: {
   error_code: OneProductServerAssetRegistrationErrorCode;
   message: string;
   blocked_reasons: string[];
-}): OneProductServerAssetRegistrationResult {
+  r2_uploaded?: boolean;
+  orphan_object_possible?: boolean;
+}): OneProductServerAssetRegistrationFailure {
   return {
     ok: false,
     error_code: input.error_code,
     message: input.message,
     blocked_reasons: input.blocked_reasons,
-    r2_uploaded: false,
+    r2_uploaded: input.r2_uploaded ?? false,
     db_written: false,
-    rows_inserted_or_upserted: 0
+    rows_inserted_or_upserted: 0,
+    ...(input.orphan_object_possible === undefined ? {} : { orphan_object_possible: input.orphan_object_possible })
   };
 }

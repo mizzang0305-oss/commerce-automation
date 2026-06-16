@@ -634,6 +634,15 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     return clone(productQueueId ? assets.filter((asset) => asset.product_queue_id === productQueueId) : assets);
   }
 
+  async getProductAssetPersistenceCapabilities() {
+    return {
+      candidate_linked_assets_supported: true,
+      product_queue_id_nullable: true,
+      product_candidate_id_available: true,
+      blocked_reasons: []
+    };
+  }
+
   async upsertProductAsset(asset: ProductAsset) {
     await this.ensureInitialized();
     const assets = await readJson<ProductAsset[]>(this.paths.productAssets);

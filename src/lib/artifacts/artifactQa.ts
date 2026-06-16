@@ -33,7 +33,11 @@ export async function listArtifactQaSummaries(repository: AutomationRepository, 
   ]);
   const groups = new Map<string, ProductAsset[]>();
   for (const asset of assets) {
-    groups.set(asset.product_queue_id, [...(groups.get(asset.product_queue_id) ?? []), normalizeAssetQa(asset)]);
+    const productQueueId = typeof asset.product_queue_id === "string" ? asset.product_queue_id.trim() : "";
+    if (!productQueueId) {
+      continue;
+    }
+    groups.set(productQueueId, [...(groups.get(productQueueId) ?? []), normalizeAssetQa(asset)]);
   }
 
   const artifacts = [...groups.entries()].map(([productQueueId, groupAssets]) => {
@@ -70,14 +74,18 @@ export async function getArtifactQaDetail(repository: AutomationRepository, asse
   if (!asset) {
     return null;
   }
+  const productQueueId = typeof asset.product_queue_id === "string" ? asset.product_queue_id.trim() : "";
+  if (!productQueueId) {
+    return null;
+  }
   const [queueItem, queueAssets, packages] = await Promise.all([
-    repository.getQueueItem(asset.product_queue_id),
-    repository.getProductAssets(asset.product_queue_id),
-    repository.getChannelUploadPackages(asset.product_queue_id)
+    repository.getQueueItem(productQueueId),
+    repository.getProductAssets(productQueueId),
+    repository.getChannelUploadPackages(productQueueId)
   ]);
   return {
     ...buildArtifactSummary(
-      asset.product_queue_id,
+      productQueueId,
       queueItem?.product_name ?? "",
       queueAssets.map(normalizeAssetQa),
       packages[0]?.status ?? ""

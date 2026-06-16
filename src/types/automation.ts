@@ -247,7 +247,8 @@ export type ProductCandidate = {
 
 export type ProductAsset = {
   id: string;
-  product_queue_id: string;
+  product_queue_id: string | null;
+  product_candidate_id?: string | null;
   worker_job_id: string;
   asset_type: "video" | "thumbnail" | "subtitle" | "upload_package" | "sheet_export" | "product_image";
   bucket: string;

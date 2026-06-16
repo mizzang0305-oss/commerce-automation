@@ -812,6 +812,15 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     return clone(assets);
   }
 
+  async getProductAssetPersistenceCapabilities() {
+    return {
+      candidate_linked_assets_supported: true,
+      product_queue_id_nullable: true,
+      product_candidate_id_available: true,
+      blocked_reasons: []
+    };
+  }
+
   async upsertProductAsset(asset: ProductAsset) {
     const normalized: ProductAsset = {
       ...asset,
