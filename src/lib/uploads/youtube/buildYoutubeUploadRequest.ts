@@ -19,6 +19,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   const selectedAffiliateUrl = safeTrim(input.selected_affiliate_url);
   const smokeApproval = safeTrim(input.smoke_approval) || safeTrim(input.smokeApproval);
   const visibility = normalizeVisibility(input.visibility);
+  const executionIntent = normalizeExecutionIntent(input.execution_intent ?? input.upload_intent);
   const missingReasons: string[] = [];
 
   if (!candidateId) {
@@ -68,6 +69,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
       tags: normalizeTags(input.tags),
       category_id: safeTrim(input.category_id) || undefined,
       visibility: safeVisibility,
+      execution_intent: executionIntent,
       disclosure_text: disclosureText,
       selected_affiliate_url: selectedAffiliateUrl,
       smoke_approval: smokeApproval || undefined,
@@ -93,6 +95,10 @@ function normalizeVisibility(input: unknown): YouTubeUploadVisibility | "" {
     return input;
   }
   return "";
+}
+
+function normalizeExecutionIntent(input: unknown) {
+  return input === "live_smoke" ? "live_smoke" : "private_execute";
 }
 
 function normalizeTags(input: unknown): string[] {

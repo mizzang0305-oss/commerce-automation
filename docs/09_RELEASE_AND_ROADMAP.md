@@ -36,7 +36,7 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 
 ## v2.4 Platform Upload Core
 
-The upload layer now has a common readiness and planning model. YouTube has a server-only private/unlisted smoke path behind explicit readiness and approval gates; TikTok and Threads remain readiness-only.
+The upload layer now has a common readiness and planning model. YouTube has a server-only private smoke path behind explicit readiness and approval gates; TikTok and Threads remain readiness-only.
 
 Included:
 
@@ -60,7 +60,7 @@ YouTube adapter scaffold:
 
 - Server-only YouTube readiness at `/api/uploads/youtube/readiness`.
 - Local token provider metadata readiness at `/api/uploads/youtube/token-readiness`.
-- Private/unlisted request preparation at `/api/uploads/youtube/prepare`.
+- Private request preparation at `/api/uploads/youtube/prepare`.
 - Exact confirmation gate at `/api/uploads/youtube/execute`.
 - Public visibility blocked.
 - Token values and Authorization headers are not exposed.

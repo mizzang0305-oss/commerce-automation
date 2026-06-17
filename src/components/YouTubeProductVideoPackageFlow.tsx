@@ -2,14 +2,13 @@
 
 import { useMemo, useState } from "react";
 import {
-  APPROVE_YOUTUBE_PRIVATE_UPLOAD,
-  RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
+  APPROVE_YOUTUBE_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "@/lib/uploads/youtube/productVideoUploadPackage";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 import { validatePreparedVideoAssetRef } from "@/lib/uploads/assets/preparedVideoAsset";
 
-type Visibility = "private" | "unlisted";
+type Visibility = "private";
 
 type ProductPackageApiState = {
   status: "idle" | "loading" | "success" | "blocked";
@@ -400,7 +399,6 @@ export function YouTubeProductVideoPackageFlow() {
               onChange={(event) => setVisibility(event.target.value as Visibility)}
             >
               <option value="private">private</option>
-              <option value="unlisted">unlisted</option>
               <option value="public" disabled>public disabled</option>
             </select>
           </label>
@@ -435,16 +433,13 @@ export function YouTubeProductVideoPackageFlow() {
             <StatusRow label="local_path_only_is_domain_blocked" value={!domainAssetReady && Boolean(videoPath.trim())} />
             <StatusRow label="affiliate_url_ready" value={Boolean(affiliateUrl.trim())} />
             <StatusRow label="disclosure_ready" value={disclosureReasons.length === 0} />
-            <StatusRow label="visibility_ready" value={visibility === "private" || visibility === "unlisted"} />
+            <StatusRow label="visibility_ready" value={visibility === "private"} />
             <StatusRow label="public_upload_blocked" value />
           </dl>
           <div className="rounded-md border border-slate-200 bg-white p-3 text-sm">
             <p className="font-bold text-slate-950">필수 승인 문구</p>
             <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
               {APPROVE_YOUTUBE_PRIVATE_UPLOAD}
-            </code>
-            <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
-              {RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE}
             </code>
           </div>
           {disclosureReasons.length > 0 ? (

@@ -12,19 +12,19 @@ import { blockedYouTubeUploadResult } from "@/lib/uploads/youtube/youtubeUploadE
 
 export async function POST(request: Request) {
   const body = await parseBody(request);
-  const requestResult = buildYouTubeUploadRequest(body);
-  const visibility = body.visibility === "unlisted" ? "unlisted" : "private";
+  const requestedVisibility = body.visibility;
+  const visibility = requestedVisibility === "unlisted" ? "unlisted" : "private";
 
   if (!hasExactYouTubeUploadConfirmation(body.confirmation)) {
     return NextResponse.json(
       {
         ok: false,
         error_code: "BLOCKED_BY_CONFIRMATION",
-        message: "Exact YouTube private/unlisted upload confirmation is required.",
+        message: "Exact YouTube private upload confirmation is required.",
         result: blockedYouTubeUploadResult(
           visibility,
           "YouTube upload was not attempted because the confirmation phrase did not match.",
-          ["upload_confirmation_missing"],
+          ["upload_confirmation_missing", "private_execute_approval_missing"],
           false
         ),
         side_effects: youtubeUploadSafeSideEffects,
@@ -34,13 +34,48 @@ export async function POST(request: Request) {
     );
   }
 
+  if (requestedVisibility === "public" || requestedVisibility === "unlisted") {
+    const reason = requestedVisibility === "public"
+      ? "visibility_public_blocked"
+      : "visibility_unlisted_blocked";
+    return NextResponse.json(
+      {
+        ok: false,
+        error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+        message: "This YouTube execute path allows private visibility only.",
+        missing_reasons: [reason],
+        side_effects: youtubeUploadSafeSideEffects,
+        approval_required: true
+      },
+      { status: 400 }
+    );
+  }
+
+  const requestResult = buildYouTubeUploadRequest(body);
   if (!requestResult.ok) {
     return NextResponse.json(
       {
         ok: false,
         error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
-        message: "YouTube upload request is missing required private/unlisted upload inputs.",
+        message: "YouTube upload request is missing required private upload inputs.",
         missing_reasons: requestResult.missing_reasons,
+        side_effects: youtubeUploadSafeSideEffects,
+        approval_required: true
+      },
+      { status: 400 }
+    );
+  }
+
+  if (requestResult.request.visibility !== "private") {
+    const reason = requestResult.request.visibility === "unlisted"
+      ? "visibility_unlisted_blocked"
+      : "visibility_public_blocked";
+    return NextResponse.json(
+      {
+        ok: false,
+        error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+        message: "This YouTube execute path allows private visibility only.",
+        missing_reasons: [reason],
         side_effects: youtubeUploadSafeSideEffects,
         approval_required: true
       },
@@ -61,7 +96,9 @@ export async function POST(request: Request) {
         readiness,
         gates: buildYouTubeExecuteReadiness({
           confirmation: body.confirmation,
-          smokeApproval: body.smoke_approval ?? body.smokeApproval
+          smokeApproval: body.smoke_approval ?? body.smokeApproval,
+          executionIntent: requestResult.request.execution_intent,
+          visibility: requestResult.request.visibility
         }).gates,
         result: blockedYouTubeUploadResult(
           requestResult.request.visibility,
@@ -78,7 +115,9 @@ export async function POST(request: Request) {
 
   const executeReadiness = buildYouTubeExecuteReadiness({
     confirmation: body.confirmation,
-    smokeApproval: body.smoke_approval ?? body.smokeApproval
+    smokeApproval: body.smoke_approval ?? body.smokeApproval,
+    executionIntent: requestResult.request.execution_intent,
+    visibility: requestResult.request.visibility
   });
   if (!executeReadiness.can_execute) {
     const blockedReasons = executeReadiness.blocked_reasons.length ? executeReadiness.blocked_reasons : ["youtube_execute_readiness_blocked"];

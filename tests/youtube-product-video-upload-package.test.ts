@@ -59,7 +59,7 @@ describe("YouTube product video private upload package", () => {
         visibility: "private",
         selected_affiliate_url: validProductPackageInput.selected_affiliate_url,
         upload_confirmation_phrase_required: "APPROVE_YOUTUBE_PRIVATE_UPLOAD",
-        smoke_or_product_approval_required: "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE",
+        private_execute_approval_required: "APPROVE_YOUTUBE_PRIVATE_UPLOAD",
         readiness: {
           candidate_ready: true,
           video_ready: true,
@@ -86,6 +86,7 @@ describe("YouTube product video private upload package", () => {
       },
       execute_in_this_pr: false
     });
+    expect(JSON.stringify(payload.package)).not.toContain("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
     expect(JSON.stringify(payload)).not.toMatch(/access_token|refresh_token|client_secret|Authorization: Bearer/i);
   });
 
@@ -128,6 +129,21 @@ describe("YouTube product video private upload package", () => {
       readiness: {
         visibility_ready: false,
         public_upload_blocked: false
+      }
+    });
+  });
+
+  test("unlisted visibility blocks package prepare", async () => {
+    const response = await prepare({ ...validProductPackageInput, visibility: "unlisted" });
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      blocked_reasons: expect.arrayContaining(["visibility_unlisted_blocked"]),
+      readiness: {
+        visibility_ready: false,
+        public_upload_blocked: true
       }
     });
   });

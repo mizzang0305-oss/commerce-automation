@@ -1,5 +1,8 @@
 import type { YouTubeUploadRequestInput } from "@/lib/uploads/youtube/types";
-import { APPROVE_YOUTUBE_PRIVATE_UPLOAD } from "@/lib/uploads/youtube/youtubeUploadGuards";
+import {
+  APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+  RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
+} from "@/lib/uploads/youtube/youtubeUploadGuards";
 
 export const YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID = "candidate-video-smoke-001";
 
@@ -24,6 +27,8 @@ export function buildYouTubePrivateSmokePayload(
   return {
     candidate_id: YOUTUBE_PRIVATE_SMOKE_CANDIDATE_ID,
     confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+    smoke_approval: RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE,
+    execution_intent: "live_smoke",
     video_path_or_url: override.video_path_or_url ?? YOUTUBE_PRIVATE_SMOKE_VIDEO_PATH,
     title: override.title ?? "Commerce Automation Private Upload Smoke",
     description: override.description ?? [

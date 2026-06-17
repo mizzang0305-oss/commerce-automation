@@ -11,7 +11,7 @@ import {
 } from "@/lib/uploads/youtube/youtubePrivateSmokeContract";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 
-type Visibility = "private" | "unlisted";
+type Visibility = "private";
 
 type YouTubeSmokeFlowProps = {
   defaultVideoPath: string;
@@ -116,6 +116,7 @@ export function YouTubeDashboardSmokeFlow({
 
   const payload = useMemo(() => ({
     candidate_id: candidateId,
+    execution_intent: "live_smoke",
     confirmation,
     smoke_approval: smokeApproval,
     video_path_or_url: videoPath,
@@ -263,7 +264,7 @@ export function YouTubeDashboardSmokeFlow({
           </p>
         </div>
         <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
-          private/unlisted only
+          private only
         </span>
       </div>
 
@@ -311,7 +312,6 @@ export function YouTubeDashboardSmokeFlow({
               onChange={(event) => setVisibility(event.target.value as Visibility)}
             >
               <option value="private">비공개</option>
-              <option value="unlisted">일부 공개</option>
               <option value="public" disabled>
                 공개 업로드 차단
               </option>
