@@ -52,23 +52,19 @@ export interface YouTubeTokenProvider {
 
 export function buildYouTubeTokenProviderReadiness(env: NodeJS.ProcessEnv = process.env): YouTubeTokenReadiness {
   const provider = normalizeTokenProvider(env.YOUTUBE_TOKEN_PROVIDER);
-  const providerConfigured = provider === "server";
-  const tokenReady = readBooleanEnvValue(env.YOUTUBE_TOKEN_READY);
-  const scopesReady = readBooleanEnvValue(env.YOUTUBE_SCOPES_READY);
+  const providerMode = normalizeTokenProviderMode(env);
+  const localStatus = providerMode === "local_file" ? buildYouTubeLocalTokenProviderStatus(env) : null;
+  const providerConfigured = provider === "server" || Boolean(localStatus?.configured);
+  const tokenReady = localStatus ? localStatus.token_ready : readBooleanEnvValue(env.YOUTUBE_TOKEN_READY);
+  const scopesReady = localStatus ? localStatus.scopes_ready : readBooleanEnvValue(env.YOUTUBE_SCOPES_READY);
   const accountReady = readBooleanEnvValue(env.YOUTUBE_ACCOUNT_READY);
   const quotaReady = readBooleanEnvValue(env.YOUTUBE_QUOTA_READY);
   const policyReady = readBooleanEnvValue(env.YOUTUBE_POLICY_READY) && !readBooleanEnvValue(env.PUBLIC_UPLOAD_ENABLED);
   const blockers: string[] = [];
 
-  if (!providerConfigured) {
-    blockers.push("provider_not_configured");
-  }
-  if (!tokenReady) {
-    blockers.push("token_not_ready");
-  }
-  if (!scopesReady) {
-    blockers.push("scopes_not_ready");
-  }
+  if (!providerConfigured) blockers.push("provider_not_configured");
+  if (!tokenReady) blockers.push("token_not_ready");
+  if (!scopesReady) blockers.push("scopes_not_ready");
   if (!accountReady) {
     blockers.push("account_not_ready");
   }
@@ -81,16 +77,18 @@ export function buildYouTubeTokenProviderReadiness(env: NodeJS.ProcessEnv = proc
 
   return {
     provider_configured: providerConfigured,
-    provider_kind: provider,
+    provider_kind: localStatus ? "local_dev" : provider,
     token_ready: tokenReady,
     scopes_ready: scopesReady,
     account_ready: accountReady,
     quota_ready: quotaReady,
     policy_ready: policyReady,
     blockers: [...new Set(blockers)],
-    safe_message: providerConfigured
-      ? "Server-side YouTube token provider readiness is represented by safe booleans only."
-      : "Server-accessible YouTube token provider is not configured."
+    safe_message: localStatus
+      ? localStatus.safe_summary
+      : providerConfigured
+        ? "Server-side YouTube token provider readiness is represented by safe booleans only."
+        : "Server-accessible YouTube token provider is not configured."
   };
 }
 

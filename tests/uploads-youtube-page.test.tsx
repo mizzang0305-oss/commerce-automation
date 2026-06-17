@@ -19,9 +19,11 @@ function clearYouTubeEnv() {
     "YOUTUBE_CLIENT_SECRET",
     "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
     "YOUTUBE_TOKEN_FILE",
+    "YOUTUBE_TOKEN_PROVIDER_MODE",
     "YOUTUBE_TOKEN_PROVIDER",
     "YOUTUBE_TOKEN_READY",
     "YOUTUBE_SCOPES_READY",
+    "YOUTUBE_PRIVATE_UPLOAD_ENABLED",
     "YOUTUBE_UPLOAD_ENABLED",
     "YOUTUBE_QUOTA_READY",
     "YOUTUBE_ACCOUNT_READY",
@@ -48,7 +50,7 @@ function setReadyYouTubeEnv() {
   vi.stubEnv("YOUTUBE_TOKEN_READY", "true");
   vi.stubEnv("YOUTUBE_SCOPES_READY", "true");
   vi.stubEnv("YOUTUBE_TOKEN_FILE", tokenFile);
-  vi.stubEnv("YOUTUBE_UPLOAD_ENABLED", "true");
+  vi.stubEnv("YOUTUBE_PRIVATE_UPLOAD_ENABLED", "true");
   vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
   vi.stubEnv("YOUTUBE_ACCOUNT_READY", "true");
   vi.stubEnv("YOUTUBE_POLICY_READY", "true");
@@ -65,7 +67,7 @@ describe("YouTube uploads page readiness panel", () => {
     }
   });
 
-  test("renders Korean readiness diagnostics with private or unlisted gates only", async () => {
+  test("renders Korean readiness diagnostics with private-only gates", async () => {
     clearYouTubeEnv();
 
     render(await UploadsPage());

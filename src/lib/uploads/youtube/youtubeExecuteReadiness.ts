@@ -1,6 +1,10 @@
 import "server-only";
 
-import type { YouTubeUploadBlockedReason, YouTubeUploadReadiness } from "@/lib/uploads/youtube/types";
+import type {
+  YouTubeExecutionIntent,
+  YouTubeUploadBlockedReason,
+  YouTubeUploadReadiness
+} from "@/lib/uploads/youtube/types";
 import { buildYouTubeExecuteTokenProviderReadiness } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
 import { buildYouTubeUploadReadiness } from "@/lib/uploads/youtube/youtubeReadiness";
 import {
@@ -32,9 +36,13 @@ export type YouTubeExecuteReadiness = {
 export function buildYouTubeExecuteReadiness(input: {
   confirmation?: unknown;
   smokeApproval?: unknown;
+  executionIntent?: unknown;
+  visibility?: unknown;
   env?: NodeJS.ProcessEnv;
 } = {}): YouTubeExecuteReadiness {
   const env = input.env ?? process.env;
+  const executionIntent = normalizeExecutionIntent(input.executionIntent);
+  const visibility = normalizeExecuteVisibility(input.visibility);
   const readiness = buildYouTubeUploadReadiness(env);
   const tokenProvider = buildYouTubeExecuteTokenProviderReadiness(env);
   const gates: YouTubeExecuteReadinessGate[] = [];
@@ -47,13 +55,11 @@ export function buildYouTubeExecuteReadiness(input: {
   gates.push({
     key: "youtube_upload_readiness",
     status: readiness.can_upload ? "pass" : "blocked",
-    label_ko: "YouTube 업로드 readiness",
+    label_ko: "YouTube upload readiness",
     safe_error: readiness.can_upload
-      ? "YouTube 서버 readiness가 통과했습니다."
-      : "YouTube 서버 readiness가 아직 통과하지 않았습니다.",
-    fix_hint_ko: readiness.can_upload
-      ? "다음 실행 게이트를 확인하세요."
-      : "readiness.blocked_reasons를 해결한 뒤 다시 확인하세요.",
+      ? "YouTube server readiness passed."
+      : "YouTube server readiness is still blocked.",
+    fix_hint_ko: "Resolve readiness.blocked_reasons without exposing secret values.",
     secret_safe: true
   });
 
@@ -68,7 +74,7 @@ export function buildYouTubeExecuteReadiness(input: {
       ? "Server-only token provider can supply an upload token without exposing it to the client."
       : tokenProvider.safe_message,
     fix_hint_ko: tokenProvider.provider_mode === "contract_only"
-      ? "Set YOUTUBE_TOKEN_PROVIDER_MODE=local_file for an approved localhost smoke or implement server_secret provider before domain execute."
+      ? "Set YOUTUBE_TOKEN_PROVIDER_MODE=local_file for approved localhost execution or implement server_secret provider before domain execute."
       : "Check token provider mode, token file location, upload scope, and server-only configuration.",
     secret_safe: true
   });
@@ -76,34 +82,52 @@ export function buildYouTubeExecuteReadiness(input: {
   const confirmationOk = hasExactYouTubeUploadConfirmation(input.confirmation);
   if (!confirmationOk) {
     blockedReasons.add("upload_confirmation_missing" satisfies YouTubeUploadBlockedReason);
+    blockedReasons.add("private_execute_approval_missing" satisfies YouTubeUploadBlockedReason);
   }
   gates.push({
-    key: "execute_confirmation",
+    key: "execute_private_approval",
     status: confirmationOk ? "pass" : "blocked",
-    label_ko: "업로드 승인 문구",
+    label_ko: "YouTube private execute approval",
     safe_error: confirmationOk
-      ? "업로드 승인 문구가 일치합니다."
-      : "APPROVE_YOUTUBE_PRIVATE_UPLOAD 승인 문구가 필요합니다.",
-    fix_hint_ko: "대시보드에 APPROVE_YOUTUBE_PRIVATE_UPLOAD를 정확히 입력하세요.",
+      ? "APPROVE_YOUTUBE_PRIVATE_UPLOAD approval phrase matched."
+      : "APPROVE_YOUTUBE_PRIVATE_UPLOAD approval phrase is required.",
+    fix_hint_ko: "Enter APPROVE_YOUTUBE_PRIVATE_UPLOAD exactly before private execute.",
     secret_safe: true
   });
 
-  const liveSmokeApprovalOk =
-    hasExactYouTubeLiveSmokeApproval(input.smokeApproval) ||
-    hasExactYouTubeLiveSmokeApproval(env.RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE);
-  if (!liveSmokeApprovalOk) {
-    blockedReasons.add("live_smoke_approval_missing" satisfies YouTubeUploadBlockedReason);
+  const visibilityBlocker = getExecuteVisibilityBlocker(visibility);
+  if (visibilityBlocker) {
+    blockedReasons.add(visibilityBlocker);
   }
   gates.push({
-    key: "execute_live_smoke_approval",
-    status: liveSmokeApprovalOk ? "pass" : "blocked",
-    label_ko: "비공개 스모크 실행 승인",
-    safe_error: liveSmokeApprovalOk
-      ? "비공개 스모크 실행 승인 문구가 확인되었습니다."
-      : `Live YouTube upload smoke is blocked until ${RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE} is explicitly configured or submitted.`,
-    fix_hint_ko: "대시보드에 RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE를 정확히 입력하거나 승인된 로컬 smoke env를 설정하세요.",
+    key: "execute_private_visibility",
+    status: visibilityBlocker ? "blocked" : "pass",
+    label_ko: "YouTube private visibility",
+    safe_error: visibilityBlocker
+      ? "This execute path allows private visibility only."
+      : "Private visibility is selected for this execute path.",
+    fix_hint_ko: "Set visibility=private. Public and unlisted visibility are blocked for this final private execute path.",
     secret_safe: true
   });
+
+  if (executionIntent === "live_smoke") {
+    const liveSmokeApprovalOk =
+      hasExactYouTubeLiveSmokeApproval(input.smokeApproval) ||
+      hasExactYouTubeLiveSmokeApproval(env.RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE);
+    if (!liveSmokeApprovalOk) {
+      blockedReasons.add("live_smoke_approval_missing" satisfies YouTubeUploadBlockedReason);
+    }
+    gates.push({
+      key: "execute_live_smoke_approval",
+      status: liveSmokeApprovalOk ? "pass" : "blocked",
+      label_ko: "YouTube live smoke approval",
+      safe_error: liveSmokeApprovalOk
+        ? "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE approval phrase matched."
+        : `Live YouTube upload smoke is blocked until ${RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE} is explicitly configured or submitted.`,
+      fix_hint_ko: "Use RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE only for the smoke path, not for real private execute.",
+      secret_safe: true
+    });
+  }
 
   return {
     ok: true,
@@ -114,4 +138,27 @@ export function buildYouTubeExecuteReadiness(input: {
     token_provider: tokenProvider,
     side_effects: youtubeUploadSafeSideEffects
   };
+}
+
+function normalizeExecutionIntent(value: unknown): YouTubeExecutionIntent {
+  return value === "live_smoke" ? "live_smoke" : "private_execute";
+}
+
+function normalizeExecuteVisibility(value: unknown) {
+  if (value === "public" || value === "unlisted" || value === "private") {
+    return value;
+  }
+  return "private";
+}
+
+function getExecuteVisibilityBlocker(
+  visibility: "private" | "unlisted" | "public"
+): YouTubeUploadBlockedReason | null {
+  if (visibility === "public") {
+    return "visibility_public_blocked";
+  }
+  if (visibility === "unlisted") {
+    return "visibility_unlisted_blocked";
+  }
+  return null;
 }

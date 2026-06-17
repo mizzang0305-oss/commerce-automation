@@ -8,7 +8,9 @@ export function buildYouTubeUploadReadiness(env: NodeJS.ProcessEnv = process.env
   const hasClientId = Boolean(env.YOUTUBE_CLIENT_ID?.trim());
   const hasClientSecret = Boolean(env.YOUTUBE_CLIENT_SECRET?.trim());
   const tokenProvider = buildYouTubeTokenProviderReadiness(env);
-  const upload_enabled = readBooleanEnv("YOUTUBE_UPLOAD_ENABLED", env);
+  const upload_enabled =
+    readBooleanEnv("YOUTUBE_PRIVATE_UPLOAD_ENABLED", env) ||
+    readBooleanEnv("YOUTUBE_UPLOAD_ENABLED", env);
   const publicUploadEnabled = readBooleanEnv("PUBLIC_UPLOAD_ENABLED", env);
   const token_ready = tokenProvider.token_ready;
   const scopes_ready = tokenProvider.scopes_ready;

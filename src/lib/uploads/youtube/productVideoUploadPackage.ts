@@ -238,7 +238,15 @@ function buildBlockedReasons(
   if (!readiness.product_ready) reasons.push("product_name");
   if (!readiness.video_ready) reasons.push(...assetBlockedReasons);
   if (!readiness.affiliate_url_ready) reasons.push("selected_affiliate_url");
-  if (!readiness.visibility_ready) reasons.push(rawVisibility === "public" ? "visibility_public_blocked" : "visibility");
+  if (!readiness.visibility_ready) {
+    reasons.push(
+      rawVisibility === "public"
+        ? "visibility_public_blocked"
+        : rawVisibility === "unlisted"
+          ? "visibility_unlisted_blocked"
+          : "visibility"
+    );
+  }
   if (!readiness.title_ready) reasons.push("title");
   if (!readiness.description_ready) reasons.push("description");
   reasons.push(...disclosureReasons);
@@ -246,7 +254,7 @@ function buildBlockedReasons(
 }
 
 function normalizeVisibility(input: unknown): YouTubeUploadVisibility | "" {
-  if (input === "private" || input === "unlisted") {
+  if (input === "private") {
     return input;
   }
   return "";

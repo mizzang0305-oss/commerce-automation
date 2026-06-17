@@ -132,6 +132,21 @@ describe("YouTube product video private upload package", () => {
     });
   });
 
+  test("unlisted visibility blocks package prepare", async () => {
+    const response = await prepare({ ...validProductPackageInput, visibility: "unlisted" });
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      blocked_reasons: expect.arrayContaining(["visibility_unlisted_blocked"]),
+      readiness: {
+        visibility_ready: false,
+        public_upload_blocked: true
+      }
+    });
+  });
+
   test("missing Coupang Partners or commission disclosure blocks prepare", async () => {
     const response = await prepare({
       ...validProductPackageInput,

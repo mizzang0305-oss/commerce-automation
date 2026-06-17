@@ -43,7 +43,10 @@ describe("private YouTube live adapter readiness", () => {
   });
 
   test("blocks execute when live smoke approval is missing", async () => {
-    const request = makeValidUploadRequest();
+    const request = {
+      ...makeValidUploadRequest(),
+      execution_intent: "live_smoke" as const
+    };
     const fetchMock = vi.fn();
 
     const result = await new ServerYouTubeUploadAdapter({

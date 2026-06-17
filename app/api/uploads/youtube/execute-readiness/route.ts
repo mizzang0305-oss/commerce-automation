@@ -5,7 +5,9 @@ export async function POST(request: Request) {
   const body = await parseBody(request);
   const readiness = buildYouTubeExecuteReadiness({
     confirmation: body.confirmation,
-    smokeApproval: body.smoke_approval ?? body.smokeApproval
+    smokeApproval: body.smoke_approval ?? body.smokeApproval,
+    executionIntent: body.execution_intent ?? body.upload_intent,
+    visibility: body.visibility
   });
 
   return NextResponse.json({

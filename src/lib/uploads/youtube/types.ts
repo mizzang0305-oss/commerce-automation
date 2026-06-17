@@ -1,6 +1,7 @@
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export type YouTubeUploadVisibility = "private" | "unlisted";
+export type YouTubeExecutionIntent = "private_execute" | "live_smoke";
 
 export type YouTubeUploadBlockedReason =
   | "provider_not_configured"
@@ -13,7 +14,11 @@ export type YouTubeUploadBlockedReason =
   | "public_upload_blocked"
   | "confirmation_required"
   | "upload_confirmation_missing"
-  | "live_smoke_approval_missing";
+  | "private_execute_approval_missing"
+  | "live_smoke_approval_missing"
+  | "visibility_public_blocked"
+  | "visibility_unlisted_blocked"
+  | "visibility_private_required";
 
 export interface YouTubeUploadReadiness {
   provider: "youtube";
@@ -38,6 +43,7 @@ export interface YouTubeUploadRequest {
   tags: string[];
   category_id?: string;
   visibility: YouTubeUploadVisibility;
+  execution_intent: YouTubeExecutionIntent;
   disclosure_text: string;
   selected_affiliate_url: string;
   smoke_approval?: string;
@@ -115,6 +121,8 @@ export type YouTubeUploadRequestInput = {
   tags?: unknown;
   category_id?: unknown;
   visibility?: unknown;
+  execution_intent?: unknown;
+  upload_intent?: unknown;
   disclosure_text?: unknown;
   selected_affiliate_url?: unknown;
   smoke_approval?: unknown;

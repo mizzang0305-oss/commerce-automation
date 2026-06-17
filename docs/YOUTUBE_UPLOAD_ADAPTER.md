@@ -1,15 +1,15 @@
 ﻿# YouTube Upload Adapter
 
-This adapter is an approval-gated server-only path for YouTube private or unlisted upload smoke.
+This adapter is an approval-gated server-only path for YouTube private upload.
 
 It does not enable public upload. It does not run live upload smoke by default. It does not store OAuth tokens in the repository or expose token values to the client.
 
 ## Scope
 
 - Provider: YouTube only.
-- Visibility: `private` or `unlisted` only.
-- Exact confirmation phrase: `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
-- Live smoke phrase: `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`.
+- Final execute visibility: `private` only. `public` and `unlisted` are blocked by the execute gate.
+- Final execute confirmation phrase: `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
+- Live smoke phrase: `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE`, required only with `execution_intent=live_smoke`.
 - Default behavior: blocked by readiness.
 - Upload method: YouTube Data API resumable `videos.insert` from a server-accessible prepared video asset reference.
 - Local `.mp4` paths are localhost diagnostics only and do not satisfy domain/serverless readiness.
@@ -49,7 +49,7 @@ YouTube upload request preparation requires:
 - `selected_affiliate_url`
 - `visibility` as `private` or `unlisted`
 
-`public` visibility is rejected. The final description must include the affiliate disclosure text and affiliate URL.
+`public` visibility is rejected during prepare. Final execute additionally requires `private` visibility. The final description must include the affiliate disclosure text and affiliate URL.
 
 `video_path_or_url` is deprecated for domain readiness. It may remain in a
 localhost diagnostic payload, but a Windows path such as `C:\...\video.mp4`, a
@@ -94,7 +94,7 @@ Korean labels, current blocker summaries, and fix hints:
 - local token file path and token readiness
 - `youtube.upload` scope readiness
 - quota, account, and policy readiness
-- `YOUTUBE_UPLOAD_ENABLED`
+- `YOUTUBE_PRIVATE_UPLOAD_ENABLED` or legacy `YOUTUBE_UPLOAD_ENABLED`
 - manual-only and exact-approval requirements
 - public upload blocked state
 
@@ -136,9 +136,9 @@ for a real product video after the private smoke path is proven. It validates:
 - `title`
 - `description`
 - `disclosure_text`
-- `visibility=private|unlisted`
+- `visibility=private`
 
-`public` visibility is rejected. The disclosure must include readable
+`public` visibility is rejected during prepare. Final execute additionally requires `private` visibility. The disclosure must include readable
 `쿠팡파트너스`, `활동의 일환`, and `수수료`/`제공받을 수 있습니다` text and must not
 look garbled.
 
@@ -192,7 +192,7 @@ Resolver gates:
 - `quota_ready`: YouTube 할당량 준비. Source: `YOUTUBE_QUOTA_READY`.
 - `account_ready`: YouTube 계정/채널 준비. Source: `YOUTUBE_ACCOUNT_READY`.
 - `policy_ready`: 업로드 정책 준비. Source: `YOUTUBE_POLICY_READY` plus `PUBLIC_UPLOAD_ENABLED=false`.
-- `youtube_upload_enabled`: YouTube 업로드 기능 플래그. Source: `YOUTUBE_UPLOAD_ENABLED`.
+- `youtube_upload_enabled`: YouTube private upload feature flag. Source: `YOUTUBE_PRIVATE_UPLOAD_ENABLED` or legacy `YOUTUBE_UPLOAD_ENABLED`.
 - `public_upload_blocked`: public visibility and public upload remain blocked. Source: `PUBLIC_UPLOAD_ENABLED=false`.
 - `manual_upload_only`: manual verification remains enabled.
 - `approval_required`: exact approval phrases remain required.
@@ -210,34 +210,48 @@ refresh tokens, client secret values, or Authorization headers.
 `prepare` validates and returns request JSON only. It does not call YouTube.
 
 `execute-readiness` is a side-effect-free dry-run for the stricter execute
-contract. It combines `readiness.can_upload`, the exact upload confirmation,
-and the live smoke approval phrase into a single `can_execute` boolean. It must
-return non-empty `blocked_reasons` when blocked, for example
-`upload_confirmation_missing` or `live_smoke_approval_missing`, and it must keep all upload side effects false.
+contract. The default `private_execute` intent combines `readiness.can_upload`,
+the exact upload confirmation, and private-only visibility into a single
+`can_execute` boolean. It must return non-empty `blocked_reasons` when blocked,
+for example `upload_confirmation_missing`, `private_execute_approval_missing`,
+or `visibility_unlisted_blocked`, and it must keep all upload side effects false.
 The `/uploads` dashboard uses this endpoint to keep the execute button disabled
 when server execute gates are stricter than the top-level readiness card.
 
-The dashboard sends the same approval contract to both `execute-readiness` and
-`execute`:
+The real-product execute path sends the same private execute confirmation to both
+`execute-readiness` and `execute`:
 
 ```json
 {
+  "execution_intent": "private_execute",
+  "visibility": "private",
+  "confirmation": "APPROVE_YOUTUBE_PRIVATE_UPLOAD"
+}
+```
+
+Live smoke remains a separate contract. It must explicitly send
+`execution_intent=live_smoke` and the smoke approval phrase:
+
+```json
+{
+  "execution_intent": "live_smoke",
+  "visibility": "private",
   "smoke_approval": "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE",
   "confirmation": "APPROVE_YOUTUBE_PRIVATE_UPLOAD"
 }
 ```
 
 If `execute-readiness` returns `can_execute=true`, the subsequent Execute
-request must preserve those same fields. A later `live_smoke_approval_missing`
-response means the dashboard/server contract is misaligned, not that an upload
-succeeded.
+request must preserve the same intent, visibility, and approval fields. A later
+`live_smoke_approval_missing` response on a `private_execute` request means the
+dashboard/server contract is misaligned, not that an upload succeeded.
 
 `execute` requires:
 
 - exact confirmation phrase
 - readiness `can_upload=true`
 - execute readiness `can_execute=true`
-- private or unlisted visibility
+- private visibility
 - required disclosure and affiliate URL
 
 Without readiness and explicit approval, it returns `BLOCKED_BY_CONFIRMATION` or
@@ -290,7 +304,7 @@ Required conditions before any live smoke:
 - `readiness.can_upload=true`
 - `token_ready=true`
 - `quota_ready=true`
-- visibility is `private` or `unlisted`
+- visibility is `private`
 - `prepared_video_asset` exists
 - `prepared_video_asset.server_accessible=true`
 - `prepared_video_asset.mime_type=video/mp4`
@@ -328,6 +342,6 @@ writing DB/R2/queue/job/upload-package state.
 
 ## videos.insert Boundary
 
-The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, smoke approval, and exact confirmation pass. Success requires a returned YouTube video id. Missing video id, missing server-accessible asset reference, missing token readiness, public visibility, or failed provider responses must return `succeeded=false`.
+The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, exact confirmation, private visibility, and any intent-specific approval pass. `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE` is required only for `execution_intent=live_smoke`. Success requires a returned YouTube video id. Missing video id, missing server-accessible asset reference, missing token readiness, public or unlisted visibility, or failed provider responses must return `succeeded=false`.
 
 See [YOUTUBE_PRIVATE_UPLOAD_SMOKE.md](YOUTUBE_PRIVATE_UPLOAD_SMOKE.md) for the smoke checklist.

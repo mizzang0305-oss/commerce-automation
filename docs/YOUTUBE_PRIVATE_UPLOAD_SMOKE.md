@@ -1,6 +1,6 @@
 # YouTube Private Upload Smoke
 
-This runbook covers one approval-gated YouTube private or unlisted upload smoke from a local mp4 file.
+This runbook covers one approval-gated YouTube private upload smoke from a local mp4 file.
 
 It does not enable public upload, TikTok upload, Threads upload, DB writes, R2 uploads, queue creation, worker job creation, or upload package creation.
 
@@ -31,7 +31,7 @@ All gates must be true before `POST /api/uploads/youtube/execute` is attempted:
 - Request body confirmation is exactly `APPROVE_YOUTUBE_PRIVATE_UPLOAD`.
 - YouTube readiness returns `can_upload=true`.
 - Token readiness returns `token_ready=true` and `scopes_ready=true`.
-- Visibility is `private` or `unlisted`.
+- Visibility is `private`.
 - `PUBLIC_UPLOAD_ENABLED` is not true.
 - `candidate_id` is present and links the smoke upload request to an approved candidate context.
 - `video_path_or_url` points to an existing local `.mp4` file.
@@ -105,6 +105,8 @@ Smoke payload shape:
 {
   "candidate_id": "candidate-video-smoke-001",
   "confirmation": "APPROVE_YOUTUBE_PRIVATE_UPLOAD",
+  "smoke_approval": "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE",
+  "execution_intent": "live_smoke",
   "visibility": "private",
   "video_path_or_url": "C:\\Users\\LOVE\\MyProjects\\commerce-automation\\commerce-assets\\output\\video-packages\\youtube-private-smoke-001\\youtube-private-smoke-001.mp4",
   "title": "Commerce Automation Private Upload Smoke",
@@ -169,7 +171,7 @@ Success requires:
 - `succeeded=true`
 - `youtube_video_id` present
 - `youtube_url` present
-- `visibility=private` or `visibility=unlisted`
+- `visibility=private`
 - `external_api_called=true`
 - `youtube_upload_executed=true`
 - `uploaded=true`
@@ -184,7 +186,7 @@ a new explicit approval.
 
 After a successful smoke, verify manually in YouTube Studio:
 
-- The video is private or unlisted as requested.
+- The video is private.
 - The title is the smoke title.
 - The description includes the affiliate disclosure and affiliate URL.
 - The video did not become public automatically.
@@ -203,7 +205,7 @@ Use `/uploads` and the `상품 영상 업로드 패키지` section to prepare:
 - product name
 - selected Coupang affiliate URL
 - local mp4 path or approved video URL
-- private or unlisted visibility only
+- private visibility only
 - title and description preview
 - readable Korean Coupang Partners disclosure
 - Studio verification checklist

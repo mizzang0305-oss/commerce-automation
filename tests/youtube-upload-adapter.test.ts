@@ -44,10 +44,12 @@ function clearYouTubeEnv() {
   for (const name of [
     "YOUTUBE_LOCAL_TOKEN_FILE_PATH",
     "YOUTUBE_TOKEN_FILE",
+    "YOUTUBE_TOKEN_PROVIDER_MODE",
     "YOUTUBE_TOKEN_PROVIDER",
     "YOUTUBE_TOKEN_READY",
     "YOUTUBE_SCOPES_READY",
     "YOUTUBE_UPLOAD_ENABLED",
+    "YOUTUBE_PRIVATE_UPLOAD_ENABLED",
     "YOUTUBE_QUOTA_READY",
     "YOUTUBE_ACCOUNT_READY",
     "YOUTUBE_POLICY_READY",
@@ -270,7 +272,7 @@ describe("YouTube upload adapter readiness and gates", () => {
     });
   });
 
-  test("execute readiness dry-run includes live smoke gate without external side effects", async () => {
+  test("private execute readiness does not require live smoke approval", async () => {
     vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
     vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
     vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "configured-provider");
@@ -295,14 +297,15 @@ describe("YouTube upload adapter readiness and gates", () => {
     expect(payload).toMatchObject({
       ok: true,
       can_execute: false,
-      blocked_reasons: expect.arrayContaining(["live_smoke_approval_missing"]),
+      blocked_reasons: expect.arrayContaining(["server_token_provider_contract_only"]),
       side_effects: youtubeUploadSafeSideEffects
     });
-    expect(JSON.stringify(payload)).toContain("execute_live_smoke_approval");
+    expect(payload.blocked_reasons).not.toContain("live_smoke_approval_missing");
+    expect(JSON.stringify(payload)).not.toContain("execute_live_smoke_approval");
     expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
   });
 
-  test("execute readiness separates missing upload confirmation from missing smoke approval", async () => {
+  test("execute readiness separates missing private approval from missing smoke approval", async () => {
     vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
     vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
     vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "configured-provider");
@@ -323,14 +326,15 @@ describe("YouTube upload adapter readiness and gates", () => {
     }));
     expect(await json(missingConfirmation)).toMatchObject({
       can_execute: false,
-      blocked_reasons: expect.arrayContaining(["upload_confirmation_missing"])
+      blocked_reasons: expect.arrayContaining(["upload_confirmation_missing", "private_execute_approval_missing"])
     });
 
     const missingSmokeApproval = await postYouTubeExecuteReadiness(new Request("http://localhost/api/uploads/youtube/execute-readiness", {
       method: "POST",
       body: JSON.stringify({
         ...validRequestBody,
-        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        execution_intent: "live_smoke"
       })
     }));
     expect(await json(missingSmokeApproval)).toMatchObject({
@@ -355,6 +359,7 @@ describe("YouTube upload adapter readiness and gates", () => {
       method: "POST",
       body: JSON.stringify({
         ...validRequestBody,
+        execution_intent: "live_smoke",
         confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
         smoke_approval: "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE"
       })
@@ -478,6 +483,139 @@ describe("YouTube upload adapter readiness and gates", () => {
     }
   });
 
+  test("private execute readiness can pass with local token provider and no smoke approval", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "commerce-youtube-ready-token-"));
+    const tokenPath = path.join(dir, "youtube-token.json");
+    writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        access_token: "access-secret-value",
+        scope: "https://www.googleapis.com/auth/youtube.upload"
+      }),
+      "utf8"
+    );
+    vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
+    vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
+    vi.stubEnv("YOUTUBE_LOCAL_TOKEN_FILE_PATH", tokenPath);
+    vi.stubEnv("YOUTUBE_PRIVATE_UPLOAD_ENABLED", "true");
+    vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
+    vi.stubEnv("YOUTUBE_ACCOUNT_READY", "true");
+    vi.stubEnv("YOUTUBE_POLICY_READY", "true");
+    vi.stubEnv("PUBLIC_UPLOAD_ENABLED", "false");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const response = await postYouTubeExecuteReadiness(new Request("http://localhost/api/uploads/youtube/execute-readiness", {
+        method: "POST",
+        body: JSON.stringify({
+          ...validRequestBody,
+          confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+          visibility: "private"
+        })
+      }));
+      const payload = await json(response);
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        ok: true,
+        can_execute: true,
+        blocked_reasons: [],
+        side_effects: youtubeUploadSafeSideEffects
+      });
+      expect(JSON.stringify(payload)).not.toContain("execute_live_smoke_approval");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("execute readiness blocks public and unlisted visibility for final private execute", async () => {
+    vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
+    vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
+    vi.stubEnv("YOUTUBE_TOKEN_PROVIDER", "configured-provider");
+    vi.stubEnv("YOUTUBE_TOKEN_READY", "true");
+    vi.stubEnv("YOUTUBE_SCOPES_READY", "true");
+    vi.stubEnv("YOUTUBE_PRIVATE_UPLOAD_ENABLED", "true");
+    vi.stubEnv("YOUTUBE_QUOTA_READY", "true");
+    vi.stubEnv("YOUTUBE_ACCOUNT_READY", "true");
+    vi.stubEnv("YOUTUBE_POLICY_READY", "true");
+    vi.stubEnv("PUBLIC_UPLOAD_ENABLED", "false");
+
+    const publicResponse = await postYouTubeExecuteReadiness(new Request("http://localhost/api/uploads/youtube/execute-readiness", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        visibility: "public"
+      })
+    }));
+    expect(await json(publicResponse)).toMatchObject({
+      can_execute: false,
+      blocked_reasons: expect.arrayContaining(["visibility_public_blocked"])
+    });
+
+    const unlistedResponse = await postYouTubeExecuteReadiness(new Request("http://localhost/api/uploads/youtube/execute-readiness", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        visibility: "unlisted"
+      })
+    }));
+    expect(await json(unlistedResponse)).toMatchObject({
+      can_execute: false,
+      blocked_reasons: expect.arrayContaining(["visibility_unlisted_blocked"])
+    });
+  });
+
+  test("public upload flag does not bypass upload-disabled or policy gates", () => {
+    const readiness = buildYouTubeUploadReadiness({
+      YOUTUBE_CLIENT_ID: "configured-client-id",
+      YOUTUBE_CLIENT_SECRET: "configured-client-secret",
+      YOUTUBE_TOKEN_PROVIDER: "configured-provider",
+      YOUTUBE_TOKEN_READY: "true",
+      YOUTUBE_SCOPES_READY: "true",
+      YOUTUBE_QUOTA_READY: "true",
+      YOUTUBE_ACCOUNT_READY: "true",
+      YOUTUBE_POLICY_READY: "true",
+      YOUTUBE_UPLOAD_ENABLED: "",
+      YOUTUBE_PRIVATE_UPLOAD_ENABLED: "",
+      PUBLIC_UPLOAD_ENABLED: "true"
+    } as NodeJS.ProcessEnv);
+
+    expect(readiness.can_upload).toBe(false);
+    expect(readiness.blocked_reasons).toEqual(expect.arrayContaining([
+      "upload_disabled",
+      "public_upload_blocked",
+      "policy_not_ready"
+    ]));
+  });
+
+  test("execute route blocks unlisted visibility before adapter or videos.insert", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        ...validRequestBody,
+        confirmation: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
+        visibility: "unlisted"
+      })
+    }));
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
+      missing_reasons: expect.arrayContaining(["visibility_unlisted_blocked"]),
+      side_effects: youtubeUploadSafeSideEffects
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("execute readiness block returns top-level safe error and non-empty reasons", async () => {
     vi.stubEnv("YOUTUBE_CLIENT_ID", "configured-client-id");
     vi.stubEnv("YOUTUBE_CLIENT_SECRET", "configured-client-secret");
@@ -504,10 +642,11 @@ describe("YouTube upload adapter readiness and gates", () => {
       ok: false,
       error_code: "BLOCKED_BY_YOUTUBE_READINESS",
       safe_error: expect.any(String),
-      blocked_reasons: expect.arrayContaining(["live_smoke_approval_missing"]),
+      blocked_reasons: expect.arrayContaining(["server_token_provider_contract_only"]),
       side_effects: youtubeUploadSafeSideEffects
     });
-    expect(JSON.stringify(payload)).toContain("execute_live_smoke_approval");
+    expect(JSON.stringify(payload)).toContain("execute_token_provider");
+    expect(JSON.stringify(payload)).not.toContain("execute_live_smoke_approval");
     expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
   });
 

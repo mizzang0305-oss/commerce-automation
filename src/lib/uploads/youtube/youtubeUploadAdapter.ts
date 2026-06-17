@@ -47,7 +47,17 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   }
 
   async upload(request: YouTubeUploadRequest): Promise<YouTubeUploadResult> {
+    if (request.visibility !== "private") {
+      return blockedYouTubeUploadResult(
+        request.visibility,
+        "This YouTube execute path allows private visibility only.",
+        [request.visibility === "unlisted" ? "visibility_unlisted_blocked" : "visibility_public_blocked"],
+        false
+      );
+    }
+
     if (
+      request.execution_intent === "live_smoke" &&
       !hasExactYouTubeLiveSmokeApproval(request.smoke_approval) &&
       !hasExactYouTubeLiveSmokeApproval(this.env.RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE)
     ) {
@@ -123,7 +133,7 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       youtube_video_id: upload.youtube_video_id,
       youtube_url: `https://www.youtube.com/watch?v=${upload.youtube_video_id}`,
       visibility: request.visibility,
-      safe_message: "YouTube private/unlisted upload completed.",
+      safe_message: "YouTube private upload completed.",
       blocked_reasons: [],
       side_effects: {
         external_api_called: true,
