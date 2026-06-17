@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  APPROVE_YOUTUBE_PRIVATE_UPLOAD,
-  RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
+  APPROVE_YOUTUBE_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "@/lib/uploads/youtube/productVideoUploadPackage";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
@@ -441,9 +440,6 @@ export function YouTubeProductVideoPackageFlow() {
             <p className="font-bold text-slate-950">필수 승인 문구</p>
             <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
               {APPROVE_YOUTUBE_PRIVATE_UPLOAD}
-            </code>
-            <code className="mt-2 block rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">
-              {RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE}
             </code>
           </div>
           {disclosureReasons.length > 0 ? (

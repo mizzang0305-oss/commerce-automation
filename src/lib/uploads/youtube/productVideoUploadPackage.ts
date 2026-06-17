@@ -1,7 +1,6 @@
 import type { YouTubeUploadVisibility } from "@/lib/uploads/youtube/types";
 import {
-  APPROVE_YOUTUBE_PRIVATE_UPLOAD,
-  RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE
+  APPROVE_YOUTUBE_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
@@ -66,7 +65,7 @@ export type YouTubeProductVideoUploadPackage = {
   tags: string[];
   made_for_kids: boolean;
   upload_confirmation_phrase_required: typeof APPROVE_YOUTUBE_PRIVATE_UPLOAD;
-  smoke_or_product_approval_required: typeof RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE;
+  private_execute_approval_required: typeof APPROVE_YOUTUBE_PRIVATE_UPLOAD;
   readiness: YouTubeProductVideoUploadPackageReadiness;
   blocked_reasons: string[];
   side_effects: YouTubeProductVideoUploadPackageSideEffects;
@@ -158,7 +157,7 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
       tags: normalizeTags(input.tags),
       made_for_kids: input.made_for_kids === true,
       upload_confirmation_phrase_required: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
-      smoke_or_product_approval_required: RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE,
+      private_execute_approval_required: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
       readiness,
       blocked_reasons: [],
       side_effects: YOUTUBE_PRODUCT_VIDEO_PACKAGE_SIDE_EFFECTS,
