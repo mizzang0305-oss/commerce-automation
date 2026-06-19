@@ -3,6 +3,7 @@ import {
   DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
   buildYouTubeProductVideoUploadPackage
 } from "@/lib/uploads/youtube";
+import { buildYouTubeUploadRequest } from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 
 const CANONICAL_KOREAN_DISCLOSURE =
@@ -77,5 +78,56 @@ describe("YouTube product package disclosure/readiness repair", () => {
     expect(result.package.description).toContain(CANONICAL_KOREAN_DISCLOSURE);
     expect(result.package.blocked_reasons).not.toContain("disclosure_text_garbled");
     expect(result.package.readiness.disclosure_ready).toBe(true);
+  });
+
+  test("source garbled product text does not reintroduce disclosure_text_garbled after package repair", () => {
+    const garbledProductText = "? ???? ???? 8? ???";
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PRODUCT_PACKAGE_INPUT,
+      product_name: garbledProductText,
+      description: [
+        garbledProductText,
+        CANONICAL_KOREAN_DISCLOSURE
+      ].join("\n\n"),
+      disclosure_text: CANONICAL_KOREAN_DISCLOSURE
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(`expected source text repair, got ${result.blocked_reasons.join(",")}`);
+    }
+    expect(result.package.disclosure_text).toBe(CANONICAL_KOREAN_DISCLOSURE);
+    expect(result.package.description).toContain(CANONICAL_KOREAN_DISCLOSURE);
+    expect(result.package.description).not.toContain(garbledProductText);
+    expect(result.package.blocked_reasons).not.toContain("disclosure_text_garbled");
+    expect(result.package.readiness.disclosure_ready).toBe(true);
+  });
+
+  test("private execute preflight accepts repaired package disclosure description", () => {
+    const garbledProductText = "? ???? ???? 8? ???";
+    const packageResult = buildYouTubeProductVideoUploadPackage({
+      ...READY_PRODUCT_PACKAGE_INPUT,
+      product_name: garbledProductText,
+      description: [
+        garbledProductText,
+        CANONICAL_KOREAN_DISCLOSURE
+      ].join("\n\n"),
+      disclosure_text: CANONICAL_KOREAN_DISCLOSURE
+    });
+
+    expect(packageResult.ok).toBe(true);
+    if (!packageResult.ok) {
+      throw new Error(`expected repaired package, got ${packageResult.blocked_reasons.join(",")}`);
+    }
+
+    const requestResult = buildYouTubeUploadRequest({
+      ...packageResult.package,
+      execution_intent: "private_execute"
+    });
+
+    expect(requestResult.ok).toBe(true);
+    if (!requestResult.ok) {
+      expect(requestResult.missing_reasons).not.toContain("disclosure_text_garbled");
+    }
   });
 });
