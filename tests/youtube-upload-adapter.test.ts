@@ -17,6 +17,8 @@ import {
 
 const validRequestBody = {
   candidate_id: "candidate-youtube-upload-001",
+  product_name: "Desk organizer set",
+  product_source: "coupang",
   video_path_or_url: "commerce-assets/output/video-packages/candidate-youtube-upload-001/shorts.mp4",
   prepared_video_asset: {
     asset_id: "asset-candidate-youtube-upload-001",
@@ -650,8 +652,10 @@ describe("YouTube upload adapter readiness and gates", () => {
     expect(JSON.stringify(payload)).not.toMatch(/refresh_token|access_token|client-secret|Authorization: Bearer/i);
   });
 
-  test("execute rejects garbled disclosure before readiness or external upload attempts", async () => {
-    const blockedByGarbledDisclosure = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+  test("execute route repairs package disclosure before readiness or external upload attempts", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
       method: "POST",
       body: JSON.stringify({
         ...validRequestBody,
@@ -660,13 +664,16 @@ describe("YouTube upload adapter readiness and gates", () => {
         disclosure_text: "? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????."
       })
     }));
-    expect(blockedByGarbledDisclosure.status).toBe(400);
-    expect(await json(blockedByGarbledDisclosure)).toMatchObject({
+    const payload = await json(response);
+
+    expect(response.status).toBe(403);
+    expect(payload).toMatchObject({
       ok: false,
-      error_code: "YOUTUBE_UPLOAD_REQUEST_NOT_READY",
-      missing_reasons: expect.arrayContaining(["disclosure_text_garbled"]),
+      error_code: "BLOCKED_BY_YOUTUBE_READINESS",
       side_effects: youtubeUploadSafeSideEffects
     });
+    expect(JSON.stringify(payload)).not.toContain("disclosure_text_garbled");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test("mock adapter is explicit and does not report production upload success", async () => {
