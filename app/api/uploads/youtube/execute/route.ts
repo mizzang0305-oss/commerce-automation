@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   ServerYouTubeUploadAdapter,
   buildYouTubeExecuteReadiness,
+  buildYouTubeProductVideoUploadPackage,
   buildYouTubeUploadReadiness,
   buildYouTubeUploadRequest,
   getYouTubeUploadAccessTokenForServerUpload,
@@ -51,7 +52,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const requestResult = buildYouTubeUploadRequest(body);
+  const packageResult = buildYouTubeProductVideoUploadPackage(body);
+  if (!packageResult.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error_code: "YOUTUBE_PRODUCT_UPLOAD_PACKAGE_NOT_READY",
+        message: "YouTube product upload package is not ready for private execute.",
+        missing_reasons: packageResult.blocked_reasons,
+        package_readiness: packageResult.readiness,
+        side_effects: youtubeUploadSafeSideEffects,
+        approval_required: true
+      },
+      { status: 400 }
+    );
+  }
+
+  const requestResult = buildYouTubeUploadRequest({
+    ...packageResult.package,
+    execution_intent: body.execution_intent ?? body.upload_intent,
+    smoke_approval: body.smoke_approval ?? body.smokeApproval
+  });
   if (!requestResult.ok) {
     return NextResponse.json(
       {
