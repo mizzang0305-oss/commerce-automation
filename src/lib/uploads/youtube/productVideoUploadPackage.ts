@@ -112,7 +112,7 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
   const descriptionInput = repairProductVideoDescriptionInput(rawDescriptionInput);
   const descriptionWasRepaired = Boolean(rawDescriptionInput) && !descriptionInput;
   const description = buildProductVideoDescription({
-    product_name: productName,
+    product_name: repairProductVideoDescriptionFragment(productName),
     selected_affiliate_url: selectedAffiliateUrl,
     description: descriptionInput,
     disclosure_text: disclosureText
@@ -179,9 +179,9 @@ export function buildProductVideoDescription(input: {
   disclosure_text?: string;
 }) {
   const base = input.description?.trim() || [
-    `상품명: ${input.product_name}`,
-    `제휴 링크: ${input.selected_affiliate_url}`,
-    `쿠팡파트너스 고지: ${input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT}`
+    input.product_name ? `Product: ${input.product_name}` : "Product selected for private review.",
+    "Affiliate link is present in the source package.",
+    input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT
   ].join("\n");
   const parts = [base];
   const disclosure = input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT;
@@ -287,6 +287,13 @@ function repairProductVideoDisclosureText(value: string) {
 }
 
 function repairProductVideoDescriptionInput(value: string) {
+  if (!value) {
+    return "";
+  }
+  return looksLikeGarbledKorean(value) ? "" : value;
+}
+
+function repairProductVideoDescriptionFragment(value: string) {
   if (!value) {
     return "";
   }
