@@ -163,7 +163,7 @@ describe("YouTube product video private upload package", () => {
     });
   });
 
-  test("garbled disclosure blocks prepare", async () => {
+  test("garbled disclosure is repaired with canonical package fallback", async () => {
     const response = await prepare({
       ...validProductPackageInput,
       description: "? ???? ?? ???? ??? ????, ?? ?? ???? ???? ? ????.",
@@ -171,11 +171,18 @@ describe("YouTube product video private upload package", () => {
     });
     const payload = await json(response);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     expect(payload).toMatchObject({
-      ok: false,
-      blocked_reasons: expect.arrayContaining(["disclosure_text_garbled"])
+      ok: true,
+      package: {
+        disclosure_text: DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
+        blocked_reasons: [],
+        readiness: {
+          disclosure_ready: true
+        }
+      }
     });
+    expect(JSON.stringify(payload)).not.toContain("disclosure_text_garbled");
   });
 
   test("builder preserves title and description with affiliate and disclosure text", () => {

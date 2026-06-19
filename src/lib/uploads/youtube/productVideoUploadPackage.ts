@@ -2,7 +2,10 @@ import type { YouTubeUploadVisibility } from "@/lib/uploads/youtube/types";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube/youtubeUploadGuards";
-import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
+import {
+  looksLikeGarbledKorean,
+  validateYouTubeDisclosureText
+} from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 
@@ -91,7 +94,7 @@ export const YOUTUBE_PRODUCT_VIDEO_PACKAGE_SIDE_EFFECTS: YouTubeProductVideoUplo
 };
 
 export const DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT =
-  "이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
+  "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
 
 export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideoUploadPackageInput):
   | { ok: true; package: YouTubeProductVideoUploadPackage }
@@ -102,16 +105,19 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
   const videoPathOrUrl = safeTrim(input.video_path_or_url);
   const assetReadiness = buildPreparedVideoAssetReadiness(input);
   const visibility = normalizeVisibility(input.visibility);
-  const disclosureText = safeTrim(input.disclosure_text);
+  const rawDisclosureText = safeTrim(input.disclosure_text);
+  const disclosureText = repairProductVideoDisclosureText(rawDisclosureText);
   const title = safeTrim(input.title);
-  const descriptionInput = safeTrim(input.description);
+  const rawDescriptionInput = safeTrim(input.description);
+  const descriptionInput = repairProductVideoDescriptionInput(rawDescriptionInput);
+  const descriptionWasRepaired = Boolean(rawDescriptionInput) && !descriptionInput;
   const description = buildProductVideoDescription({
     product_name: productName,
     selected_affiliate_url: selectedAffiliateUrl,
     description: descriptionInput,
     disclosure_text: disclosureText
   });
-  const disclosureReasons = disclosureText
+  const disclosureReasons = rawDisclosureText
     ? validateYouTubeDisclosureText({ description, disclosure_text: disclosureText })
     : ["disclosure_text"];
 
@@ -123,7 +129,7 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
     disclosure_ready: disclosureReasons.length === 0,
     visibility_ready: Boolean(visibility),
     title_ready: Boolean(title),
-    description_ready: Boolean(descriptionInput),
+    description_ready: Boolean(descriptionInput) || descriptionWasRepaired,
     public_upload_blocked: input.visibility !== "public",
     server_accessible_asset_ready: assetReadiness.server_accessible && assetReadiness.asset_ready,
     domain_ready: assetReadiness.domain_ready,
@@ -271,6 +277,20 @@ function normalizeTags(input: unknown): string[] {
     return ["coupang", "private upload", "commerce automation"];
   }
   return [...new Set(input.map((item) => safeTrim(item)).filter(Boolean))].slice(0, 20);
+}
+
+function repairProductVideoDisclosureText(value: string) {
+  if (!value) {
+    return "";
+  }
+  return looksLikeGarbledKorean(value) ? DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT : value;
+}
+
+function repairProductVideoDescriptionInput(value: string) {
+  if (!value) {
+    return "";
+  }
+  return looksLikeGarbledKorean(value) ? "" : value;
 }
 
 function safeTrim(value: unknown) {
