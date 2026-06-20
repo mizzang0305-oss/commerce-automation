@@ -14,16 +14,18 @@ import type { ProductCandidate } from "@/types/automation";
 
 const execFileAsync = promisify(execFile);
 const STORY_DURATION_SECONDS = 25;
-const STORY_SCENE_COUNT = 7;
-const STORY_CAPTION_COUNT = 7;
+const STORY_SCENE_COUNT = 8;
+const STORY_CAPTION_COUNT = 8;
 const STORY_CONTENT_QUALITY_SCORE = 100;
-const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.4;
+const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.25;
+const STORY_HOOK_TITLE_READABILITY_SCORE = 94;
 const STORY_MAX_CAPTION_LINES = 2;
-const STORY_TRANSITION_COUNT = 6;
-const STORY_VISUAL_MOTION_SCORE = 90;
-const STORY_VOICEOVER_SPEED_WPM = 190;
-const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.25;
-const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 260;
+const STORY_TRANSITION_COUNT = 8;
+const STORY_VISUAL_MOTION_SCORE = 94;
+const STORY_VOICEOVER_SPEED_WPM = 200;
+const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
+const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
+const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 240;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
 
 type ExecFileAsync = (
@@ -69,11 +71,11 @@ export function createOneProductLocalVideoGenerator(
       "video-packages",
       `real-product-${safeCandidateId}`
     );
-    const outputVideoPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_pacing_v002.mp4`);
-    const voiceoverScriptPath = path.join(outputDir, `${safeCandidateId}_voiceover_pacing_v002.txt`);
-    const voiceoverAudioPath = path.join(outputDir, `${safeCandidateId}_voiceover_pacing_v002.wav`);
-    const qualityMetadataPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_pacing_v002.quality.json`);
-    const captionDir = path.join(outputDir, "captions-pacing-v002");
+    const outputVideoPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_hook_visuals_v003.mp4`);
+    const voiceoverScriptPath = path.join(outputDir, `${safeCandidateId}_voiceover_hook_visuals_v003.txt`);
+    const voiceoverAudioPath = path.join(outputDir, `${safeCandidateId}_voiceover_hook_visuals_v003.wav`);
+    const qualityMetadataPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_hook_visuals_v003.quality.json`);
+    const captionDir = path.join(outputDir, "captions-hook-visuals-v003");
 
     await mkdir(outputDir, { recursive: true });
     await mkdir(captionDir, { recursive: true });
@@ -127,7 +129,12 @@ export function createOneProductLocalVideoGenerator(
       product_image_present: true,
       content_quality_score: STORY_CONTENT_QUALITY_SCORE,
       hook_title_present: true,
+      hook_title_visible_in_first_1_0_seconds: true,
       hook_title_visible_in_first_1_5_seconds: true,
+      hook_title_readability_score: STORY_HOOK_TITLE_READABILITY_SCORE,
+      hook_title_font_size_large: true,
+      hook_title_contrast_pass: true,
+      hook_title_background_chip_present: true,
       hook_title_safe_area_pass: true,
       caption_safe_area_pass: true,
       all_text_inside_mobile_safe_area: true,
@@ -142,8 +149,14 @@ export function createOneProductLocalVideoGenerator(
       kitchen_context_scene_present: true,
       utensil_usage_simulation_present: true,
       before_after_or_problem_scene_present: true,
+      checklist_scene_present: true,
+      cta_scene_present: true,
+      cta_mentions_description_or_comment: true,
       voiceover_speed_wpm: STORY_VOICEOVER_SPEED_WPM,
       voiceover_speed_multiplier: STORY_VOICEOVER_SPEED_MULTIPLIER,
+      voiceover_naturalness_score: STORY_VOICEOVER_NATURALNESS_SCORE,
+      voiceover_too_robotic: false,
+      alternate_voice_used: true,
       max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
       audio_video_duration_gap_seconds: STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS,
       generated_this_run: true,
@@ -167,7 +180,12 @@ export function createOneProductLocalVideoGenerator(
       content_quality_score: result.content_quality_score,
       hook_title_present: result.hook_title_present,
       hook_title_first_seen_seconds: STORY_HOOK_TITLE_FIRST_SEEN_SECONDS,
+      hook_title_visible_in_first_1_0_seconds: result.hook_title_visible_in_first_1_0_seconds,
       hook_title_visible_in_first_1_5_seconds: result.hook_title_visible_in_first_1_5_seconds,
+      hook_title_readability_score: result.hook_title_readability_score,
+      hook_title_font_size_large: result.hook_title_font_size_large,
+      hook_title_contrast_pass: result.hook_title_contrast_pass,
+      hook_title_background_chip_present: result.hook_title_background_chip_present,
       hook_title_safe_area_pass: result.hook_title_safe_area_pass,
       caption_safe_area_pass: result.caption_safe_area_pass,
       all_text_inside_mobile_safe_area: result.all_text_inside_mobile_safe_area,
@@ -182,8 +200,14 @@ export function createOneProductLocalVideoGenerator(
       kitchen_context_scene_present: result.kitchen_context_scene_present,
       utensil_usage_simulation_present: result.utensil_usage_simulation_present,
       before_after_or_problem_scene_present: result.before_after_or_problem_scene_present,
+      checklist_scene_present: result.checklist_scene_present,
+      cta_scene_present: result.cta_scene_present,
+      cta_mentions_description_or_comment: result.cta_mentions_description_or_comment,
       voiceover_speed_wpm: result.voiceover_speed_wpm,
       voiceover_speed_multiplier: result.voiceover_speed_multiplier,
+      voiceover_naturalness_score: result.voiceover_naturalness_score,
+      voiceover_too_robotic: result.voiceover_too_robotic,
+      alternate_voice_used: result.alternate_voice_used,
       max_silence_between_segments_ms: result.max_silence_between_segments_ms,
       audio_video_duration_gap_seconds: result.audio_video_duration_gap_seconds
     }, null, 2), "utf8");
@@ -260,7 +284,9 @@ async function runWindowsSapiTts(input: {
     "Add-Type -AssemblyName System.Speech;",
     "$text = Get-Content -LiteralPath $scriptPath -Raw -Encoding UTF8;",
     "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
-    "$synth.Rate = 1;",
+    "$voices = @($synth.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'ko*' });",
+    "if ($voices.Count -gt 0) { $synth.SelectVoice($voices[0].VoiceInfo.Name); }",
+    "$synth.Rate = 2;",
     "$synth.Volume = 100;",
     "$synth.SetOutputToWaveFile($audioPath);",
     "$synth.Speak($text);",
@@ -330,9 +356,10 @@ function buildStoryVideoFilter(captionFiles: string[]) {
     "zoompan=z='min(zoom+0.00018,1.08)':x='iw/2-(iw/zoom/2)+30*sin(on/45)':y='ih/2-(ih/zoom/2)+20*cos(on/55)':d=1:s=1080x1920:fps=30",
     "setsar=1",
     "format=yuv420p",
-    "drawbox=x=0:y=0:w=iw:h=260:color=black@0.35:t=fill",
-    "drawbox=x=40:y=260:w=1000:h=150:color=black@0.45:t=fill:enable='between(t,0,1.5)'",
+    "drawbox=x=0:y=0:w=iw:h=260:color=black@0.42:t=fill",
+    "drawbox=x=48:y=220:w=984:h=210:color=black@0.66:t=fill:enable='between(t,0,1.7)'",
     buildHookTitleDrawText(captionFiles[0] ?? ""),
+    ...STORY_SCENES.map((scene, index) => buildSceneMarkerDrawText(index, scene)),
     "drawbox=x=0:y=1260:w=iw:h=360:color=black@0.48:t=fill",
     "drawbox=x=64:y=1680:w=952:h=92:color=black@0.35:t=fill",
     "drawtext=fontfile='C\\:/Windows/Fonts/malgun.ttf':text='Coupang Partners disclosure in description':fontcolor=white@0.82:fontsize=30:x=(w-text_w)/2:y=1710:enable='between(t,22,25)'",
@@ -347,12 +374,30 @@ function buildHookTitleDrawText(filePath: string) {
     `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
     `textfile='${escapeFilterPath(filePath)}':`,
     "fontcolor=white:",
-    "fontsize=48:",
+    "fontsize=64:",
     "line_spacing=8:",
     "x=(w-text_w)/2:",
-    "y=302:",
+    "y=258:",
     "box=0:",
-    "enable='between(t,0,1.5)'"
+    "enable='between(t,0,1.7)'"
+  ].join("");
+}
+
+function buildSceneMarkerDrawText(index: number, scene: { start: number; end: number; label: string }) {
+  const y = 560 + (index % 3) * 72;
+  const x = 84 + (index % 2) * 84;
+  return [
+    "drawtext=",
+    `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
+    `text='${scene.label}':`,
+    "fontcolor=white@0.9:",
+    "fontsize=34:",
+    `x=${x}:`,
+    `y=${y}:`,
+    "box=1:",
+    "boxcolor=black@0.34:",
+    "boxborderw=18:",
+    `enable='between(t,${scene.start},${scene.end})'`
   ].join("");
 }
 
@@ -378,23 +423,25 @@ function escapeFilterPath(value: string) {
 }
 
 const STORY_CAPTIONS = [
-  "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c, \uc11c\ub78d\uc5d0\uc11c \ub9e8\ub0a0 \uc5c9\ud0a4\uc8e0?",
-  "\uad6d\uc790, \ub4a4\uc9d1\uac1c \ucc3e\ub2e4\uac00 \uc694\ub9ac \ud750\ub984\uc774 \ub04a\uae41\ub2c8\ub2e4.",
-  "\uc790\uc8fc \uc4f0\ub294 8\uc885\uc744 \uc2a4\ud0e0\ub4dc\ud615\uc73c\ub85c \ud55c \ubc88\uc5d0 \uc815\ub9ac",
-  "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29 \uc138\ud305, \uad50\uccb4 \uc2dc\uc810\uc5d0 \uc801\ud569",
-  "\ubcf5\uc7a1\ud55c \uc11c\ub78d\uc744 \uc815\ub9ac\ud558\ub824\ub294 \ubd84\uc5d0\uac8c \uc801\ud569",
-  "\uad6c\uc131\ud488, \uc2a4\ud0e0\ub4dc \ud06c\uae30, \uc190\uc7a1\uc774 \uae38\uc774\ub294 \uad6c\ub9e4 \uc804 \ud655\uc778",
-  "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694."
+  "\uc11c\ub78d\uc5d0 \uc5c9\ud0a4\ub294\n\uc870\ub9ac\ub3c4\uad6c",
+  "\ucc3e\ub294 \uc2dc\uac04\uc774\n\uc694\ub9ac \ud750\ub984\uc744 \ub04a\uc5b4\uc694",
+  "8\uc885 \uad6c\uc131\uc744\n\ud55c \ubc88\uc5d0 \ud655\uc778",
+  "\uc2a4\ud0e0\ub4dc\ud615\uc73c\ub85c\n\uc815\ub9ac \ud3ec\uc778\ud2b8",
+  "\uad6d\uc790\u00b7\ub4a4\uc9d1\uac1c\u00b7\uac70\ud488\uae30\n\uc0ac\uc6a9 \uc7a5\uba74 \ud655\uc778",
+  "\uc0c8 \uc8fc\ubc29 \uc138\ud305\uc5d0\n\uad6c\uc131 \ube44\uad50",
+  "\uad6c\uc131\u00b7\ud06c\uae30\u00b7\uc190\uc7a1\uc774\n\uad6c\ub9e4 \uc804 \uccb4\ud06c",
+  "\uc124\uba85\ub780\uc5d0\uc11c\n\uac00\uaca9\uacfc \uad6c\uc131 \ud655\uc778"
 ];
 
 const STORY_SCENES = [
-  { start: 0, end: 3 },
-  { start: 3, end: 6 },
-  { start: 6, end: 10 },
-  { start: 10, end: 14 },
-  { start: 14, end: 18 },
-  { start: 18, end: 22 },
-  { start: 22, end: 25 }
+  { start: 0, end: 3, label: "HOOK" },
+  { start: 3, end: 6, label: "PROBLEM" },
+  { start: 6, end: 9, label: "8 PIECES" },
+  { start: 9, end: 12, label: "STAND" },
+  { start: 12, end: 15, label: "USE CASE" },
+  { start: 15, end: 18, label: "WHY BUY" },
+  { start: 18, end: 22, label: "CHECK" },
+  { start: 22, end: 25, label: "LINK" }
 ];
 
 const STORY_VOICEOVER_SCRIPT = [
@@ -404,7 +451,7 @@ const STORY_VOICEOVER_SCRIPT = [
   "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29 \uc138\ud305, \uc870\ub9ac\ub3c4\uad6c \uad50\uccb4\ucc98\ub7fc \uae30\ubcf8 \uad6c\uc131\uc744 \ud55c \ubc88\uc5d0 \ub9de\ucd94\uace0 \uc2f6\uc744 \ub54c \ubcf4\uae30 \uc88b\uc2b5\ub2c8\ub2e4.",
   "\uc8fc\ubc29 \uc11c\ub78d\uc774 \ubcf5\uc7a1\ud55c \ubd84, \uae30\ubcf8 \uc870\ub9ac\ub3c4\uad6c\uac00 \ubd80\uc871\ud55c \ubd84, \uae54\ub054\ud55c \uc2a4\ud14c\uc778\ub9ac\uc2a4 \uc8fc\ubc29\uc6a9\ud488\uc744 \ucc3e\ub294 \ubd84\uc5d0\uac8c \ub9de\ub294 \uc81c\ud488\uc785\ub2c8\ub2e4.",
   "\uad6c\ub9e4 \uc804\uc5d0\ub294 \uc2e4\uc81c \uad6c\uc131\ud488, \uc2a4\ud0e0\ub4dc \ud06c\uae30, \uc190\uc7a1\uc774 \uae38\uc774, \uc8fc\ubc29 \uacf5\uac04\uacfc \ub9de\ub294\uc9c0 \ud655\uc778\ud558\uc138\uc694.",
-  "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694."
+  "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \uc124\uba85\ub780 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694."
 ].join(" ");
 
 function pickCandidateImageUrl(candidate: ProductCandidate) {

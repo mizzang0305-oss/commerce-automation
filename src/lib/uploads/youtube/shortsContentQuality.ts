@@ -12,11 +12,18 @@ export type ShortsContentQualityBlocker =
   | "VIDEO_DURATION_TOO_SHORT"
   | "HOOK_TITLE_MISSING"
   | "HOOK_TITLE_TOO_LATE"
+  | "HOOK_TITLE_LOW_VISIBILITY"
+  | "HOOK_TITLE_TOO_SMALL"
+  | "HOOK_TITLE_LOW_CONTRAST"
   | "TEXT_OUT_OF_SAFE_AREA"
   | "CAPTION_CLIPPED"
+  | "CAPTION_LINE_OVERFLOW"
   | "VISUAL_MOTION_TOO_LOW"
+  | "VISUAL_VARIATION_TOO_LOW"
   | "USE_CASE_SCENE_MISSING"
-  | "VOICEOVER_TOO_SLOW";
+  | "VOICEOVER_TOO_SLOW"
+  | "VOICEOVER_TOO_ROBOTIC"
+  | "VOICEOVER_NATURALNESS_TOO_LOW";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -49,7 +56,12 @@ export type ShortsContentQualityResult = {
   description_contains_no_manual_review_placeholder: boolean;
   hook_title_present: boolean;
   hook_title_first_seen_seconds: number | null;
+  hook_title_visible_in_first_1_0_seconds: boolean;
   hook_title_visible_in_first_1_5_seconds: boolean;
+  hook_title_readability_score: number | null;
+  hook_title_font_size_large: boolean;
+  hook_title_contrast_pass: boolean;
+  hook_title_background_chip_present: boolean;
   hook_title_safe_area_pass: boolean;
   caption_safe_area_pass: boolean;
   all_text_inside_mobile_safe_area: boolean;
@@ -64,8 +76,14 @@ export type ShortsContentQualityResult = {
   kitchen_context_scene_present: boolean;
   utensil_usage_simulation_present: boolean;
   before_after_or_problem_scene_present: boolean;
+  checklist_scene_present: boolean;
+  cta_scene_present: boolean;
+  cta_mentions_description_or_comment: boolean;
   voiceover_speed_wpm: number | null;
   voiceover_speed_multiplier: number | null;
+  voiceover_naturalness_score: number | null;
+  voiceover_too_robotic: boolean;
+  alternate_voice_used: boolean;
   max_silence_between_segments_ms: number | null;
   voiceover_too_slow: boolean;
 };
@@ -78,18 +96,21 @@ export type StoryDrivenShortsPackage = {
   tags: string[];
 };
 
-const MIN_CAPTION_COUNT = 7;
-const MIN_SCENE_COUNT = 7;
+const MIN_CAPTION_COUNT = 8;
+const MIN_SCENE_COUNT = 8;
 const MIN_DURATION_SECONDS = 20;
-const MIN_QUALITY_SCORE = 85;
-const MAX_HOOK_TITLE_FIRST_SEEN_SECONDS = 1.5;
-const MIN_TRANSITION_COUNT = 6;
-const MIN_VISUAL_MOTION_SCORE = 80;
-const MIN_VOICEOVER_WPM = 175;
-const MAX_VOICEOVER_WPM = 215;
-const MIN_VOICEOVER_SPEED_MULTIPLIER = 1.18;
-const MAX_VOICEOVER_SPEED_MULTIPLIER = 1.35;
-const MAX_SILENCE_BETWEEN_SEGMENTS_MS = 350;
+const MIN_QUALITY_SCORE = 88;
+const MAX_HOOK_TITLE_FIRST_SEEN_SECONDS = 1;
+const MAX_HOOK_TITLE_VISIBLE_SECONDS_FOR_REPORTING = 1.5;
+const MIN_HOOK_TITLE_READABILITY_SCORE = 90;
+const MIN_TRANSITION_COUNT = 8;
+const MIN_VISUAL_MOTION_SCORE = 88;
+const MIN_VOICEOVER_WPM = 180;
+const MAX_VOICEOVER_WPM = 220;
+const MIN_VOICEOVER_SPEED_MULTIPLIER = 1.15;
+const MAX_VOICEOVER_SPEED_MULTIPLIER = 1.3;
+const MIN_VOICEOVER_NATURALNESS_SCORE = 80;
+const MAX_SILENCE_BETWEEN_SEGMENTS_MS = 300;
 const MAX_CAPTION_LINES = 2;
 const REQUIRED_DISCLOSURE =
   "\u203b \uc774 \ucf58\ud150\uce20\ub294 \ucfe0\ud321\ud30c\ud2b8\ub108\uc2a4 \ud65c\ub3d9\uc758 \uc77c\ud658\uc73c\ub85c, \uc774\uc5d0 \ub530\ub978 \uc77c\uc815\uc561\uc758 \uc218\uc218\ub8cc\ub97c \uc81c\uacf5\ubc1b\uc744 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
@@ -136,9 +157,16 @@ export function evaluateShortsContentQuality(input: {
   const voiceoverSpeedMultiplier = normalizePositiveNumber(quality.voiceover_speed_multiplier);
   const maxSilenceBetweenSegmentsMs = normalizeNonNegativeNumber(quality.max_silence_between_segments_ms);
   const hookTitlePresent = Boolean(safeTrim(quality.hook_title));
+  const hookTitleReadabilityScore = normalizeNonNegativeNumber(quality.hook_title_readability_score);
   const hookTitleVisible = hookTitlePresent &&
     hookTitleFirstSeenSeconds !== null &&
     hookTitleFirstSeenSeconds <= MAX_HOOK_TITLE_FIRST_SEEN_SECONDS;
+  const hookTitleVisibleInFirstOnePointFive = hookTitlePresent &&
+    hookTitleFirstSeenSeconds !== null &&
+    hookTitleFirstSeenSeconds <= MAX_HOOK_TITLE_VISIBLE_SECONDS_FOR_REPORTING;
+  const hookTitleFontSizeLarge = quality.hook_title_font_size_large === true;
+  const hookTitleContrastPass = quality.hook_title_contrast_pass === true;
+  const hookTitleBackgroundChipPresent = quality.hook_title_background_chip_present === true;
   const hookTitleSafeAreaPass = quality.hook_title_safe_area_pass === true;
   const captionSafeAreaPass = quality.caption_safe_area_pass === true;
   const allTextInsideMobileSafeArea = quality.all_text_inside_mobile_safe_area === true;
@@ -150,6 +178,12 @@ export function evaluateShortsContentQuality(input: {
   const kitchenContextScenePresent = quality.kitchen_context_scene_present === true;
   const utensilUsageSimulationPresent = quality.utensil_usage_simulation_present === true;
   const beforeAfterOrProblemScenePresent = quality.before_after_or_problem_scene_present === true;
+  const checklistScenePresent = quality.checklist_scene_present === true;
+  const ctaScenePresent = quality.cta_scene_present === true;
+  const ctaMentionsDescriptionOrComment = quality.cta_mentions_description_or_comment === true;
+  const voiceoverNaturalnessScore = normalizeNonNegativeNumber(quality.voiceover_naturalness_score);
+  const voiceoverTooRobotic = quality.voiceover_too_robotic === true;
+  const alternateVoiceUsed = quality.alternate_voice_used === true;
   const voiceoverTooSlow = voiceoverSpeedWpm === null ||
     voiceoverSpeedWpm < MIN_VOICEOVER_WPM ||
     voiceoverSpeedWpm > MAX_VOICEOVER_WPM ||
@@ -194,7 +228,12 @@ export function evaluateShortsContentQuality(input: {
     description_contains_no_manual_review_placeholder: !/manual review/i.test(description),
     hook_title_present: hookTitlePresent,
     hook_title_first_seen_seconds: hookTitleFirstSeenSeconds,
-    hook_title_visible_in_first_1_5_seconds: hookTitleVisible,
+    hook_title_visible_in_first_1_0_seconds: hookTitleVisible,
+    hook_title_visible_in_first_1_5_seconds: hookTitleVisibleInFirstOnePointFive,
+    hook_title_readability_score: hookTitleReadabilityScore,
+    hook_title_font_size_large: hookTitleFontSizeLarge,
+    hook_title_contrast_pass: hookTitleContrastPass,
+    hook_title_background_chip_present: hookTitleBackgroundChipPresent,
     hook_title_safe_area_pass: hookTitleSafeAreaPass,
     caption_safe_area_pass: captionSafeAreaPass,
     all_text_inside_mobile_safe_area: allTextInsideMobileSafeArea,
@@ -209,8 +248,14 @@ export function evaluateShortsContentQuality(input: {
     kitchen_context_scene_present: kitchenContextScenePresent,
     utensil_usage_simulation_present: utensilUsageSimulationPresent,
     before_after_or_problem_scene_present: beforeAfterOrProblemScenePresent,
+    checklist_scene_present: checklistScenePresent,
+    cta_scene_present: ctaScenePresent,
+    cta_mentions_description_or_comment: ctaMentionsDescriptionOrComment,
     voiceover_speed_wpm: voiceoverSpeedWpm,
     voiceover_speed_multiplier: voiceoverSpeedMultiplier,
+    voiceover_naturalness_score: voiceoverNaturalnessScore,
+    voiceover_too_robotic: voiceoverTooRobotic,
+    alternate_voice_used: alternateVoiceUsed,
     max_silence_between_segments_ms: maxSilenceBetweenSegmentsMs,
     voiceover_too_slow: voiceoverTooSlow
   };
@@ -255,6 +300,20 @@ export function evaluateShortsContentQuality(input: {
   if (!result.hook_title_visible_in_first_1_5_seconds) {
     result.blocked_reasons.push("HOOK_TITLE_TOO_LATE");
   }
+  if (!result.hook_title_visible_in_first_1_0_seconds) {
+    result.blocked_reasons.push("HOOK_TITLE_TOO_LATE");
+  }
+  if (result.hook_title_readability_score === null ||
+    result.hook_title_readability_score < MIN_HOOK_TITLE_READABILITY_SCORE ||
+    !result.hook_title_background_chip_present) {
+    result.blocked_reasons.push("HOOK_TITLE_LOW_VISIBILITY");
+  }
+  if (!result.hook_title_font_size_large) {
+    result.blocked_reasons.push("HOOK_TITLE_TOO_SMALL");
+  }
+  if (!result.hook_title_contrast_pass) {
+    result.blocked_reasons.push("HOOK_TITLE_LOW_CONTRAST");
+  }
   if (!result.hook_title_safe_area_pass ||
     !result.caption_safe_area_pass ||
     !result.all_text_inside_mobile_safe_area ||
@@ -267,19 +326,34 @@ export function evaluateShortsContentQuality(input: {
     result.max_caption_lines > MAX_CAPTION_LINES) {
     result.blocked_reasons.push("CAPTION_CLIPPED");
   }
+  if (result.max_caption_lines === null || result.max_caption_lines > MAX_CAPTION_LINES) {
+    result.blocked_reasons.push("CAPTION_LINE_OVERFLOW");
+  }
   if (result.transition_count < MIN_TRANSITION_COUNT ||
     result.visual_motion_score < MIN_VISUAL_MOTION_SCORE ||
     !result.distinct_frame_ratio_pass) {
     result.blocked_reasons.push("VISUAL_MOTION_TOO_LOW");
+    result.blocked_reasons.push("VISUAL_VARIATION_TOO_LOW");
   }
   if (!result.use_case_scene_present ||
     !result.kitchen_context_scene_present ||
     !result.utensil_usage_simulation_present ||
-    !result.before_after_or_problem_scene_present) {
+    !result.before_after_or_problem_scene_present ||
+    !result.checklist_scene_present ||
+    !result.cta_scene_present ||
+    !result.cta_mentions_description_or_comment) {
     result.blocked_reasons.push("USE_CASE_SCENE_MISSING");
   }
   if (result.voiceover_too_slow) {
     result.blocked_reasons.push("VOICEOVER_TOO_SLOW");
+  }
+  if (result.voiceover_too_robotic) {
+    result.blocked_reasons.push("VOICEOVER_TOO_ROBOTIC");
+  }
+  if (result.voiceover_naturalness_score === null ||
+    result.voiceover_naturalness_score < MIN_VOICEOVER_NATURALNESS_SCORE ||
+    result.voiceover_too_robotic) {
+    result.blocked_reasons.push("VOICEOVER_NATURALNESS_TOO_LOW");
   }
   if (result.static_single_image_only) {
     result.blocked_reasons.push("STATIC_IMAGE_ONLY_VIDEO_BLOCKED");
@@ -311,7 +385,12 @@ export function evaluateShortsContentQuality(input: {
     !result.black_screen_detected,
     audioVideoDurationDelta === null || audioVideoDurationDelta <= 2,
     result.hook_title_present,
-    result.hook_title_visible_in_first_1_5_seconds,
+    result.hook_title_visible_in_first_1_0_seconds,
+    result.hook_title_readability_score !== null &&
+      result.hook_title_readability_score >= MIN_HOOK_TITLE_READABILITY_SCORE,
+    result.hook_title_font_size_large,
+    result.hook_title_contrast_pass,
+    result.hook_title_background_chip_present,
     result.hook_title_safe_area_pass,
     result.caption_safe_area_pass,
     result.all_text_inside_mobile_safe_area,
@@ -326,7 +405,14 @@ export function evaluateShortsContentQuality(input: {
     result.kitchen_context_scene_present,
     result.utensil_usage_simulation_present,
     result.before_after_or_problem_scene_present,
-    !result.voiceover_too_slow
+    result.checklist_scene_present,
+    result.cta_scene_present,
+    result.cta_mentions_description_or_comment,
+    !result.voiceover_too_slow,
+    result.voiceover_naturalness_score !== null &&
+      result.voiceover_naturalness_score >= MIN_VOICEOVER_NATURALNESS_SCORE,
+    !result.voiceover_too_robotic,
+    result.alternate_voice_used
   ];
   result.score = Math.round((checks.filter(Boolean).length / checks.length) * 100);
   if (result.score < MIN_QUALITY_SCORE) {
@@ -364,6 +450,16 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   kitchen_context_scene_present?: boolean;
   utensil_usage_simulation_present?: boolean;
   before_after_or_problem_scene_present?: boolean;
+  checklist_scene_present?: boolean;
+  cta_scene_present?: boolean;
+  cta_mentions_description_or_comment?: boolean;
+  hook_title_readability_score?: number;
+  hook_title_font_size_large?: boolean;
+  hook_title_contrast_pass?: boolean;
+  hook_title_background_chip_present?: boolean;
+  voiceover_naturalness_score?: number;
+  voiceover_too_robotic?: boolean;
+  alternate_voice_used?: boolean;
   voiceover_speed_wpm?: number;
   voiceover_speed_multiplier?: number;
   max_silence_between_segments_ms?: number;
@@ -375,20 +471,22 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   const scenes = [
     { id: "hook", duration_seconds: 3, motion: "slow_zoom_in" },
     { id: "problem", duration_seconds: 3, motion: "pan_left" },
-    { id: "product_intro", duration_seconds: 4, motion: "slow_zoom_out" },
-    { id: "why_buy", duration_seconds: 4, motion: "pan_right" },
-    { id: "target_customer", duration_seconds: 4, motion: "push_in_card" },
-    { id: "check_before_buy", duration_seconds: 4, motion: "crop_shift" },
-    { id: "cta", duration_seconds: 3, motion: "slow_zoom_in" }
+    { id: "product_intro", duration_seconds: 3, motion: "slow_zoom_out" },
+    { id: "components", duration_seconds: 3, motion: "card_pop" },
+    { id: "use_case", duration_seconds: 3, motion: "slide" },
+    { id: "why_buy", duration_seconds: 3, motion: "pan_right" },
+    { id: "check_before_buy", duration_seconds: 4, motion: "checklist_reveal" },
+    { id: "cta", duration_seconds: 3, motion: "zoom_snap" }
   ];
   const captions = [
     "\uc870\ub9ac\ub3c4\uad6c, \uc11c\ub78d\uc5d0\uc11c \ub9e8\ub0a0 \uc5c9\ud0a4\uc8e0?",
     "\uad6d\uc790\u00b7\ub4a4\uc9d1\uac1c \ucc3e\ub2e4\uac00 \uc694\ub9ac \ud750\ub984\uc774 \ub04a\uae41\ub2c8\ub2e4.",
     "\uae30\ubcf8 \uc870\ub9ac\ub3c4\uad6c 8\uc885\uc744 \ud55c \ubc88\uc5d0 \uc900\ube44",
+    "\uc2a4\ud0e0\ub4dc\ud615 \uad6c\uc131\uc73c\ub85c \uc8fc\ubc29 \uc815\ub9ac \ud3ec\uc778\ud2b8 \ud655\uc778",
+    "\uad6d\uc790\u00b7\ub4a4\uc9d1\uac1c\u00b7\uac70\ud488\uae30 \uc0ac\uc6a9 \uc7a5\uba74\uc744 \uc9e7\uac8c \ud655\uc778",
     "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29 \uc138\ud305, \uad50\uccb4 \uc2dc\uc810\uc5d0 \uc801\ud569",
-    "\ubcf5\uc7a1\ud55c \uc11c\ub78d\uc744 \uc815\ub9ac\ud558\ub824\ub294 \ubd84\uc5d0\uac8c \uc801\ud569",
     "\uad6c\uc131\ud488\u00b7\uc2a4\ud0e0\ub4dc \ud06c\uae30\u00b7\uc190\uc7a1\uc774 \uae38\uc774\ub97c \ud655\uc778",
-    "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778"
+    "\uc124\uba85\ub780\uc5d0\uc11c \uac00\uaca9\uacfc \uad6c\uc131 \ud655\uc778"
   ];
   const summary = [
     `${productName}`,
@@ -438,6 +536,10 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       duration_seconds: 25,
       hook_title: "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c, \uc544\uc9c1\ub3c4 \uc11c\ub78d\uc5d0 \ub123\uc5b4\ub450\uc138\uc694?",
       hook_title_first_seen_seconds: input.hook_title_first_seen_seconds ?? null,
+      hook_title_readability_score: input.hook_title_readability_score ?? null,
+      hook_title_font_size_large: input.hook_title_font_size_large === true,
+      hook_title_contrast_pass: input.hook_title_contrast_pass === true,
+      hook_title_background_chip_present: input.hook_title_background_chip_present === true,
       hook_title_safe_area_pass: input.hook_title_safe_area_pass === true,
       caption_safe_area_pass: input.caption_safe_area_pass === true,
       all_text_inside_mobile_safe_area: input.all_text_inside_mobile_safe_area === true,
@@ -452,8 +554,14 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       kitchen_context_scene_present: input.kitchen_context_scene_present === true,
       utensil_usage_simulation_present: input.utensil_usage_simulation_present === true,
       before_after_or_problem_scene_present: input.before_after_or_problem_scene_present === true,
+      checklist_scene_present: input.checklist_scene_present === true,
+      cta_scene_present: input.cta_scene_present === true,
+      cta_mentions_description_or_comment: input.cta_mentions_description_or_comment === true,
       voiceover_speed_wpm: input.voiceover_speed_wpm ?? null,
       voiceover_speed_multiplier: input.voiceover_speed_multiplier ?? null,
+      voiceover_naturalness_score: input.voiceover_naturalness_score ?? null,
+      voiceover_too_robotic: input.voiceover_too_robotic === true,
+      alternate_voice_used: input.alternate_voice_used === true,
       max_silence_between_segments_ms: input.max_silence_between_segments_ms ?? null,
       audio_video_duration_gap_seconds: input.audio_video_duration_gap_seconds ?? null,
       static_single_image_only: false,
