@@ -51,6 +51,14 @@ export type GeneratedProductVideoAsset = {
   image_generation_provider?: string | null;
   generated_scene_image_count?: number | null;
   generated_scene_image_paths_present?: boolean;
+  unique_scene_image_hash_count?: number | null;
+  scene_image_color_palette_delta_pass?: boolean;
+  scene_image_semantic_kind_unique?: boolean;
+  product_image_reuse_ratio?: number | null;
+  color_card_only_ratio?: number | null;
+  real_scene_image_provider_configured?: boolean;
+  generated_scene_images_are_not_color_cards?: boolean;
+  generated_scene_images_are_visually_distinct?: boolean;
   scene_manifest_created?: boolean;
   scene_manifest_path?: string | null;
   renderer_consumed_scene_manifest?: boolean;
@@ -601,6 +609,14 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     image_generation_provider: asset.image_generation_provider ?? null,
     generated_scene_image_count: asset.generated_scene_image_count ?? null,
     generated_scene_image_paths_present: asset.generated_scene_image_paths_present === true,
+    unique_scene_image_hash_count: asset.unique_scene_image_hash_count ?? null,
+    scene_image_color_palette_delta_pass: asset.scene_image_color_palette_delta_pass === true,
+    scene_image_semantic_kind_unique: asset.scene_image_semantic_kind_unique === true,
+    product_image_reuse_ratio: asset.product_image_reuse_ratio ?? null,
+    color_card_only_ratio: asset.color_card_only_ratio ?? null,
+    real_scene_image_provider_configured: asset.real_scene_image_provider_configured === true,
+    generated_scene_images_are_not_color_cards: asset.generated_scene_images_are_not_color_cards === true,
+    generated_scene_images_are_visually_distinct: asset.generated_scene_images_are_visually_distinct === true,
     scene_manifest_created: asset.scene_manifest_created === true,
     scene_manifest_path_present: Boolean(safeTrim(asset.scene_manifest_path)),
     renderer_consumed_scene_manifest: asset.renderer_consumed_scene_manifest === true,

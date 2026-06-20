@@ -167,6 +167,29 @@ blockers include
 `CAPTION_POSITION_STATIC_TOO_LONG`, `VISUAL_LAYOUT_VARIATION_TOO_LOW`, and
 `VIDEO_DURATION_TOO_SHORT`.
 
+Human review of the prior `mLytN-u2C5M` private output found that a metadata
+success was still visually static: the local deterministic scene-card generator
+changed colors/cards but reused the same product photo without real kitchen
+context or use-case scene imagery. That output is now recorded as a false
+positive in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
+
+The local deterministic scene-card generator is a preview/debug fallback, not a
+real scene-image provider. It must not set final `content_quality_ready=true` by
+itself. Final private upload readiness now requires real provider evidence:
+`real_scene_image_provider_configured=true`, no color-card-only scene set,
+unique scene image hashes, semantic scene kind uniqueness, product image reuse
+ratio at or below 0.35, color-card-only ratio equal to 0, same-frame ratio at or
+below 0.25, static-background ratio at or below 0.30, dominant background
+changes at least 7 times, product bbox changes at least 6 times, caption
+position changes at least 5 times, and visual motion score at least 90.
+
+Related blockers include `BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED`,
+`REAL_SCENE_IMAGE_PROVIDER_REQUIRED`, `LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH`,
+`COLOR_CARD_ONLY_SCENE_BLOCKED`, `REAL_SCENE_IMAGE_MISSING`,
+`SCENE_IMAGE_HASH_DUPLICATE`, `SCENE_IMAGE_SEMANTIC_DUPLICATE`,
+`PRODUCT_IMAGE_REUSE_TOO_HIGH`, `BACKGROUND_VARIATION_TOO_LOW`, and
+`SCENE_IMAGE_VISUAL_REALISM_TOO_LOW`.
+
 The local one-product renderer now uses an automatic scene image pipeline before
 video rendering. The pipeline builds eight product-specific scene briefs,
 generates scene card PNGs locally, writes `scene-manifest.json`, creates a

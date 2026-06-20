@@ -70,12 +70,12 @@ export type SceneImageManifest = {
   width: 1080;
   height: 1920;
   manifest_path: string;
-  image_generation_provider: typeof SCENE_IMAGE_PROVIDER;
+  image_generation_provider: string;
   scenes: SceneImageManifestScene[];
 };
 
 export type AutoSceneImagePipelineResult = {
-  provider: typeof SCENE_IMAGE_PROVIDER;
+  provider: string;
   version: string;
   scene_image_briefs: SceneImageBrief[];
   generated_images: GeneratedSceneImage[];
@@ -94,6 +94,14 @@ export type SceneImageQualityReport = {
   frame_sample_count: number;
   same_frame_ratio: number;
   static_background_ratio: number;
+  unique_scene_image_hash_count: number;
+  scene_image_color_palette_delta_pass: boolean;
+  scene_image_semantic_kind_unique: boolean;
+  product_image_reuse_ratio: number;
+  color_card_only_ratio: number;
+  real_scene_image_provider_configured: boolean;
+  generated_scene_images_are_not_color_cards: boolean;
+  generated_scene_images_are_visually_distinct: boolean;
   product_image_bbox_change_count: number;
   caption_position_change_count: number;
   dominant_background_change_count: number;
@@ -294,13 +302,21 @@ export function createAutoSceneImagePipeline(
 export function buildSceneImageQualityReport(): SceneImageQualityReport {
   return {
     frame_sample_count: 8,
-    same_frame_ratio: 0.18,
-    static_background_ratio: 0.22,
+    same_frame_ratio: 1,
+    static_background_ratio: 1,
+    unique_scene_image_hash_count: 0,
+    scene_image_color_palette_delta_pass: false,
+    scene_image_semantic_kind_unique: false,
+    product_image_reuse_ratio: 1,
+    color_card_only_ratio: 1,
+    real_scene_image_provider_configured: false,
+    generated_scene_images_are_not_color_cards: false,
+    generated_scene_images_are_visually_distinct: false,
     product_image_bbox_change_count: 8,
     caption_position_change_count: 6,
     dominant_background_change_count: 8,
-    visual_motion_score: 96,
-    true_scene_change_pass: true
+    visual_motion_score: 0,
+    true_scene_change_pass: false
   };
 }
 

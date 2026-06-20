@@ -71,7 +71,10 @@ python -m compileall python-worker
 - `scene-manifest.json`, `scene-contact-sheet.jpg`, and `quality-report.json` are present before rendering.
 - The local renderer consumes the scene manifest image paths and does not use one product image as the full-video fallback.
 - Missing scene images block rendering before MP4 generation.
-- True scene change probe passes: at least 8 frame samples, same-frame ratio at or below 0.35, static-background ratio at or below 0.45, product image bbox changes at least 5 times, caption position changes at least 4 times, and dominant background changes at least 5 times.
+- The local deterministic scene-card generator is preview/debug only. It cannot satisfy final private-upload readiness by itself.
+- Final readiness requires a real scene-image provider, at least 8 generated scene images, at least 8 unique scene image hashes, no color-card-only scenes, semantic scene-kind uniqueness, product image reuse ratio at or below 0.35, and color-card-only ratio equal to 0.
+- True scene change probe passes: at least 8 frame samples, same-frame ratio at or below 0.25, static-background ratio at or below 0.30, product image bbox changes at least 6 times, caption position changes at least 5 times, dominant background changes at least 7 times, and visual motion score at least 90.
+- Human review false positives are tracked in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
 - Hook title, captions, CTA, disclosure, and affiliate URL gates remain required.
 - Public and unlisted visibility remain blocked.
 - Generated `commerce-assets/**` files are never committed.
