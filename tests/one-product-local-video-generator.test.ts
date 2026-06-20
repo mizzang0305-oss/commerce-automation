@@ -57,6 +57,7 @@ describe("one-product local video generator adapter", () => {
     expect(execFileAsync.mock.calls[0]?.[0]).toMatch(/powershell/i);
     expect(execFileAsync.mock.calls[1]?.[0]).toBe("ffmpeg");
     expect(execFileAsync.mock.calls[2]?.[0]).toBe("ffprobe");
+    expect(execFileAsync.mock.calls[1]?.[2]?.timeout).toBeGreaterThanOrEqual(240000);
     expect(args).toContain("https://image.example.com/product.jpg");
     expect(args).toContain("-i");
     expect(result).toMatchObject({
