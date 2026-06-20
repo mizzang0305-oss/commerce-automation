@@ -161,8 +161,25 @@ blockers include
 `VOICEOVER_AUDIO_REQUIRED`, `STORY_SCRIPT_REQUIRED`,
 `WHY_BUY_REASON_REQUIRED`, `DEV_PLACEHOLDER_DESCRIPTION_BLOCKED`,
 `CAPTION_COUNT_TOO_LOW`, `SCENE_COUNT_TOO_LOW`, `HOOK_TITLE_LOW_VISIBILITY`,
-`VISUAL_VARIATION_TOO_LOW`, `VOICEOVER_NATURALNESS_TOO_LOW`, and
+`VISUAL_VARIATION_TOO_LOW`, `VOICEOVER_NATURALNESS_TOO_LOW`,
+`TRUE_SCENE_CHANGE_FAILED`, `FRAME_HASH_DELTA_TOO_LOW`,
+`PRODUCT_IMAGE_BBOX_STATIC`, `BACKGROUND_STATIC_TOO_LONG`,
+`CAPTION_POSITION_STATIC_TOO_LONG`, `VISUAL_LAYOUT_VARIATION_TOO_LOW`, and
 `VIDEO_DURATION_TOO_SHORT`.
+
+The local one-product renderer now uses an automatic scene image pipeline before
+video rendering. The pipeline builds eight product-specific scene briefs,
+generates scene card PNGs locally, writes `scene-manifest.json`, creates a
+contact sheet, and then renders the MP4 from the manifest image paths. It does
+not ask the operator to write prompts manually and it must not fall back to one
+static product image when scene images are missing. Local artifacts are written
+under:
+
+- `commerce-assets/generated-scenes/<candidate_id>/v005/`
+- `commerce-assets/generated-videos/<candidate_id>/v005/story-shorts.mp4`
+- `commerce-assets/generated-audio/<candidate_id>/v005/`
+
+These generated artifacts are local evidence only and must not be committed.
 
 This endpoint is prepare-only. It must return
 `external_api_called=false`, `youtube_upload_executed=false`, `uploaded=false`,

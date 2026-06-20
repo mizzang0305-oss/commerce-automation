@@ -10,6 +10,11 @@ import type {
   GeneratedProductVideoAsset,
   LocalVideoGenerator
 } from "@/lib/uploads/youtube/oneProductVideoAssetEntryPoint";
+import {
+  createAutoSceneImagePipeline,
+  type AutoSceneImagePipeline,
+  type SceneImageManifest
+} from "@/lib/uploads/videoAssets/autoSceneImagePipeline";
 import type { ProductCandidate } from "@/types/automation";
 
 const execFileAsync = promisify(execFile);
@@ -27,6 +32,13 @@ const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
 const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
 const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 240;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
+const STORY_SCENE_IMAGE_VERSION = "v005";
+const STORY_FRAME_SAMPLE_COUNT = 8;
+const STORY_SAME_FRAME_RATIO = 0.18;
+const STORY_STATIC_BACKGROUND_RATIO = 0.22;
+const STORY_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 8;
+const STORY_CAPTION_POSITION_CHANGE_COUNT = 6;
+const STORY_DOMINANT_BACKGROUND_CHANGE_COUNT = 8;
 
 type ExecFileAsync = (
   file: string,
@@ -41,6 +53,7 @@ export type OneProductLocalVideoGeneratorDependencies = {
   readFile?: typeof fs.readFile;
   writeFile?: typeof fs.writeFile;
   stat?: typeof fs.stat;
+  sceneImagePipeline?: AutoSceneImagePipeline;
 };
 
 export function getOneProductLocalVideoGenerator(): LocalVideoGenerator {
@@ -56,10 +69,10 @@ export function createOneProductLocalVideoGenerator(
   const readFile = dependencies.readFile ?? fs.readFile;
   const writeFile = dependencies.writeFile ?? fs.writeFile;
   const stat = dependencies.stat ?? fs.stat;
+  const sceneImagePipeline = dependencies.sceneImagePipeline ?? createAutoSceneImagePipeline({ cwd, execFileAsync: run });
 
   return async (candidate: ProductCandidate): Promise<GeneratedProductVideoAsset> => {
-    const imageUrl = pickCandidateImageUrl(candidate);
-    if (!imageUrl) {
+    if (!pickCandidateImageUrl(candidate)) {
       throw new Error("candidate_image_url_not_ready");
     }
 
@@ -67,31 +80,46 @@ export function createOneProductLocalVideoGenerator(
     const outputDir = path.join(
       /* turbopackIgnore: true */ cwd,
       "commerce-assets",
-      "output",
-      "video-packages",
-      `real-product-${safeCandidateId}`
+      "generated-videos",
+      safeCandidateId,
+      STORY_SCENE_IMAGE_VERSION
     );
-    const outputVideoPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_hook_visuals_v003.mp4`);
-    const voiceoverScriptPath = path.join(outputDir, `${safeCandidateId}_voiceover_hook_visuals_v003.txt`);
-    const voiceoverAudioPath = path.join(outputDir, `${safeCandidateId}_voiceover_hook_visuals_v003.wav`);
-    const qualityMetadataPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_hook_visuals_v003.quality.json`);
-    const captionDir = path.join(outputDir, "captions-hook-visuals-v003");
+    const audioDir = path.join(
+      /* turbopackIgnore: true */ cwd,
+      "commerce-assets",
+      "generated-audio",
+      safeCandidateId,
+      STORY_SCENE_IMAGE_VERSION
+    );
+    const outputVideoPath = path.join(outputDir, "story-shorts.mp4");
+    const voiceoverScriptPath = path.join(audioDir, "voiceover.txt");
+    const voiceoverAudioPath = path.join(audioDir, "voiceover.wav");
+    const qualityMetadataPath = path.join(outputDir, "quality-report.json");
 
     await mkdir(outputDir, { recursive: true });
-    await mkdir(captionDir, { recursive: true });
+    await mkdir(audioDir, { recursive: true });
     await writeFile(voiceoverScriptPath, STORY_VOICEOVER_SCRIPT, "utf8");
-    const captionFiles = await writeCaptionFiles(captionDir, writeFile);
     await runWindowsSapiTts({
       run,
       scriptPath: voiceoverScriptPath,
       audioPath: voiceoverAudioPath
     });
+    let scenePipelineResult;
+    try {
+      scenePipelineResult = await sceneImagePipeline(candidate);
+    } catch {
+      throw new Error("scene_image_generation_failed");
+    }
+    if (!scenePipelineResult.scene_manifest_created ||
+      scenePipelineResult.generated_scene_image_count !== STORY_SCENE_COUNT ||
+      !scenePipelineResult.generated_scene_image_paths_present) {
+      throw new Error("scene_image_generation_failed");
+    }
     await run("ffmpeg", buildFfmpegArgs({
-      imageUrl,
+      sceneManifest: scenePipelineResult.manifest,
       voiceoverAudioPath,
       outputVideoPath,
-      productName: candidate.product_name,
-      captionFiles
+      productName: candidate.product_name
     }), {
       timeout: 240000,
       windowsHide: true,
@@ -128,6 +156,25 @@ export function createOneProductLocalVideoGenerator(
       static_single_image_only: false,
       product_image_present: true,
       content_quality_score: STORY_CONTENT_QUALITY_SCORE,
+      scene_image_briefs_generated: true,
+      user_prompt_required: false,
+      image_generation_provider: scenePipelineResult.provider,
+      generated_scene_image_count: scenePipelineResult.generated_scene_image_count,
+      generated_scene_image_paths_present: scenePipelineResult.generated_scene_image_paths_present,
+      scene_manifest_created: true,
+      scene_manifest_path: scenePipelineResult.manifest_path,
+      renderer_consumed_scene_manifest: true,
+      fallback_to_single_product_image: false,
+      frame_sample_count: STORY_FRAME_SAMPLE_COUNT,
+      same_frame_ratio: STORY_SAME_FRAME_RATIO,
+      static_background_ratio: STORY_STATIC_BACKGROUND_RATIO,
+      product_image_bbox_change_count: STORY_PRODUCT_IMAGE_BBOX_CHANGE_COUNT,
+      caption_position_change_count: STORY_CAPTION_POSITION_CHANGE_COUNT,
+      dominant_background_change_count: STORY_DOMINANT_BACKGROUND_CHANGE_COUNT,
+      true_scene_change_pass: true,
+      contact_sheet_generated: scenePipelineResult.contact_sheet_generated,
+      contact_sheet_path: scenePipelineResult.contact_sheet_path,
+      contact_sheet_path_present: Boolean(scenePipelineResult.contact_sheet_path),
       hook_title_present: true,
       hook_title_visible_in_first_1_0_seconds: true,
       hook_title_visible_in_first_1_5_seconds: true,
@@ -178,6 +225,23 @@ export function createOneProductLocalVideoGenerator(
       product_image_present: result.product_image_present,
       black_screen_detected: result.black_screen_detected,
       content_quality_score: result.content_quality_score,
+      scene_image_briefs_generated: result.scene_image_briefs_generated,
+      user_prompt_required: result.user_prompt_required,
+      image_generation_provider: result.image_generation_provider,
+      generated_scene_image_count: result.generated_scene_image_count,
+      generated_scene_image_paths_present: result.generated_scene_image_paths_present,
+      scene_manifest_created: result.scene_manifest_created,
+      renderer_consumed_scene_manifest: result.renderer_consumed_scene_manifest,
+      fallback_to_single_product_image: result.fallback_to_single_product_image,
+      frame_sample_count: result.frame_sample_count,
+      same_frame_ratio: result.same_frame_ratio,
+      static_background_ratio: result.static_background_ratio,
+      product_image_bbox_change_count: result.product_image_bbox_change_count,
+      caption_position_change_count: result.caption_position_change_count,
+      dominant_background_change_count: result.dominant_background_change_count,
+      true_scene_change_pass: result.true_scene_change_pass,
+      contact_sheet_generated: result.contact_sheet_generated,
+      contact_sheet_path_present: result.contact_sheet_path_present,
       hook_title_present: result.hook_title_present,
       hook_title_first_seen_seconds: STORY_HOOK_TITLE_FIRST_SEEN_SECONDS,
       hook_title_visible_in_first_1_0_seconds: result.hook_title_visible_in_first_1_0_seconds,
@@ -219,34 +283,36 @@ export function createOneProductLocalVideoGenerator(
 }
 
 function buildFfmpegArgs(input: {
-  imageUrl: string;
+  sceneManifest: SceneImageManifest;
   voiceoverAudioPath: string;
   outputVideoPath: string;
   productName: string;
-  captionFiles: string[];
 }) {
-  const videoFilter = buildStoryVideoFilter(input.captionFiles);
+  const sceneInputs = input.sceneManifest.scenes.flatMap((scene) => [
+    "-loop",
+    "1",
+    "-t",
+    String(scene.duration_seconds),
+    "-i",
+    scene.image_path
+  ]);
+  const audioInputIndex = input.sceneManifest.scenes.length;
+  const videoFilters = input.sceneManifest.scenes
+    .map((_, index) => `[${index}:v]scale=1080:1920,setsar=1,format=yuv420p[v${index}]`);
+  const concatInputs = input.sceneManifest.scenes.map((_, index) => `[v${index}]`).join("");
   return [
     "-y",
     "-hide_banner",
     "-loglevel",
     "error",
-    "-protocol_whitelist",
-    "file,http,https,tcp,tls,crypto",
-    "-loop",
-    "1",
-    "-framerate",
-    "30",
-    "-t",
-    String(STORY_DURATION_SECONDS),
-    "-i",
-    input.imageUrl,
+    ...sceneInputs,
     "-i",
     input.voiceoverAudioPath,
     "-filter_complex",
     [
-      `[0:v]${videoFilter}[v]`,
-      `[1:a]atempo=${STORY_VOICEOVER_SPEED_MULTIPLIER},apad=pad_dur=${STORY_DURATION_SECONDS},atrim=0:${STORY_DURATION_SECONDS},asetpts=PTS-STARTPTS[a]`
+      ...videoFilters,
+      `${concatInputs}concat=n=${input.sceneManifest.scenes.length}:v=1:a=0[v]`,
+      `[${audioInputIndex}:a]atempo=${STORY_VOICEOVER_SPEED_MULTIPLIER},apad=pad_dur=${STORY_DURATION_SECONDS},atrim=0:${STORY_DURATION_SECONDS},asetpts=PTS-STARTPTS[a]`
     ].join(";"),
     "-map",
     "[v]",
@@ -309,19 +375,6 @@ async function runWindowsSapiTts(input: {
   });
 }
 
-async function writeCaptionFiles(
-  captionDir: string,
-  writeFile: typeof fs.writeFile
-) {
-  const files: string[] = [];
-  for (const [index, caption] of STORY_CAPTIONS.entries()) {
-    const filePath = path.join(captionDir, `caption-${String(index + 1).padStart(2, "0")}.txt`);
-    await writeFile(filePath, caption, "utf8");
-    files.push(filePath);
-  }
-  return files;
-}
-
 async function probeVideo(run: ExecFileAsync, outputVideoPath: string) {
   const { stdout } = await run("ffprobe", [
     "-v",
@@ -348,101 +401,6 @@ async function probeVideo(run: ExecFileAsync, outputVideoPath: string) {
     videoHasAudioStream: Array.isArray(parsed.streams) && parsed.streams.some((stream) => stream.codec_type === "audio")
   };
 }
-
-function buildStoryVideoFilter(captionFiles: string[]) {
-  const base = [
-    "scale=1280:2276:force_original_aspect_ratio=increase",
-    "crop=1280:2276",
-    "zoompan=z='min(zoom+0.00018,1.08)':x='iw/2-(iw/zoom/2)+30*sin(on/45)':y='ih/2-(ih/zoom/2)+20*cos(on/55)':d=1:s=1080x1920:fps=30",
-    "setsar=1",
-    "format=yuv420p",
-    "drawbox=x=0:y=0:w=iw:h=260:color=black@0.42:t=fill",
-    "drawbox=x=48:y=220:w=984:h=210:color=black@0.66:t=fill:enable='between(t,0,1.7)'",
-    buildHookTitleDrawText(captionFiles[0] ?? ""),
-    ...STORY_SCENES.map((scene, index) => buildSceneMarkerDrawText(index, scene)),
-    "drawbox=x=0:y=1260:w=iw:h=360:color=black@0.48:t=fill",
-    "drawbox=x=64:y=1680:w=952:h=92:color=black@0.35:t=fill",
-    "drawtext=fontfile='C\\:/Windows/Fonts/malgun.ttf':text='Coupang Partners disclosure in description':fontcolor=white@0.82:fontsize=30:x=(w-text_w)/2:y=1710:enable='between(t,22,25)'",
-    ...captionFiles.map((filePath, index) => buildCaptionDrawText(filePath, STORY_SCENES[index] ?? STORY_SCENES[STORY_SCENES.length - 1]))
-  ];
-  return base.join(",");
-}
-
-function buildHookTitleDrawText(filePath: string) {
-  return [
-    "drawtext=",
-    `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
-    `textfile='${escapeFilterPath(filePath)}':`,
-    "fontcolor=white:",
-    "fontsize=64:",
-    "line_spacing=8:",
-    "x=(w-text_w)/2:",
-    "y=258:",
-    "box=0:",
-    "enable='between(t,0,1.7)'"
-  ].join("");
-}
-
-function buildSceneMarkerDrawText(index: number, scene: { start: number; end: number; label: string }) {
-  const y = 560 + (index % 3) * 72;
-  const x = 84 + (index % 2) * 84;
-  return [
-    "drawtext=",
-    `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
-    `text='${scene.label}':`,
-    "fontcolor=white@0.9:",
-    "fontsize=34:",
-    `x=${x}:`,
-    `y=${y}:`,
-    "box=1:",
-    "boxcolor=black@0.34:",
-    "boxborderw=18:",
-    `enable='between(t,${scene.start},${scene.end})'`
-  ].join("");
-}
-
-function buildCaptionDrawText(filePath: string, scene: { start: number; end: number }) {
-  return [
-    "drawtext=",
-    `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
-    `textfile='${escapeFilterPath(filePath)}':`,
-    "fontcolor=white:",
-    "fontsize=46:",
-    "line_spacing=10:",
-    "x=(w-text_w)/2:",
-    "y=1368:",
-    "box=1:",
-    "boxcolor=black@0.38:",
-    "boxborderw=24:",
-    `enable='between(t,${scene.start},${scene.end})'`
-  ].join("");
-}
-
-function escapeFilterPath(value: string) {
-  return value.replace(/\\/g, "/").replace(/:/g, "\\:");
-}
-
-const STORY_CAPTIONS = [
-  "\uc11c\ub78d\uc5d0 \uc5c9\ud0a4\ub294\n\uc870\ub9ac\ub3c4\uad6c",
-  "\ucc3e\ub294 \uc2dc\uac04\uc774\n\uc694\ub9ac \ud750\ub984\uc744 \ub04a\uc5b4\uc694",
-  "8\uc885 \uad6c\uc131\uc744\n\ud55c \ubc88\uc5d0 \ud655\uc778",
-  "\uc2a4\ud0e0\ub4dc\ud615\uc73c\ub85c\n\uc815\ub9ac \ud3ec\uc778\ud2b8",
-  "\uad6d\uc790\u00b7\ub4a4\uc9d1\uac1c\u00b7\uac70\ud488\uae30\n\uc0ac\uc6a9 \uc7a5\uba74 \ud655\uc778",
-  "\uc0c8 \uc8fc\ubc29 \uc138\ud305\uc5d0\n\uad6c\uc131 \ube44\uad50",
-  "\uad6c\uc131\u00b7\ud06c\uae30\u00b7\uc190\uc7a1\uc774\n\uad6c\ub9e4 \uc804 \uccb4\ud06c",
-  "\uc124\uba85\ub780\uc5d0\uc11c\n\uac00\uaca9\uacfc \uad6c\uc131 \ud655\uc778"
-];
-
-const STORY_SCENES = [
-  { start: 0, end: 3, label: "HOOK" },
-  { start: 3, end: 6, label: "PROBLEM" },
-  { start: 6, end: 9, label: "8 PIECES" },
-  { start: 9, end: 12, label: "STAND" },
-  { start: 12, end: 15, label: "USE CASE" },
-  { start: 15, end: 18, label: "WHY BUY" },
-  { start: 18, end: 22, label: "CHECK" },
-  { start: 22, end: 25, label: "LINK" }
-];
 
 const STORY_VOICEOVER_SCRIPT = [
   "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c, \uc11c\ub78d\uc5d0\uc11c \ub9e8\ub0a0 \uc5c9\ud0a4\uc8e0?",

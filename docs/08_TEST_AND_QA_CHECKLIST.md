@@ -64,6 +64,18 @@ python -m compileall python-worker
 - `python-worker/.env` is not committed.
 - `python-worker/.venv`, `python-worker/outputs`, `python-worker/temp`, and worker logs are not committed.
 
+## Auto Scene Image Shorts QA
+
+- One selected candidate generates eight scene image briefs without asking the operator for manual prompts.
+- Generated scene images are written to `commerce-assets/generated-scenes/<candidate_id>/v005/`.
+- `scene-manifest.json`, `scene-contact-sheet.jpg`, and `quality-report.json` are present before rendering.
+- The local renderer consumes the scene manifest image paths and does not use one product image as the full-video fallback.
+- Missing scene images block rendering before MP4 generation.
+- True scene change probe passes: at least 8 frame samples, same-frame ratio at or below 0.35, static-background ratio at or below 0.45, product image bbox changes at least 5 times, caption position changes at least 4 times, and dominant background changes at least 5 times.
+- Hook title, captions, CTA, disclosure, and affiliate URL gates remain required.
+- Public and unlisted visibility remain blocked.
+- Generated `commerce-assets/**` files are never committed.
+
 ## Operator Command Palette QA
 
 - `Ctrl+K` and `Cmd+K` open the command palette.

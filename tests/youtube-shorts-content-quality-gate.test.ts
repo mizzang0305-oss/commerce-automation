@@ -8,7 +8,8 @@ import {
   hasExactYouTubeUploadConfirmation,
   APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
 const DISCLOSURE =
@@ -55,6 +56,16 @@ const STORY_QUALITY = {
   transition_count: 8,
   visual_motion_score: 88,
   distinct_frame_ratio_pass: true,
+  frame_sample_count: 8,
+  same_frame_ratio: 0.18,
+  static_background_ratio: 0.22,
+  product_image_bbox_change_count: 8,
+  caption_position_change_count: 6,
+  dominant_background_change_count: 8,
+  true_scene_change_pass: true,
+  scene_manifest_created: true,
+  renderer_consumed_scene_manifest: true,
+  fallback_to_single_product_image: false,
   use_case_scene_present: true,
   kitchen_context_scene_present: true,
   utensil_usage_simulation_present: true,
@@ -152,6 +163,10 @@ describe("YouTube Shorts content quality gate", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
+  test("auto scene image pipeline approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
   test("static single image package is blocked before private upload", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
@@ -175,6 +190,39 @@ describe("YouTube Shorts content quality gate", () => {
       "CAPTION_COUNT_TOO_LOW",
       "SCENE_COUNT_TOO_LOW",
       "VIDEO_DURATION_TOO_SHORT"
+    ]));
+    expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
+  test("true scene change probe blocks repeated scene images before private upload", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        true_scene_change_pass: false,
+        scene_manifest_created: false,
+        renderer_consumed_scene_manifest: false,
+        fallback_to_single_product_image: true,
+        frame_sample_count: 4,
+        same_frame_ratio: 0.82,
+        static_background_ratio: 0.91,
+        product_image_bbox_change_count: 1,
+        caption_position_change_count: 1,
+        dominant_background_change_count: 1
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("repeated single scene image probe must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "TRUE_SCENE_CHANGE_FAILED",
+      "FRAME_HASH_DELTA_TOO_LOW",
+      "PRODUCT_IMAGE_BBOX_STATIC",
+      "BACKGROUND_STATIC_TOO_LONG",
+      "CAPTION_POSITION_STATIC_TOO_LONG",
+      "VISUAL_LAYOUT_VARIATION_TOO_LOW"
     ]));
     expect(result.readiness.content_quality_ready).toBe(false);
   });
@@ -242,6 +290,12 @@ describe("YouTube Shorts content quality gate", () => {
       max_caption_lines: 2,
       transition_count: 8,
       visual_motion_score: 88,
+      true_scene_change_pass: true,
+      frame_sample_count: 8,
+      same_frame_ratio: 0.18,
+      product_image_bbox_change_count: 8,
+      caption_position_change_count: 6,
+      dominant_background_change_count: 8,
       use_case_scene_present: true,
       kitchen_context_scene_present: true,
       utensil_usage_simulation_present: true,

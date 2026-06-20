@@ -449,6 +449,16 @@ function buildPackageInput(input: {
     transition_count: input.contentQualityHints?.transition_count ?? undefined,
     visual_motion_score: input.contentQualityHints?.visual_motion_score ?? undefined,
     distinct_frame_ratio_pass: input.contentQualityHints?.distinct_frame_ratio_pass === true,
+    frame_sample_count: input.contentQualityHints?.frame_sample_count ?? undefined,
+    same_frame_ratio: input.contentQualityHints?.same_frame_ratio ?? undefined,
+    static_background_ratio: input.contentQualityHints?.static_background_ratio ?? undefined,
+    product_image_bbox_change_count: input.contentQualityHints?.product_image_bbox_change_count ?? undefined,
+    caption_position_change_count: input.contentQualityHints?.caption_position_change_count ?? undefined,
+    dominant_background_change_count: input.contentQualityHints?.dominant_background_change_count ?? undefined,
+    true_scene_change_pass: input.contentQualityHints?.true_scene_change_pass === true,
+    scene_manifest_created: input.contentQualityHints?.scene_manifest_created === true,
+    renderer_consumed_scene_manifest: input.contentQualityHints?.renderer_consumed_scene_manifest === true,
+    fallback_to_single_product_image: input.contentQualityHints?.fallback_to_single_product_image === true,
     use_case_scene_present: input.contentQualityHints?.use_case_scene_present === true,
     kitchen_context_scene_present: input.contentQualityHints?.kitchen_context_scene_present === true,
     utensil_usage_simulation_present: input.contentQualityHints?.utensil_usage_simulation_present === true,
@@ -510,6 +520,16 @@ function buildContentQualityHints(asset: ProductAsset) {
     transition_count: normalizeOptionalNonNegativeNumber(metadata.transition_count),
     visual_motion_score: normalizeOptionalNonNegativeNumber(metadata.visual_motion_score),
     distinct_frame_ratio_pass: metadata.distinct_frame_ratio_pass === true,
+    frame_sample_count: normalizeOptionalNonNegativeNumber(metadata.frame_sample_count),
+    same_frame_ratio: normalizeOptionalRatio(metadata.same_frame_ratio),
+    static_background_ratio: normalizeOptionalRatio(metadata.static_background_ratio),
+    product_image_bbox_change_count: normalizeOptionalNonNegativeNumber(metadata.product_image_bbox_change_count),
+    caption_position_change_count: normalizeOptionalNonNegativeNumber(metadata.caption_position_change_count),
+    dominant_background_change_count: normalizeOptionalNonNegativeNumber(metadata.dominant_background_change_count),
+    true_scene_change_pass: metadata.true_scene_change_pass === true,
+    scene_manifest_created: metadata.scene_manifest_created === true,
+    renderer_consumed_scene_manifest: metadata.renderer_consumed_scene_manifest === true,
+    fallback_to_single_product_image: metadata.fallback_to_single_product_image === true,
     use_case_scene_present: metadata.use_case_scene_present === true,
     kitchen_context_scene_present: metadata.kitchen_context_scene_present === true,
     utensil_usage_simulation_present: metadata.utensil_usage_simulation_present === true,
@@ -686,6 +706,11 @@ function normalizeOptionalPositiveFloat(value: unknown) {
 function normalizeOptionalNonNegativeNumber(value: unknown) {
   const normalized = normalizeNumber(value);
   return normalized >= 0 ? normalized : null;
+}
+
+function normalizeOptionalRatio(value: unknown) {
+  const normalized = normalizeOptionalNonNegativeNumber(value);
+  return normalized !== null && normalized <= 1 ? normalized : null;
 }
 
 function safeTrim(value: unknown) {
