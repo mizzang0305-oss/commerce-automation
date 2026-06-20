@@ -13,6 +13,7 @@ import { APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE } fro
 import { APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/autoSceneImagePipelineApproval";
 import { APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/realSceneImageProviderApproval";
 import { APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/realUsageSceneProviderApproval";
+import { APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/photorealisticUsageSceneProviderApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export {
@@ -21,7 +22,8 @@ export {
   APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
 };
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
@@ -55,8 +57,8 @@ export type GeneratedProductVideoAsset = {
   user_prompt_required?: boolean;
   manual_prompt_required?: boolean;
   image_generation_provider?: string | null;
-  image_generation_provider_mode?: "real_usage" | "real" | "draft" | null;
-  provider_mode?: "real_usage" | "real" | "draft" | null;
+  image_generation_provider_mode?: "photorealistic_generated" | "realistic_generated" | "draft_composited" | "real_usage" | "real" | "draft" | null;
+  provider_mode?: "photorealistic_generated" | "realistic_generated" | "draft_composited" | "real_usage" | "real" | "draft" | null;
   final_upload_allowed?: boolean;
   local_card_generator_final_upload_allowed?: boolean;
   local_card_generator_used_for_final?: boolean;
@@ -80,6 +82,13 @@ export type GeneratedProductVideoAsset = {
   abstract_shape_card_scene_count?: number | null;
   real_usage_scene_pass?: boolean;
   real_usage_visual_present?: boolean;
+  photorealistic_scene_provider_configured?: boolean;
+  photorealistic_score?: number | null;
+  photorealistic_scene_count?: number | null;
+  vector_or_shape_scene_count?: number | null;
+  abstract_scene_count?: number | null;
+  unrealistic_hand_detected?: boolean;
+  product_identity_consistency_score?: number | null;
   shape_card_scene_detected?: boolean;
   shape_card_scene_count?: number | null;
   abstract_scene_ratio?: number | null;
@@ -468,7 +477,8 @@ function hasGenerationApproval(value: unknown) {
     value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function hasRegistrationApproval(value: unknown) {
@@ -478,7 +488,8 @@ function hasRegistrationApproval(value: unknown) {
     value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -665,6 +676,13 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     abstract_shape_card_scene_count: asset.abstract_shape_card_scene_count ?? null,
     real_usage_scene_pass: asset.real_usage_scene_pass === true,
     real_usage_visual_present: asset.real_usage_visual_present === true,
+    photorealistic_scene_provider_configured: asset.photorealistic_scene_provider_configured === true,
+    photorealistic_score: asset.photorealistic_score ?? null,
+    photorealistic_scene_count: asset.photorealistic_scene_count ?? null,
+    vector_or_shape_scene_count: asset.vector_or_shape_scene_count ?? null,
+    abstract_scene_count: asset.abstract_scene_count ?? null,
+    unrealistic_hand_detected: asset.unrealistic_hand_detected === true,
+    product_identity_consistency_score: asset.product_identity_consistency_score ?? null,
     shape_card_scene_detected: asset.shape_card_scene_detected === true,
     shape_card_scene_count: asset.shape_card_scene_count ?? null,
     abstract_scene_ratio: asset.abstract_scene_ratio ?? null,

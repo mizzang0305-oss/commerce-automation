@@ -67,12 +67,12 @@ python -m compileall python-worker
 ## Auto Scene Image Shorts QA
 
 - One selected candidate generates eight scene image briefs without asking the operator for manual prompts.
-- Generated scene images are written to `commerce-assets/generated-scenes/<candidate_id>/v007/`.
+- Generated scene images are written to `commerce-assets/generated-scenes/<candidate_id>/v008/`.
 - `scene-manifest.json`, `scene-contact-sheet.jpg`, and `quality-report.json` are present before rendering.
 - The local renderer consumes the scene manifest image paths and does not use one product image as the full-video fallback.
 - Missing scene images block rendering before MP4 generation.
-- The local deterministic scene-card generator is preview/debug only. It cannot satisfy final private-upload readiness by itself.
-- Final readiness requires a real scene-image provider, at least 8 generated scene images, at least 8 unique scene image hashes, no color-card-only scenes, semantic scene-kind uniqueness, product image reuse ratio at or below 0.35, and color-card-only ratio equal to 0.
+- The local deterministic scene-card generator and local composited scene provider are preview/debug only. They cannot satisfy final private-upload readiness by themselves.
+- Final readiness requires `provider_mode=photorealistic_generated` or `provider_mode=realistic_generated`, a reviewed provider such as `codex_photorealistic_scene_image_provider`, `photorealistic_scene_provider_configured=true`, `photorealistic_score >= 80`, at least 8 generated scene images, at least 8 unique scene image hashes, no vector/shape/abstract scene set, no unrealistic hands, product identity consistency score at least 70, semantic scene-kind uniqueness, product image reuse ratio at or below 0.35, and color-card-only ratio equal to 0.
 - True scene change probe passes: at least 8 frame samples, same-frame ratio at or below 0.25, static-background ratio at or below 0.30, product image bbox changes at least 6 times, caption position changes at least 5 times, dominant background changes at least 7 times, and visual motion score at least 90.
 - Human review false positives are tracked in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
 - Hook title, captions, CTA, disclosure, and affiliate URL gates remain required.

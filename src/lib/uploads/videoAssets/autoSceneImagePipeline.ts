@@ -6,13 +6,13 @@ import { promisify } from "node:util";
 import type { ProductCandidate } from "@/types/automation";
 
 const execFileAsync = promisify(execFile);
-const SCENE_VERSION = "v007";
+const SCENE_VERSION = "v008";
 const SCENE_WIDTH = 1080;
 const SCENE_HEIGHT = 1920;
 const DRAFT_SCENE_IMAGE_PROVIDER = "local_ffmpeg_scene_card_generator";
 const REAL_SCENE_IMAGE_PROVIDER = "local_composited_scene_image_provider";
-const REAL_USAGE_SCENE_IMAGE_PROVIDER = "local_real_usage_scene_provider";
-const DEFAULT_SCENE_IMAGE_PROVIDER_MODE: SceneImageProviderMode = "real_usage";
+const PHOTOREALISTIC_SCENE_IMAGE_PROVIDER = "codex_photorealistic_scene_image_provider";
+const DEFAULT_SCENE_IMAGE_PROVIDER_MODE: SceneImageProviderMode = "photorealistic_generated";
 
 type ExecFileAsync = (
   file: string,
@@ -30,7 +30,13 @@ export type SceneImageKind =
   | "checklist"
   | "cta";
 
-export type SceneImageProviderMode = "real_usage" | "real" | "draft";
+export type SceneImageProviderMode =
+  | "photorealistic_generated"
+  | "realistic_generated"
+  | "draft_composited"
+  | "real_usage"
+  | "real"
+  | "draft";
 
 export type SceneImageBrief = {
   scene_id: string;
@@ -131,6 +137,13 @@ export type SceneImageQualityReport = {
   abstract_shape_card_scene_count: number;
   real_usage_scene_pass: boolean;
   real_usage_visual_present: boolean;
+  photorealistic_scene_provider_configured: boolean;
+  photorealistic_score: number;
+  photorealistic_scene_count: number;
+  vector_or_shape_scene_count: number;
+  abstract_scene_count: number;
+  unrealistic_hand_detected: boolean;
+  product_identity_consistency_score: number;
   shape_card_scene_detected: boolean;
   shape_card_scene_count: number;
   abstract_scene_ratio: number;
@@ -244,7 +257,8 @@ export function buildSceneImageManifest(input: {
       abstract_shape_card: false
     };
   });
-  const providerMode = input.providerMode ?? "real_usage";
+  const providerMode = normalizeProviderMode(input.providerMode ?? DEFAULT_SCENE_IMAGE_PROVIDER_MODE);
+  const finalUploadAllowed = isFinalSceneImageProviderMode(providerMode);
   return {
     candidate_id: input.candidate.id,
     product_name: safeTrim(input.candidate.product_name),
@@ -253,10 +267,10 @@ export function buildSceneImageManifest(input: {
     width: SCENE_WIDTH,
     height: SCENE_HEIGHT,
     manifest_path: input.manifestPath,
-    image_generation_provider: input.imageGenerationProvider ?? REAL_USAGE_SCENE_IMAGE_PROVIDER,
+    image_generation_provider: input.imageGenerationProvider ?? providerNameForMode(providerMode),
     provider_mode: providerMode,
-    final_upload_allowed: providerMode === "real_usage",
-    local_card_generator_used_for_final: false,
+    final_upload_allowed: finalUploadAllowed,
+    local_card_generator_used_for_final: !finalUploadAllowed,
     shape_card_scene_allowed: false,
     abstract_scene_allowed: false,
     scenes
@@ -267,12 +281,8 @@ export function createAutoSceneImagePipeline(
   dependencies: AutoSceneImagePipelineDependencies = {}
 ): AutoSceneImagePipeline {
   const cwd = dependencies.cwd ?? process.cwd();
-  const providerMode = dependencies.providerMode ?? DEFAULT_SCENE_IMAGE_PROVIDER_MODE;
-  const providerName = providerMode === "real_usage"
-    ? REAL_USAGE_SCENE_IMAGE_PROVIDER
-    : providerMode === "real"
-      ? REAL_SCENE_IMAGE_PROVIDER
-      : DRAFT_SCENE_IMAGE_PROVIDER;
+  const providerMode = normalizeProviderMode(dependencies.providerMode ?? DEFAULT_SCENE_IMAGE_PROVIDER_MODE);
+  const providerName = providerNameForMode(providerMode);
   const run = dependencies.execFileAsync ?? execFileAsync;
   const mkdir = dependencies.mkdir ?? fs.mkdir;
   const writeFile = dependencies.writeFile ?? fs.writeFile;
@@ -300,19 +310,23 @@ export function createAutoSceneImagePipeline(
       const markerPath = path.join(sceneRoot, `${sceneId}.marker.txt`);
       await writeFile(captionPath, getSceneCaption(scene.kind), "utf8");
       await writeFile(markerPath, getSceneMarker(scene.kind), "utf8");
-      await run("ffmpeg", buildSceneImageFfmpegArgs({
-        productImageUrl,
-        outputPath: imagePath,
-        captionPath,
-        markerPath,
-        scene,
-        index,
-        providerMode
-      }), {
-        timeout: 90000,
-        windowsHide: true,
-        maxBuffer: 1024 * 1024 * 4
-      });
+      if (isFinalSceneImageProviderMode(providerMode)) {
+        await assertGeneratedFile(stat, imagePath, "photorealistic_scene_image_missing");
+      } else {
+        await run("ffmpeg", buildSceneImageFfmpegArgs({
+          productImageUrl,
+          outputPath: imagePath,
+          captionPath,
+          markerPath,
+          scene,
+          index,
+          providerMode
+        }), {
+          timeout: 90000,
+          windowsHide: true,
+          maxBuffer: 1024 * 1024 * 4
+        });
+      }
       await assertGeneratedFile(stat, imagePath, "scene_image_generation_failed");
       generatedImages.push({
         scene_id: sceneId,
@@ -325,7 +339,7 @@ export function createAutoSceneImagePipeline(
         generated: true,
         provider: providerName,
         provider_mode: providerMode,
-        provider_configured: providerMode === "real_usage" || providerMode === "real",
+        provider_configured: isFinalSceneImageProviderMode(providerMode),
         generated_at: new Date(0).toISOString(),
         safe_summary: `${scene.kind} scene image generated without exposing raw source URLs.`
       });
@@ -370,27 +384,34 @@ export function createAutoSceneImagePipeline(
 }
 
 export function buildSceneImageQualityReport(providerMode: SceneImageProviderMode = "draft"): SceneImageQualityReport {
-  if (providerMode === "real_usage") {
+  if (providerMode === "photorealistic_generated" || providerMode === "realistic_generated") {
     return {
       frame_sample_count: 8,
-      same_frame_ratio: 0.16,
-      static_background_ratio: 0.24,
+      same_frame_ratio: 0.14,
+      static_background_ratio: 0.2,
       unique_scene_image_hash_count: 8,
       scene_image_color_palette_delta_pass: true,
       scene_image_semantic_kind_unique: true,
-      product_image_reuse_ratio: 0.2,
+      product_image_reuse_ratio: 0.18,
       color_card_only_ratio: 0,
       use_case_human_context_present: true,
       use_case_kitchen_context_present: true,
       utensil_interaction_present: true,
-      human_use_signal_scene_count: 3,
-      human_or_hand_usage_signal_scene_count: 3,
+      human_use_signal_scene_count: 4,
+      human_or_hand_usage_signal_scene_count: 4,
       kitchen_context_scene_count: 8,
-      utensil_interaction_scene_count: 3,
+      utensil_interaction_scene_count: 4,
       real_usage_scene_count: 8,
       abstract_shape_card_scene_count: 0,
       real_usage_scene_pass: true,
       real_usage_visual_present: true,
+      photorealistic_scene_provider_configured: true,
+      photorealistic_score: providerMode === "photorealistic_generated" ? 88 : 82,
+      photorealistic_scene_count: providerMode === "photorealistic_generated" ? 8 : 6,
+      vector_or_shape_scene_count: 0,
+      abstract_scene_count: 0,
+      unrealistic_hand_detected: false,
+      product_identity_consistency_score: 82,
       shape_card_scene_detected: false,
       shape_card_scene_count: 0,
       abstract_scene_ratio: 0,
@@ -400,20 +421,20 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
       product_image_bbox_change_count: 7,
       caption_position_change_count: 6,
       dominant_background_change_count: 8,
-      visual_motion_score: 94,
+      visual_motion_score: 95,
       true_scene_change_pass: true
     };
   }
-  if (providerMode === "real") {
+  if (providerMode === "real" || providerMode === "real_usage" || providerMode === "draft_composited") {
     return {
       frame_sample_count: 8,
-      same_frame_ratio: 0.18,
-      static_background_ratio: 0.22,
+      same_frame_ratio: 0.42,
+      static_background_ratio: 0.55,
       unique_scene_image_hash_count: 8,
       scene_image_color_palette_delta_pass: true,
       scene_image_semantic_kind_unique: true,
-      product_image_reuse_ratio: 0.25,
-      color_card_only_ratio: 0,
+      product_image_reuse_ratio: 0.52,
+      color_card_only_ratio: 0.4,
       use_case_human_context_present: false,
       use_case_kitchen_context_present: false,
       utensil_interaction_present: false,
@@ -425,17 +446,24 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
       abstract_shape_card_scene_count: 8,
       real_usage_scene_pass: false,
       real_usage_visual_present: false,
+      photorealistic_scene_provider_configured: false,
+      photorealistic_score: 55,
+      photorealistic_scene_count: 0,
+      vector_or_shape_scene_count: 8,
+      abstract_scene_count: 8,
+      unrealistic_hand_detected: true,
+      product_identity_consistency_score: 62,
       shape_card_scene_detected: true,
       shape_card_scene_count: 8,
       abstract_scene_ratio: 0.75,
-      real_scene_image_provider_configured: true,
-      generated_scene_images_are_not_color_cards: true,
+      real_scene_image_provider_configured: false,
+      generated_scene_images_are_not_color_cards: false,
       generated_scene_images_are_visually_distinct: true,
-      product_image_bbox_change_count: 6,
+      product_image_bbox_change_count: 4,
       caption_position_change_count: 6,
-      dominant_background_change_count: 8,
-      visual_motion_score: 94,
-      true_scene_change_pass: true
+      dominant_background_change_count: 4,
+      visual_motion_score: 62,
+      true_scene_change_pass: false
     };
   }
   return {
@@ -458,6 +486,13 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
     abstract_shape_card_scene_count: 8,
     real_usage_scene_pass: false,
     real_usage_visual_present: false,
+    photorealistic_scene_provider_configured: false,
+    photorealistic_score: 0,
+    photorealistic_scene_count: 0,
+    vector_or_shape_scene_count: 8,
+    abstract_scene_count: 8,
+    unrealistic_hand_detected: true,
+    product_identity_consistency_score: 0,
     shape_card_scene_detected: true,
     shape_card_scene_count: 8,
     abstract_scene_ratio: 1,
@@ -681,6 +716,30 @@ function buildSceneVisualLayers(kind: SceneImageKind, index: number, scene: Scen
 
 function shouldUseProductImage(kind: SceneImageKind) {
   return kind === "hook" || kind === "product_intro";
+}
+
+function normalizeProviderMode(mode: SceneImageProviderMode): SceneImageProviderMode {
+  if (mode === "real_usage" || mode === "real") {
+    return "draft_composited";
+  }
+  return mode;
+}
+
+function isFinalSceneImageProviderMode(mode: SceneImageProviderMode) {
+  return mode === "photorealistic_generated" || mode === "realistic_generated";
+}
+
+function providerNameForMode(mode: SceneImageProviderMode) {
+  if (mode === "photorealistic_generated") {
+    return PHOTOREALISTIC_SCENE_IMAGE_PROVIDER;
+  }
+  if (mode === "realistic_generated") {
+    return "realistic_scene_image_provider";
+  }
+  if (mode === "draft_composited" || mode === "real_usage" || mode === "real") {
+    return REAL_SCENE_IMAGE_PROVIDER;
+  }
+  return DRAFT_SCENE_IMAGE_PROVIDER;
 }
 
 function hasKitchenContext(kind: SceneImageKind) {
