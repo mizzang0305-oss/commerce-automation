@@ -198,9 +198,9 @@ not ask the operator to write prompts manually and it must not fall back to one
 static product image when scene images are missing. Local artifacts are written
 under:
 
-- `commerce-assets/generated-scenes/<candidate_id>/v005/`
-- `commerce-assets/generated-videos/<candidate_id>/v005/story-shorts.mp4`
-- `commerce-assets/generated-audio/<candidate_id>/v005/`
+- `commerce-assets/generated-scenes/<candidate_id>/v007/`
+- `commerce-assets/generated-videos/<candidate_id>/v007/story-shorts.mp4`
+- `commerce-assets/generated-audio/<candidate_id>/v007/`
 
 These generated artifacts are local evidence only and must not be committed.
 

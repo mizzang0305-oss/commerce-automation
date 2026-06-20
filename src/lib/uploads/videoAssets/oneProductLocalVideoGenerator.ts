@@ -31,7 +31,7 @@ const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
 const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
 const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 240;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
-const STORY_SCENE_IMAGE_VERSION = "v005";
+const STORY_SCENE_IMAGE_VERSION = "v007";
 const STORY_FRAME_SAMPLE_COUNT = 8;
 const STORY_HOOK_TEXT = "주방 조리도구, 아직도 서랍에 쌓아두세요?";
 const STORY_PROBLEM_TEXT = "국자, 뒤집개, 거품기 찾다가 요리 흐름이 끊기는 경우가 많습니다.";
@@ -194,8 +194,12 @@ export function createOneProductLocalVideoGenerator(
       product_image_present: true,
       content_quality_score: finalSceneImageGateReady ? STORY_CONTENT_QUALITY_SCORE : 0,
       scene_image_briefs_generated: true,
+      scene_image_prompts_generated: true,
       user_prompt_required: false,
+      manual_prompt_required: false,
       image_generation_provider: scenePipelineResult.provider,
+      image_generation_provider_mode: scenePipelineResult.manifest.provider_mode,
+      local_card_generator_final_upload_allowed: false,
       generated_scene_image_count: scenePipelineResult.generated_scene_image_count,
       generated_scene_image_paths_present: scenePipelineResult.generated_scene_image_paths_present,
       unique_scene_image_hash_count: sceneQuality.unique_scene_image_hash_count,
@@ -282,8 +286,12 @@ export function createOneProductLocalVideoGenerator(
       black_screen_detected: result.black_screen_detected,
       content_quality_score: result.content_quality_score,
       scene_image_briefs_generated: result.scene_image_briefs_generated,
+      scene_image_prompts_generated: result.scene_image_prompts_generated,
       user_prompt_required: result.user_prompt_required,
+      manual_prompt_required: result.manual_prompt_required,
       image_generation_provider: result.image_generation_provider,
+      image_generation_provider_mode: result.image_generation_provider_mode,
+      local_card_generator_final_upload_allowed: result.local_card_generator_final_upload_allowed,
       generated_scene_image_count: result.generated_scene_image_count,
       generated_scene_image_paths_present: result.generated_scene_image_paths_present,
       unique_scene_image_hash_count: result.unique_scene_image_hash_count,

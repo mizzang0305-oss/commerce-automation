@@ -67,7 +67,7 @@ python -m compileall python-worker
 ## Auto Scene Image Shorts QA
 
 - One selected candidate generates eight scene image briefs without asking the operator for manual prompts.
-- Generated scene images are written to `commerce-assets/generated-scenes/<candidate_id>/v005/`.
+- Generated scene images are written to `commerce-assets/generated-scenes/<candidate_id>/v007/`.
 - `scene-manifest.json`, `scene-contact-sheet.jpg`, and `quality-report.json` are present before rendering.
 - The local renderer consumes the scene manifest image paths and does not use one product image as the full-video fallback.
 - Missing scene images block rendering before MP4 generation.

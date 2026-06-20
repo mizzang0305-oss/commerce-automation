@@ -90,8 +90,12 @@ describe("one-product local video generator adapter", () => {
       product_image_present: true,
       content_quality_score: 100,
       scene_image_briefs_generated: true,
+      scene_image_prompts_generated: true,
       user_prompt_required: false,
+      manual_prompt_required: false,
       image_generation_provider: "real_scene_image_provider_mock",
+      image_generation_provider_mode: "real",
+      local_card_generator_final_upload_allowed: false,
       generated_scene_image_count: 8,
       generated_scene_image_paths_present: true,
       unique_scene_image_hash_count: 8,
@@ -146,8 +150,8 @@ describe("one-product local video generator adapter", () => {
       max_silence_between_segments_ms: 240,
       audio_video_duration_gap_seconds: 0
     });
-    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", "candidate-real-asset-001", "v005"));
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", "candidate-real-asset-001", "v005", "scene-manifest.json"));
+    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", "candidate-real-asset-001", "v007"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", "candidate-real-asset-001", "v007", "scene-manifest.json"));
     expect(result.checksum_sha256).toHaveLength(64);
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com/product.jpg");
@@ -180,26 +184,33 @@ function buildScenePipelineResult(productCandidate: ProductCandidate, cwd: strin
   const generatedImages = briefs.map((brief, index) => ({
     scene_id: brief.scene_id,
     kind: brief.kind,
-    image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    local_image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    mime_type: "image/png" as const,
     width: 1080,
     height: 1920,
-    generated: true
+    generated: true,
+    provider: "real_scene_image_provider_mock",
+    provider_mode: "real" as const,
+    provider_configured: true,
+    generated_at: "1970-01-01T00:00:00.000Z",
+    safe_summary: `${brief.kind} scene image generated without exposing raw source URLs.`
   }));
-  const manifestPath = path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "scene-manifest.json");
+  const manifestPath = path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "scene-manifest.json");
   return {
     provider: "real_scene_image_provider_mock",
-    version: "v005",
+    version: "v007",
     scene_image_briefs: briefs,
     generated_images: generatedImages,
     manifest: buildSceneImageManifest({
       candidate: productCandidate,
-      version: "v005",
+      version: "v007",
       generatedImages,
       manifestPath
     }),
     manifest_path: manifestPath,
-    contact_sheet_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "scene-contact-sheet.jpg"),
-    quality_report_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "quality-report.json"),
+    contact_sheet_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "scene-contact-sheet.jpg"),
+    quality_report_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "quality-report.json"),
     generated_scene_image_count: 8,
     generated_scene_image_paths_present: true,
     scene_manifest_created: true,
