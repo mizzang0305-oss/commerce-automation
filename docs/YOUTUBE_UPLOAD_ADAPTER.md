@@ -416,4 +416,6 @@ writing DB/R2/queue/job/upload-package state.
 
 The adapter performs YouTube Data API `videos.insert` only through a server-only resumable upload path after readiness, exact confirmation, private visibility, and any intent-specific approval pass. `RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE` is required only for `execution_intent=live_smoke`. Success requires a returned YouTube video id. Missing video id, missing server-accessible asset reference, missing token readiness, public or unlisted visibility, or failed provider responses must return `succeeded=false`.
 
+Motion-first shorts add a provider-quality prerequisite before final private execute. `slideshow_generated`, `animated_still_generated` without real clips, missing hand/utensil/product-rotate interactions, missing provider configuration, or public/unlisted upload policy gaps must block before any `videos.insert` attempt.
+
 See [YOUTUBE_PRIVATE_UPLOAD_SMOKE.md](YOUTUBE_PRIVATE_UPLOAD_SMOKE.md) for the smoke checklist.
