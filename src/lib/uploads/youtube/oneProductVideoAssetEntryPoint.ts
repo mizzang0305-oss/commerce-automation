@@ -9,11 +9,13 @@ import type {
 } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
 import { APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
+import { APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export {
   APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE
 };
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
@@ -43,7 +45,12 @@ export type GeneratedProductVideoAsset = {
   product_image_present?: boolean;
   content_quality_score?: number | null;
   hook_title_present?: boolean;
+  hook_title_visible_in_first_1_0_seconds?: boolean;
   hook_title_visible_in_first_1_5_seconds?: boolean;
+  hook_title_readability_score?: number | null;
+  hook_title_font_size_large?: boolean;
+  hook_title_contrast_pass?: boolean;
+  hook_title_background_chip_present?: boolean;
   hook_title_safe_area_pass?: boolean;
   caption_safe_area_pass?: boolean;
   all_text_inside_mobile_safe_area?: boolean;
@@ -58,8 +65,14 @@ export type GeneratedProductVideoAsset = {
   kitchen_context_scene_present?: boolean;
   utensil_usage_simulation_present?: boolean;
   before_after_or_problem_scene_present?: boolean;
+  checklist_scene_present?: boolean;
+  cta_scene_present?: boolean;
+  cta_mentions_description_or_comment?: boolean;
   voiceover_speed_wpm?: number | null;
   voiceover_speed_multiplier?: number | null;
+  voiceover_naturalness_score?: number | null;
+  voiceover_too_robotic?: boolean;
+  alternate_voice_used?: boolean;
   max_silence_between_segments_ms?: number | null;
   audio_video_duration_gap_seconds?: number | null;
   generated_this_run: boolean;
@@ -393,13 +406,15 @@ export async function buildOneProductVideoAssetEntryPoint(
 function hasGenerationApproval(value: unknown) {
   return value === RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION ||
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function hasRegistrationApproval(value: unknown) {
   return value === APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION ||
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -557,7 +572,12 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     product_image_present: asset.product_image_present === true,
     content_quality_score: asset.content_quality_score ?? null,
     hook_title_present: asset.hook_title_present === true,
+    hook_title_visible_in_first_1_0_seconds: asset.hook_title_visible_in_first_1_0_seconds === true,
     hook_title_visible_in_first_1_5_seconds: asset.hook_title_visible_in_first_1_5_seconds === true,
+    hook_title_readability_score: asset.hook_title_readability_score ?? null,
+    hook_title_font_size_large: asset.hook_title_font_size_large === true,
+    hook_title_contrast_pass: asset.hook_title_contrast_pass === true,
+    hook_title_background_chip_present: asset.hook_title_background_chip_present === true,
     hook_title_safe_area_pass: asset.hook_title_safe_area_pass === true,
     caption_safe_area_pass: asset.caption_safe_area_pass === true,
     all_text_inside_mobile_safe_area: asset.all_text_inside_mobile_safe_area === true,
@@ -572,8 +592,14 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     kitchen_context_scene_present: asset.kitchen_context_scene_present === true,
     utensil_usage_simulation_present: asset.utensil_usage_simulation_present === true,
     before_after_or_problem_scene_present: asset.before_after_or_problem_scene_present === true,
+    checklist_scene_present: asset.checklist_scene_present === true,
+    cta_scene_present: asset.cta_scene_present === true,
+    cta_mentions_description_or_comment: asset.cta_mentions_description_or_comment === true,
     voiceover_speed_wpm: asset.voiceover_speed_wpm ?? null,
     voiceover_speed_multiplier: asset.voiceover_speed_multiplier ?? null,
+    voiceover_naturalness_score: asset.voiceover_naturalness_score ?? null,
+    voiceover_too_robotic: asset.voiceover_too_robotic === true,
+    alternate_voice_used: asset.alternate_voice_used === true,
     max_silence_between_segments_ms: asset.max_silence_between_segments_ms ?? null,
     audio_video_duration_gap_seconds: asset.audio_video_duration_gap_seconds ?? null,
     generated_this_run: asset.generated_this_run,

@@ -1,5 +1,6 @@
 import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
 import { APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
+import { APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
 
 export const APPROVE_YOUTUBE_PRIVATE_UPLOAD = "APPROVE_YOUTUBE_PRIVATE_UPLOAD";
 export const RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE = "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE";
@@ -8,7 +9,8 @@ export function hasExactYouTubeUploadConfirmation(value: unknown) {
   return typeof value === "string" && [
     APPROVE_YOUTUBE_PRIVATE_UPLOAD,
     APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
-    APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE
+    APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
+    APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE
   ].includes(value.trim());
 }
 
