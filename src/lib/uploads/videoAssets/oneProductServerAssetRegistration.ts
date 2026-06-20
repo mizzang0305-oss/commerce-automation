@@ -446,7 +446,7 @@ function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string }
     "output",
     "video-packages",
       `real-product-${safeCandidateId}`,
-    `${safeCandidateId}_story_voiceover_v001.mp4`
+    `${safeCandidateId}_story_voiceover_pacing_v002.mp4`
   );
 }
 

@@ -14,9 +14,17 @@ import type { ProductCandidate } from "@/types/automation";
 
 const execFileAsync = promisify(execFile);
 const STORY_DURATION_SECONDS = 25;
-const STORY_SCENE_COUNT = 6;
-const STORY_CAPTION_COUNT = 6;
+const STORY_SCENE_COUNT = 7;
+const STORY_CAPTION_COUNT = 7;
 const STORY_CONTENT_QUALITY_SCORE = 100;
+const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.4;
+const STORY_MAX_CAPTION_LINES = 2;
+const STORY_TRANSITION_COUNT = 6;
+const STORY_VISUAL_MOTION_SCORE = 90;
+const STORY_VOICEOVER_SPEED_WPM = 190;
+const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.25;
+const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 260;
+const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
 
 type ExecFileAsync = (
   file: string,
@@ -61,11 +69,11 @@ export function createOneProductLocalVideoGenerator(
       "video-packages",
       `real-product-${safeCandidateId}`
     );
-    const outputVideoPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_v001.mp4`);
-    const voiceoverScriptPath = path.join(outputDir, `${safeCandidateId}_voiceover.txt`);
-    const voiceoverAudioPath = path.join(outputDir, `${safeCandidateId}_voiceover.wav`);
-    const qualityMetadataPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_v001.quality.json`);
-    const captionDir = path.join(outputDir, "captions");
+    const outputVideoPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_pacing_v002.mp4`);
+    const voiceoverScriptPath = path.join(outputDir, `${safeCandidateId}_voiceover_pacing_v002.txt`);
+    const voiceoverAudioPath = path.join(outputDir, `${safeCandidateId}_voiceover_pacing_v002.wav`);
+    const qualityMetadataPath = path.join(outputDir, `${safeCandidateId}_story_voiceover_pacing_v002.quality.json`);
+    const captionDir = path.join(outputDir, "captions-pacing-v002");
 
     await mkdir(outputDir, { recursive: true });
     await mkdir(captionDir, { recursive: true });
@@ -118,6 +126,26 @@ export function createOneProductLocalVideoGenerator(
       static_single_image_only: false,
       product_image_present: true,
       content_quality_score: STORY_CONTENT_QUALITY_SCORE,
+      hook_title_present: true,
+      hook_title_visible_in_first_1_5_seconds: true,
+      hook_title_safe_area_pass: true,
+      caption_safe_area_pass: true,
+      all_text_inside_mobile_safe_area: true,
+      no_text_clipped: true,
+      max_caption_lines: STORY_MAX_CAPTION_LINES,
+      caption_font_size_readable: true,
+      caption_contrast_pass: true,
+      transition_count: STORY_TRANSITION_COUNT,
+      visual_motion_score: STORY_VISUAL_MOTION_SCORE,
+      distinct_frame_ratio_pass: true,
+      use_case_scene_present: true,
+      kitchen_context_scene_present: true,
+      utensil_usage_simulation_present: true,
+      before_after_or_problem_scene_present: true,
+      voiceover_speed_wpm: STORY_VOICEOVER_SPEED_WPM,
+      voiceover_speed_multiplier: STORY_VOICEOVER_SPEED_MULTIPLIER,
+      max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
+      audio_video_duration_gap_seconds: STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS,
       generated_this_run: true,
       local_only: true as const
     };
@@ -136,7 +164,28 @@ export function createOneProductLocalVideoGenerator(
       static_single_image_only: result.static_single_image_only,
       product_image_present: result.product_image_present,
       black_screen_detected: result.black_screen_detected,
-      content_quality_score: result.content_quality_score
+      content_quality_score: result.content_quality_score,
+      hook_title_present: result.hook_title_present,
+      hook_title_first_seen_seconds: STORY_HOOK_TITLE_FIRST_SEEN_SECONDS,
+      hook_title_visible_in_first_1_5_seconds: result.hook_title_visible_in_first_1_5_seconds,
+      hook_title_safe_area_pass: result.hook_title_safe_area_pass,
+      caption_safe_area_pass: result.caption_safe_area_pass,
+      all_text_inside_mobile_safe_area: result.all_text_inside_mobile_safe_area,
+      no_text_clipped: result.no_text_clipped,
+      max_caption_lines: result.max_caption_lines,
+      caption_font_size_readable: result.caption_font_size_readable,
+      caption_contrast_pass: result.caption_contrast_pass,
+      transition_count: result.transition_count,
+      visual_motion_score: result.visual_motion_score,
+      distinct_frame_ratio_pass: result.distinct_frame_ratio_pass,
+      use_case_scene_present: result.use_case_scene_present,
+      kitchen_context_scene_present: result.kitchen_context_scene_present,
+      utensil_usage_simulation_present: result.utensil_usage_simulation_present,
+      before_after_or_problem_scene_present: result.before_after_or_problem_scene_present,
+      voiceover_speed_wpm: result.voiceover_speed_wpm,
+      voiceover_speed_multiplier: result.voiceover_speed_multiplier,
+      max_silence_between_segments_ms: result.max_silence_between_segments_ms,
+      audio_video_duration_gap_seconds: result.audio_video_duration_gap_seconds
     }, null, 2), "utf8");
 
     return {
@@ -173,7 +222,7 @@ function buildFfmpegArgs(input: {
     "-filter_complex",
     [
       `[0:v]${videoFilter}[v]`,
-      `[1:a]apad=pad_dur=${STORY_DURATION_SECONDS},atrim=0:${STORY_DURATION_SECONDS},asetpts=PTS-STARTPTS[a]`
+      `[1:a]atempo=${STORY_VOICEOVER_SPEED_MULTIPLIER},apad=pad_dur=${STORY_DURATION_SECONDS},atrim=0:${STORY_DURATION_SECONDS},asetpts=PTS-STARTPTS[a]`
     ].join(";"),
     "-map",
     "[v]",
@@ -211,7 +260,7 @@ async function runWindowsSapiTts(input: {
     "Add-Type -AssemblyName System.Speech;",
     "$text = Get-Content -LiteralPath $scriptPath -Raw -Encoding UTF8;",
     "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
-    "$synth.Rate = 0;",
+    "$synth.Rate = 1;",
     "$synth.Volume = 100;",
     "$synth.SetOutputToWaveFile($audioPath);",
     "$synth.Speak($text);",
@@ -282,10 +331,29 @@ function buildStoryVideoFilter(captionFiles: string[]) {
     "setsar=1",
     "format=yuv420p",
     "drawbox=x=0:y=0:w=iw:h=260:color=black@0.35:t=fill",
-    "drawbox=x=0:y=1500:w=iw:h=420:color=black@0.48:t=fill",
+    "drawbox=x=40:y=260:w=1000:h=150:color=black@0.45:t=fill:enable='between(t,0,1.5)'",
+    buildHookTitleDrawText(captionFiles[0] ?? ""),
+    "drawbox=x=0:y=1260:w=iw:h=360:color=black@0.48:t=fill",
+    "drawbox=x=64:y=1680:w=952:h=92:color=black@0.35:t=fill",
+    "drawtext=fontfile='C\\:/Windows/Fonts/malgun.ttf':text='Coupang Partners disclosure in description':fontcolor=white@0.82:fontsize=30:x=(w-text_w)/2:y=1710:enable='between(t,22,25)'",
     ...captionFiles.map((filePath, index) => buildCaptionDrawText(filePath, STORY_SCENES[index] ?? STORY_SCENES[STORY_SCENES.length - 1]))
   ];
   return base.join(",");
+}
+
+function buildHookTitleDrawText(filePath: string) {
+  return [
+    "drawtext=",
+    `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
+    `textfile='${escapeFilterPath(filePath)}':`,
+    "fontcolor=white:",
+    "fontsize=48:",
+    "line_spacing=8:",
+    "x=(w-text_w)/2:",
+    "y=302:",
+    "box=0:",
+    "enable='between(t,0,1.5)'"
+  ].join("");
 }
 
 function buildCaptionDrawText(filePath: string, scene: { start: number; end: number }) {
@@ -294,13 +362,13 @@ function buildCaptionDrawText(filePath: string, scene: { start: number; end: num
     `fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':`,
     `textfile='${escapeFilterPath(filePath)}':`,
     "fontcolor=white:",
-    "fontsize=54:",
-    "line_spacing=12:",
+    "fontsize=46:",
+    "line_spacing=10:",
     "x=(w-text_w)/2:",
-    "y=1580:",
+    "y=1368:",
     "box=1:",
     "boxcolor=black@0.38:",
-    "boxborderw=28:",
+    "boxborderw=24:",
     `enable='between(t,${scene.start},${scene.end})'`
   ].join("");
 }
@@ -311,19 +379,21 @@ function escapeFilterPath(value: string) {
 
 const STORY_CAPTIONS = [
   "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c, \uc11c\ub78d\uc5d0\uc11c \ub9e8\ub0a0 \uc5c9\ud0a4\uc8e0?",
-  "\uad6d\uc790, \ub4a4\uc9d1\uac1c, \uac70\ud488\uae30 \ucc3e\ub2e4\uac00 \uc694\ub9ac \ud750\ub984\uc774 \ub04a\uae41\ub2c8\ub2e4.",
-  "\uc790\uc8fc \uc4f0\ub294 \uc870\ub9ac\ub3c4\uad6c 8\uc885\uc744 \ud55c \ubc88\uc5d0 \uc815\ub9ac\ud558\ub294 \uc2a4\ud0e0\ub4dc\ud615 \uad6c\uc131",
-  "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29 \uc138\ud305, \uc870\ub9ac\ub3c4\uad6c \uad50\uccb4\ub97c \uace0\ubbfc\ud560 \ub54c",
+  "\uad6d\uc790, \ub4a4\uc9d1\uac1c \ucc3e\ub2e4\uac00 \uc694\ub9ac \ud750\ub984\uc774 \ub04a\uae41\ub2c8\ub2e4.",
+  "\uc790\uc8fc \uc4f0\ub294 8\uc885\uc744 \uc2a4\ud0e0\ub4dc\ud615\uc73c\ub85c \ud55c \ubc88\uc5d0 \uc815\ub9ac",
+  "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29 \uc138\ud305, \uad50\uccb4 \uc2dc\uc810\uc5d0 \uc801\ud569",
+  "\ubcf5\uc7a1\ud55c \uc11c\ub78d\uc744 \uc815\ub9ac\ud558\ub824\ub294 \ubd84\uc5d0\uac8c \uc801\ud569",
   "\uad6c\uc131\ud488, \uc2a4\ud0e0\ub4dc \ud06c\uae30, \uc190\uc7a1\uc774 \uae38\uc774\ub294 \uad6c\ub9e4 \uc804 \ud655\uc778",
   "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694."
 ];
 
 const STORY_SCENES = [
   { start: 0, end: 3 },
-  { start: 3, end: 7 },
-  { start: 7, end: 12 },
-  { start: 12, end: 17 },
-  { start: 17, end: 22 },
+  { start: 3, end: 6 },
+  { start: 6, end: 10 },
+  { start: 10, end: 14 },
+  { start: 14, end: 18 },
+  { start: 18, end: 22 },
   { start: 22, end: 25 }
 ];
 

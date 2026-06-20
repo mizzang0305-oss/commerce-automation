@@ -8,9 +8,13 @@ import type {
   ServerVideoAssetRegistrar
 } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
+import { APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
-export { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE };
+export {
+  APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE
+};
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
 export const APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION =
@@ -38,6 +42,26 @@ export type GeneratedProductVideoAsset = {
   static_single_image_only?: boolean;
   product_image_present?: boolean;
   content_quality_score?: number | null;
+  hook_title_present?: boolean;
+  hook_title_visible_in_first_1_5_seconds?: boolean;
+  hook_title_safe_area_pass?: boolean;
+  caption_safe_area_pass?: boolean;
+  all_text_inside_mobile_safe_area?: boolean;
+  no_text_clipped?: boolean;
+  max_caption_lines?: number | null;
+  caption_font_size_readable?: boolean;
+  caption_contrast_pass?: boolean;
+  transition_count?: number | null;
+  visual_motion_score?: number | null;
+  distinct_frame_ratio_pass?: boolean;
+  use_case_scene_present?: boolean;
+  kitchen_context_scene_present?: boolean;
+  utensil_usage_simulation_present?: boolean;
+  before_after_or_problem_scene_present?: boolean;
+  voiceover_speed_wpm?: number | null;
+  voiceover_speed_multiplier?: number | null;
+  max_silence_between_segments_ms?: number | null;
+  audio_video_duration_gap_seconds?: number | null;
   generated_this_run: boolean;
   local_only: true;
 };
@@ -368,12 +392,14 @@ export async function buildOneProductVideoAssetEntryPoint(
 
 function hasGenerationApproval(value: unknown) {
   return value === RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION ||
-    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function hasRegistrationApproval(value: unknown) {
   return value === APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION ||
-    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -530,6 +556,26 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     static_single_image_only: asset.static_single_image_only === true,
     product_image_present: asset.product_image_present === true,
     content_quality_score: asset.content_quality_score ?? null,
+    hook_title_present: asset.hook_title_present === true,
+    hook_title_visible_in_first_1_5_seconds: asset.hook_title_visible_in_first_1_5_seconds === true,
+    hook_title_safe_area_pass: asset.hook_title_safe_area_pass === true,
+    caption_safe_area_pass: asset.caption_safe_area_pass === true,
+    all_text_inside_mobile_safe_area: asset.all_text_inside_mobile_safe_area === true,
+    no_text_clipped: asset.no_text_clipped === true,
+    max_caption_lines: asset.max_caption_lines ?? null,
+    caption_font_size_readable: asset.caption_font_size_readable === true,
+    caption_contrast_pass: asset.caption_contrast_pass === true,
+    transition_count: asset.transition_count ?? null,
+    visual_motion_score: asset.visual_motion_score ?? null,
+    distinct_frame_ratio_pass: asset.distinct_frame_ratio_pass === true,
+    use_case_scene_present: asset.use_case_scene_present === true,
+    kitchen_context_scene_present: asset.kitchen_context_scene_present === true,
+    utensil_usage_simulation_present: asset.utensil_usage_simulation_present === true,
+    before_after_or_problem_scene_present: asset.before_after_or_problem_scene_present === true,
+    voiceover_speed_wpm: asset.voiceover_speed_wpm ?? null,
+    voiceover_speed_multiplier: asset.voiceover_speed_multiplier ?? null,
+    max_silence_between_segments_ms: asset.max_silence_between_segments_ms ?? null,
+    audio_video_duration_gap_seconds: asset.audio_video_duration_gap_seconds ?? null,
     generated_this_run: asset.generated_this_run,
     local_only: true,
     domain_ready: false
