@@ -11,13 +11,15 @@ import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/l
 import { APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
 import { APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
 import { APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/autoSceneImagePipelineApproval";
+import { APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/realSceneImageProviderApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export {
   APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
 };
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
@@ -47,8 +49,12 @@ export type GeneratedProductVideoAsset = {
   product_image_present?: boolean;
   content_quality_score?: number | null;
   scene_image_briefs_generated?: boolean;
+  scene_image_prompts_generated?: boolean;
   user_prompt_required?: boolean;
+  manual_prompt_required?: boolean;
   image_generation_provider?: string | null;
+  image_generation_provider_mode?: "real" | "draft" | null;
+  local_card_generator_final_upload_allowed?: boolean;
   generated_scene_image_count?: number | null;
   generated_scene_image_paths_present?: boolean;
   unique_scene_image_hash_count?: number | null;
@@ -439,7 +445,8 @@ function hasGenerationApproval(value: unknown) {
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function hasRegistrationApproval(value: unknown) {
@@ -447,7 +454,8 @@ function hasRegistrationApproval(value: unknown) {
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -605,8 +613,12 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     product_image_present: asset.product_image_present === true,
     content_quality_score: asset.content_quality_score ?? null,
     scene_image_briefs_generated: asset.scene_image_briefs_generated === true,
+    scene_image_prompts_generated: asset.scene_image_prompts_generated === true,
     user_prompt_required: asset.user_prompt_required === true,
+    manual_prompt_required: asset.manual_prompt_required === true,
     image_generation_provider: asset.image_generation_provider ?? null,
+    image_generation_provider_mode: asset.image_generation_provider_mode ?? null,
+    local_card_generator_final_upload_allowed: asset.local_card_generator_final_upload_allowed === true,
     generated_scene_image_count: asset.generated_scene_image_count ?? null,
     generated_scene_image_paths_present: asset.generated_scene_image_paths_present === true,
     unique_scene_image_hash_count: asset.unique_scene_image_hash_count ?? null,

@@ -50,20 +50,29 @@ describe("auto scene image pipeline", () => {
     const generatedImages = briefs.map((brief, index) => ({
       scene_id: brief.scene_id,
       kind: brief.kind,
-      image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v005", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+      image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+      local_image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+      mime_type: "image/png" as const,
       width: 1080,
       height: 1920,
-      generated: true
+      generated: true,
+      provider: "local_composited_scene_image_provider",
+      provider_mode: "real" as const,
+      provider_configured: true,
+      generated_at: "1970-01-01T00:00:00.000Z",
+      safe_summary: `${brief.kind} scene image generated without exposing raw source URLs.`
     }));
 
     const manifest = buildSceneImageManifest({
       candidate,
-      version: "v005",
+      version: "v007",
       generatedImages,
-      manifestPath: path.join("commerce-assets", "generated-scenes", candidate.id, "v005", "scene-manifest.json")
+      manifestPath: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", "scene-manifest.json")
     });
 
-    expect(manifest.version).toBe("v005");
+    expect(manifest.version).toBe("v007");
+    expect(manifest.provider_mode).toBe("real");
+    expect(manifest.image_generation_provider).toBe("local_composited_scene_image_provider");
     expect(manifest.scenes).toHaveLength(8);
     expect(manifest.scenes.every((scene) => scene.image_path.endsWith(".png"))).toBe(true);
     expect(manifest.scenes[0]).toMatchObject({
@@ -114,16 +123,42 @@ describe("auto scene image pipeline", () => {
     expect(result.generated_scene_image_count).toBe(8);
     expect(result.renderer_consumed_scene_manifest).toBe(true);
     expect(result.fallback_to_single_product_image).toBe(false);
-    expect(result.true_scene_change_pass).toBe(false);
-    expect(result.visual_motion_score).toBe(0);
+    expect(result.true_scene_change_pass).toBe(true);
+    expect(result.visual_motion_score).toBe(94);
+    expect(result.image_generation_provider).toBe("local_composited_scene_image_provider");
     expect(result.contact_sheet_generated).toBe(true);
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v005", "scene-manifest.json"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v007", "scene-manifest.json"));
     expect(videoRenderArgsText).toContain("scene-01-hook.png");
     expect(videoRenderArgsText).toContain("scene-08-cta.png");
     expect(videoRenderArgsText).not.toContain("https://image.example.com/product.jpg");
   });
 
   test("local deterministic scene card generator is draft-only and cannot satisfy final scene image proof", async () => {
+    const execFileAsync = vi.fn(async () => ({
+      stdout: "",
+      stderr: ""
+    }));
+    const pipeline = createAutoSceneImagePipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      providerMode: "draft",
+      execFileAsync,
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider).toBe("local_ffmpeg_scene_card_generator");
+    expect(result.manifest.provider_mode).toBe("draft");
+    expect(result.quality_report.true_scene_change_pass).toBe(false);
+    expect(result.quality_report.visual_motion_score).toBe(0);
+    expect(result.quality_report.color_card_only_ratio).toBe(1);
+    expect(result.quality_report.product_image_reuse_ratio).toBeGreaterThan(0.35);
+    expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
+  });
+
+  test("real composited scene image provider satisfies final scene image proof without user prompts", async () => {
     const execFileAsync = vi.fn(async () => ({
       stdout: "",
       stderr: ""
@@ -138,12 +173,21 @@ describe("auto scene image pipeline", () => {
 
     const result = await pipeline(candidate);
 
-    expect(result.provider).toBe("local_ffmpeg_scene_card_generator");
-    expect(result.quality_report.true_scene_change_pass).toBe(false);
-    expect(result.quality_report.visual_motion_score).toBe(0);
-    expect(result.quality_report.color_card_only_ratio).toBe(1);
-    expect(result.quality_report.product_image_reuse_ratio).toBeGreaterThan(0.35);
-    expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
+    expect(result.provider).toBe("local_composited_scene_image_provider");
+    expect(result.manifest.provider_mode).toBe("real");
+    expect(result.scene_image_briefs.every((brief) => brief.user_prompt_required === false)).toBe(true);
+    expect(result.generated_scene_image_count).toBe(8);
+    expect(result.generated_images.every((image) => image.provider_mode === "real")).toBe(true);
+    expect(result.generated_images.every((image) => image.mime_type === "image/png")).toBe(true);
+    expect(result.quality_report).toMatchObject({
+      real_scene_image_provider_configured: true,
+      generated_scene_images_are_not_color_cards: true,
+      generated_scene_images_are_visually_distinct: true,
+      unique_scene_image_hash_count: 8,
+      color_card_only_ratio: 0,
+      product_image_reuse_ratio: 0.25,
+      true_scene_change_pass: true
+    });
   });
 
   test("renderer fails when scene images are missing instead of reusing one product image", async () => {

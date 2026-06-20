@@ -9,7 +9,8 @@ import {
   APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
 const DISCLOSURE =
@@ -175,6 +176,10 @@ describe("YouTube Shorts content quality gate", () => {
 
   test("auto scene image pipeline approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
+  test("real scene image provider approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {
