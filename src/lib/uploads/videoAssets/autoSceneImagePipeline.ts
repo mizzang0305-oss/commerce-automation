@@ -111,6 +111,14 @@ export type SceneImageQualityReport = {
   scene_image_semantic_kind_unique: boolean;
   product_image_reuse_ratio: number;
   color_card_only_ratio: number;
+  use_case_human_context_present: boolean;
+  use_case_kitchen_context_present: boolean;
+  utensil_interaction_present: boolean;
+  human_use_signal_scene_count: number;
+  real_usage_visual_present: boolean;
+  shape_card_scene_detected: boolean;
+  shape_card_scene_count: number;
+  abstract_scene_ratio: number;
   real_scene_image_provider_configured: boolean;
   generated_scene_images_are_not_color_cards: boolean;
   generated_scene_images_are_visually_distinct: boolean;
@@ -164,6 +172,7 @@ export function buildBilibinSceneImageBriefs(candidate: ProductCandidate): Scene
         scene.visualDirection,
         "leave safe area for captions",
         "no fake review",
+        "show human hands for real usage scenes when the scene is a use case",
         "no human face unless needed",
         "no brand logo fabrication",
         "no exaggerated claim",
@@ -338,6 +347,14 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
       scene_image_semantic_kind_unique: true,
       product_image_reuse_ratio: 0.25,
       color_card_only_ratio: 0,
+      use_case_human_context_present: false,
+      use_case_kitchen_context_present: false,
+      utensil_interaction_present: false,
+      human_use_signal_scene_count: 0,
+      real_usage_visual_present: false,
+      shape_card_scene_detected: true,
+      shape_card_scene_count: 8,
+      abstract_scene_ratio: 0.75,
       real_scene_image_provider_configured: true,
       generated_scene_images_are_not_color_cards: true,
       generated_scene_images_are_visually_distinct: true,
@@ -357,6 +374,14 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
     scene_image_semantic_kind_unique: false,
     product_image_reuse_ratio: 1,
     color_card_only_ratio: 1,
+    use_case_human_context_present: false,
+    use_case_kitchen_context_present: false,
+    utensil_interaction_present: false,
+    human_use_signal_scene_count: 0,
+    real_usage_visual_present: false,
+    shape_card_scene_detected: true,
+    shape_card_scene_count: 8,
+    abstract_scene_ratio: 1,
     real_scene_image_provider_configured: false,
     generated_scene_images_are_not_color_cards: false,
     generated_scene_images_are_visually_distinct: false,
@@ -658,7 +683,7 @@ const SCENE_SPECS: SceneSpec[] = [
   {
     kind: "use_case",
     purpose: "활용 예시",
-    visualDirection: "staged usage example on a countertop, utensil set ready to be picked up, not a fake review",
+    visualDirection: "real kitchen countertop use case with human hands picking up a ladle or spatula from the utensil stand, visible kitchen context, not a fake review",
     caption: "바로 꺼내 쓰기 좋은\n정리감",
     durationSeconds: 3,
     textPosition: "bottom_safe",

@@ -62,6 +62,14 @@ export type GeneratedProductVideoAsset = {
   scene_image_semantic_kind_unique?: boolean;
   product_image_reuse_ratio?: number | null;
   color_card_only_ratio?: number | null;
+  use_case_human_context_present?: boolean;
+  use_case_kitchen_context_present?: boolean;
+  utensil_interaction_present?: boolean;
+  human_use_signal_scene_count?: number | null;
+  real_usage_visual_present?: boolean;
+  shape_card_scene_detected?: boolean;
+  shape_card_scene_count?: number | null;
+  abstract_scene_ratio?: number | null;
   real_scene_image_provider_configured?: boolean;
   generated_scene_images_are_not_color_cards?: boolean;
   generated_scene_images_are_visually_distinct?: boolean;
@@ -626,6 +634,14 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     scene_image_semantic_kind_unique: asset.scene_image_semantic_kind_unique === true,
     product_image_reuse_ratio: asset.product_image_reuse_ratio ?? null,
     color_card_only_ratio: asset.color_card_only_ratio ?? null,
+    use_case_human_context_present: asset.use_case_human_context_present === true,
+    use_case_kitchen_context_present: asset.use_case_kitchen_context_present === true,
+    utensil_interaction_present: asset.utensil_interaction_present === true,
+    human_use_signal_scene_count: asset.human_use_signal_scene_count ?? null,
+    real_usage_visual_present: asset.real_usage_visual_present === true,
+    shape_card_scene_detected: asset.shape_card_scene_detected === true,
+    shape_card_scene_count: asset.shape_card_scene_count ?? null,
+    abstract_scene_ratio: asset.abstract_scene_ratio ?? null,
     real_scene_image_provider_configured: asset.real_scene_image_provider_configured === true,
     generated_scene_images_are_not_color_cards: asset.generated_scene_images_are_not_color_cards === true,
     generated_scene_images_are_visually_distinct: asset.generated_scene_images_are_visually_distinct === true,

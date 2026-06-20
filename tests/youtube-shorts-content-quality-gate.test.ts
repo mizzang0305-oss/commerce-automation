@@ -80,6 +80,14 @@ const STORY_QUALITY = {
   use_case_scene_present: true,
   kitchen_context_scene_present: true,
   utensil_usage_simulation_present: true,
+  use_case_human_context_present: true,
+  use_case_kitchen_context_present: true,
+  utensil_interaction_present: true,
+  human_use_signal_scene_count: 2,
+  real_usage_visual_present: true,
+  shape_card_scene_detected: false,
+  shape_card_scene_count: 0,
+  abstract_scene_ratio: 0,
   before_after_or_problem_scene_present: true,
   voiceover_speed_wpm: 190,
   voiceover_speed_multiplier: 1.25,
@@ -273,6 +281,36 @@ describe("YouTube Shorts content quality gate", () => {
     expect(result.readiness.content_quality_ready).toBe(false);
   });
 
+  test("abstract use-case scenes without human kitchen interaction are blocked", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        use_case_human_context_present: false,
+        use_case_kitchen_context_present: false,
+        utensil_interaction_present: false,
+        human_use_signal_scene_count: 0,
+        real_usage_visual_present: false,
+        shape_card_scene_detected: true,
+        shape_card_scene_count: 4,
+        abstract_scene_ratio: 0.62
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("abstract use-case visuals must not pass final private upload gate");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "USE_CASE_SCENE_HAS_NO_HUMAN_CONTEXT",
+      "USE_CASE_SCENE_TOO_ABSTRACT",
+      "REAL_USAGE_VISUAL_MISSING",
+      "KITCHEN_CONTEXT_MISSING",
+      "SHAPE_CARD_SCENE_BLOCKED"
+    ]));
+    expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
   test("manual review placeholder description is blocked", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
@@ -348,6 +386,14 @@ describe("YouTube Shorts content quality gate", () => {
       use_case_scene_present: true,
       kitchen_context_scene_present: true,
       utensil_usage_simulation_present: true,
+      use_case_human_context_present: true,
+      use_case_kitchen_context_present: true,
+      utensil_interaction_present: true,
+      human_use_signal_scene_count: 2,
+      real_usage_visual_present: true,
+      shape_card_scene_detected: false,
+      shape_card_scene_count: 0,
+      abstract_scene_ratio: 0,
       before_after_or_problem_scene_present: true,
       checklist_scene_present: true,
       cta_scene_present: true,

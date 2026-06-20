@@ -167,11 +167,11 @@ blockers include
 `CAPTION_POSITION_STATIC_TOO_LONG`, `VISUAL_LAYOUT_VARIATION_TOO_LOW`, and
 `VIDEO_DURATION_TOO_SHORT`.
 
-Human review of the prior `mLytN-u2C5M` private output found that a metadata
-success was still visually static: the local deterministic scene-card generator
-changed colors/cards but reused the same product photo without real kitchen
-context or use-case scene imagery. That output is now recorded as a false
-positive in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
+Human review of the prior `mLytN-u2C5M` and `hRq1iap1C14` private outputs found
+that metadata success was still visually static or too abstract: local generated
+cards changed colors/layouts but did not show real kitchen context, human hands,
+or utensil interaction in the use-case scene. Those outputs are now recorded as
+false positives in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
 
 The local deterministic scene-card generator is a preview/debug fallback, not a
 real scene-image provider. It must not set final `content_quality_ready=true` by
@@ -181,14 +181,19 @@ unique scene image hashes, semantic scene kind uniqueness, product image reuse
 ratio at or below 0.35, color-card-only ratio equal to 0, same-frame ratio at or
 below 0.25, static-background ratio at or below 0.30, dominant background
 changes at least 7 times, product bbox changes at least 6 times, caption
-position changes at least 5 times, and visual motion score at least 90.
+position changes at least 5 times, visual motion score at least 90, real
+use-case human context, at least two human-use signal scenes, explicit utensil
+interaction, no shape-card scene, and abstract scene ratio at or below 0.15.
 
 Related blockers include `BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED`,
 `REAL_SCENE_IMAGE_PROVIDER_REQUIRED`, `LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH`,
 `COLOR_CARD_ONLY_SCENE_BLOCKED`, `REAL_SCENE_IMAGE_MISSING`,
 `SCENE_IMAGE_HASH_DUPLICATE`, `SCENE_IMAGE_SEMANTIC_DUPLICATE`,
 `PRODUCT_IMAGE_REUSE_TOO_HIGH`, `BACKGROUND_VARIATION_TOO_LOW`, and
-`SCENE_IMAGE_VISUAL_REALISM_TOO_LOW`.
+`SCENE_IMAGE_VISUAL_REALISM_TOO_LOW`. Human-use blockers include
+`USE_CASE_SCENE_HAS_NO_HUMAN_CONTEXT`, `USE_CASE_SCENE_TOO_ABSTRACT`,
+`REAL_USAGE_VISUAL_MISSING`, `KITCHEN_CONTEXT_MISSING`, and
+`SHAPE_CARD_SCENE_BLOCKED`.
 
 The local one-product renderer now uses an automatic scene image pipeline before
 video rendering. The pipeline builds eight product-specific scene briefs,
