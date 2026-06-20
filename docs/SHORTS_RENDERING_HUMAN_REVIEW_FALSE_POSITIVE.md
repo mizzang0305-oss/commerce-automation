@@ -5,12 +5,18 @@
 The machine result for the prior auto scene-image Shorts run is no longer
 accepted as final content-quality success.
 
-- previous_video_id: `mLytN-u2C5M`
-- latest_failed_video_id: `hRq1iap1C14`
-- machine_result: `SUCCESS_AUTO_SCENE_IMAGE_SHORTS_PRIVATE_UPLOAD`
+- previous_video_id: `G-r6rWsZwiU`
+- earlier_failed_video_ids: `mLytN-u2C5M`, `hRq1iap1C14`
+- machine_result: `SUCCESS_REAL_USAGE_SCENE_SHORTS_PRIVATE_UPLOAD`
 - human_review_result: `FAIL`
 - failure_type:
   - `local_scene_card_generator_false_positive`
+  - `local_composited_scene_provider_false_positive`
+  - `vector_or_shape_based_scene`
+  - `unrealistic_hand_visual`
+  - `non_photorealistic_kitchen_context`
+  - `abstract_usage_visual`
+  - `real_usage_claim_not_supported_by_visual`
   - `product_image_repeated`
   - `background_color_only_changed`
   - `no_real_generated_scene_images`
@@ -20,10 +26,10 @@ accepted as final content-quality success.
   - `shape_card_scene_false_positive`
   - `no_human_hand_or_usage_action`
 
-The local deterministic scene-card generator is a fallback visual-card renderer,
-not a real scene-image generation provider. It may be used for previews, debug
-artifacts, and tests, but it must not satisfy final private-upload readiness by
-itself.
+The local deterministic scene-card generator and local composited scene-image
+provider are fallback visual-card renderers, not final real usage scene-image
+providers. They may be used for previews, debug artifacts, and tests, but they
+must not satisfy final private-upload readiness by themselves.
 
 The local composited scene-image provider is also not enough by itself when its
 output is still abstract cards, color blocks, or layout boxes. A use-case scene
@@ -33,9 +39,19 @@ or a clear before/after organization comparison.
 
 ## Correct Gate
 
-Final Shorts readiness requires real scene-image provider evidence:
+Final Shorts readiness requires photorealistic or realistic generated scene
+provider evidence:
 
+- `provider_mode=photorealistic_generated` or `provider_mode=realistic_generated`
+- `image_generation_provider=codex_photorealistic_scene_image_provider` or a reviewed realistic provider
 - `real_scene_image_provider_configured=true`
+- `photorealistic_scene_provider_configured=true`
+- `photorealistic_score >= 80`
+- `photorealistic_scene_count >= 5`
+- `vector_or_shape_scene_count = 0`
+- `abstract_scene_count = 0`
+- `unrealistic_hand_detected=false`
+- `product_identity_consistency_score >= 70`
 - `generated_scene_image_count >= 8`
 - `unique_scene_image_hash_count >= 8`
 - `generated_scene_images_are_not_color_cards=true`
@@ -66,6 +82,13 @@ codes such as:
 - `BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED`
 - `REAL_SCENE_IMAGE_PROVIDER_REQUIRED`
 - `LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH`
+- `LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH`
+- `PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED`
+- `PHOTOREALISTIC_SCORE_TOO_LOW`
+- `VECTOR_OR_SHAPE_SCENE_BLOCKED`
+- `UNREALISTIC_HAND_SCENE_BLOCKED`
+- `NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED`
+- `PRODUCT_IDENTITY_INCONSISTENT`
 - `COLOR_CARD_ONLY_SCENE_BLOCKED`
 - `REAL_SCENE_IMAGE_MISSING`
 - `SCENE_IMAGE_HASH_DUPLICATE`

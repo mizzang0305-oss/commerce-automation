@@ -93,9 +93,16 @@ describe("one-product local video generator adapter", () => {
       scene_image_prompts_generated: true,
       user_prompt_required: false,
       manual_prompt_required: false,
-      image_generation_provider: "real_scene_image_provider_mock",
-      image_generation_provider_mode: "real_usage",
+      image_generation_provider: "codex_photorealistic_scene_image_provider",
+      image_generation_provider_mode: "photorealistic_generated",
       local_card_generator_final_upload_allowed: false,
+      photorealistic_scene_provider_configured: true,
+      photorealistic_score: 88,
+      photorealistic_scene_count: 8,
+      vector_or_shape_scene_count: 0,
+      abstract_scene_count: 0,
+      unrealistic_hand_detected: false,
+      product_identity_consistency_score: 82,
       generated_scene_image_count: 8,
       generated_scene_image_paths_present: true,
       unique_scene_image_hash_count: 8,
@@ -164,8 +171,8 @@ describe("one-product local video generator adapter", () => {
       max_silence_between_segments_ms: 240,
       audio_video_duration_gap_seconds: 0
     });
-    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", "candidate-real-asset-001", "v007"));
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", "candidate-real-asset-001", "v007", "scene-manifest.json"));
+    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", "candidate-real-asset-001", "v008"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", "candidate-real-asset-001", "v008", "scene-manifest.json"));
     expect(result.checksum_sha256).toHaveLength(64);
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com/product.jpg");
@@ -198,35 +205,35 @@ function buildScenePipelineResult(productCandidate: ProductCandidate, cwd: strin
   const generatedImages = briefs.map((brief, index) => ({
     scene_id: brief.scene_id,
     kind: brief.kind,
-    image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
-    local_image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v008", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    local_image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v008", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
     mime_type: "image/png" as const,
     width: 1080,
     height: 1920,
     generated: true,
-    provider: "real_scene_image_provider_mock",
-    provider_mode: "real_usage" as const,
+    provider: "codex_photorealistic_scene_image_provider",
+    provider_mode: "photorealistic_generated" as const,
     provider_configured: true,
     generated_at: "1970-01-01T00:00:00.000Z",
     safe_summary: `${brief.kind} scene image generated without exposing raw source URLs.`
   }));
-  const manifestPath = path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "scene-manifest.json");
+  const manifestPath = path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v008", "scene-manifest.json");
   return {
-    provider: "real_scene_image_provider_mock",
-    version: "v007",
+    provider: "codex_photorealistic_scene_image_provider",
+    version: "v008",
     scene_image_briefs: briefs,
     generated_images: generatedImages,
     manifest: buildSceneImageManifest({
       candidate: productCandidate,
-      version: "v007",
+      version: "v008",
       generatedImages,
       manifestPath,
-      providerMode: "real_usage",
-      imageGenerationProvider: "real_scene_image_provider_mock"
+      providerMode: "photorealistic_generated",
+      imageGenerationProvider: "codex_photorealistic_scene_image_provider"
     }),
     manifest_path: manifestPath,
-    contact_sheet_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "scene-contact-sheet.jpg"),
-    quality_report_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v007", "quality-report.json"),
+    contact_sheet_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v008", "scene-contact-sheet.jpg"),
+    quality_report_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v008", "quality-report.json"),
     generated_scene_image_count: 8,
     generated_scene_image_paths_present: true,
     scene_manifest_created: true,
@@ -255,6 +262,13 @@ function buildScenePipelineResult(productCandidate: ProductCandidate, cwd: strin
       shape_card_scene_count: 0,
       abstract_scene_ratio: 0,
       real_scene_image_provider_configured: true,
+      photorealistic_scene_provider_configured: true,
+      photorealistic_score: 88,
+      photorealistic_scene_count: 8,
+      vector_or_shape_scene_count: 0,
+      abstract_scene_count: 0,
+      unrealistic_hand_detected: false,
+      product_identity_consistency_score: 82,
       generated_scene_images_are_not_color_cards: true,
       generated_scene_images_are_visually_distinct: true,
       product_image_bbox_change_count: 8,

@@ -167,26 +167,36 @@ blockers include
 `CAPTION_POSITION_STATIC_TOO_LONG`, `VISUAL_LAYOUT_VARIATION_TOO_LOW`, and
 `VIDEO_DURATION_TOO_SHORT`.
 
-Human review of the prior `mLytN-u2C5M` and `hRq1iap1C14` private outputs found
-that metadata success was still visually static or too abstract: local generated
-cards changed colors/layouts but did not show real kitchen context, human hands,
-or utensil interaction in the use-case scene. Those outputs are now recorded as
-false positives in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
+Human review of the prior `mLytN-u2C5M`, `hRq1iap1C14`, and `G-r6rWsZwiU`
+private outputs found that metadata success was still visually static or too
+abstract: local generated cards changed colors/layouts but did not show
+photorealistic kitchen context, realistic human hands, or credible utensil
+interaction in the use-case scene. Those outputs are now recorded as false
+positives in `docs/SHORTS_RENDERING_HUMAN_REVIEW_FALSE_POSITIVE.md`.
 
-The local deterministic scene-card generator is a preview/debug fallback, not a
-real scene-image provider. It must not set final `content_quality_ready=true` by
-itself. Final private upload readiness now requires real provider evidence:
-`real_scene_image_provider_configured=true`, no color-card-only scene set,
-unique scene image hashes, semantic scene kind uniqueness, product image reuse
-ratio at or below 0.35, color-card-only ratio equal to 0, same-frame ratio at or
-below 0.25, static-background ratio at or below 0.30, dominant background
-changes at least 7 times, product bbox changes at least 6 times, caption
-position changes at least 5 times, visual motion score at least 90, real
+The local deterministic scene-card generator and local composited scene-image
+provider are preview/debug fallbacks, not final real usage scene-image
+providers. They must not set final `content_quality_ready=true` by themselves.
+Final private upload readiness now requires `provider_mode=photorealistic_generated`
+or `provider_mode=realistic_generated`, a reviewed provider such as
+`codex_photorealistic_scene_image_provider`,
+`photorealistic_scene_provider_configured=true`, `photorealistic_score >= 80`,
+`photorealistic_scene_count >= 5`, no vector/shape/abstract scene set, no
+unrealistic hands, product identity consistency score at least 70, real provider
+evidence, unique scene image hashes, semantic scene kind uniqueness, product
+image reuse ratio at or below 0.35, color-card-only ratio equal to 0, same-frame
+ratio at or below 0.25, static-background ratio at or below 0.30, dominant
+background changes at least 7 times, product bbox changes at least 6 times,
+caption position changes at least 5 times, visual motion score at least 90, real
 use-case human context, at least two human-use signal scenes, explicit utensil
 interaction, no shape-card scene, and abstract scene ratio at or below 0.15.
 
 Related blockers include `BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED`,
 `REAL_SCENE_IMAGE_PROVIDER_REQUIRED`, `LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH`,
+`LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH`, `PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED`,
+`PHOTOREALISTIC_SCORE_TOO_LOW`, `VECTOR_OR_SHAPE_SCENE_BLOCKED`,
+`UNREALISTIC_HAND_SCENE_BLOCKED`, `NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED`,
+`PRODUCT_IDENTITY_INCONSISTENT`,
 `COLOR_CARD_ONLY_SCENE_BLOCKED`, `REAL_SCENE_IMAGE_MISSING`,
 `SCENE_IMAGE_HASH_DUPLICATE`, `SCENE_IMAGE_SEMANTIC_DUPLICATE`,
 `PRODUCT_IMAGE_REUSE_TOO_HIGH`, `BACKGROUND_VARIATION_TOO_LOW`, and
@@ -203,9 +213,9 @@ not ask the operator to write prompts manually and it must not fall back to one
 static product image when scene images are missing. Local artifacts are written
 under:
 
-- `commerce-assets/generated-scenes/<candidate_id>/v007/`
-- `commerce-assets/generated-videos/<candidate_id>/v007/story-shorts.mp4`
-- `commerce-assets/generated-audio/<candidate_id>/v007/`
+- `commerce-assets/generated-scenes/<candidate_id>/v008/`
+- `commerce-assets/generated-videos/<candidate_id>/v008/story-shorts.mp4`
+- `commerce-assets/generated-audio/<candidate_id>/v008/`
 
 These generated artifacts are local evidence only and must not be committed.
 

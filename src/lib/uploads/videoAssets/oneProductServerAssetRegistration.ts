@@ -445,7 +445,7 @@ function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string }
     "commerce-assets",
     "generated-videos",
     safeCandidateId,
-    "v007",
+    "v008",
     "story-shorts.mp4"
   );
 }

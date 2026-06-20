@@ -14,6 +14,9 @@ import {
   APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
+const APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE =
+  "APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE";
+
 const DISCLOSURE =
   "\u203b \uc774 \ucf58\ud150\uce20\ub294 \ucfe0\ud321\ud30c\ud2b8\ub108\uc2a4 \ud65c\ub3d9\uc758 \uc77c\ud658\uc73c\ub85c, \uc774\uc5d0 \ub530\ub978 \uc77c\uc815\uc561\uc758 \uc218\uc218\ub8cc\ub97c \uc81c\uacf5\ubc1b\uc744 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
 
@@ -58,13 +61,20 @@ const STORY_QUALITY = {
   transition_count: 8,
   visual_motion_score: 92,
   distinct_frame_ratio_pass: true,
-  image_generation_provider: "real_scene_image_provider_mock",
+  image_generation_provider: "codex_photorealistic_scene_image_provider",
   real_scene_image_provider_configured: true,
+  photorealistic_scene_provider_configured: true,
+  photorealistic_score: 88,
+  photorealistic_scene_count: 8,
+  vector_or_shape_scene_count: 0,
+  abstract_scene_count: 0,
+  unrealistic_hand_detected: false,
+  product_identity_consistency_score: 82,
   generated_scene_image_count: 8,
   unique_scene_image_hash_count: 8,
   generated_scene_images_are_not_color_cards: true,
   generated_scene_images_are_visually_distinct: true,
-  provider_mode: "real_usage",
+  provider_mode: "photorealistic_generated",
   final_upload_allowed: true,
   local_card_generator_used_for_final: false,
   shape_card_scene_allowed: false,
@@ -204,6 +214,10 @@ describe("YouTube Shorts content quality gate", () => {
 
   test("real usage scene provider approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
+  test("photorealistic usage scene provider approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {
@@ -351,6 +365,73 @@ describe("YouTube Shorts content quality gate", () => {
       "KITCHEN_CONTEXT_MISSING",
       "REAL_USAGE_VISUAL_MISSING"
     ]));
+  });
+
+  test("local composited real-usage provider cannot pass the final upload gate after human review failure", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        image_generation_provider: "local_real_usage_scene_provider",
+        provider_mode: "real_usage",
+        final_upload_allowed: true,
+        photorealistic_scene_provider_configured: false,
+        photorealistic_score: 55,
+        photorealistic_scene_count: 0,
+        vector_or_shape_scene_count: 3,
+        abstract_scene_count: 4,
+        unrealistic_hand_detected: true,
+        product_identity_consistency_score: 62
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("local composited real-usage provider must not pass final upload gate");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH",
+      "PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED",
+      "PHOTOREALISTIC_SCORE_TOO_LOW",
+      "VECTOR_OR_SHAPE_SCENE_BLOCKED",
+      "UNREALISTIC_HAND_SCENE_BLOCKED",
+      "NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED"
+    ]));
+  });
+
+  test("photorealistic generated usage scenes pass the final content gate", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        image_generation_provider: "codex_photorealistic_scene_image_provider",
+        provider_mode: "photorealistic_generated",
+        final_upload_allowed: true,
+        photorealistic_scene_provider_configured: true,
+        photorealistic_score: 88,
+        photorealistic_scene_count: 8,
+        vector_or_shape_scene_count: 0,
+        abstract_scene_count: 0,
+        unrealistic_hand_detected: false,
+        product_identity_consistency_score: 82
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(`expected photorealistic usage package to pass: ${result.blocked_reasons.join(",")}`);
+    }
+    expect(result.package.content_quality).toMatchObject({
+      provider_mode: "photorealistic_generated",
+      photorealistic_scene_provider_configured: true,
+      photorealistic_scene_count: 8,
+      photorealistic_score: 88,
+      vector_or_shape_scene_count: 0,
+      abstract_scene_count: 0,
+      unrealistic_hand_detected: false,
+      product_identity_consistency_score: 82,
+      passed: true
+    });
   });
 
   test("shape-card style real usage metadata is blocked even when legacy booleans are true", () => {

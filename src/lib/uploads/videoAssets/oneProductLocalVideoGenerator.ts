@@ -31,7 +31,7 @@ const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
 const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
 const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 240;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
-const STORY_SCENE_IMAGE_VERSION = "v007";
+const STORY_SCENE_IMAGE_VERSION = "v008";
 const STORY_FRAME_SAMPLE_COUNT = 8;
 const STORY_HOOK_TEXT = "주방 조리도구, 아직도 서랍에 쌓아두세요?";
 const STORY_PROBLEM_TEXT = "국자, 뒤집개, 거품기 찾다가 요리 흐름이 끊기는 경우가 많습니다.";
@@ -139,7 +139,8 @@ export function createOneProductLocalVideoGenerator(
     }
     const sceneQuality = scenePipelineResult.quality_report;
     const finalSceneImageGateReady = sceneQuality.real_scene_image_provider_configured &&
-      scenePipelineResult.manifest.provider_mode === "real_usage" &&
+      (scenePipelineResult.manifest.provider_mode === "photorealistic_generated" ||
+        scenePipelineResult.manifest.provider_mode === "realistic_generated") &&
       scenePipelineResult.manifest.final_upload_allowed === true &&
       scenePipelineResult.manifest.local_card_generator_used_for_final === false &&
       scenePipelineResult.manifest.shape_card_scene_allowed === false &&
@@ -158,6 +159,13 @@ export function createOneProductLocalVideoGenerator(
       sceneQuality.abstract_shape_card_scene_count === 0 &&
       sceneQuality.real_usage_scene_pass &&
       sceneQuality.real_usage_visual_present &&
+      sceneQuality.photorealistic_scene_provider_configured &&
+      sceneQuality.photorealistic_score >= 80 &&
+      sceneQuality.photorealistic_scene_count >= 5 &&
+      sceneQuality.vector_or_shape_scene_count === 0 &&
+      sceneQuality.abstract_scene_count === 0 &&
+      !sceneQuality.unrealistic_hand_detected &&
+      sceneQuality.product_identity_consistency_score >= 70 &&
       !sceneQuality.shape_card_scene_detected &&
       sceneQuality.shape_card_scene_count === 0 &&
       sceneQuality.abstract_scene_ratio <= 0.15;
@@ -242,6 +250,13 @@ export function createOneProductLocalVideoGenerator(
       abstract_shape_card_scene_count: sceneQuality.abstract_shape_card_scene_count,
       real_usage_scene_pass: sceneQuality.real_usage_scene_pass,
       real_usage_visual_present: sceneQuality.real_usage_visual_present,
+      photorealistic_scene_provider_configured: sceneQuality.photorealistic_scene_provider_configured,
+      photorealistic_score: sceneQuality.photorealistic_score,
+      photorealistic_scene_count: sceneQuality.photorealistic_scene_count,
+      vector_or_shape_scene_count: sceneQuality.vector_or_shape_scene_count,
+      abstract_scene_count: sceneQuality.abstract_scene_count,
+      unrealistic_hand_detected: sceneQuality.unrealistic_hand_detected,
+      product_identity_consistency_score: sceneQuality.product_identity_consistency_score,
       shape_card_scene_detected: sceneQuality.shape_card_scene_detected,
       shape_card_scene_count: sceneQuality.shape_card_scene_count,
       abstract_scene_ratio: sceneQuality.abstract_scene_ratio,
@@ -353,6 +368,13 @@ export function createOneProductLocalVideoGenerator(
       abstract_shape_card_scene_count: result.abstract_shape_card_scene_count,
       real_usage_scene_pass: result.real_usage_scene_pass,
       real_usage_visual_present: result.real_usage_visual_present,
+      photorealistic_scene_provider_configured: result.photorealistic_scene_provider_configured,
+      photorealistic_score: result.photorealistic_score,
+      photorealistic_scene_count: result.photorealistic_scene_count,
+      vector_or_shape_scene_count: result.vector_or_shape_scene_count,
+      abstract_scene_count: result.abstract_scene_count,
+      unrealistic_hand_detected: result.unrealistic_hand_detected,
+      product_identity_consistency_score: result.product_identity_consistency_score,
       shape_card_scene_detected: result.shape_card_scene_detected,
       shape_card_scene_count: result.shape_card_scene_count,
       abstract_scene_ratio: result.abstract_scene_ratio,

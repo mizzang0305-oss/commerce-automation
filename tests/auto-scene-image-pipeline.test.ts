@@ -1,4 +1,4 @@
-import path from "node:path";
+﻿import path from "node:path";
 import { Buffer } from "node:buffer";
 import { describe, expect, test, vi } from "vitest";
 
@@ -12,7 +12,7 @@ import type { ProductCandidate } from "@/types/automation";
 
 const candidate: ProductCandidate = {
   id: "candidate-490aa6d25e8ea89d",
-  product_name: "빌리빈 스테인리스 조리도구 8종 세트",
+  product_name: "\ube4c\ub9ac\ube48 \uc2a4\ud14c\uc778\ub9ac\uc2a4 \uc870\ub9ac\ub3c4\uad6c 8\uc885 \uc138\ud2b8",
   raw_coupang_url: "https://www.coupang.com/vp/products/123456789",
   selected_affiliate_url: "https://link.coupang.com/a/private-real-product",
   candidate_score: 91,
@@ -42,7 +42,8 @@ describe("auto scene image pipeline", () => {
     ]);
     expect(briefs.every((brief) => brief.user_prompt_required === false)).toBe(true);
     expect(briefs.every((brief) => brief.prompt.includes("vertical 9:16 shorts background"))).toBe(true);
-    expect(JSON.stringify(briefs)).not.toMatch(/제가 써봤|실제 사용 후기|무조건|완벽|최고/);
+    expect(briefs.every((brief) => brief.prompt.includes("no fake review"))).toBe(true);
+    expect(briefs.every((brief) => brief.negative_prompt.includes("best or perfect guarantee"))).toBe(true);
   });
 
   test("stores generated scene image paths as the manifest source of truth", () => {
@@ -50,14 +51,14 @@ describe("auto scene image pipeline", () => {
     const generatedImages = briefs.map((brief, index) => ({
       scene_id: brief.scene_id,
       kind: brief.kind,
-      image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
-      local_image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+      image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v008", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+      local_image_path: path.join("commerce-assets", "generated-scenes", candidate.id, "v008", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
       mime_type: "image/png" as const,
       width: 1080,
       height: 1920,
       generated: true,
-      provider: "local_real_usage_scene_provider",
-      provider_mode: "real_usage" as const,
+      provider: "codex_photorealistic_scene_image_provider",
+      provider_mode: "photorealistic_generated" as const,
       provider_configured: true,
       generated_at: "1970-01-01T00:00:00.000Z",
       safe_summary: `${brief.kind} scene image generated without exposing raw source URLs.`
@@ -65,18 +66,18 @@ describe("auto scene image pipeline", () => {
 
     const manifest = buildSceneImageManifest({
       candidate,
-      version: "v007",
+      version: "v008",
       generatedImages,
-      manifestPath: path.join("commerce-assets", "generated-scenes", candidate.id, "v007", "scene-manifest.json")
+      manifestPath: path.join("commerce-assets", "generated-scenes", candidate.id, "v008", "scene-manifest.json")
     });
 
-    expect(manifest.version).toBe("v007");
-    expect(manifest.provider_mode).toBe("real_usage");
+    expect(manifest.version).toBe("v008");
+    expect(manifest.provider_mode).toBe("photorealistic_generated");
     expect(manifest.final_upload_allowed).toBe(true);
     expect(manifest.local_card_generator_used_for_final).toBe(false);
     expect(manifest.shape_card_scene_allowed).toBe(false);
     expect(manifest.abstract_scene_allowed).toBe(false);
-    expect(manifest.image_generation_provider).toBe("local_real_usage_scene_provider");
+    expect(manifest.image_generation_provider).toBe("codex_photorealistic_scene_image_provider");
     expect(manifest.scenes).toHaveLength(8);
     expect(manifest.scenes.every((scene) => scene.image_path.endsWith(".png"))).toBe(true);
     expect(manifest.scenes.filter((scene) => scene.kitchen_context)).toHaveLength(8);
@@ -132,16 +133,16 @@ describe("auto scene image pipeline", () => {
     expect(result.renderer_consumed_scene_manifest).toBe(true);
     expect(result.fallback_to_single_product_image).toBe(false);
     expect(result.true_scene_change_pass).toBe(true);
-    expect(result.visual_motion_score).toBe(94);
-    expect(result.image_generation_provider).toBe("local_real_usage_scene_provider");
-    expect(result.image_generation_provider_mode).toBe("real_usage");
+    expect(result.visual_motion_score).toBe(95);
+    expect(result.image_generation_provider).toBe("codex_photorealistic_scene_image_provider");
+    expect(result.image_generation_provider_mode).toBe("photorealistic_generated");
     expect(result.real_usage_scene_count).toBeGreaterThanOrEqual(5);
     expect(result.kitchen_context_scene_count).toBeGreaterThanOrEqual(3);
     expect(result.human_or_hand_usage_signal_scene_count).toBeGreaterThanOrEqual(2);
     expect(result.utensil_interaction_scene_count).toBeGreaterThanOrEqual(2);
     expect(result.abstract_shape_card_scene_count).toBe(0);
     expect(result.contact_sheet_generated).toBe(true);
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v007", "scene-manifest.json"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v008", "scene-manifest.json"));
     expect(videoRenderArgsText).toContain("scene-01-hook.png");
     expect(videoRenderArgsText).toContain("scene-08-cta.png");
     expect(videoRenderArgsText).not.toContain("https://image.example.com/product.jpg");
@@ -172,7 +173,34 @@ describe("auto scene image pipeline", () => {
     expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
   });
 
-  test("real usage scene provider produces final-upload usage, kitchen, and utensil evidence", async () => {
+  test("local composited real usage scene provider is draft-composited and cannot satisfy final upload", async () => {
+    const execFileAsync = vi.fn(async () => ({
+      stdout: "",
+      stderr: ""
+    }));
+    const pipeline = createAutoSceneImagePipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      providerMode: "real_usage",
+      execFileAsync,
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider).toBe("local_composited_scene_image_provider");
+    expect(result.manifest.provider_mode).toBe("draft_composited");
+    expect(result.manifest.final_upload_allowed).toBe(false);
+    expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
+    expect(result.quality_report.photorealistic_scene_provider_configured).toBe(false);
+    expect(result.quality_report.photorealistic_score).toBeLessThan(80);
+    expect(result.quality_report.vector_or_shape_scene_count).toBeGreaterThan(0);
+    expect(result.quality_report.unrealistic_hand_detected).toBe(true);
+    expect(result.quality_report.real_usage_scene_pass).toBe(false);
+  });
+
+  test("photorealistic usage scene provider produces final-upload usage, kitchen, and utensil evidence", async () => {
     const execFileAsync = vi.fn(async () => ({
       stdout: "",
       stderr: ""
@@ -187,27 +215,34 @@ describe("auto scene image pipeline", () => {
 
     const result = await pipeline(candidate);
 
-    expect(result.provider).toBe("local_real_usage_scene_provider");
-    expect(result.manifest.provider_mode).toBe("real_usage");
+    expect(result.provider).toBe("codex_photorealistic_scene_image_provider");
+    expect(result.manifest.provider_mode).toBe("photorealistic_generated");
     expect(result.manifest.final_upload_allowed).toBe(true);
     expect(result.scene_image_briefs.every((brief) => brief.user_prompt_required === false)).toBe(true);
     expect(result.generated_scene_image_count).toBe(8);
-    expect(result.generated_images.every((image) => image.provider_mode === "real_usage")).toBe(true);
+    expect(result.generated_images.every((image) => image.provider_mode === "photorealistic_generated")).toBe(true);
     expect(result.generated_images.every((image) => image.mime_type === "image/png")).toBe(true);
     expect(result.quality_report).toMatchObject({
       real_scene_image_provider_configured: true,
+      photorealistic_scene_provider_configured: true,
+      photorealistic_score: 88,
+      photorealistic_scene_count: 8,
+      vector_or_shape_scene_count: 0,
+      abstract_scene_count: 0,
+      unrealistic_hand_detected: false,
+      product_identity_consistency_score: 82,
       generated_scene_images_are_not_color_cards: true,
       generated_scene_images_are_visually_distinct: true,
       unique_scene_image_hash_count: 8,
       color_card_only_ratio: 0,
-      product_image_reuse_ratio: 0.2,
+      product_image_reuse_ratio: 0.18,
       use_case_human_context_present: true,
       use_case_kitchen_context_present: true,
       utensil_interaction_present: true,
-      human_use_signal_scene_count: 3,
-      human_or_hand_usage_signal_scene_count: 3,
+      human_use_signal_scene_count: 4,
+      human_or_hand_usage_signal_scene_count: 4,
       kitchen_context_scene_count: 8,
-      utensil_interaction_scene_count: 3,
+      utensil_interaction_scene_count: 4,
       real_usage_scene_count: 8,
       abstract_shape_card_scene_count: 0,
       real_usage_visual_present: true,

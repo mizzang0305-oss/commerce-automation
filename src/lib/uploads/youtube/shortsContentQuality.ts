@@ -48,7 +48,14 @@ export type ShortsContentQualityBlocker =
   | "REAL_USAGE_IMAGE_PROVIDER_NOT_CONFIGURED"
   | "HUMAN_OR_HAND_USAGE_SIGNAL_TOO_LOW"
   | "UTENSIL_INTERACTION_MISSING"
-  | "ABSTRACT_SHAPE_CARD_SCENE_BLOCKED";
+  | "ABSTRACT_SHAPE_CARD_SCENE_BLOCKED"
+  | "LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH"
+  | "PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED"
+  | "PHOTOREALISTIC_SCORE_TOO_LOW"
+  | "VECTOR_OR_SHAPE_SCENE_BLOCKED"
+  | "UNREALISTIC_HAND_SCENE_BLOCKED"
+  | "NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED"
+  | "PRODUCT_IDENTITY_INCONSISTENT";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -136,6 +143,13 @@ export type ShortsContentQualityResult = {
   abstract_shape_card_scene_count: number;
   real_usage_scene_pass: boolean;
   real_usage_visual_present: boolean;
+  photorealistic_scene_provider_configured: boolean;
+  photorealistic_score: number | null;
+  photorealistic_scene_count: number;
+  vector_or_shape_scene_count: number;
+  abstract_scene_count: number;
+  unrealistic_hand_detected: boolean;
+  product_identity_consistency_score: number | null;
   shape_card_scene_detected: boolean;
   shape_card_scene_count: number;
   abstract_scene_ratio: number | null;
@@ -181,6 +195,11 @@ const MIN_KITCHEN_CONTEXT_SCENE_COUNT = 3;
 const MIN_UTENSIL_INTERACTION_SCENE_COUNT = 2;
 const MIN_REAL_USAGE_SCENE_COUNT = 5;
 const MAX_ABSTRACT_SHAPE_CARD_SCENE_COUNT = 0;
+const MIN_PHOTOREALISTIC_SCORE = 80;
+const MIN_PHOTOREALISTIC_SCENE_COUNT = 5;
+const MAX_VECTOR_OR_SHAPE_SCENE_COUNT = 0;
+const MAX_ABSTRACT_SCENE_COUNT = 0;
+const MIN_PRODUCT_IDENTITY_CONSISTENCY_SCORE = 70;
 const MAX_SAME_FRAME_RATIO = 0.25;
 const MAX_STATIC_BACKGROUND_RATIO = 0.3;
 const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 6;
@@ -296,6 +315,13 @@ export function evaluateShortsContentQuality(input: {
   const abstractShapeCardSceneCount = normalizeNonNegativeNumber(quality.abstract_shape_card_scene_count) ?? 0;
   const realUsageScenePass = quality.real_usage_scene_pass === true;
   const realUsageVisualPresent = quality.real_usage_visual_present === true;
+  const photorealisticSceneProviderConfigured = quality.photorealistic_scene_provider_configured === true;
+  const photorealisticScore = normalizeNonNegativeNumber(quality.photorealistic_score);
+  const photorealisticSceneCount = normalizeNonNegativeNumber(quality.photorealistic_scene_count) ?? 0;
+  const vectorOrShapeSceneCount = normalizeNonNegativeNumber(quality.vector_or_shape_scene_count) ?? 0;
+  const abstractSceneCount = normalizeNonNegativeNumber(quality.abstract_scene_count) ?? 0;
+  const unrealisticHandDetected = quality.unrealistic_hand_detected === true;
+  const productIdentityConsistencyScore = normalizeNonNegativeNumber(quality.product_identity_consistency_score);
   const shapeCardSceneDetected = quality.shape_card_scene_detected === true;
   const shapeCardSceneCount = normalizeNonNegativeNumber(quality.shape_card_scene_count) ?? 0;
   const abstractSceneRatio = normalizeRatio(quality.abstract_scene_ratio);
@@ -405,6 +431,13 @@ export function evaluateShortsContentQuality(input: {
     abstract_shape_card_scene_count: abstractShapeCardSceneCount,
     real_usage_scene_pass: realUsageScenePass,
     real_usage_visual_present: realUsageVisualPresent,
+    photorealistic_scene_provider_configured: photorealisticSceneProviderConfigured,
+    photorealistic_score: photorealisticScore,
+    photorealistic_scene_count: photorealisticSceneCount,
+    vector_or_shape_scene_count: vectorOrShapeSceneCount,
+    abstract_scene_count: abstractSceneCount,
+    unrealistic_hand_detected: unrealisticHandDetected,
+    product_identity_consistency_score: productIdentityConsistencyScore,
     shape_card_scene_detected: shapeCardSceneDetected,
     shape_card_scene_count: shapeCardSceneCount,
     abstract_scene_ratio: abstractSceneRatio,
@@ -499,15 +532,45 @@ export function evaluateShortsContentQuality(input: {
   if (result.image_generation_provider === "local_ffmpeg_scene_card_generator") {
     result.blocked_reasons.push("LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH");
   }
+  const providerIsPhotorealisticReady =
+    result.provider_mode === "photorealistic_generated" ||
+    result.provider_mode === "realistic_generated";
+  if (result.provider_mode === "real_usage" ||
+    result.provider_mode === "draft_composited" ||
+    result.image_generation_provider === "local_real_usage_scene_provider" ||
+    result.image_generation_provider === "local_composited_scene_image_provider") {
+    result.blocked_reasons.push("LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH");
+  }
   if (!result.real_scene_image_provider_configured ||
-    result.provider_mode !== "real_usage" ||
+    !result.photorealistic_scene_provider_configured ||
+    !providerIsPhotorealisticReady ||
     !result.final_upload_allowed ||
     result.local_card_generator_used_for_final ||
     result.shape_card_scene_allowed ||
     result.abstract_scene_allowed) {
     result.blocked_reasons.push("REAL_SCENE_IMAGE_PROVIDER_REQUIRED");
+    result.blocked_reasons.push("PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED");
     result.blocked_reasons.push("BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED");
     result.blocked_reasons.push("REAL_USAGE_IMAGE_PROVIDER_NOT_CONFIGURED");
+  }
+  if (result.photorealistic_score === null ||
+    result.photorealistic_score < MIN_PHOTOREALISTIC_SCORE ||
+    result.photorealistic_scene_count < MIN_PHOTOREALISTIC_SCENE_COUNT) {
+    result.blocked_reasons.push("PHOTOREALISTIC_SCORE_TOO_LOW");
+    result.blocked_reasons.push("NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED");
+  }
+  if (result.vector_or_shape_scene_count > MAX_VECTOR_OR_SHAPE_SCENE_COUNT) {
+    result.blocked_reasons.push("VECTOR_OR_SHAPE_SCENE_BLOCKED");
+  }
+  if (result.abstract_scene_count > MAX_ABSTRACT_SCENE_COUNT) {
+    result.blocked_reasons.push("USE_CASE_SCENE_TOO_ABSTRACT");
+  }
+  if (result.unrealistic_hand_detected) {
+    result.blocked_reasons.push("UNREALISTIC_HAND_SCENE_BLOCKED");
+  }
+  if (result.product_identity_consistency_score === null ||
+    result.product_identity_consistency_score < MIN_PRODUCT_IDENTITY_CONSISTENCY_SCORE) {
+    result.blocked_reasons.push("PRODUCT_IDENTITY_INCONSISTENT");
   }
   if (result.generated_scene_image_count < MIN_GENERATED_SCENE_IMAGE_COUNT) {
     result.blocked_reasons.push("REAL_SCENE_IMAGE_MISSING");
@@ -663,12 +726,22 @@ export function evaluateShortsContentQuality(input: {
     result.visual_motion_score >= MIN_VISUAL_MOTION_SCORE,
     result.distinct_frame_ratio_pass,
     result.image_generation_provider !== "local_ffmpeg_scene_card_generator",
-    result.provider_mode === "real_usage",
+    result.image_generation_provider !== "local_real_usage_scene_provider",
+    result.image_generation_provider !== "local_composited_scene_image_provider",
+    providerIsPhotorealisticReady,
     result.final_upload_allowed,
     !result.local_card_generator_used_for_final,
     !result.shape_card_scene_allowed,
     !result.abstract_scene_allowed,
     result.real_scene_image_provider_configured,
+    result.photorealistic_scene_provider_configured,
+    result.photorealistic_score !== null && result.photorealistic_score >= MIN_PHOTOREALISTIC_SCORE,
+    result.photorealistic_scene_count >= MIN_PHOTOREALISTIC_SCENE_COUNT,
+    result.vector_or_shape_scene_count <= MAX_VECTOR_OR_SHAPE_SCENE_COUNT,
+    result.abstract_scene_count <= MAX_ABSTRACT_SCENE_COUNT,
+    !result.unrealistic_hand_detected,
+    result.product_identity_consistency_score !== null &&
+      result.product_identity_consistency_score >= MIN_PRODUCT_IDENTITY_CONSISTENCY_SCORE,
     result.generated_scene_image_count >= MIN_GENERATED_SCENE_IMAGE_COUNT,
     result.unique_scene_image_hash_count >= MIN_UNIQUE_SCENE_IMAGE_HASH_COUNT,
     result.generated_scene_images_are_not_color_cards,
@@ -787,6 +860,13 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   abstract_shape_card_scene_count?: number;
   real_usage_scene_pass?: boolean;
   real_usage_visual_present?: boolean;
+  photorealistic_scene_provider_configured?: boolean;
+  photorealistic_score?: number;
+  photorealistic_scene_count?: number;
+  vector_or_shape_scene_count?: number;
+  abstract_scene_count?: number;
+  unrealistic_hand_detected?: boolean;
+  product_identity_consistency_score?: number;
   shape_card_scene_detected?: boolean;
   shape_card_scene_count?: number;
   abstract_scene_ratio?: number;
@@ -930,6 +1010,13 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       abstract_shape_card_scene_count: input.abstract_shape_card_scene_count ?? null,
       real_usage_scene_pass: input.real_usage_scene_pass === true,
       real_usage_visual_present: input.real_usage_visual_present === true,
+      photorealistic_scene_provider_configured: input.photorealistic_scene_provider_configured === true,
+      photorealistic_score: input.photorealistic_score ?? null,
+      photorealistic_scene_count: input.photorealistic_scene_count ?? null,
+      vector_or_shape_scene_count: input.vector_or_shape_scene_count ?? null,
+      abstract_scene_count: input.abstract_scene_count ?? null,
+      unrealistic_hand_detected: input.unrealistic_hand_detected === true,
+      product_identity_consistency_score: input.product_identity_consistency_score ?? null,
       shape_card_scene_detected: input.shape_card_scene_detected === true,
       shape_card_scene_count: input.shape_card_scene_count ?? null,
       abstract_scene_ratio: input.abstract_scene_ratio ?? null,
