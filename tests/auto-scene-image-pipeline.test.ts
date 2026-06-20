@@ -7,6 +7,13 @@ import {
   buildSceneImageManifest,
   createAutoSceneImagePipeline
 } from "@/lib/uploads/videoAssets/autoSceneImagePipeline";
+import {
+  buildBilibinMotionScenePlan,
+  createMotionFirstShortsPipeline,
+  type MotionFirstProvider,
+  type MotionFirstProviderMode,
+  type MotionScenePlan
+} from "@/lib/uploads/videoAssets/motionFirstShortsPipeline";
 import { createOneProductLocalVideoGenerator } from "@/lib/uploads/videoAssets/oneProductLocalVideoGenerator";
 import type { ProductCandidate } from "@/types/automation";
 
@@ -279,3 +286,187 @@ describe("auto scene image pipeline", () => {
     expect(execFileAsync.mock.calls.some((call) => call[0] === "ffmpeg" && JSON.stringify(call[1]).includes("story-shorts.mp4"))).toBe(false);
   });
 });
+
+describe("motion-first shorts pipeline", () => {
+  test("generates eight motion scene briefs automatically without manual prompts", () => {
+    const plan = buildBilibinMotionScenePlan(candidate);
+
+    expect(plan.scene_plan.map((scene) => scene.scene_id)).toEqual([
+      "scene-01-hook",
+      "scene-02-problem",
+      "scene-03-product-intro",
+      "scene-04-hand-pickup",
+      "scene-05-cooking-use",
+      "scene-06-product-rotate",
+      "scene-07-checklist",
+      "scene-08-cta"
+    ]);
+    expect(plan.scene_video_briefs_generated).toBe(true);
+    expect(plan.scene_image_briefs_generated).toBe(true);
+    expect(plan.scene_prompts_generated).toBe(true);
+    expect(plan.user_prompt_required).toBe(false);
+    expect(plan.manual_image_upload_required).toBe(false);
+    expect(plan.manual_scene_selection_required).toBe(false);
+    expect(plan.manual_provider_selection_required).toBe(false);
+    expect(plan.scene_plan.find((scene) => scene.scene_id === "scene-04-hand-pickup")?.prompt)
+      .toContain("human hand taking a stainless steel utensil");
+    expect(plan.scene_plan.find((scene) => scene.scene_id === "scene-05-cooking-use")?.prompt)
+      .toContain("hand stirring soup using a stainless steel ladle");
+    expect(plan.scene_plan.find((scene) => scene.scene_id === "scene-06-product-rotate")?.prompt)
+      .toContain("rotating slowly");
+    expect(plan.scene_plan.every((scene) => scene.negative_prompt.includes("no cartoon"))).toBe(true);
+    expect(plan.scene_plan.every((scene) => scene.negative_prompt.includes("no vector"))).toBe(true);
+  });
+
+  test("provider router prefers real motion clips when the quality gate passes", async () => {
+    const pipeline = createMotionFirstShortsPipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never,
+      providers: {
+        motionClip: provider("real_motion_generated", true),
+        imageToVideo: provider("image_to_video_generated", true),
+        animatedStill: provider("animated_still_generated", true),
+        slideshow: provider("slideshow_generated", true)
+      }
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.motion_first_pipeline_enabled).toBe(true);
+    expect(result.provider_selected).toBe("real_motion_generated");
+    expect(result.fallback_chain_used).toEqual(["real_motion_generated"]);
+    expect(result.motion_manifest_created).toBe(true);
+    expect(result.renderer_consumed_motion_manifest).toBe(true);
+    expect(result.final_upload_allowed).toBe(true);
+    expect(result.scene_count).toBe(8);
+    expect(result.motion_scene_count).toBeGreaterThanOrEqual(4);
+    expect(result.real_motion_scene_count).toBeGreaterThanOrEqual(2);
+    expect(result.hand_interaction_scene_count).toBeGreaterThanOrEqual(2);
+    expect(result.utensil_interaction_scene_count).toBeGreaterThanOrEqual(2);
+    expect(result.product_rotate_scene_present).toBe(true);
+    expect(result.kitchen_context_scene_count).toBeGreaterThanOrEqual(5);
+    expect(result.slideshow_like_ratio).toBeLessThanOrEqual(0.25);
+    expect(result.blockers).toEqual([]);
+    expect(result.manifest.scenes.find((scene) => scene.scene_id === "scene-04-hand-pickup"))
+      .toMatchObject({ asset_type: "video", real_motion: true, hand_interaction: true, utensil_interaction: true });
+  });
+
+  test("provider router falls back to strong image-to-video before animated stills", async () => {
+    const pipeline = createMotionFirstShortsPipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never,
+      providers: {
+        motionClip: provider("real_motion_generated", false),
+        imageToVideo: provider("image_to_video_generated", true),
+        animatedStill: provider("animated_still_generated", true),
+        slideshow: provider("slideshow_generated", true)
+      }
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider_selected).toBe("image_to_video_generated");
+    expect(result.fallback_chain_used).toEqual(["real_motion_generated", "image_to_video_generated"]);
+    expect(result.final_upload_allowed).toBe(true);
+    expect(result.real_motion_scene_count).toBeGreaterThanOrEqual(2);
+    expect(result.manifest.scenes.filter((scene) => scene.strong_image_to_video_motion)).toHaveLength(4);
+  });
+
+  test("animated still fallback runs but cannot pass the motion-first final upload gate", async () => {
+    const pipeline = createMotionFirstShortsPipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never,
+      providers: {
+        motionClip: provider("real_motion_generated", false),
+        imageToVideo: provider("image_to_video_generated", false),
+        animatedStill: provider("animated_still_generated", true),
+        slideshow: provider("slideshow_generated", true)
+      }
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider_selected).toBe("animated_still_generated");
+    expect(result.fallback_chain_used).toEqual([
+      "real_motion_generated",
+      "image_to_video_generated",
+      "animated_still_generated"
+    ]);
+    expect(result.final_upload_allowed).toBe(false);
+    expect(result.blockers).toEqual(expect.arrayContaining([
+      "REAL_MOTION_CLIP_REQUIRED",
+      "HAND_INTERACTION_SCENE_MISSING",
+      "UTENSIL_INTERACTION_SCENE_MISSING"
+    ]));
+  });
+
+  test("slideshow fallback is created only as a blocked last resort", async () => {
+    const pipeline = createMotionFirstShortsPipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never,
+      providers: {
+        motionClip: provider("real_motion_generated", false),
+        imageToVideo: provider("image_to_video_generated", false),
+        animatedStill: provider("animated_still_generated", false),
+        slideshow: provider("slideshow_generated", true)
+      }
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider_selected).toBe("slideshow_generated");
+    expect(result.final_upload_allowed).toBe(false);
+    expect(result.fallback_to_slideshow_only).toBe(true);
+    expect(result.blockers).toEqual(expect.arrayContaining([
+      "SLIDESHOW_LIKE_OUTPUT_BLOCKED",
+      "IMAGE_SWAP_ONLY_VIDEO_BLOCKED"
+    ]));
+  });
+});
+
+function provider(providerMode: MotionFirstProviderMode, configured: boolean): MotionFirstProvider {
+  return {
+    provider_name: `test_${providerMode}`,
+    provider_mode: providerMode,
+    configured,
+    generate: async ({ scene_plan }) => ({
+      ok: true,
+      scenes: providerScenes(scene_plan, providerMode)
+    })
+  };
+}
+
+function providerScenes(scenePlan: MotionScenePlan[], providerMode: MotionFirstProviderMode) {
+  return scenePlan.map((scene) => {
+    const coreMotion = [
+      "scene-02-problem",
+      "scene-04-hand-pickup",
+      "scene-05-cooking-use",
+      "scene-06-product-rotate"
+    ].includes(scene.scene_id);
+    const realOrStrong = providerMode === "real_motion_generated" || providerMode === "image_to_video_generated";
+    return {
+      scene_id: scene.scene_id,
+      kind: scene.kind,
+      asset_type: providerMode === "slideshow_generated" ? "image" as const : "video" as const,
+      asset_path: path.join("commerce-assets", "generated-motion", candidate.id, "v001", `${scene.scene_id}.${providerMode === "slideshow_generated" ? "png" : "mp4"}`),
+      real_motion: providerMode === "real_motion_generated" && coreMotion,
+      strong_image_to_video_motion: providerMode === "image_to_video_generated" && coreMotion,
+      animated_still: providerMode === "animated_still_generated",
+      image_swap_only: providerMode === "slideshow_generated",
+      hand_interaction: realOrStrong && ["scene-02-problem", "scene-04-hand-pickup"].includes(scene.scene_id),
+      utensil_interaction: realOrStrong && ["scene-04-hand-pickup", "scene-05-cooking-use"].includes(scene.scene_id),
+      product_rotate_scene: scene.scene_id === "scene-06-product-rotate" && realOrStrong,
+      kitchen_context: providerMode !== "slideshow_generated",
+      duration_seconds: scene.duration_seconds
+    };
+  });
+}

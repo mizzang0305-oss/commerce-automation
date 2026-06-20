@@ -55,7 +55,21 @@ export type ShortsContentQualityBlocker =
   | "VECTOR_OR_SHAPE_SCENE_BLOCKED"
   | "UNREALISTIC_HAND_SCENE_BLOCKED"
   | "NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED"
-  | "PRODUCT_IDENTITY_INCONSISTENT";
+  | "PRODUCT_IDENTITY_INCONSISTENT"
+  | "MOTION_PROVIDER_NOT_CONFIGURED"
+  | "REAL_MOTION_CLIP_REQUIRED"
+  | "MOTION_SCENE_COUNT_TOO_LOW"
+  | "HAND_INTERACTION_SCENE_MISSING"
+  | "UTENSIL_INTERACTION_SCENE_MISSING"
+  | "PRODUCT_ROTATE_SCENE_MISSING"
+  | "SLIDESHOW_LIKE_OUTPUT_BLOCKED"
+  | "ALL_SCENES_STATIC_BLOCKED"
+  | "IMAGE_SWAP_ONLY_VIDEO_BLOCKED"
+  | "PLACEHOLDER_VISUAL_BLOCKED"
+  | "MOTION_MANIFEST_NOT_USED"
+  | "SCENE_MANIFEST_NOT_USED"
+  | "FALLBACK_TO_SINGLE_PRODUCT_IMAGE"
+  | "FALLBACK_TO_SLIDESHOW_ONLY";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -107,6 +121,29 @@ export type ShortsContentQualityResult = {
   image_generation_provider: string | null;
   provider_mode: string | null;
   final_upload_allowed: boolean;
+  motion_first_pipeline_enabled: boolean;
+  user_prompt_required: boolean;
+  manual_image_upload_required: boolean;
+  manual_scene_selection_required: boolean;
+  manual_provider_selection_required: boolean;
+  scene_image_briefs_generated: boolean;
+  scene_video_briefs_generated: boolean;
+  scene_prompts_generated: boolean;
+  motion_manifest_created: boolean;
+  renderer_consumed_motion_manifest: boolean;
+  fallback_to_slideshow_only: boolean;
+  motion_scene_count: number;
+  real_motion_scene_count: number;
+  hand_interaction_scene_count: number;
+  product_rotate_scene_present: boolean;
+  static_only_ratio: number | null;
+  slideshow_like_ratio: number | null;
+  all_scenes_static: boolean;
+  vector_or_shape_scene_present: boolean;
+  abstract_scene_present: boolean;
+  placeholder_scene_present: boolean;
+  dev_placeholder_description: boolean;
+  image_swap_only_video: boolean;
   local_card_generator_used_for_final: boolean;
   shape_card_scene_allowed: boolean;
   abstract_scene_allowed: boolean;
@@ -202,6 +239,13 @@ const MAX_ABSTRACT_SCENE_COUNT = 0;
 const MIN_PRODUCT_IDENTITY_CONSISTENCY_SCORE = 70;
 const MAX_SAME_FRAME_RATIO = 0.25;
 const MAX_STATIC_BACKGROUND_RATIO = 0.3;
+const MAX_MOTION_SAME_FRAME_RATIO = 0.2;
+const MAX_STATIC_ONLY_RATIO = 0.25;
+const MAX_SLIDESHOW_LIKE_RATIO = 0.25;
+const MIN_MOTION_SCENE_COUNT = 4;
+const MIN_REAL_MOTION_SCENE_COUNT = 2;
+const MIN_HAND_INTERACTION_SCENE_COUNT = 2;
+const MIN_MOTION_KITCHEN_CONTEXT_SCENE_COUNT = 5;
 const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 6;
 const MIN_CAPTION_POSITION_CHANGE_COUNT = 5;
 const MIN_DOMINANT_BACKGROUND_CHANGE_COUNT = 7;
@@ -256,6 +300,29 @@ export function evaluateShortsContentQuality(input: {
   const imageGenerationProvider = safeTrim(quality.image_generation_provider) || null;
   const providerMode = safeTrim(quality.provider_mode ?? quality.image_generation_provider_mode) || null;
   const finalUploadAllowed = quality.final_upload_allowed === true;
+  const motionFirstPipelineEnabled = quality.motion_first_pipeline_enabled === true ||
+    isMotionFirstProviderMode(providerMode);
+  const userPromptRequired = quality.user_prompt_required === true || quality.manual_prompt_required === true;
+  const manualImageUploadRequired = quality.manual_image_upload_required === true;
+  const manualSceneSelectionRequired = quality.manual_scene_selection_required === true;
+  const manualProviderSelectionRequired = quality.manual_provider_selection_required === true;
+  const sceneImageBriefsGenerated = quality.scene_image_briefs_generated === true;
+  const sceneVideoBriefsGenerated = quality.scene_video_briefs_generated === true;
+  const scenePromptsGenerated = quality.scene_prompts_generated === true ||
+    quality.scene_image_prompts_generated === true;
+  const motionManifestCreated = quality.motion_manifest_created === true;
+  const rendererConsumedMotionManifest = quality.renderer_consumed_motion_manifest === true;
+  const fallbackToSlideshowOnly = quality.fallback_to_slideshow_only === true;
+  const motionSceneCount = normalizeNonNegativeNumber(quality.motion_scene_count) ?? 0;
+  const realMotionSceneCount = normalizeNonNegativeNumber(quality.real_motion_scene_count) ?? 0;
+  const handInteractionSceneCount = normalizeNonNegativeNumber(quality.hand_interaction_scene_count) ?? 0;
+  const productRotateScenePresent = quality.product_rotate_scene_present === true;
+  const staticOnlyRatio = normalizeRatio(quality.static_only_ratio);
+  const slideshowLikeRatio = normalizeRatio(quality.slideshow_like_ratio);
+  const allScenesStatic = quality.all_scenes_static === true;
+  const placeholderScenePresent = quality.placeholder_scene_present === true;
+  const devPlaceholderDescription = quality.dev_placeholder_description === true;
+  const imageSwapOnlyVideo = quality.image_swap_only_video === true;
   const localCardGeneratorUsedForFinal = quality.local_card_generator_used_for_final === true;
   const shapeCardSceneAllowed = quality.shape_card_scene_allowed === true;
   const abstractSceneAllowed = quality.abstract_scene_allowed === true;
@@ -320,6 +387,8 @@ export function evaluateShortsContentQuality(input: {
   const photorealisticSceneCount = normalizeNonNegativeNumber(quality.photorealistic_scene_count) ?? 0;
   const vectorOrShapeSceneCount = normalizeNonNegativeNumber(quality.vector_or_shape_scene_count) ?? 0;
   const abstractSceneCount = normalizeNonNegativeNumber(quality.abstract_scene_count) ?? 0;
+  const vectorOrShapeScenePresent = quality.vector_or_shape_scene_present === true || vectorOrShapeSceneCount > 0;
+  const abstractScenePresent = quality.abstract_scene_present === true || abstractSceneCount > 0;
   const unrealisticHandDetected = quality.unrealistic_hand_detected === true;
   const productIdentityConsistencyScore = normalizeNonNegativeNumber(quality.product_identity_consistency_score);
   const shapeCardSceneDetected = quality.shape_card_scene_detected === true;
@@ -395,6 +464,29 @@ export function evaluateShortsContentQuality(input: {
     image_generation_provider: imageGenerationProvider,
     provider_mode: providerMode,
     final_upload_allowed: finalUploadAllowed,
+    motion_first_pipeline_enabled: motionFirstPipelineEnabled,
+    user_prompt_required: userPromptRequired,
+    manual_image_upload_required: manualImageUploadRequired,
+    manual_scene_selection_required: manualSceneSelectionRequired,
+    manual_provider_selection_required: manualProviderSelectionRequired,
+    scene_image_briefs_generated: sceneImageBriefsGenerated,
+    scene_video_briefs_generated: sceneVideoBriefsGenerated,
+    scene_prompts_generated: scenePromptsGenerated,
+    motion_manifest_created: motionManifestCreated,
+    renderer_consumed_motion_manifest: rendererConsumedMotionManifest,
+    fallback_to_slideshow_only: fallbackToSlideshowOnly,
+    motion_scene_count: motionSceneCount,
+    real_motion_scene_count: realMotionSceneCount,
+    hand_interaction_scene_count: handInteractionSceneCount,
+    product_rotate_scene_present: productRotateScenePresent,
+    static_only_ratio: staticOnlyRatio,
+    slideshow_like_ratio: slideshowLikeRatio,
+    all_scenes_static: allScenesStatic,
+    vector_or_shape_scene_present: vectorOrShapeScenePresent,
+    abstract_scene_present: abstractScenePresent,
+    placeholder_scene_present: placeholderScenePresent,
+    dev_placeholder_description: devPlaceholderDescription,
+    image_swap_only_video: imageSwapOnlyVideo,
     local_card_generator_used_for_final: localCardGeneratorUsedForFinal,
     shape_card_scene_allowed: shapeCardSceneAllowed,
     abstract_scene_allowed: abstractSceneAllowed,
@@ -535,27 +627,35 @@ export function evaluateShortsContentQuality(input: {
   const providerIsPhotorealisticReady =
     result.provider_mode === "photorealistic_generated" ||
     result.provider_mode === "realistic_generated";
+  const providerIsMotionReady =
+    result.provider_mode === "real_motion_generated" ||
+    result.provider_mode === "image_to_video_generated";
+  const providerReadinessReady = result.motion_first_pipeline_enabled
+    ? providerIsMotionReady
+    : providerIsPhotorealisticReady;
   if (result.provider_mode === "real_usage" ||
     result.provider_mode === "draft_composited" ||
     result.image_generation_provider === "local_real_usage_scene_provider" ||
     result.image_generation_provider === "local_composited_scene_image_provider") {
     result.blocked_reasons.push("LOCAL_COMPOSITED_PROVIDER_NOT_ENOUGH");
   }
-  if (!result.real_scene_image_provider_configured ||
-    !result.photorealistic_scene_provider_configured ||
-    !providerIsPhotorealisticReady ||
-    !result.final_upload_allowed ||
-    result.local_card_generator_used_for_final ||
-    result.shape_card_scene_allowed ||
-    result.abstract_scene_allowed) {
+  if (!result.motion_first_pipeline_enabled && (
+    !result.real_scene_image_provider_configured ||
+      !result.photorealistic_scene_provider_configured ||
+      !providerIsPhotorealisticReady ||
+      !result.final_upload_allowed ||
+      result.local_card_generator_used_for_final ||
+      result.shape_card_scene_allowed ||
+      result.abstract_scene_allowed
+  )) {
     result.blocked_reasons.push("REAL_SCENE_IMAGE_PROVIDER_REQUIRED");
     result.blocked_reasons.push("PHOTOREALISTIC_SCENE_PROVIDER_REQUIRED");
     result.blocked_reasons.push("BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED");
     result.blocked_reasons.push("REAL_USAGE_IMAGE_PROVIDER_NOT_CONFIGURED");
   }
-  if (result.photorealistic_score === null ||
+  if (!result.motion_first_pipeline_enabled && (result.photorealistic_score === null ||
     result.photorealistic_score < MIN_PHOTOREALISTIC_SCORE ||
-    result.photorealistic_scene_count < MIN_PHOTOREALISTIC_SCENE_COUNT) {
+    result.photorealistic_scene_count < MIN_PHOTOREALISTIC_SCENE_COUNT)) {
     result.blocked_reasons.push("PHOTOREALISTIC_SCORE_TOO_LOW");
     result.blocked_reasons.push("NON_PHOTOREALISTIC_USAGE_SCENE_BLOCKED");
   }
@@ -668,6 +768,70 @@ export function evaluateShortsContentQuality(input: {
     result.blocked_reasons.push("SHAPE_CARD_SCENE_BLOCKED");
     result.blocked_reasons.push("ABSTRACT_SHAPE_CARD_SCENE_BLOCKED");
   }
+  if (result.motion_first_pipeline_enabled) {
+    if (!providerIsMotionReady && result.provider_mode !== "animated_still_generated" && result.provider_mode !== "slideshow_generated") {
+      result.blocked_reasons.push("MOTION_PROVIDER_NOT_CONFIGURED");
+    }
+    if (result.user_prompt_required ||
+      result.manual_image_upload_required ||
+      result.manual_scene_selection_required ||
+      result.manual_provider_selection_required ||
+      !result.scene_image_briefs_generated ||
+      !result.scene_video_briefs_generated ||
+      !result.scene_prompts_generated) {
+      result.blocked_reasons.push("CONTENT_QUALITY_FAILED");
+    }
+    if (!result.motion_manifest_created || !result.renderer_consumed_motion_manifest) {
+      result.blocked_reasons.push("MOTION_MANIFEST_NOT_USED");
+    }
+    if (!result.scene_manifest_created || !result.renderer_consumed_scene_manifest) {
+      result.blocked_reasons.push("SCENE_MANIFEST_NOT_USED");
+    }
+    if (result.fallback_to_single_product_image) {
+      result.blocked_reasons.push("FALLBACK_TO_SINGLE_PRODUCT_IMAGE");
+    }
+    if (result.fallback_to_slideshow_only) {
+      result.blocked_reasons.push("FALLBACK_TO_SLIDESHOW_ONLY");
+    }
+    if (result.motion_scene_count < MIN_MOTION_SCENE_COUNT) {
+      result.blocked_reasons.push("MOTION_SCENE_COUNT_TOO_LOW");
+    }
+    if (result.real_motion_scene_count < MIN_REAL_MOTION_SCENE_COUNT) {
+      result.blocked_reasons.push("REAL_MOTION_CLIP_REQUIRED");
+    }
+    if (result.hand_interaction_scene_count < MIN_HAND_INTERACTION_SCENE_COUNT) {
+      result.blocked_reasons.push("HAND_INTERACTION_SCENE_MISSING");
+    }
+    if (result.utensil_interaction_scene_count < MIN_UTENSIL_INTERACTION_SCENE_COUNT) {
+      result.blocked_reasons.push("UTENSIL_INTERACTION_SCENE_MISSING");
+    }
+    if (!result.product_rotate_scene_present) {
+      result.blocked_reasons.push("PRODUCT_ROTATE_SCENE_MISSING");
+    }
+    if (result.kitchen_context_scene_count < MIN_MOTION_KITCHEN_CONTEXT_SCENE_COUNT) {
+      result.blocked_reasons.push("KITCHEN_CONTEXT_MISSING");
+    }
+    if (result.same_frame_ratio === null || result.same_frame_ratio > MAX_MOTION_SAME_FRAME_RATIO) {
+      result.blocked_reasons.push("FRAME_HASH_DELTA_TOO_LOW");
+    }
+    if (result.static_only_ratio === null || result.static_only_ratio > MAX_STATIC_ONLY_RATIO || result.all_scenes_static) {
+      result.blocked_reasons.push("ALL_SCENES_STATIC_BLOCKED");
+    }
+    if (result.slideshow_like_ratio === null ||
+      result.slideshow_like_ratio > MAX_SLIDESHOW_LIKE_RATIO ||
+      result.provider_mode === "slideshow_generated") {
+      result.blocked_reasons.push("SLIDESHOW_LIKE_OUTPUT_BLOCKED");
+    }
+    if (result.image_swap_only_video || result.provider_mode === "slideshow_generated") {
+      result.blocked_reasons.push("IMAGE_SWAP_ONLY_VIDEO_BLOCKED");
+    }
+    if (result.vector_or_shape_scene_present ||
+      result.abstract_scene_present ||
+      result.placeholder_scene_present ||
+      result.dev_placeholder_description) {
+      result.blocked_reasons.push("PLACEHOLDER_VISUAL_BLOCKED");
+    }
+  }
   if (result.voiceover_too_slow) {
     result.blocked_reasons.push("VOICEOVER_TOO_SLOW");
   }
@@ -728,15 +892,16 @@ export function evaluateShortsContentQuality(input: {
     result.image_generation_provider !== "local_ffmpeg_scene_card_generator",
     result.image_generation_provider !== "local_real_usage_scene_provider",
     result.image_generation_provider !== "local_composited_scene_image_provider",
-    providerIsPhotorealisticReady,
+    providerReadinessReady,
     result.final_upload_allowed,
     !result.local_card_generator_used_for_final,
     !result.shape_card_scene_allowed,
     !result.abstract_scene_allowed,
     result.real_scene_image_provider_configured,
-    result.photorealistic_scene_provider_configured,
-    result.photorealistic_score !== null && result.photorealistic_score >= MIN_PHOTOREALISTIC_SCORE,
-    result.photorealistic_scene_count >= MIN_PHOTOREALISTIC_SCENE_COUNT,
+    result.motion_first_pipeline_enabled || result.photorealistic_scene_provider_configured,
+    result.motion_first_pipeline_enabled ||
+      result.photorealistic_score !== null && result.photorealistic_score >= MIN_PHOTOREALISTIC_SCORE,
+    result.motion_first_pipeline_enabled || result.photorealistic_scene_count >= MIN_PHOTOREALISTIC_SCENE_COUNT,
     result.vector_or_shape_scene_count <= MAX_VECTOR_OR_SHAPE_SCENE_COUNT,
     result.abstract_scene_count <= MAX_ABSTRACT_SCENE_COUNT,
     !result.unrealistic_hand_detected,
@@ -789,6 +954,34 @@ export function evaluateShortsContentQuality(input: {
     !result.voiceover_too_robotic,
     result.alternate_voice_used
   ];
+  if (result.motion_first_pipeline_enabled) {
+    checks.push(
+      !result.user_prompt_required,
+      !result.manual_image_upload_required,
+      !result.manual_scene_selection_required,
+      !result.manual_provider_selection_required,
+      result.scene_image_briefs_generated,
+      result.scene_video_briefs_generated,
+      result.scene_prompts_generated,
+      result.motion_manifest_created,
+      result.renderer_consumed_motion_manifest,
+      !result.fallback_to_slideshow_only,
+      result.motion_scene_count >= MIN_MOTION_SCENE_COUNT,
+      result.real_motion_scene_count >= MIN_REAL_MOTION_SCENE_COUNT,
+      result.hand_interaction_scene_count >= MIN_HAND_INTERACTION_SCENE_COUNT,
+      result.utensil_interaction_scene_count >= MIN_UTENSIL_INTERACTION_SCENE_COUNT,
+      result.product_rotate_scene_present,
+      result.kitchen_context_scene_count >= MIN_MOTION_KITCHEN_CONTEXT_SCENE_COUNT,
+      result.static_only_ratio !== null && result.static_only_ratio <= MAX_STATIC_ONLY_RATIO,
+      result.slideshow_like_ratio !== null && result.slideshow_like_ratio <= MAX_SLIDESHOW_LIKE_RATIO,
+      !result.all_scenes_static,
+      !result.vector_or_shape_scene_present,
+      !result.abstract_scene_present,
+      !result.placeholder_scene_present,
+      !result.dev_placeholder_description,
+      !result.image_swap_only_video
+    );
+  }
   result.score = Math.round((checks.filter(Boolean).length / checks.length) * 100);
   if (result.score < MIN_QUALITY_SCORE) {
     result.blocked_reasons = [...new Set<ShortsContentQualityBlocker>([
@@ -1087,6 +1280,13 @@ function normalizeRatio(value: unknown) {
     return null;
   }
   return normalized;
+}
+
+function isMotionFirstProviderMode(value: string | null) {
+  return value === "real_motion_generated" ||
+    value === "image_to_video_generated" ||
+    value === "animated_still_generated" ||
+    value === "slideshow_generated";
 }
 
 function safeTrim(value: unknown) {
