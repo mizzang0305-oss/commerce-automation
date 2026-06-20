@@ -16,3 +16,4 @@ export * from "@/lib/uploads/youtube/youtubeUploadAdapter";
 export * from "@/lib/uploads/youtube/youtubeUploadResultVerification";
 export * from "@/lib/uploads/youtube/youtubeExecuteReadiness";
 export * from "@/lib/uploads/youtube/productVideoUploadPackage";
+export * from "@/lib/uploads/youtube/shortsContentQuality";

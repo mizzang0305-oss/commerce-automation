@@ -1,0 +1,32 @@
+export const PASSING_SHORTS_CONTENT_QUALITY = {
+  hook_text: "\uc870\ub9ac\ub3c4\uad6c, \uc815\ub9ac\uac00 \ud544\uc694\ud55c \uc21c\uac04\uc785\ub2c8\ub2e4.",
+  problem_text: "\ud544\uc694\ud55c \ub3c4\uad6c\ub97c \ucc3e\ub294 \uc2dc\uac04\uc774 \uc694\ub9ac \ud750\ub984\uc744 \ub04a\uc744 \uc218 \uc788\uc2b5\ub2c8\ub2e4.",
+  why_buy_reason: "\uc0c8 \uc8fc\ubc29 \uc138\ud305\uc774\ub098 \uc870\ub9ac\ub3c4\uad6c \uad50\uccb4 \uc2dc\uc810\uc5d0 \uad6c\uc131\uc744 \ud55c \ubc88\uc5d0 \ud655\uc778\ud558\uae30 \uc88b\uc2b5\ub2c8\ub2e4.",
+  target_customer: "\uc790\ucde8 \uc2dc\uc791, \uc0c8 \uc8fc\ubc29, \uae30\ubcf8 \uc870\ub9ac\ub3c4\uad6c\ub97c \uad50\uccb4\ud558\ub824\ub294 \uc0ac\uc6a9\uc790",
+  product_benefit: "\uc0c1\ud488 \uad6c\uc131\uacfc \uc0ac\uc6a9 \uc7a5\uba74\uc744 \uc9e7\uc740 \uc2dc\uac04\uc5d0 \ud655\uc778\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.",
+  caution_or_check_before_buy: "\uad6c\uc131\ud488, \ud06c\uae30, \uc0ac\uc6a9 \uc2b5\uad00\uc5d0 \ub9de\ub294\uc9c0\ub97c \uad6c\ub9e4 \uc804 \ud655\uc778\ud558\uc138\uc694.",
+  cta_text: "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694.",
+  korean_voiceover_script: "\uc774 \uc0c1\ud488\uc774 \uc5b4\ub5a4 \uc0ac\uc6a9\uc790\uc5d0\uac8c \ub9de\ub294\uc9c0, \uad6c\uc131\uacfc \ud655\uc778 \ud3ec\uc778\ud2b8\ub97c \uc9e7\uac8c \uc815\ub9ac\ud569\ub2c8\ub2e4.",
+  voiceover_audio_present: true,
+  audio_duration_seconds: 24,
+  captions: [
+    "\ud544\uc694\ud55c \uc21c\uac04\uc5d0 \uc27d\uac8c \ucc3e\uae30",
+    "\uc0ac\uc6a9 \uc7a5\uba74\uc744 \uc9e7\uac8c \ud655\uc778",
+    "\uad6c\uc131 \ud3ec\uc778\ud2b8 \uc815\ub9ac",
+    "\ucd94\ucc9c \ub300\uc0c1 \ud655\uc778",
+    "\uad6c\ub9e4 \uc804 \uccb4\ud06c \ud3ec\uc778\ud2b8",
+    "\ub9c1\ud06c\uc5d0\uc11c \ucd5c\uc885 \ud655\uc778"
+  ],
+  scenes: [
+    { id: "hook", duration_seconds: 3, motion: "slow_zoom_in" },
+    { id: "problem", duration_seconds: 4, motion: "pan_left" },
+    { id: "product", duration_seconds: 5, motion: "slow_zoom_out" },
+    { id: "benefit", duration_seconds: 5, motion: "pan_right" },
+    { id: "check", duration_seconds: 5, motion: "crop_shift" },
+    { id: "cta", duration_seconds: 3, motion: "slow_zoom_in" }
+  ],
+  duration_seconds: 25,
+  static_single_image_only: false,
+  product_image_present: true,
+  black_screen_detected: false
+};

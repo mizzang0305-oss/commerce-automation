@@ -7,6 +7,7 @@ import {
   validatePreparedVideoAssetRef
 } from "@/lib/uploads/assets/preparedVideoAsset";
 import { buildYouTubeProductVideoUploadPackage, DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "@/lib/uploads/youtube";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
@@ -34,6 +35,7 @@ const validPackageInput = {
     "Affiliate link: https://link.coupang.com/a/domain-video-001"
   ].join("\n"),
   disclosure_text: DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["coupang", "private upload"],
   made_for_kids: false
 };

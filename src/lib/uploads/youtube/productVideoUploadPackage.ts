@@ -8,6 +8,10 @@ import {
 } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
+import {
+  evaluateShortsContentQuality,
+  type ShortsContentQualityResult
+} from "@/lib/uploads/youtube/shortsContentQuality";
 
 export type YouTubeProductVideoSource = "coupang" | "manual" | "mock";
 
@@ -24,6 +28,7 @@ export type YouTubeProductVideoUploadPackageInput = {
   disclosure_text?: unknown;
   tags?: unknown;
   made_for_kids?: unknown;
+  shorts_content_quality?: unknown;
 };
 
 export type YouTubeProductVideoUploadPackageSideEffects = {
@@ -51,6 +56,10 @@ export type YouTubeProductVideoUploadPackageReadiness = {
   server_accessible_asset_ready: boolean;
   domain_ready: boolean;
   local_dev_path_only: boolean;
+  content_quality_ready: boolean;
+  story_script_ready: boolean;
+  voiceover_audio_ready: boolean;
+  description_not_dev_placeholder: boolean;
 };
 
 export type YouTubeProductVideoUploadPackage = {
@@ -67,6 +76,8 @@ export type YouTubeProductVideoUploadPackage = {
   disclosure_text: string;
   tags: string[];
   made_for_kids: boolean;
+  shorts_content_quality: unknown;
+  content_quality: ShortsContentQualityResult;
   upload_confirmation_phrase_required: typeof APPROVE_YOUTUBE_PRIVATE_UPLOAD;
   private_execute_approval_required: typeof APPROVE_YOUTUBE_PRIVATE_UPLOAD;
   readiness: YouTubeProductVideoUploadPackageReadiness;
@@ -120,22 +131,47 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
   const disclosureReasons = rawDisclosureText
     ? validateYouTubeDisclosureText({ description, disclosure_text: disclosureText })
     : ["disclosure_text"];
+  const disclosureReady = disclosureReasons.length === 0;
+  const quality = evaluateShortsContentQuality({
+    shorts_content_quality: input.shorts_content_quality,
+    description,
+    disclosure_ready: disclosureReady,
+    affiliate_url_present: Boolean(selectedAffiliateUrl)
+  });
 
   const readiness: YouTubeProductVideoUploadPackageReadiness = {
     candidate_ready: Boolean(candidateId),
     product_ready: Boolean(productName),
     video_ready: assetReadiness.asset_ready,
     affiliate_url_ready: Boolean(selectedAffiliateUrl),
-    disclosure_ready: disclosureReasons.length === 0,
+    disclosure_ready: disclosureReady,
     visibility_ready: Boolean(visibility),
     title_ready: Boolean(title),
     description_ready: Boolean(descriptionInput) || descriptionWasRepaired,
     public_upload_blocked: input.visibility !== "public",
     server_accessible_asset_ready: assetReadiness.server_accessible && assetReadiness.asset_ready,
     domain_ready: assetReadiness.domain_ready,
-    local_dev_path_only: assetReadiness.local_dev_path_only
+    local_dev_path_only: assetReadiness.local_dev_path_only,
+    content_quality_ready: quality.passed,
+    story_script_ready: quality.hook_text_present &&
+      quality.problem_text_present &&
+      quality.why_buy_reason_present &&
+      quality.target_customer_present &&
+      quality.product_benefit_present &&
+      quality.caution_or_check_before_buy_present &&
+      quality.cta_present &&
+      quality.korean_voiceover_script_present,
+    voiceover_audio_ready: quality.voiceover_audio_ready,
+    description_not_dev_placeholder: quality.description_not_dev_placeholder &&
+      quality.description_contains_no_manual_review_placeholder
   };
-  const blockedReasons = buildBlockedReasons(readiness, disclosureReasons, input.visibility, assetReadiness.blocked_reasons);
+  const blockedReasons = buildBlockedReasons(
+    readiness,
+    disclosureReasons,
+    input.visibility,
+    assetReadiness.blocked_reasons,
+    quality.blocked_reasons
+  );
 
   if (blockedReasons.length > 0) {
     return {
@@ -162,6 +198,8 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
       disclosure_text: disclosureText,
       tags: normalizeTags(input.tags),
       made_for_kids: input.made_for_kids === true,
+      shorts_content_quality: input.shorts_content_quality,
+      content_quality: quality,
       upload_confirmation_phrase_required: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
       private_execute_approval_required: APPROVE_YOUTUBE_PRIVATE_UPLOAD,
       readiness,
@@ -236,7 +274,8 @@ function buildBlockedReasons(
   readiness: YouTubeProductVideoUploadPackageReadiness,
   disclosureReasons: string[],
   rawVisibility: unknown,
-  assetBlockedReasons: string[]
+  assetBlockedReasons: string[],
+  contentQualityReasons: string[]
 ) {
   const reasons: string[] = [];
   if (!readiness.candidate_ready) reasons.push("candidate_id");
@@ -255,6 +294,7 @@ function buildBlockedReasons(
   if (!readiness.title_ready) reasons.push("title");
   if (!readiness.description_ready) reasons.push("description");
   reasons.push(...disclosureReasons);
+  reasons.push(...contentQualityReasons);
   return [...new Set(reasons)];
 }
 

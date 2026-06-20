@@ -4,6 +4,7 @@ import type {
   YouTubeUploadVisibility
 } from "@/lib/uploads/youtube/types";
 import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
+import { evaluateShortsContentQuality } from "@/lib/uploads/youtube/shortsContentQuality";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 
 export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
@@ -49,9 +50,22 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   if (!visibility) {
     missingReasons.push(input.visibility === "public" ? "visibility_not_allowed" : "visibility");
   }
+  const quality = evaluateShortsContentQuality({
+    shorts_content_quality: input.shorts_content_quality,
+    description: descriptionInput || captionInput,
+    disclosure_ready: disclosureText
+      ? validateYouTubeDisclosureText({
+        description: descriptionInput,
+        caption: captionInput,
+        disclosure_text: disclosureText
+      }).length === 0
+      : false,
+    affiliate_url_present: Boolean(selectedAffiliateUrl)
+  });
+  missingReasons.push(...quality.blocked_reasons);
 
   if (missingReasons.length > 0) {
-    return { ok: false, missing_reasons: missingReasons };
+    return { ok: false, missing_reasons: [...new Set(missingReasons)] };
   }
   const safeVisibility: YouTubeUploadVisibility = visibility || "private";
 
@@ -72,6 +86,7 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
       execution_intent: executionIntent,
       disclosure_text: disclosureText,
       selected_affiliate_url: selectedAffiliateUrl,
+      shorts_content_quality: input.shorts_content_quality,
       smoke_approval: smokeApproval || undefined,
       made_for_kids: false,
       self_declared_made_for_kids: false

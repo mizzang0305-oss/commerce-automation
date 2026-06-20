@@ -18,6 +18,7 @@ import {
   buildDefaultProductVideoTitle,
   buildYouTubeProductVideoUploadPackage
 } from "@/lib/uploads/youtube/productVideoUploadPackage";
+import { buildBilibinStainlessCookingToolsShortsPackage } from "@/lib/uploads/youtube/shortsContentQuality";
 
 export type RealProductAutoPilotMode = "dry_run" | "prepare_only";
 
@@ -184,6 +185,7 @@ export function buildRealProductAutoPilot(input: RealProductAutoPilotInput): Rea
   const packageInput = buildPackageInput({
     selected,
     assetRef: asset.asset_ref,
+    contentQualityHints: asset.content_quality_hints,
     visibility: requestedVisibility
   });
   const packageResult = buildYouTubeProductVideoUploadPackage(packageInput);
@@ -355,6 +357,7 @@ function findBestPreparedVideoAsset(input: {
           ...toPreparedVideoAssetApiSummary(validation.asset_ref, validation.safe_display),
           url_host: pickUrlHost(candidate.prepared_video_asset_url ?? candidate.signed_url)
         } as PreparedVideoAssetSummary,
+        content_quality_hints: buildContentQualityHints(asset),
         safe_display: validation.safe_display
       };
     }
@@ -416,17 +419,18 @@ function inferAssetProvider(asset: ProductAsset, url: string) {
 function buildPackageInput(input: {
   selected: CandidateEvaluation;
   assetRef: PreparedVideoAssetRef;
+  contentQualityHints?: ReturnType<typeof buildContentQualityHints>;
   visibility: "private" | "unlisted";
 }) {
   const productName = safeTrim(input.selected.candidate.product_name);
   const affiliateUrl = safeTrim(input.selected.candidate.selected_affiliate_url);
-  const title = buildDefaultProductVideoTitle(productName);
-  const description = [
-    productName,
-    "Private product upload package prepared for manual review.",
-    DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
-    "Affiliate link is present in the source package."
-  ].join("\n\n");
+  const storyPackage = buildBilibinStainlessCookingToolsShortsPackage({
+    product_name: productName,
+    selected_affiliate_url: affiliateUrl,
+    product_image_present: hasCandidateImage(input.selected.candidate),
+    voiceover_audio_present: input.contentQualityHints?.voiceover_audio_present === true,
+    audio_duration_seconds: input.contentQualityHints?.audio_duration_seconds ?? undefined
+  });
 
   return {
     candidate_id: input.selected.candidate.id,
@@ -436,11 +440,24 @@ function buildPackageInput(input: {
     prepared_video_asset: input.assetRef,
     video_path_or_url: input.assetRef.prepared_video_asset_url ?? input.assetRef.signed_url ?? input.assetRef.storage_key ?? "",
     visibility: input.visibility,
-    title,
-    description,
-    disclosure_text: DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
-    tags: ["coupang", "private upload", "commerce automation"],
+    title: storyPackage.title || buildDefaultProductVideoTitle(productName),
+    description: storyPackage.description,
+    disclosure_text: storyPackage.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
+    tags: storyPackage.tags,
+    shorts_content_quality: storyPackage.shorts_content_quality,
     made_for_kids: false
+  };
+}
+
+function buildContentQualityHints(asset: ProductAsset) {
+  const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
+  return {
+    voiceover_audio_present: metadata.voiceover_audio_present === true,
+    audio_duration_seconds: normalizeOptionalPositiveNumber(metadata.audio_duration_seconds),
+    duration_seconds: normalizeOptionalPositiveNumber(metadata.duration_seconds),
+    static_single_image_only: metadata.static_single_image_only === true,
+    scene_count: normalizeOptionalPositiveNumber(metadata.scene_count),
+    caption_count: normalizeOptionalPositiveNumber(metadata.caption_count)
   };
 }
 
