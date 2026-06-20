@@ -7,7 +7,10 @@ import type {
   OneProductServerAssetRegistrationErrorCode,
   ServerVideoAssetRegistrar
 } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
+import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+
+export { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE };
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
 export const APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION =
@@ -23,6 +26,18 @@ export type GeneratedProductVideoAsset = {
   duration_seconds?: number | null;
   checksum_sha256?: string | null;
   black_screen_detected?: boolean | null;
+  story_video_generated?: boolean;
+  voiceover_audio_present?: boolean;
+  voiceover_audio_file_present?: boolean;
+  audio_duration_seconds?: number | null;
+  audio_mime_type?: string | null;
+  audio_muxed_into_video?: boolean;
+  video_has_audio_stream?: boolean;
+  scene_count?: number | null;
+  caption_count?: number | null;
+  static_single_image_only?: boolean;
+  product_image_present?: boolean;
+  content_quality_score?: number | null;
   generated_this_run: boolean;
   local_only: true;
 };
@@ -169,7 +184,7 @@ export async function buildOneProductVideoAssetEntryPoint(
   }
 
   if (mode === "generate_local_only") {
-    if (input.approval !== RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION) {
+    if (!hasGenerationApproval(input.approval)) {
       return blockedResult({
         mode,
         error_code: "VIDEO_ASSET_GENERATION_APPROVAL_REQUIRED",
@@ -235,7 +250,7 @@ export async function buildOneProductVideoAssetEntryPoint(
     }
   }
 
-  if (input.approval !== APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION) {
+  if (!hasRegistrationApproval(input.approval)) {
     return blockedResult({
       mode,
       error_code: "VIDEO_ASSET_REGISTRATION_APPROVAL_REQUIRED",
@@ -349,6 +364,16 @@ export async function buildOneProductVideoAssetEntryPoint(
     next_action: "RUN_REAL_PRODUCT_AUTO_PILOT_DRY_RUN_AFTER_APPROVED_PERSISTENCE",
     side_effects: { ...ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS }
   };
+}
+
+function hasGenerationApproval(value: unknown) {
+  return value === RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION ||
+    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE;
+}
+
+function hasRegistrationApproval(value: unknown) {
+  return value === APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION ||
+    value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -493,6 +518,18 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     duration_seconds: asset.duration_seconds ?? null,
     checksum_sha256: asset.checksum_sha256 ?? null,
     black_screen_detected: asset.black_screen_detected ?? null,
+    story_video_generated: asset.story_video_generated === true,
+    voiceover_audio_present: asset.voiceover_audio_present === true,
+    voiceover_audio_file_present: asset.voiceover_audio_file_present === true,
+    audio_duration_seconds: asset.audio_duration_seconds ?? null,
+    audio_mime_type: asset.audio_mime_type ?? null,
+    audio_muxed_into_video: asset.audio_muxed_into_video === true,
+    video_has_audio_stream: asset.video_has_audio_stream === true,
+    scene_count: asset.scene_count ?? null,
+    caption_count: asset.caption_count ?? null,
+    static_single_image_only: asset.static_single_image_only === true,
+    product_image_present: asset.product_image_present === true,
+    content_quality_score: asset.content_quality_score ?? null,
     generated_this_run: asset.generated_this_run,
     local_only: true,
     domain_ready: false

@@ -429,6 +429,10 @@ function buildPackageInput(input: {
     selected_affiliate_url: affiliateUrl,
     product_image_present: hasCandidateImage(input.selected.candidate),
     voiceover_audio_present: input.contentQualityHints?.voiceover_audio_present === true,
+    voiceover_audio_file_present: input.contentQualityHints?.voiceover_audio_file_present === true,
+    video_has_audio_stream: input.contentQualityHints?.video_has_audio_stream === true,
+    audio_muxed_into_video: input.contentQualityHints?.audio_muxed_into_video === true,
+    audio_mime_type: input.contentQualityHints?.audio_mime_type ?? undefined,
     audio_duration_seconds: input.contentQualityHints?.audio_duration_seconds ?? undefined
   });
 
@@ -453,6 +457,10 @@ function buildContentQualityHints(asset: ProductAsset) {
   const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
   return {
     voiceover_audio_present: metadata.voiceover_audio_present === true,
+    voiceover_audio_file_present: metadata.voiceover_audio_file_present === true,
+    video_has_audio_stream: metadata.video_has_audio_stream === true,
+    audio_muxed_into_video: metadata.audio_muxed_into_video === true,
+    audio_mime_type: safeTrim(metadata.audio_mime_type) || null,
     audio_duration_seconds: normalizeOptionalPositiveNumber(metadata.audio_duration_seconds),
     duration_seconds: normalizeOptionalPositiveNumber(metadata.duration_seconds),
     static_single_image_only: metadata.static_single_image_only === true,

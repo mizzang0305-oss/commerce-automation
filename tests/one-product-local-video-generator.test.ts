@@ -22,7 +22,18 @@ const candidate: ProductCandidate = {
 
 describe("one-product local video generator adapter", () => {
   test("returns a local-only video contract without exposing source URLs", async () => {
-    const execFileAsync = vi.fn(async () => ({ stdout: "", stderr: "" }));
+    const execFileAsync = vi.fn(async (file: string) => ({
+      stdout: file === "ffprobe"
+        ? JSON.stringify({
+            format: { duration: "25.000000" },
+            streams: [
+              { codec_type: "video" },
+              { codec_type: "audio" }
+            ]
+          })
+        : "",
+      stderr: ""
+    }));
     const mkdir = vi.fn(async () => undefined);
     const stat = vi.fn(async () => ({
       isFile: () => true,
@@ -33,25 +44,41 @@ describe("one-product local video generator adapter", () => {
       cwd: "C:\\repo\\commerce-automation",
       execFileAsync,
       mkdir,
+      writeFile: vi.fn(async () => undefined),
       stat: stat as never,
       readFile: readFile as never
     });
 
     const result = await generator(candidate);
-    const args = execFileAsync.mock.calls[0]?.[1] ?? [];
+    const args = execFileAsync.mock.calls[1]?.[1] ?? [];
     const serialized = JSON.stringify(result);
 
-    expect(execFileAsync).toHaveBeenCalledTimes(1);
+    expect(execFileAsync).toHaveBeenCalledTimes(3);
+    expect(execFileAsync.mock.calls[0]?.[0]).toMatch(/powershell/i);
+    expect(execFileAsync.mock.calls[1]?.[0]).toBe("ffmpeg");
+    expect(execFileAsync.mock.calls[2]?.[0]).toBe("ffprobe");
     expect(args).toContain("https://image.example.com/product.jpg");
     expect(args).toContain("-i");
     expect(result).toMatchObject({
       candidate_id: "candidate-real-asset-001",
       mime_type: "video/mp4",
       size_bytes: 8192,
-      duration_seconds: 12,
-      black_screen_detected: null,
+      duration_seconds: 25,
+      black_screen_detected: false,
       generated_this_run: true,
-      local_only: true
+      local_only: true,
+      story_video_generated: true,
+      voiceover_audio_present: true,
+      voiceover_audio_file_present: true,
+      audio_duration_seconds: 25,
+      audio_mime_type: "audio/wav",
+      audio_muxed_into_video: true,
+      video_has_audio_stream: true,
+      scene_count: 6,
+      caption_count: 6,
+      static_single_image_only: false,
+      product_image_present: true,
+      content_quality_score: 100
     });
     expect(result.local_video_path).toContain(path.join("commerce-assets", "output", "video-packages", "real-product-candidate-real-asset-001"));
     expect(result.checksum_sha256).toHaveLength(64);
@@ -65,6 +92,7 @@ describe("one-product local video generator adapter", () => {
     const generator = createOneProductLocalVideoGenerator({
       execFileAsync,
       mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
       stat: vi.fn() as never,
       readFile: vi.fn() as never
     });

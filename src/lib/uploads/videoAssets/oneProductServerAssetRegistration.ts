@@ -112,6 +112,7 @@ export function createOneProductServerAssetRegistrar(
     }
 
     const localVideoPath = buildExpectedLocalVideoPath({ cwd, candidateId: candidate.id });
+    const qualityMetadata = await readQualityMetadataSidecar(readFile, localVideoPath);
     let fileBuffer: Buffer;
     let sizeBytes: number;
     try {
@@ -163,6 +164,7 @@ export function createOneProductServerAssetRegistrar(
       asset_ref: upload.asset_ref,
       registration_source: "r2_upload",
       r2_uploaded: true,
+      quality_metadata: qualityMetadata,
       now
     });
   };
@@ -174,6 +176,7 @@ async function persistAssetRef(input: {
   asset_ref: PreparedVideoAssetRef;
   registration_source: "provided_asset_ref" | "r2_upload";
   r2_uploaded: boolean;
+  quality_metadata?: Record<string, unknown>;
   now: () => string;
 }): Promise<OneProductServerAssetRegistrationResult> {
   const validation = validatePreparedVideoAssetRef(input.asset_ref);
@@ -206,7 +209,8 @@ async function persistAssetRef(input: {
       expires_at: input.asset_ref.expires_at ?? undefined,
       server_accessible: input.asset_ref.server_accessible,
       registration_source: input.registration_source,
-      registered_by: "one_product_server_asset_registrar"
+      registered_by: "one_product_server_asset_registrar",
+      ...(input.quality_metadata ?? {})
     }),
     qa_status: "pending",
     qa_note: "",
@@ -441,9 +445,31 @@ function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string }
     "commerce-assets",
     "output",
     "video-packages",
-    `real-product-${safeCandidateId}`,
-    `${safeCandidateId}_one_product_v001.mp4`
+      `real-product-${safeCandidateId}`,
+    `${safeCandidateId}_story_voiceover_v001.mp4`
   );
+}
+
+async function readQualityMetadataSidecar(
+  readFile: typeof fs.readFile,
+  localVideoPath: string
+) {
+  const sidecarPath = localVideoPath.replace(/\.mp4$/i, ".quality.json");
+  try {
+    const text = await readFile(sidecarPath, "utf8");
+    const parsed = JSON.parse(String(text)) as unknown;
+    return isSafeQualityMetadata(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isSafeQualityMetadata(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const serialized = JSON.stringify(value);
+  return !/access_token|refresh_token|client_secret|Authorization|Bearer|https?:\/\//i.test(serialized);
 }
 
 function buildR2StorageKey(candidateId: string, fileName: string) {
