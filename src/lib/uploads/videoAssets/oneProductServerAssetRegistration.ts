@@ -443,10 +443,10 @@ function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string }
   return path.join(
     input.cwd,
     "commerce-assets",
-    "output",
-    "video-packages",
-      `real-product-${safeCandidateId}`,
-    `${safeCandidateId}_story_voiceover_hook_visuals_v003.mp4`
+    "generated-videos",
+    safeCandidateId,
+    "v005",
+    "story-shorts.mp4"
   );
 }
 
@@ -454,14 +454,22 @@ async function readQualityMetadataSidecar(
   readFile: typeof fs.readFile,
   localVideoPath: string
 ) {
-  const sidecarPath = localVideoPath.replace(/\.mp4$/i, ".quality.json");
-  try {
-    const text = await readFile(sidecarPath, "utf8");
-    const parsed = JSON.parse(String(text)) as unknown;
-    return isSafeQualityMetadata(parsed) ? parsed : {};
-  } catch {
-    return {};
+  const sidecarPaths = [
+    localVideoPath.replace(/\.mp4$/i, ".quality.json"),
+    path.join(path.dirname(localVideoPath), "quality-report.json")
+  ];
+  for (const sidecarPath of sidecarPaths) {
+    try {
+      const text = await readFile(sidecarPath, "utf8");
+      const parsed = JSON.parse(String(text)) as unknown;
+      if (isSafeQualityMetadata(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Try the next supported local metadata path.
+    }
   }
+  return {};
 }
 
 function isSafeQualityMetadata(value: unknown): value is Record<string, unknown> {

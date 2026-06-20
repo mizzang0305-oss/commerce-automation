@@ -20,3 +20,4 @@ export * from "@/lib/uploads/youtube/shortsContentQuality";
 export * from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
 export * from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
 export * from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
+export * from "@/lib/uploads/youtube/autoSceneImagePipelineApproval";

@@ -10,12 +10,14 @@ import type {
 import { APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/storyVoiceoverUploadApproval";
 import { APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
 import { APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
+import { APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/autoSceneImagePipelineApproval";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
 export {
   APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE
 };
 
 export const RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION = "RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION";
@@ -44,6 +46,25 @@ export type GeneratedProductVideoAsset = {
   static_single_image_only?: boolean;
   product_image_present?: boolean;
   content_quality_score?: number | null;
+  scene_image_briefs_generated?: boolean;
+  user_prompt_required?: boolean;
+  image_generation_provider?: string | null;
+  generated_scene_image_count?: number | null;
+  generated_scene_image_paths_present?: boolean;
+  scene_manifest_created?: boolean;
+  scene_manifest_path?: string | null;
+  renderer_consumed_scene_manifest?: boolean;
+  fallback_to_single_product_image?: boolean;
+  frame_sample_count?: number | null;
+  same_frame_ratio?: number | null;
+  static_background_ratio?: number | null;
+  product_image_bbox_change_count?: number | null;
+  caption_position_change_count?: number | null;
+  dominant_background_change_count?: number | null;
+  true_scene_change_pass?: boolean;
+  contact_sheet_generated?: boolean;
+  contact_sheet_path?: string | null;
+  contact_sheet_path_present?: boolean;
   hook_title_present?: boolean;
   hook_title_visible_in_first_1_0_seconds?: boolean;
   hook_title_visible_in_first_1_5_seconds?: boolean;
@@ -79,8 +100,10 @@ export type GeneratedProductVideoAsset = {
   local_only: true;
 };
 
-export type SafeGeneratedProductVideoAsset = Omit<GeneratedProductVideoAsset, "local_video_path"> & {
+export type SafeGeneratedProductVideoAsset = Omit<GeneratedProductVideoAsset, "local_video_path" | "scene_manifest_path" | "contact_sheet_path"> & {
   local_video_path_present: boolean;
+  scene_manifest_path_present: boolean;
+  contact_sheet_path_present: boolean;
   domain_ready: false;
 };
 
@@ -407,14 +430,16 @@ function hasGenerationApproval(value: unknown) {
   return value === RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION ||
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function hasRegistrationApproval(value: unknown) {
   return value === APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION ||
     value === APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE ||
     value === APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE ||
-    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE;
+    value === APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE ||
+    value === APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE;
 }
 
 function nextActionForRegistrationError(errorCode: OneProductServerAssetRegistrationErrorCode) {
@@ -571,6 +596,24 @@ function sanitizeGeneratedAsset(asset: GeneratedProductVideoAsset): SafeGenerate
     static_single_image_only: asset.static_single_image_only === true,
     product_image_present: asset.product_image_present === true,
     content_quality_score: asset.content_quality_score ?? null,
+    scene_image_briefs_generated: asset.scene_image_briefs_generated === true,
+    user_prompt_required: asset.user_prompt_required === true,
+    image_generation_provider: asset.image_generation_provider ?? null,
+    generated_scene_image_count: asset.generated_scene_image_count ?? null,
+    generated_scene_image_paths_present: asset.generated_scene_image_paths_present === true,
+    scene_manifest_created: asset.scene_manifest_created === true,
+    scene_manifest_path_present: Boolean(safeTrim(asset.scene_manifest_path)),
+    renderer_consumed_scene_manifest: asset.renderer_consumed_scene_manifest === true,
+    fallback_to_single_product_image: asset.fallback_to_single_product_image === true,
+    frame_sample_count: asset.frame_sample_count ?? null,
+    same_frame_ratio: asset.same_frame_ratio ?? null,
+    static_background_ratio: asset.static_background_ratio ?? null,
+    product_image_bbox_change_count: asset.product_image_bbox_change_count ?? null,
+    caption_position_change_count: asset.caption_position_change_count ?? null,
+    dominant_background_change_count: asset.dominant_background_change_count ?? null,
+    true_scene_change_pass: asset.true_scene_change_pass === true,
+    contact_sheet_generated: asset.contact_sheet_generated === true,
+    contact_sheet_path_present: Boolean(safeTrim(asset.contact_sheet_path)) || asset.contact_sheet_path_present === true,
     hook_title_present: asset.hook_title_present === true,
     hook_title_visible_in_first_1_0_seconds: asset.hook_title_visible_in_first_1_0_seconds === true,
     hook_title_visible_in_first_1_5_seconds: asset.hook_title_visible_in_first_1_5_seconds === true,

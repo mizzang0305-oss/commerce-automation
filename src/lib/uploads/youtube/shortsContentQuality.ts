@@ -23,7 +23,13 @@ export type ShortsContentQualityBlocker =
   | "USE_CASE_SCENE_MISSING"
   | "VOICEOVER_TOO_SLOW"
   | "VOICEOVER_TOO_ROBOTIC"
-  | "VOICEOVER_NATURALNESS_TOO_LOW";
+  | "VOICEOVER_NATURALNESS_TOO_LOW"
+  | "TRUE_SCENE_CHANGE_FAILED"
+  | "FRAME_HASH_DELTA_TOO_LOW"
+  | "PRODUCT_IMAGE_BBOX_STATIC"
+  | "BACKGROUND_STATIC_TOO_LONG"
+  | "CAPTION_POSITION_STATIC_TOO_LONG"
+  | "VISUAL_LAYOUT_VARIATION_TOO_LOW";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -72,6 +78,16 @@ export type ShortsContentQualityResult = {
   transition_count: number;
   visual_motion_score: number;
   distinct_frame_ratio_pass: boolean;
+  frame_sample_count: number;
+  same_frame_ratio: number | null;
+  static_background_ratio: number | null;
+  product_image_bbox_change_count: number;
+  caption_position_change_count: number;
+  dominant_background_change_count: number;
+  true_scene_change_pass: boolean;
+  scene_manifest_created: boolean;
+  renderer_consumed_scene_manifest: boolean;
+  fallback_to_single_product_image: boolean;
   use_case_scene_present: boolean;
   kitchen_context_scene_present: boolean;
   utensil_usage_simulation_present: boolean;
@@ -105,6 +121,12 @@ const MAX_HOOK_TITLE_VISIBLE_SECONDS_FOR_REPORTING = 1.5;
 const MIN_HOOK_TITLE_READABILITY_SCORE = 90;
 const MIN_TRANSITION_COUNT = 8;
 const MIN_VISUAL_MOTION_SCORE = 88;
+const MIN_FRAME_SAMPLE_COUNT = 8;
+const MAX_SAME_FRAME_RATIO = 0.35;
+const MAX_STATIC_BACKGROUND_RATIO = 0.45;
+const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 5;
+const MIN_CAPTION_POSITION_CHANGE_COUNT = 4;
+const MIN_DOMINANT_BACKGROUND_CHANGE_COUNT = 5;
 const MIN_VOICEOVER_WPM = 180;
 const MAX_VOICEOVER_WPM = 220;
 const MIN_VOICEOVER_SPEED_MULTIPLIER = 1.15;
@@ -153,6 +175,16 @@ export function evaluateShortsContentQuality(input: {
   const maxCaptionLines = normalizePositiveNumber(quality.max_caption_lines);
   const transitionCount = normalizeNonNegativeNumber(quality.transition_count) ?? 0;
   const visualMotionScore = normalizeNonNegativeNumber(quality.visual_motion_score) ?? 0;
+  const frameSampleCount = normalizeNonNegativeNumber(quality.frame_sample_count) ?? 0;
+  const sameFrameRatio = normalizeRatio(quality.same_frame_ratio);
+  const staticBackgroundRatio = normalizeRatio(quality.static_background_ratio);
+  const productImageBboxChangeCount = normalizeNonNegativeNumber(quality.product_image_bbox_change_count) ?? 0;
+  const captionPositionChangeCount = normalizeNonNegativeNumber(quality.caption_position_change_count) ?? 0;
+  const dominantBackgroundChangeCount = normalizeNonNegativeNumber(quality.dominant_background_change_count) ?? 0;
+  const trueSceneChangePass = quality.true_scene_change_pass === true;
+  const sceneManifestCreated = quality.scene_manifest_created === true;
+  const rendererConsumedSceneManifest = quality.renderer_consumed_scene_manifest === true;
+  const fallbackToSingleProductImage = quality.fallback_to_single_product_image === true;
   const voiceoverSpeedWpm = normalizePositiveNumber(quality.voiceover_speed_wpm);
   const voiceoverSpeedMultiplier = normalizePositiveNumber(quality.voiceover_speed_multiplier);
   const maxSilenceBetweenSegmentsMs = normalizeNonNegativeNumber(quality.max_silence_between_segments_ms);
@@ -244,6 +276,16 @@ export function evaluateShortsContentQuality(input: {
     transition_count: transitionCount,
     visual_motion_score: visualMotionScore,
     distinct_frame_ratio_pass: distinctFrameRatioPass,
+    frame_sample_count: frameSampleCount,
+    same_frame_ratio: sameFrameRatio,
+    static_background_ratio: staticBackgroundRatio,
+    product_image_bbox_change_count: productImageBboxChangeCount,
+    caption_position_change_count: captionPositionChangeCount,
+    dominant_background_change_count: dominantBackgroundChangeCount,
+    true_scene_change_pass: trueSceneChangePass,
+    scene_manifest_created: sceneManifestCreated,
+    renderer_consumed_scene_manifest: rendererConsumedSceneManifest,
+    fallback_to_single_product_image: fallbackToSingleProductImage,
     use_case_scene_present: useCaseScenePresent,
     kitchen_context_scene_present: kitchenContextScenePresent,
     utensil_usage_simulation_present: utensilUsageSimulationPresent,
@@ -335,6 +377,35 @@ export function evaluateShortsContentQuality(input: {
     result.blocked_reasons.push("VISUAL_MOTION_TOO_LOW");
     result.blocked_reasons.push("VISUAL_VARIATION_TOO_LOW");
   }
+  if (!result.true_scene_change_pass ||
+    !result.scene_manifest_created ||
+    !result.renderer_consumed_scene_manifest ||
+    result.fallback_to_single_product_image) {
+    result.blocked_reasons.push("TRUE_SCENE_CHANGE_FAILED");
+  }
+  if (result.frame_sample_count < MIN_FRAME_SAMPLE_COUNT ||
+    result.same_frame_ratio === null ||
+    result.same_frame_ratio > MAX_SAME_FRAME_RATIO) {
+    result.blocked_reasons.push("FRAME_HASH_DELTA_TOO_LOW");
+  }
+  if (result.product_image_bbox_change_count < MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT) {
+    result.blocked_reasons.push("PRODUCT_IMAGE_BBOX_STATIC");
+  }
+  if (result.static_background_ratio === null ||
+    result.static_background_ratio > MAX_STATIC_BACKGROUND_RATIO ||
+    result.dominant_background_change_count < MIN_DOMINANT_BACKGROUND_CHANGE_COUNT) {
+    result.blocked_reasons.push("BACKGROUND_STATIC_TOO_LONG");
+  }
+  if (result.caption_position_change_count < MIN_CAPTION_POSITION_CHANGE_COUNT) {
+    result.blocked_reasons.push("CAPTION_POSITION_STATIC_TOO_LONG");
+  }
+  if (!result.true_scene_change_pass ||
+    result.frame_sample_count < MIN_FRAME_SAMPLE_COUNT ||
+    result.product_image_bbox_change_count < MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT ||
+    result.caption_position_change_count < MIN_CAPTION_POSITION_CHANGE_COUNT ||
+    result.dominant_background_change_count < MIN_DOMINANT_BACKGROUND_CHANGE_COUNT) {
+    result.blocked_reasons.push("VISUAL_LAYOUT_VARIATION_TOO_LOW");
+  }
   if (!result.use_case_scene_present ||
     !result.kitchen_context_scene_present ||
     !result.utensil_usage_simulation_present ||
@@ -401,6 +472,16 @@ export function evaluateShortsContentQuality(input: {
     result.transition_count >= MIN_TRANSITION_COUNT,
     result.visual_motion_score >= MIN_VISUAL_MOTION_SCORE,
     result.distinct_frame_ratio_pass,
+    result.true_scene_change_pass,
+    result.scene_manifest_created,
+    result.renderer_consumed_scene_manifest,
+    !result.fallback_to_single_product_image,
+    result.frame_sample_count >= MIN_FRAME_SAMPLE_COUNT,
+    result.same_frame_ratio !== null && result.same_frame_ratio <= MAX_SAME_FRAME_RATIO,
+    result.static_background_ratio !== null && result.static_background_ratio <= MAX_STATIC_BACKGROUND_RATIO,
+    result.product_image_bbox_change_count >= MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT,
+    result.caption_position_change_count >= MIN_CAPTION_POSITION_CHANGE_COUNT,
+    result.dominant_background_change_count >= MIN_DOMINANT_BACKGROUND_CHANGE_COUNT,
     result.use_case_scene_present,
     result.kitchen_context_scene_present,
     result.utensil_usage_simulation_present,
@@ -446,6 +527,16 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   transition_count?: number;
   visual_motion_score?: number;
   distinct_frame_ratio_pass?: boolean;
+  frame_sample_count?: number;
+  same_frame_ratio?: number;
+  static_background_ratio?: number;
+  product_image_bbox_change_count?: number;
+  caption_position_change_count?: number;
+  dominant_background_change_count?: number;
+  true_scene_change_pass?: boolean;
+  scene_manifest_created?: boolean;
+  renderer_consumed_scene_manifest?: boolean;
+  fallback_to_single_product_image?: boolean;
   use_case_scene_present?: boolean;
   kitchen_context_scene_present?: boolean;
   utensil_usage_simulation_present?: boolean;
@@ -550,6 +641,16 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       transition_count: input.transition_count ?? null,
       visual_motion_score: input.visual_motion_score ?? null,
       distinct_frame_ratio_pass: input.distinct_frame_ratio_pass === true,
+      frame_sample_count: input.frame_sample_count ?? null,
+      same_frame_ratio: input.same_frame_ratio ?? null,
+      static_background_ratio: input.static_background_ratio ?? null,
+      product_image_bbox_change_count: input.product_image_bbox_change_count ?? null,
+      caption_position_change_count: input.caption_position_change_count ?? null,
+      dominant_background_change_count: input.dominant_background_change_count ?? null,
+      true_scene_change_pass: input.true_scene_change_pass === true,
+      scene_manifest_created: input.scene_manifest_created === true,
+      renderer_consumed_scene_manifest: input.renderer_consumed_scene_manifest === true,
+      fallback_to_single_product_image: input.fallback_to_single_product_image === true,
       use_case_scene_present: input.use_case_scene_present === true,
       kitchen_context_scene_present: input.kitchen_context_scene_present === true,
       utensil_usage_simulation_present: input.utensil_usage_simulation_present === true,
@@ -612,6 +713,14 @@ function normalizeNonNegativeNumber(value: unknown) {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   }
   return null;
+}
+
+function normalizeRatio(value: unknown) {
+  const normalized = normalizeNonNegativeNumber(value);
+  if (normalized === null || normalized > 1) {
+    return null;
+  }
+  return normalized;
 }
 
 function safeTrim(value: unknown) {

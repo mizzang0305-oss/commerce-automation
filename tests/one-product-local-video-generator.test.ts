@@ -2,6 +2,10 @@ import { Buffer } from "node:buffer";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
+import {
+  buildBilibinSceneImageBriefs,
+  buildSceneImageManifest
+} from "@/lib/uploads/videoAssets/autoSceneImagePipeline";
 import { createOneProductLocalVideoGenerator } from "@/lib/uploads/videoAssets/oneProductLocalVideoGenerator";
 import type { ProductCandidate } from "@/types/automation";
 
@@ -40,13 +44,15 @@ describe("one-product local video generator adapter", () => {
       size: 8192
     }));
     const readFile = vi.fn(async () => Buffer.from("fake-mp4-content"));
+    const sceneImagePipeline = vi.fn(async () => buildScenePipelineResult(candidate, "C:\\repo\\commerce-automation"));
     const generator = createOneProductLocalVideoGenerator({
       cwd: "C:\\repo\\commerce-automation",
       execFileAsync,
       mkdir,
       writeFile: vi.fn(async () => undefined),
       stat: stat as never,
-      readFile: readFile as never
+      readFile: readFile as never,
+      sceneImagePipeline
     });
 
     const result = await generator(candidate);
@@ -54,11 +60,14 @@ describe("one-product local video generator adapter", () => {
     const serialized = JSON.stringify(result);
 
     expect(execFileAsync).toHaveBeenCalledTimes(3);
+    expect(sceneImagePipeline).toHaveBeenCalledTimes(1);
     expect(execFileAsync.mock.calls[0]?.[0]).toMatch(/powershell/i);
     expect(execFileAsync.mock.calls[1]?.[0]).toBe("ffmpeg");
     expect(execFileAsync.mock.calls[2]?.[0]).toBe("ffprobe");
     expect(execFileAsync.mock.calls[1]?.[2]?.timeout).toBeGreaterThanOrEqual(240000);
-    expect(args).toContain("https://image.example.com/product.jpg");
+    expect(JSON.stringify(args)).toContain("scene-01-hook.png");
+    expect(JSON.stringify(args)).toContain("scene-08-cta.png");
+    expect(JSON.stringify(args)).not.toContain("https://image.example.com/product.jpg");
     expect(args).toContain("-i");
     expect(result).toMatchObject({
       candidate_id: "candidate-real-asset-001",
@@ -80,6 +89,23 @@ describe("one-product local video generator adapter", () => {
       static_single_image_only: false,
       product_image_present: true,
       content_quality_score: 100,
+      scene_image_briefs_generated: true,
+      user_prompt_required: false,
+      image_generation_provider: "local_ffmpeg_scene_card_generator",
+      generated_scene_image_count: 8,
+      generated_scene_image_paths_present: true,
+      scene_manifest_created: true,
+      renderer_consumed_scene_manifest: true,
+      fallback_to_single_product_image: false,
+      frame_sample_count: 8,
+      same_frame_ratio: 0.18,
+      static_background_ratio: 0.22,
+      product_image_bbox_change_count: 8,
+      caption_position_change_count: 6,
+      dominant_background_change_count: 8,
+      true_scene_change_pass: true,
+      contact_sheet_generated: true,
+      contact_sheet_path_present: true,
       hook_title_present: true,
       hook_title_visible_in_first_1_0_seconds: true,
       hook_title_visible_in_first_1_5_seconds: true,
@@ -112,7 +138,8 @@ describe("one-product local video generator adapter", () => {
       max_silence_between_segments_ms: 240,
       audio_video_duration_gap_seconds: 0
     });
-    expect(result.local_video_path).toContain(path.join("commerce-assets", "output", "video-packages", "real-product-candidate-real-asset-001"));
+    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", "candidate-real-asset-001", "v005"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", "candidate-real-asset-001", "v005", "scene-manifest.json"));
     expect(result.checksum_sha256).toHaveLength(64);
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com/product.jpg");
@@ -139,3 +166,45 @@ describe("one-product local video generator adapter", () => {
     expect(execFileAsync).not.toHaveBeenCalled();
   });
 });
+
+function buildScenePipelineResult(productCandidate: ProductCandidate, cwd: string) {
+  const briefs = buildBilibinSceneImageBriefs(productCandidate);
+  const generatedImages = briefs.map((brief, index) => ({
+    scene_id: brief.scene_id,
+    kind: brief.kind,
+    image_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", `scene-${String(index + 1).padStart(2, "0")}-${brief.kind}.png`),
+    width: 1080,
+    height: 1920,
+    generated: true
+  }));
+  const manifestPath = path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "scene-manifest.json");
+  return {
+    provider: "local_ffmpeg_scene_card_generator" as const,
+    version: "v005",
+    scene_image_briefs: briefs,
+    generated_images: generatedImages,
+    manifest: buildSceneImageManifest({
+      candidate: productCandidate,
+      version: "v005",
+      generatedImages,
+      manifestPath
+    }),
+    manifest_path: manifestPath,
+    contact_sheet_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "scene-contact-sheet.jpg"),
+    quality_report_path: path.join(cwd, "commerce-assets", "generated-scenes", productCandidate.id, "v005", "quality-report.json"),
+    generated_scene_image_count: 8,
+    generated_scene_image_paths_present: true,
+    scene_manifest_created: true,
+    contact_sheet_generated: true,
+    quality_report: {
+      frame_sample_count: 8,
+      same_frame_ratio: 0.18,
+      static_background_ratio: 0.22,
+      product_image_bbox_change_count: 8,
+      caption_position_change_count: 6,
+      dominant_background_change_count: 8,
+      visual_motion_score: 96,
+      true_scene_change_pass: true
+    }
+  };
+}
