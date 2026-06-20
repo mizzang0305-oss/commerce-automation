@@ -158,7 +158,7 @@ describe("auto scene image pipeline", () => {
     expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
   });
 
-  test("real composited scene image provider satisfies final scene image proof without user prompts", async () => {
+  test("local composited scene image provider is blocked until real human-use scene evidence exists", async () => {
     const execFileAsync = vi.fn(async () => ({
       stdout: "",
       stderr: ""
@@ -186,6 +186,14 @@ describe("auto scene image pipeline", () => {
       unique_scene_image_hash_count: 8,
       color_card_only_ratio: 0,
       product_image_reuse_ratio: 0.25,
+      use_case_human_context_present: false,
+      use_case_kitchen_context_present: false,
+      utensil_interaction_present: false,
+      human_use_signal_scene_count: 0,
+      real_usage_visual_present: false,
+      shape_card_scene_detected: true,
+      shape_card_scene_count: 8,
+      abstract_scene_ratio: 0.75,
       true_scene_change_pass: true
     });
   });

@@ -141,7 +141,15 @@ export function createOneProductLocalVideoGenerator(
     const finalSceneImageGateReady = sceneQuality.real_scene_image_provider_configured &&
       sceneQuality.generated_scene_images_are_not_color_cards &&
       sceneQuality.generated_scene_images_are_visually_distinct &&
-      sceneQuality.true_scene_change_pass;
+      sceneQuality.true_scene_change_pass &&
+      sceneQuality.use_case_human_context_present &&
+      sceneQuality.use_case_kitchen_context_present &&
+      sceneQuality.utensil_interaction_present &&
+      sceneQuality.human_use_signal_scene_count >= 2 &&
+      sceneQuality.real_usage_visual_present &&
+      !sceneQuality.shape_card_scene_detected &&
+      sceneQuality.shape_card_scene_count === 0 &&
+      sceneQuality.abstract_scene_ratio <= 0.15;
     await run("ffmpeg", buildFfmpegArgs({
       sceneManifest: scenePipelineResult.manifest,
       voiceoverAudioPath,
@@ -207,6 +215,14 @@ export function createOneProductLocalVideoGenerator(
       scene_image_semantic_kind_unique: sceneQuality.scene_image_semantic_kind_unique,
       product_image_reuse_ratio: sceneQuality.product_image_reuse_ratio,
       color_card_only_ratio: sceneQuality.color_card_only_ratio,
+      use_case_human_context_present: sceneQuality.use_case_human_context_present,
+      use_case_kitchen_context_present: sceneQuality.use_case_kitchen_context_present,
+      utensil_interaction_present: sceneQuality.utensil_interaction_present,
+      human_use_signal_scene_count: sceneQuality.human_use_signal_scene_count,
+      real_usage_visual_present: sceneQuality.real_usage_visual_present,
+      shape_card_scene_detected: sceneQuality.shape_card_scene_detected,
+      shape_card_scene_count: sceneQuality.shape_card_scene_count,
+      abstract_scene_ratio: sceneQuality.abstract_scene_ratio,
       real_scene_image_provider_configured: sceneQuality.real_scene_image_provider_configured,
       generated_scene_images_are_not_color_cards: sceneQuality.generated_scene_images_are_not_color_cards,
       generated_scene_images_are_visually_distinct: sceneQuality.generated_scene_images_are_visually_distinct,
@@ -299,6 +315,14 @@ export function createOneProductLocalVideoGenerator(
       scene_image_semantic_kind_unique: result.scene_image_semantic_kind_unique,
       product_image_reuse_ratio: result.product_image_reuse_ratio,
       color_card_only_ratio: result.color_card_only_ratio,
+      use_case_human_context_present: result.use_case_human_context_present,
+      use_case_kitchen_context_present: result.use_case_kitchen_context_present,
+      utensil_interaction_present: result.utensil_interaction_present,
+      human_use_signal_scene_count: result.human_use_signal_scene_count,
+      real_usage_visual_present: result.real_usage_visual_present,
+      shape_card_scene_detected: result.shape_card_scene_detected,
+      shape_card_scene_count: result.shape_card_scene_count,
+      abstract_scene_ratio: result.abstract_scene_ratio,
       real_scene_image_provider_configured: result.real_scene_image_provider_configured,
       generated_scene_images_are_not_color_cards: result.generated_scene_images_are_not_color_cards,
       generated_scene_images_are_visually_distinct: result.generated_scene_images_are_visually_distinct,
