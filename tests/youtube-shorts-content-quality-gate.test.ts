@@ -6,7 +6,8 @@ import {
   buildYouTubeProductVideoUploadPackage,
   buildYouTubeUploadRequest,
   hasExactYouTubeUploadConfirmation,
-  APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
 const DISCLOSURE =
@@ -41,20 +42,42 @@ const STORY_QUALITY = {
   audio_muxed_into_video: true,
   audio_mime_type: "audio/wav",
   audio_duration_seconds: 24.5,
+  hook_title: "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c, \uc544\uc9c1\ub3c4 \uc11c\ub78d\uc5d0 \ub123\uc5b4\ub450\uc138\uc694?",
+  hook_title_first_seen_seconds: 0.4,
+  hook_title_safe_area_pass: true,
+  caption_safe_area_pass: true,
+  all_text_inside_mobile_safe_area: true,
+  no_text_clipped: true,
+  max_caption_lines: 2,
+  caption_font_size_readable: true,
+  caption_contrast_pass: true,
+  transition_count: 6,
+  visual_motion_score: 88,
+  distinct_frame_ratio_pass: true,
+  use_case_scene_present: true,
+  kitchen_context_scene_present: true,
+  utensil_usage_simulation_present: true,
+  before_after_or_problem_scene_present: true,
+  voiceover_speed_wpm: 190,
+  voiceover_speed_multiplier: 1.25,
+  max_silence_between_segments_ms: 260,
+  audio_video_duration_gap_seconds: 0.5,
   captions: [
     "\uc870\ub9ac\ub3c4\uad6c, \uc790\uc8fc \uc5c9\ud0a4\ub098\uc694?",
     "\uc694\ub9ac \ud750\ub984\uc744 \ub04a\ub294 \ucc3e\uae30 \ubb38\uc81c",
     "8\uc885\uc744 \ud55c \ubc88\uc5d0 \uc900\ube44",
     "\uc0c8 \uc8fc\ubc29 \uc138\ud305\uc5d0 \uc801\ud569",
+    "\uc11c\ub78d \uc815\ub9ac\uac00 \ud544\uc694\ud55c \ubd84\uc5d0\uac8c \uc801\ud569",
     "\uad6c\uc131\uacfc \ud06c\uae30\ub294 \uad6c\ub9e4 \uc804 \ud655\uc778",
     "\ub9c1\ud06c\uc5d0\uc11c \uac00\uaca9\uacfc \uad6c\uc131 \ud655\uc778"
   ],
   scenes: [
     { id: "hook", duration_seconds: 3, motion: "slow_zoom_in" },
-    { id: "problem", duration_seconds: 4, motion: "pan_left" },
-    { id: "intro", duration_seconds: 5, motion: "slow_zoom_out" },
-    { id: "why_buy", duration_seconds: 5, motion: "pan_right" },
-    { id: "check", duration_seconds: 5, motion: "crop_shift" },
+    { id: "problem", duration_seconds: 3, motion: "pan_left" },
+    { id: "intro", duration_seconds: 4, motion: "slow_zoom_out" },
+    { id: "why_buy", duration_seconds: 4, motion: "pan_right" },
+    { id: "target_customer", duration_seconds: 4, motion: "push_in_card" },
+    { id: "check", duration_seconds: 4, motion: "crop_shift" },
     { id: "cta", duration_seconds: 3, motion: "slow_zoom_in" }
   ],
   duration_seconds: 25,
@@ -106,6 +129,10 @@ async function json(response: Response) {
 describe("YouTube Shorts content quality gate", () => {
   test("one-shot story voiceover approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
+  test("rendering pacing approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {
@@ -182,14 +209,63 @@ describe("YouTube Shorts content quality gate", () => {
     expect(result.package.content_quality).toMatchObject({
       score: expect.any(Number),
       passed: true,
-      scene_count: 6,
-      caption_count: 6,
-      static_single_image_only: false
+      scene_count: 7,
+      caption_count: 7,
+      static_single_image_only: false,
+      hook_title_present: true,
+      hook_title_visible_in_first_1_5_seconds: true,
+      hook_title_safe_area_pass: true,
+      caption_safe_area_pass: true,
+      all_text_inside_mobile_safe_area: true,
+      no_text_clipped: true,
+      max_caption_lines: 2,
+      transition_count: 6,
+      visual_motion_score: 88,
+      use_case_scene_present: true,
+      kitchen_context_scene_present: true,
+      utensil_usage_simulation_present: true,
+      before_after_or_problem_scene_present: true,
+      voiceover_speed_wpm: 190,
+      voiceover_too_slow: false
     });
-    expect(result.package.content_quality.score).toBeGreaterThanOrEqual(80);
+    expect(result.package.content_quality.score).toBeGreaterThanOrEqual(85);
     expect(result.package.description).toContain("\ucfe0\ud321\ud30c\ud2b8\ub108\uc2a4");
     expect(result.package.description).toContain("\uc218\uc218\ub8cc");
     expect(result.package.description).not.toMatch(/manual review package|prepared package|test upload|smoke upload/i);
+  });
+
+  test("rendering quality gate blocks late hook, unsafe captions, low motion, and slow voiceover", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        hook_title_first_seen_seconds: 2.25,
+        hook_title_safe_area_pass: false,
+        caption_safe_area_pass: false,
+        no_text_clipped: false,
+        max_caption_lines: 3,
+        transition_count: 3,
+        visual_motion_score: 45,
+        distinct_frame_ratio_pass: false,
+        use_case_scene_present: false,
+        voiceover_speed_wpm: 145,
+        voiceover_speed_multiplier: 1,
+        max_silence_between_segments_ms: 700
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("unsafe rendering and slow voiceover must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "HOOK_TITLE_TOO_LATE",
+      "TEXT_OUT_OF_SAFE_AREA",
+      "CAPTION_CLIPPED",
+      "VISUAL_MOTION_TOO_LOW",
+      "USE_CASE_SCENE_MISSING",
+      "VOICEOVER_TOO_SLOW"
+    ]));
   });
 
   test("execute request builder also blocks content quality failures", () => {

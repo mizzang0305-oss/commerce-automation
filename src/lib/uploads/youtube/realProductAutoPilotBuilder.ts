@@ -433,7 +433,26 @@ function buildPackageInput(input: {
     video_has_audio_stream: input.contentQualityHints?.video_has_audio_stream === true,
     audio_muxed_into_video: input.contentQualityHints?.audio_muxed_into_video === true,
     audio_mime_type: input.contentQualityHints?.audio_mime_type ?? undefined,
-    audio_duration_seconds: input.contentQualityHints?.audio_duration_seconds ?? undefined
+    audio_duration_seconds: input.contentQualityHints?.audio_duration_seconds ?? undefined,
+    hook_title_first_seen_seconds: input.contentQualityHints?.hook_title_first_seen_seconds ?? undefined,
+    hook_title_safe_area_pass: input.contentQualityHints?.hook_title_safe_area_pass === true,
+    caption_safe_area_pass: input.contentQualityHints?.caption_safe_area_pass === true,
+    all_text_inside_mobile_safe_area: input.contentQualityHints?.all_text_inside_mobile_safe_area === true,
+    no_text_clipped: input.contentQualityHints?.no_text_clipped === true,
+    max_caption_lines: input.contentQualityHints?.max_caption_lines ?? undefined,
+    caption_font_size_readable: input.contentQualityHints?.caption_font_size_readable === true,
+    caption_contrast_pass: input.contentQualityHints?.caption_contrast_pass === true,
+    transition_count: input.contentQualityHints?.transition_count ?? undefined,
+    visual_motion_score: input.contentQualityHints?.visual_motion_score ?? undefined,
+    distinct_frame_ratio_pass: input.contentQualityHints?.distinct_frame_ratio_pass === true,
+    use_case_scene_present: input.contentQualityHints?.use_case_scene_present === true,
+    kitchen_context_scene_present: input.contentQualityHints?.kitchen_context_scene_present === true,
+    utensil_usage_simulation_present: input.contentQualityHints?.utensil_usage_simulation_present === true,
+    before_after_or_problem_scene_present: input.contentQualityHints?.before_after_or_problem_scene_present === true,
+    voiceover_speed_wpm: input.contentQualityHints?.voiceover_speed_wpm ?? undefined,
+    voiceover_speed_multiplier: input.contentQualityHints?.voiceover_speed_multiplier ?? undefined,
+    max_silence_between_segments_ms: input.contentQualityHints?.max_silence_between_segments_ms ?? undefined,
+    audio_video_duration_gap_seconds: input.contentQualityHints?.audio_video_duration_gap_seconds ?? undefined
   });
 
   return {
@@ -465,7 +484,26 @@ function buildContentQualityHints(asset: ProductAsset) {
     duration_seconds: normalizeOptionalPositiveNumber(metadata.duration_seconds),
     static_single_image_only: metadata.static_single_image_only === true,
     scene_count: normalizeOptionalPositiveNumber(metadata.scene_count),
-    caption_count: normalizeOptionalPositiveNumber(metadata.caption_count)
+    caption_count: normalizeOptionalPositiveNumber(metadata.caption_count),
+    hook_title_first_seen_seconds: normalizeOptionalNonNegativeNumber(metadata.hook_title_first_seen_seconds),
+    hook_title_safe_area_pass: metadata.hook_title_safe_area_pass === true,
+    caption_safe_area_pass: metadata.caption_safe_area_pass === true,
+    all_text_inside_mobile_safe_area: metadata.all_text_inside_mobile_safe_area === true,
+    no_text_clipped: metadata.no_text_clipped === true,
+    max_caption_lines: normalizeOptionalPositiveNumber(metadata.max_caption_lines),
+    caption_font_size_readable: metadata.caption_font_size_readable === true,
+    caption_contrast_pass: metadata.caption_contrast_pass === true,
+    transition_count: normalizeOptionalNonNegativeNumber(metadata.transition_count),
+    visual_motion_score: normalizeOptionalNonNegativeNumber(metadata.visual_motion_score),
+    distinct_frame_ratio_pass: metadata.distinct_frame_ratio_pass === true,
+    use_case_scene_present: metadata.use_case_scene_present === true,
+    kitchen_context_scene_present: metadata.kitchen_context_scene_present === true,
+    utensil_usage_simulation_present: metadata.utensil_usage_simulation_present === true,
+    before_after_or_problem_scene_present: metadata.before_after_or_problem_scene_present === true,
+    voiceover_speed_wpm: normalizeOptionalPositiveNumber(metadata.voiceover_speed_wpm),
+    voiceover_speed_multiplier: normalizeOptionalPositiveFloat(metadata.voiceover_speed_multiplier),
+    max_silence_between_segments_ms: normalizeOptionalNonNegativeNumber(metadata.max_silence_between_segments_ms),
+    audio_video_duration_gap_seconds: normalizeOptionalNonNegativeNumber(metadata.audio_video_duration_gap_seconds)
   };
 }
 
@@ -618,6 +656,16 @@ function normalizeNumber(value: unknown) {
 function normalizeOptionalPositiveNumber(value: unknown) {
   const normalized = normalizeNumber(value);
   return normalized > 0 ? Math.floor(normalized) : null;
+}
+
+function normalizeOptionalPositiveFloat(value: unknown) {
+  const normalized = normalizeNumber(value);
+  return normalized > 0 ? normalized : null;
+}
+
+function normalizeOptionalNonNegativeNumber(value: unknown) {
+  const normalized = normalizeNumber(value);
+  return normalized >= 0 ? normalized : null;
 }
 
 function safeTrim(value: unknown) {
