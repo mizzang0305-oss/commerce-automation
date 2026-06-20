@@ -5,6 +5,7 @@ import {
 } from "@/lib/uploads/youtube";
 import { buildYouTubeUploadRequest } from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const CANONICAL_KOREAN_DISCLOSURE =
   "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
@@ -28,6 +29,7 @@ const READY_PRODUCT_PACKAGE_INPUT = {
   title: "domain-ready product/private smoke package title",
   description: "Domain-ready product private package.",
   disclosure_text: CANONICAL_KOREAN_DISCLOSURE,
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["coupang", "private upload"],
   made_for_kids: false
 };

@@ -14,6 +14,7 @@ import {
   buildYouTubeUploadReadiness,
   youtubeUploadSafeSideEffects
 } from "@/lib/uploads/youtube";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const validRequestBody = {
   candidate_id: "candidate-youtube-upload-001",
@@ -34,6 +35,7 @@ const validRequestBody = {
   disclosure_text:
     "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.",
   selected_affiliate_url: "https://link.coupang.com/a/candidate-youtube-upload-001",
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["desk", "organizer"],
   visibility: "private"
 };

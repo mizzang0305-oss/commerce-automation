@@ -147,6 +147,19 @@ readiness. A local path only returns a blocked package state. A package is
 domain-ready only when it includes a server-accessible prepared video asset
 reference.
 
+Product packages must also pass the story-driven Shorts quality gate before
+private execute. The package is blocked when it is only a static single-image
+video, has fewer than 5 scenes or 5 captions, is shorter than 20 seconds, lacks
+hook/problem/why-buy/target/customer-benefit/check-before-buy/CTA copy, lacks a
+Korean voiceover script, lacks voiceover audio, or contains developer/test
+placeholder copy such as `manual review package`, `prepared package`, `test
+upload`, or `smoke upload`. Representative blockers include
+`CONTENT_QUALITY_FAILED`, `STATIC_IMAGE_ONLY_VIDEO_BLOCKED`,
+`VOICEOVER_AUDIO_REQUIRED`, `STORY_SCRIPT_REQUIRED`,
+`WHY_BUY_REASON_REQUIRED`, `DEV_PLACEHOLDER_DESCRIPTION_BLOCKED`,
+`CAPTION_COUNT_TOO_LOW`, `SCENE_COUNT_TOO_LOW`, and
+`VIDEO_DURATION_TOO_SHORT`.
+
 This endpoint is prepare-only. It must return
 `external_api_called=false`, `youtube_upload_executed=false`, `uploaded=false`,
 `db_written=false`, `r2_uploaded=false`, `queue_created=false`,

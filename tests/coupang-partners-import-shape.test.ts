@@ -211,7 +211,13 @@ function videoAsset(overrides: Partial<ProductAsset> = {}): ProductAsset {
     render_qa_metadata: {
       mime_type: "video/mp4",
       size_bytes: 1234567,
-      checksum_sha256: "b".repeat(64)
+      checksum_sha256: "b".repeat(64),
+      voiceover_audio_present: true,
+      audio_duration_seconds: 24,
+      duration_seconds: 25,
+      scene_count: 6,
+      caption_count: 6,
+      static_single_image_only: false
     },
     created_at: now,
     ...overrides

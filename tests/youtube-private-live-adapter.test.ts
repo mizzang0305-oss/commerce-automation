@@ -4,6 +4,7 @@ import {
   buildYouTubeUploadRequest,
   youtubeUploadSafeSideEffects
 } from "@/lib/uploads/youtube";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const secretNeedles = /refresh-secret-value|access-secret-value|client-secret|Authorization: Bearer/i;
 
@@ -27,6 +28,7 @@ function makeValidUploadRequest() {
     description: `Private smoke test.\n\n${disclosureText}`,
     disclosure_text: disclosureText,
     selected_affiliate_url: "https://link.coupang.com/a/private-live-smoke",
+    shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
     visibility: "private",
     tags: ["commerce", "private smoke"]
   });

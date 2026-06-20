@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { buildYouTubeUploadRequest } from "@/lib/uploads/youtube";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const CANONICAL_DISCLOSURE =
   "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
@@ -21,6 +22,7 @@ const VALID_UPLOAD_INPUT = {
   description: `Operator private upload package.\n\n${CANONICAL_DISCLOSURE}`,
   disclosure_text: CANONICAL_DISCLOSURE,
   selected_affiliate_url: "https://link.coupang.com/a/disclosure-guard-test",
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["coupang", "private"],
   visibility: "private"
 };

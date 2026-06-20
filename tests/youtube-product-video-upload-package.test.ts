@@ -5,6 +5,7 @@ import {
   buildYouTubeProductVideoUploadPackage,
   verifyYouTubeProductVideoUploadPackage
 } from "@/lib/uploads/youtube";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const validProductPackageInput = {
   candidate_id: "candidate-product-video-001",
@@ -29,6 +30,7 @@ const validProductPackageInput = {
     `쿠팡파트너스 고지: ${DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT}`
   ].join("\n"),
   disclosure_text: DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["coupang", "private upload"],
   made_for_kids: false
 };

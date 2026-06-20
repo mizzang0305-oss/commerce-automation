@@ -53,20 +53,36 @@ function queue(overrides: Partial<ProductQueueItem> & Record<string, unknown> = 
 }
 
 function videoAsset(overrides: Partial<ProductAsset> & Record<string, unknown> = {}) {
-  return {
+  const defaultMetadata = {
+    mime_type: "video/mp4",
+    size_bytes: 1234567,
+    checksum_sha256: "a".repeat(64),
+    voiceover_audio_present: true,
+    audio_duration_seconds: 24,
+    duration_seconds: 25,
+    scene_count: 6,
+    caption_count: 6,
+    static_single_image_only: false,
+  };
+  const base = {
     id: "asset-video-real-001",
     product_queue_id: "queue-real-001",
     asset_type: "video",
     bucket: "r2-videos",
     storage_key: "videos/real-product.mp4",
     url: "https://cdn.example.com/videos/real-product.mp4?signature=secret-token",
-    render_qa_metadata: {
-      mime_type: "video/mp4",
-      size_bytes: 1234567,
-      checksum_sha256: "a".repeat(64),
-    },
+    render_qa_metadata: defaultMetadata,
     created_at: now,
     ...overrides,
+  } as ProductAsset;
+  return {
+    ...base,
+    render_qa_metadata: {
+      ...defaultMetadata,
+      ...(overrides.render_qa_metadata && typeof overrides.render_qa_metadata === "object"
+        ? overrides.render_qa_metadata
+        : {})
+    }
   } as ProductAsset;
 }
 

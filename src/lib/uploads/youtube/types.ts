@@ -46,6 +46,7 @@ export interface YouTubeUploadRequest {
   execution_intent: YouTubeExecutionIntent;
   disclosure_text: string;
   selected_affiliate_url: string;
+  shorts_content_quality?: unknown;
   smoke_approval?: string;
   made_for_kids: false;
   self_declared_made_for_kids: false;
@@ -125,6 +126,7 @@ export type YouTubeUploadRequestInput = {
   upload_intent?: unknown;
   disclosure_text?: unknown;
   selected_affiliate_url?: unknown;
+  shorts_content_quality?: unknown;
   smoke_approval?: unknown;
   smokeApproval?: unknown;
 };

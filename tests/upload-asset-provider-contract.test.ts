@@ -8,6 +8,7 @@ import {
   normalizePreparedVideoAssetRef
 } from "@/lib/uploads/youtube/uploadAssetContract";
 import { buildYouTubeTokenProviderReadiness } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const serverAccessibleAsset = {
   asset_id: "asset-product-video-001",
@@ -33,6 +34,7 @@ const validPackageInput = {
     "Affiliate link: https://link.coupang.com/a/product-video-001"
   ].join("\n"),
   disclosure_text: DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT,
+  shorts_content_quality: PASSING_SHORTS_CONTENT_QUALITY,
   tags: ["coupang", "private upload"],
   made_for_kids: false
 };
