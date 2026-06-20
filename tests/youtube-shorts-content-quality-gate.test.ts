@@ -11,7 +11,8 @@ import {
   APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube";
 
 const APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE =
@@ -151,6 +152,38 @@ const STORY_QUALITY = {
   black_screen_detected: false
 };
 
+const MOTION_FIRST_QUALITY = {
+  ...STORY_QUALITY,
+  motion_first_pipeline_enabled: true,
+  user_prompt_required: false,
+  manual_image_upload_required: false,
+  manual_scene_selection_required: false,
+  manual_provider_selection_required: false,
+  scene_image_briefs_generated: true,
+  scene_video_briefs_generated: true,
+  scene_prompts_generated: true,
+  provider_mode: "real_motion_generated",
+  motion_manifest_created: true,
+  renderer_consumed_motion_manifest: true,
+  fallback_to_slideshow_only: false,
+  fallback_to_single_product_image: false,
+  motion_scene_count: 5,
+  real_motion_scene_count: 3,
+  hand_interaction_scene_count: 2,
+  utensil_interaction_scene_count: 2,
+  product_rotate_scene_present: true,
+  kitchen_context_scene_count: 8,
+  same_frame_ratio: 0.12,
+  static_only_ratio: 0.12,
+  slideshow_like_ratio: 0.1,
+  all_scenes_static: false,
+  vector_or_shape_scene_present: false,
+  abstract_scene_present: false,
+  placeholder_scene_present: false,
+  dev_placeholder_description: false,
+  image_swap_only_video: false
+};
+
 const READY_PACKAGE_INPUT = {
   candidate_id: "candidate-490aa6d25e8ea89d",
   product_name: PRODUCT_NAME,
@@ -218,6 +251,10 @@ describe("YouTube Shorts content quality gate", () => {
 
   test("photorealistic usage scene provider approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
+  test("motion-first private upload approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {
@@ -432,6 +469,116 @@ describe("YouTube Shorts content quality gate", () => {
       product_identity_consistency_score: 82,
       passed: true
     });
+  });
+
+  test("motion-first real motion manifest passes the final content gate", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: MOTION_FIRST_QUALITY
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(`expected motion-first package to pass: ${result.blocked_reasons.join(",")}`);
+    }
+    expect(result.package.content_quality).toMatchObject({
+      motion_first_pipeline_enabled: true,
+      provider_mode: "real_motion_generated",
+      motion_manifest_created: true,
+      renderer_consumed_motion_manifest: true,
+      scene_count: 8,
+      motion_scene_count: 5,
+      real_motion_scene_count: 3,
+      hand_interaction_scene_count: 2,
+      utensil_interaction_scene_count: 2,
+      product_rotate_scene_present: true,
+      kitchen_context_scene_count: 8,
+      slideshow_like_ratio: 0.1,
+      final_upload_allowed: true,
+      passed: true
+    });
+  });
+
+  test("motion-first gate blocks slideshow-only and image-swap outputs", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...MOTION_FIRST_QUALITY,
+        provider_mode: "slideshow_generated",
+        final_upload_allowed: false,
+        motion_scene_count: 0,
+        real_motion_scene_count: 0,
+        hand_interaction_scene_count: 0,
+        utensil_interaction_scene_count: 0,
+        product_rotate_scene_present: false,
+        kitchen_context_scene_count: 2,
+        same_frame_ratio: 0.62,
+        static_only_ratio: 1,
+        slideshow_like_ratio: 1,
+        all_scenes_static: true,
+        fallback_to_slideshow_only: true,
+        image_swap_only_video: true
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("slideshow-only motion-first output must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "MOTION_SCENE_COUNT_TOO_LOW",
+      "REAL_MOTION_CLIP_REQUIRED",
+      "HAND_INTERACTION_SCENE_MISSING",
+      "UTENSIL_INTERACTION_SCENE_MISSING",
+      "PRODUCT_ROTATE_SCENE_MISSING",
+      "SLIDESHOW_LIKE_OUTPUT_BLOCKED",
+      "ALL_SCENES_STATIC_BLOCKED",
+      "IMAGE_SWAP_ONLY_VIDEO_BLOCKED",
+      "FALLBACK_TO_SLIDESHOW_ONLY"
+    ]));
+  });
+
+  test("motion-first gate requires hand pickup, cooking use, and product rotate motion", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...MOTION_FIRST_QUALITY,
+        hand_interaction_scene_count: 1,
+        utensil_interaction_scene_count: 1,
+        product_rotate_scene_present: false
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("missing hand, utensil, and rotate motion must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "HAND_INTERACTION_SCENE_MISSING",
+      "UTENSIL_INTERACTION_SCENE_MISSING",
+      "PRODUCT_ROTATE_SCENE_MISSING"
+    ]));
+  });
+
+  test("motion-first gate blocks missing motion manifest and renderer fallback", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...MOTION_FIRST_QUALITY,
+        motion_manifest_created: false,
+        renderer_consumed_motion_manifest: false,
+        fallback_to_single_product_image: true
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("motion renderer must consume the motion manifest");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "MOTION_MANIFEST_NOT_USED",
+      "FALLBACK_TO_SINGLE_PRODUCT_IMAGE"
+    ]));
   });
 
   test("shape-card style real usage metadata is blocked even when legacy booleans are true", () => {
@@ -728,6 +875,42 @@ describe("YouTube Shorts content quality gate", () => {
       ok: false,
       error_code: "YOUTUBE_PRODUCT_UPLOAD_PACKAGE_NOT_READY",
       missing_reasons: expect.arrayContaining(["STATIC_IMAGE_ONLY_VIDEO_BLOCKED"])
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("execute route does not call videos.insert when motion-first gate fails", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        ...READY_PACKAGE_INPUT,
+        confirmation: APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD,
+        shorts_content_quality: {
+          ...MOTION_FIRST_QUALITY,
+          provider_mode: "slideshow_generated",
+          final_upload_allowed: false,
+          motion_scene_count: 0,
+          real_motion_scene_count: 0,
+          hand_interaction_scene_count: 0,
+          utensil_interaction_scene_count: 0,
+          product_rotate_scene_present: false,
+          slideshow_like_ratio: 1,
+          all_scenes_static: true,
+          fallback_to_slideshow_only: true,
+          image_swap_only_video: true
+        }
+      })
+    }));
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_PRODUCT_UPLOAD_PACKAGE_NOT_READY",
+      missing_reasons: expect.arrayContaining(["SLIDESHOW_LIKE_OUTPUT_BLOCKED"])
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
