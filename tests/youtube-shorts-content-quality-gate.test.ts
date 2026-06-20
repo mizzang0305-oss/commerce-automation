@@ -54,8 +54,18 @@ const STORY_QUALITY = {
   caption_font_size_readable: true,
   caption_contrast_pass: true,
   transition_count: 8,
-  visual_motion_score: 88,
+  visual_motion_score: 92,
   distinct_frame_ratio_pass: true,
+  image_generation_provider: "real_scene_image_provider_mock",
+  real_scene_image_provider_configured: true,
+  generated_scene_image_count: 8,
+  unique_scene_image_hash_count: 8,
+  generated_scene_images_are_not_color_cards: true,
+  generated_scene_images_are_visually_distinct: true,
+  scene_image_color_palette_delta_pass: true,
+  scene_image_semantic_kind_unique: true,
+  product_image_reuse_ratio: 0.28,
+  color_card_only_ratio: 0,
   frame_sample_count: 8,
   same_frame_ratio: 0.18,
   static_background_ratio: 0.22,
@@ -227,6 +237,37 @@ describe("YouTube Shorts content quality gate", () => {
     expect(result.readiness.content_quality_ready).toBe(false);
   });
 
+  test("local deterministic color-card scene generator cannot pass final private upload gate", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        image_generation_provider: "local_ffmpeg_scene_card_generator",
+        real_scene_image_provider_configured: false,
+        generated_scene_images_are_not_color_cards: false,
+        generated_scene_images_are_visually_distinct: false,
+        scene_image_color_palette_delta_pass: false,
+        scene_image_semantic_kind_unique: false,
+        unique_scene_image_hash_count: 8,
+        product_image_reuse_ratio: 0.82,
+        color_card_only_ratio: 1
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("local deterministic scene cards must not pass final private upload gate");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "REAL_SCENE_IMAGE_PROVIDER_REQUIRED",
+      "LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH",
+      "COLOR_CARD_ONLY_SCENE_BLOCKED",
+      "PRODUCT_IMAGE_REUSE_TOO_HIGH",
+      "SCENE_IMAGE_VISUAL_REALISM_TOO_LOW"
+    ]));
+    expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
   test("manual review placeholder description is blocked", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
@@ -289,7 +330,10 @@ describe("YouTube Shorts content quality gate", () => {
       no_text_clipped: true,
       max_caption_lines: 2,
       transition_count: 8,
-      visual_motion_score: 88,
+      visual_motion_score: 92,
+      real_scene_image_provider_configured: true,
+      generated_scene_images_are_not_color_cards: true,
+      generated_scene_images_are_visually_distinct: true,
       true_scene_change_pass: true,
       frame_sample_count: 8,
       same_frame_ratio: 0.18,

@@ -26,7 +26,6 @@ const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.25;
 const STORY_HOOK_TITLE_READABILITY_SCORE = 94;
 const STORY_MAX_CAPTION_LINES = 2;
 const STORY_TRANSITION_COUNT = 8;
-const STORY_VISUAL_MOTION_SCORE = 94;
 const STORY_VOICEOVER_SPEED_WPM = 200;
 const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
 const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
@@ -34,11 +33,6 @@ const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 240;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
 const STORY_SCENE_IMAGE_VERSION = "v005";
 const STORY_FRAME_SAMPLE_COUNT = 8;
-const STORY_SAME_FRAME_RATIO = 0.18;
-const STORY_STATIC_BACKGROUND_RATIO = 0.22;
-const STORY_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 8;
-const STORY_CAPTION_POSITION_CHANGE_COUNT = 6;
-const STORY_DOMINANT_BACKGROUND_CHANGE_COUNT = 8;
 const STORY_HOOK_TEXT = "주방 조리도구, 아직도 서랍에 쌓아두세요?";
 const STORY_PROBLEM_TEXT = "국자, 뒤집개, 거품기 찾다가 요리 흐름이 끊기는 경우가 많습니다.";
 const STORY_WHY_BUY_REASON = "자취 시작, 새 주방 세팅, 조리도구 교체처럼 기본 구성을 한 번에 맞추고 싶을 때 보기 좋습니다.";
@@ -143,6 +137,11 @@ export function createOneProductLocalVideoGenerator(
       !scenePipelineResult.generated_scene_image_paths_present) {
       throw new Error("scene_image_generation_failed");
     }
+    const sceneQuality = scenePipelineResult.quality_report;
+    const finalSceneImageGateReady = sceneQuality.real_scene_image_provider_configured &&
+      sceneQuality.generated_scene_images_are_not_color_cards &&
+      sceneQuality.generated_scene_images_are_visually_distinct &&
+      sceneQuality.true_scene_change_pass;
     await run("ffmpeg", buildFfmpegArgs({
       sceneManifest: scenePipelineResult.manifest,
       voiceoverAudioPath,
@@ -193,23 +192,31 @@ export function createOneProductLocalVideoGenerator(
       caption_count: STORY_CAPTION_COUNT,
       static_single_image_only: false,
       product_image_present: true,
-      content_quality_score: STORY_CONTENT_QUALITY_SCORE,
+      content_quality_score: finalSceneImageGateReady ? STORY_CONTENT_QUALITY_SCORE : 0,
       scene_image_briefs_generated: true,
       user_prompt_required: false,
       image_generation_provider: scenePipelineResult.provider,
       generated_scene_image_count: scenePipelineResult.generated_scene_image_count,
       generated_scene_image_paths_present: scenePipelineResult.generated_scene_image_paths_present,
+      unique_scene_image_hash_count: sceneQuality.unique_scene_image_hash_count,
+      scene_image_color_palette_delta_pass: sceneQuality.scene_image_color_palette_delta_pass,
+      scene_image_semantic_kind_unique: sceneQuality.scene_image_semantic_kind_unique,
+      product_image_reuse_ratio: sceneQuality.product_image_reuse_ratio,
+      color_card_only_ratio: sceneQuality.color_card_only_ratio,
+      real_scene_image_provider_configured: sceneQuality.real_scene_image_provider_configured,
+      generated_scene_images_are_not_color_cards: sceneQuality.generated_scene_images_are_not_color_cards,
+      generated_scene_images_are_visually_distinct: sceneQuality.generated_scene_images_are_visually_distinct,
       scene_manifest_created: true,
       scene_manifest_path: scenePipelineResult.manifest_path,
       renderer_consumed_scene_manifest: true,
       fallback_to_single_product_image: false,
       frame_sample_count: STORY_FRAME_SAMPLE_COUNT,
-      same_frame_ratio: STORY_SAME_FRAME_RATIO,
-      static_background_ratio: STORY_STATIC_BACKGROUND_RATIO,
-      product_image_bbox_change_count: STORY_PRODUCT_IMAGE_BBOX_CHANGE_COUNT,
-      caption_position_change_count: STORY_CAPTION_POSITION_CHANGE_COUNT,
-      dominant_background_change_count: STORY_DOMINANT_BACKGROUND_CHANGE_COUNT,
-      true_scene_change_pass: true,
+      same_frame_ratio: sceneQuality.same_frame_ratio,
+      static_background_ratio: sceneQuality.static_background_ratio,
+      product_image_bbox_change_count: sceneQuality.product_image_bbox_change_count,
+      caption_position_change_count: sceneQuality.caption_position_change_count,
+      dominant_background_change_count: sceneQuality.dominant_background_change_count,
+      true_scene_change_pass: sceneQuality.true_scene_change_pass,
       contact_sheet_generated: scenePipelineResult.contact_sheet_generated,
       contact_sheet_path: scenePipelineResult.contact_sheet_path,
       contact_sheet_path_present: Boolean(scenePipelineResult.contact_sheet_path),
@@ -229,8 +236,8 @@ export function createOneProductLocalVideoGenerator(
       caption_font_size_readable: true,
       caption_contrast_pass: true,
       transition_count: STORY_TRANSITION_COUNT,
-      visual_motion_score: STORY_VISUAL_MOTION_SCORE,
-      distinct_frame_ratio_pass: true,
+      visual_motion_score: sceneQuality.visual_motion_score,
+      distinct_frame_ratio_pass: sceneQuality.true_scene_change_pass,
       use_case_scene_present: true,
       kitchen_context_scene_present: true,
       utensil_usage_simulation_present: true,
@@ -279,6 +286,14 @@ export function createOneProductLocalVideoGenerator(
       image_generation_provider: result.image_generation_provider,
       generated_scene_image_count: result.generated_scene_image_count,
       generated_scene_image_paths_present: result.generated_scene_image_paths_present,
+      unique_scene_image_hash_count: result.unique_scene_image_hash_count,
+      scene_image_color_palette_delta_pass: result.scene_image_color_palette_delta_pass,
+      scene_image_semantic_kind_unique: result.scene_image_semantic_kind_unique,
+      product_image_reuse_ratio: result.product_image_reuse_ratio,
+      color_card_only_ratio: result.color_card_only_ratio,
+      real_scene_image_provider_configured: result.real_scene_image_provider_configured,
+      generated_scene_images_are_not_color_cards: result.generated_scene_images_are_not_color_cards,
+      generated_scene_images_are_visually_distinct: result.generated_scene_images_are_visually_distinct,
       scene_manifest_created: result.scene_manifest_created,
       renderer_consumed_scene_manifest: result.renderer_consumed_scene_manifest,
       fallback_to_single_product_image: result.fallback_to_single_product_image,

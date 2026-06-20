@@ -114,12 +114,36 @@ describe("auto scene image pipeline", () => {
     expect(result.generated_scene_image_count).toBe(8);
     expect(result.renderer_consumed_scene_manifest).toBe(true);
     expect(result.fallback_to_single_product_image).toBe(false);
-    expect(result.true_scene_change_pass).toBe(true);
+    expect(result.true_scene_change_pass).toBe(false);
+    expect(result.visual_motion_score).toBe(0);
     expect(result.contact_sheet_generated).toBe(true);
     expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v005", "scene-manifest.json"));
     expect(videoRenderArgsText).toContain("scene-01-hook.png");
     expect(videoRenderArgsText).toContain("scene-08-cta.png");
     expect(videoRenderArgsText).not.toContain("https://image.example.com/product.jpg");
+  });
+
+  test("local deterministic scene card generator is draft-only and cannot satisfy final scene image proof", async () => {
+    const execFileAsync = vi.fn(async () => ({
+      stdout: "",
+      stderr: ""
+    }));
+    const pipeline = createAutoSceneImagePipeline({
+      cwd: "C:\\repo\\commerce-automation",
+      execFileAsync,
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never
+    });
+
+    const result = await pipeline(candidate);
+
+    expect(result.provider).toBe("local_ffmpeg_scene_card_generator");
+    expect(result.quality_report.true_scene_change_pass).toBe(false);
+    expect(result.quality_report.visual_motion_score).toBe(0);
+    expect(result.quality_report.color_card_only_ratio).toBe(1);
+    expect(result.quality_report.product_image_reuse_ratio).toBeGreaterThan(0.35);
+    expect(result.quality_report.real_scene_image_provider_configured).toBe(false);
   });
 
   test("renderer fails when scene images are missing instead of reusing one product image", async () => {

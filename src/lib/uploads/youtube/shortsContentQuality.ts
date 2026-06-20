@@ -29,7 +29,17 @@ export type ShortsContentQualityBlocker =
   | "PRODUCT_IMAGE_BBOX_STATIC"
   | "BACKGROUND_STATIC_TOO_LONG"
   | "CAPTION_POSITION_STATIC_TOO_LONG"
-  | "VISUAL_LAYOUT_VARIATION_TOO_LOW";
+  | "VISUAL_LAYOUT_VARIATION_TOO_LOW"
+  | "LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH"
+  | "REAL_SCENE_IMAGE_PROVIDER_REQUIRED"
+  | "BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED"
+  | "SCENE_IMAGE_VISUAL_REALISM_TOO_LOW"
+  | "COLOR_CARD_ONLY_SCENE_BLOCKED"
+  | "REAL_SCENE_IMAGE_MISSING"
+  | "SCENE_IMAGE_HASH_DUPLICATE"
+  | "SCENE_IMAGE_SEMANTIC_DUPLICATE"
+  | "PRODUCT_IMAGE_REUSE_TOO_HIGH"
+  | "BACKGROUND_VARIATION_TOO_LOW";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -78,6 +88,16 @@ export type ShortsContentQualityResult = {
   transition_count: number;
   visual_motion_score: number;
   distinct_frame_ratio_pass: boolean;
+  image_generation_provider: string | null;
+  real_scene_image_provider_configured: boolean;
+  generated_scene_image_count: number;
+  unique_scene_image_hash_count: number;
+  generated_scene_images_are_not_color_cards: boolean;
+  generated_scene_images_are_visually_distinct: boolean;
+  scene_image_color_palette_delta_pass: boolean;
+  scene_image_semantic_kind_unique: boolean;
+  product_image_reuse_ratio: number | null;
+  color_card_only_ratio: number | null;
   frame_sample_count: number;
   same_frame_ratio: number | null;
   static_background_ratio: number | null;
@@ -120,13 +140,17 @@ const MAX_HOOK_TITLE_FIRST_SEEN_SECONDS = 1;
 const MAX_HOOK_TITLE_VISIBLE_SECONDS_FOR_REPORTING = 1.5;
 const MIN_HOOK_TITLE_READABILITY_SCORE = 90;
 const MIN_TRANSITION_COUNT = 8;
-const MIN_VISUAL_MOTION_SCORE = 88;
+const MIN_VISUAL_MOTION_SCORE = 90;
 const MIN_FRAME_SAMPLE_COUNT = 8;
-const MAX_SAME_FRAME_RATIO = 0.35;
-const MAX_STATIC_BACKGROUND_RATIO = 0.45;
-const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 5;
-const MIN_CAPTION_POSITION_CHANGE_COUNT = 4;
-const MIN_DOMINANT_BACKGROUND_CHANGE_COUNT = 5;
+const MIN_GENERATED_SCENE_IMAGE_COUNT = 8;
+const MIN_UNIQUE_SCENE_IMAGE_HASH_COUNT = 8;
+const MAX_PRODUCT_IMAGE_REUSE_RATIO = 0.35;
+const MAX_COLOR_CARD_ONLY_RATIO = 0;
+const MAX_SAME_FRAME_RATIO = 0.25;
+const MAX_STATIC_BACKGROUND_RATIO = 0.3;
+const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 6;
+const MIN_CAPTION_POSITION_CHANGE_COUNT = 5;
+const MIN_DOMINANT_BACKGROUND_CHANGE_COUNT = 7;
 const MIN_VOICEOVER_WPM = 180;
 const MAX_VOICEOVER_WPM = 220;
 const MIN_VOICEOVER_SPEED_MULTIPLIER = 1.15;
@@ -175,6 +199,16 @@ export function evaluateShortsContentQuality(input: {
   const maxCaptionLines = normalizePositiveNumber(quality.max_caption_lines);
   const transitionCount = normalizeNonNegativeNumber(quality.transition_count) ?? 0;
   const visualMotionScore = normalizeNonNegativeNumber(quality.visual_motion_score) ?? 0;
+  const imageGenerationProvider = safeTrim(quality.image_generation_provider) || null;
+  const realSceneImageProviderConfigured = quality.real_scene_image_provider_configured === true;
+  const generatedSceneImageCount = normalizeNonNegativeNumber(quality.generated_scene_image_count) ?? 0;
+  const uniqueSceneImageHashCount = normalizeNonNegativeNumber(quality.unique_scene_image_hash_count) ?? 0;
+  const generatedSceneImagesAreNotColorCards = quality.generated_scene_images_are_not_color_cards === true;
+  const generatedSceneImagesAreVisuallyDistinct = quality.generated_scene_images_are_visually_distinct === true;
+  const sceneImageColorPaletteDeltaPass = quality.scene_image_color_palette_delta_pass === true;
+  const sceneImageSemanticKindUnique = quality.scene_image_semantic_kind_unique === true;
+  const productImageReuseRatio = normalizeRatio(quality.product_image_reuse_ratio);
+  const colorCardOnlyRatio = normalizeRatio(quality.color_card_only_ratio);
   const frameSampleCount = normalizeNonNegativeNumber(quality.frame_sample_count) ?? 0;
   const sameFrameRatio = normalizeRatio(quality.same_frame_ratio);
   const staticBackgroundRatio = normalizeRatio(quality.static_background_ratio);
@@ -276,6 +310,16 @@ export function evaluateShortsContentQuality(input: {
     transition_count: transitionCount,
     visual_motion_score: visualMotionScore,
     distinct_frame_ratio_pass: distinctFrameRatioPass,
+    image_generation_provider: imageGenerationProvider,
+    real_scene_image_provider_configured: realSceneImageProviderConfigured,
+    generated_scene_image_count: generatedSceneImageCount,
+    unique_scene_image_hash_count: uniqueSceneImageHashCount,
+    generated_scene_images_are_not_color_cards: generatedSceneImagesAreNotColorCards,
+    generated_scene_images_are_visually_distinct: generatedSceneImagesAreVisuallyDistinct,
+    scene_image_color_palette_delta_pass: sceneImageColorPaletteDeltaPass,
+    scene_image_semantic_kind_unique: sceneImageSemanticKindUnique,
+    product_image_reuse_ratio: productImageReuseRatio,
+    color_card_only_ratio: colorCardOnlyRatio,
     frame_sample_count: frameSampleCount,
     same_frame_ratio: sameFrameRatio,
     static_background_ratio: staticBackgroundRatio,
@@ -377,6 +421,35 @@ export function evaluateShortsContentQuality(input: {
     result.blocked_reasons.push("VISUAL_MOTION_TOO_LOW");
     result.blocked_reasons.push("VISUAL_VARIATION_TOO_LOW");
   }
+  if (result.image_generation_provider === "local_ffmpeg_scene_card_generator") {
+    result.blocked_reasons.push("LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH");
+  }
+  if (!result.real_scene_image_provider_configured) {
+    result.blocked_reasons.push("REAL_SCENE_IMAGE_PROVIDER_REQUIRED");
+    result.blocked_reasons.push("BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED");
+  }
+  if (result.generated_scene_image_count < MIN_GENERATED_SCENE_IMAGE_COUNT) {
+    result.blocked_reasons.push("REAL_SCENE_IMAGE_MISSING");
+  }
+  if (result.unique_scene_image_hash_count < MIN_UNIQUE_SCENE_IMAGE_HASH_COUNT) {
+    result.blocked_reasons.push("SCENE_IMAGE_HASH_DUPLICATE");
+  }
+  if (!result.generated_scene_images_are_not_color_cards ||
+    result.color_card_only_ratio === null ||
+    result.color_card_only_ratio > MAX_COLOR_CARD_ONLY_RATIO) {
+    result.blocked_reasons.push("COLOR_CARD_ONLY_SCENE_BLOCKED");
+  }
+  if (!result.generated_scene_images_are_visually_distinct ||
+    !result.scene_image_color_palette_delta_pass) {
+    result.blocked_reasons.push("SCENE_IMAGE_VISUAL_REALISM_TOO_LOW");
+  }
+  if (!result.scene_image_semantic_kind_unique) {
+    result.blocked_reasons.push("SCENE_IMAGE_SEMANTIC_DUPLICATE");
+  }
+  if (result.product_image_reuse_ratio === null ||
+    result.product_image_reuse_ratio > MAX_PRODUCT_IMAGE_REUSE_RATIO) {
+    result.blocked_reasons.push("PRODUCT_IMAGE_REUSE_TOO_HIGH");
+  }
   if (!result.true_scene_change_pass ||
     !result.scene_manifest_created ||
     !result.renderer_consumed_scene_manifest ||
@@ -395,6 +468,7 @@ export function evaluateShortsContentQuality(input: {
     result.static_background_ratio > MAX_STATIC_BACKGROUND_RATIO ||
     result.dominant_background_change_count < MIN_DOMINANT_BACKGROUND_CHANGE_COUNT) {
     result.blocked_reasons.push("BACKGROUND_STATIC_TOO_LONG");
+    result.blocked_reasons.push("BACKGROUND_VARIATION_TOO_LOW");
   }
   if (result.caption_position_change_count < MIN_CAPTION_POSITION_CHANGE_COUNT) {
     result.blocked_reasons.push("CAPTION_POSITION_STATIC_TOO_LONG");
@@ -403,7 +477,10 @@ export function evaluateShortsContentQuality(input: {
     result.frame_sample_count < MIN_FRAME_SAMPLE_COUNT ||
     result.product_image_bbox_change_count < MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT ||
     result.caption_position_change_count < MIN_CAPTION_POSITION_CHANGE_COUNT ||
-    result.dominant_background_change_count < MIN_DOMINANT_BACKGROUND_CHANGE_COUNT) {
+    result.dominant_background_change_count < MIN_DOMINANT_BACKGROUND_CHANGE_COUNT ||
+    !result.real_scene_image_provider_configured ||
+    !result.generated_scene_images_are_not_color_cards ||
+    !result.generated_scene_images_are_visually_distinct) {
     result.blocked_reasons.push("VISUAL_LAYOUT_VARIATION_TOO_LOW");
   }
   if (!result.use_case_scene_present ||
@@ -472,6 +549,18 @@ export function evaluateShortsContentQuality(input: {
     result.transition_count >= MIN_TRANSITION_COUNT,
     result.visual_motion_score >= MIN_VISUAL_MOTION_SCORE,
     result.distinct_frame_ratio_pass,
+    result.image_generation_provider !== "local_ffmpeg_scene_card_generator",
+    result.real_scene_image_provider_configured,
+    result.generated_scene_image_count >= MIN_GENERATED_SCENE_IMAGE_COUNT,
+    result.unique_scene_image_hash_count >= MIN_UNIQUE_SCENE_IMAGE_HASH_COUNT,
+    result.generated_scene_images_are_not_color_cards,
+    result.generated_scene_images_are_visually_distinct,
+    result.scene_image_color_palette_delta_pass,
+    result.scene_image_semantic_kind_unique,
+    result.product_image_reuse_ratio !== null &&
+      result.product_image_reuse_ratio <= MAX_PRODUCT_IMAGE_REUSE_RATIO,
+    result.color_card_only_ratio !== null &&
+      result.color_card_only_ratio <= MAX_COLOR_CARD_ONLY_RATIO,
     result.true_scene_change_pass,
     result.scene_manifest_created,
     result.renderer_consumed_scene_manifest,
@@ -527,6 +616,16 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   transition_count?: number;
   visual_motion_score?: number;
   distinct_frame_ratio_pass?: boolean;
+  image_generation_provider?: string | null;
+  real_scene_image_provider_configured?: boolean;
+  generated_scene_image_count?: number;
+  unique_scene_image_hash_count?: number;
+  generated_scene_images_are_not_color_cards?: boolean;
+  generated_scene_images_are_visually_distinct?: boolean;
+  scene_image_color_palette_delta_pass?: boolean;
+  scene_image_semantic_kind_unique?: boolean;
+  product_image_reuse_ratio?: number;
+  color_card_only_ratio?: number;
   frame_sample_count?: number;
   same_frame_ratio?: number;
   static_background_ratio?: number;
@@ -641,6 +740,16 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       transition_count: input.transition_count ?? null,
       visual_motion_score: input.visual_motion_score ?? null,
       distinct_frame_ratio_pass: input.distinct_frame_ratio_pass === true,
+      image_generation_provider: input.image_generation_provider ?? null,
+      real_scene_image_provider_configured: input.real_scene_image_provider_configured === true,
+      generated_scene_image_count: input.generated_scene_image_count ?? null,
+      unique_scene_image_hash_count: input.unique_scene_image_hash_count ?? null,
+      generated_scene_images_are_not_color_cards: input.generated_scene_images_are_not_color_cards === true,
+      generated_scene_images_are_visually_distinct: input.generated_scene_images_are_visually_distinct === true,
+      scene_image_color_palette_delta_pass: input.scene_image_color_palette_delta_pass === true,
+      scene_image_semantic_kind_unique: input.scene_image_semantic_kind_unique === true,
+      product_image_reuse_ratio: input.product_image_reuse_ratio ?? null,
+      color_card_only_ratio: input.color_card_only_ratio ?? null,
       frame_sample_count: input.frame_sample_count ?? null,
       same_frame_ratio: input.same_frame_ratio ?? null,
       static_background_ratio: input.static_background_ratio ?? null,
