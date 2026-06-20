@@ -39,6 +39,34 @@ const STORY_STATIC_BACKGROUND_RATIO = 0.22;
 const STORY_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 8;
 const STORY_CAPTION_POSITION_CHANGE_COUNT = 6;
 const STORY_DOMINANT_BACKGROUND_CHANGE_COUNT = 8;
+const STORY_HOOK_TEXT = "주방 조리도구, 아직도 서랍에 쌓아두세요?";
+const STORY_PROBLEM_TEXT = "국자, 뒤집개, 거품기 찾다가 요리 흐름이 끊기는 경우가 많습니다.";
+const STORY_WHY_BUY_REASON = "자취 시작, 새 주방 세팅, 조리도구 교체처럼 기본 구성을 한 번에 맞추고 싶을 때 보기 좋습니다.";
+const STORY_TARGET_CUSTOMER = "주방 서랍이 복잡한 분, 기본 조리도구가 부족한 분, 깔끔한 스테인리스 주방용품을 찾는 분";
+const STORY_PRODUCT_BENEFIT = "기본 조리도구 8종을 스탠드형 구성으로 한 번에 정리할 수 있습니다.";
+const STORY_CAUTION = "구매 전에는 실제 구성품, 스탠드 크기, 손잡이 길이, 주방 공간과 맞는지 확인하세요.";
+const STORY_CTA_TEXT = "가격과 구성은 설명란에서 확인해보세요.";
+const STORY_HOOK_TITLE = "주방 조리도구, 아직도 서랍에 쌓아두세요?";
+const STORY_CAPTIONS = [
+  STORY_HOOK_TEXT,
+  "국자 찾다가 요리 흐름 끊기죠",
+  "기본 조리도구 8종 구성",
+  "자주 쓰는 도구를 한 번에",
+  "바로 꺼내 쓰기 좋은 정리감",
+  "처음 주방 세팅할 때 보기 좋은 구성",
+  "구성품·크기·손잡이 길이 확인",
+  "가격과 구성은 설명란에서 확인"
+];
+const STORY_SCENES = [
+  { id: "hook", duration_seconds: 2.5, motion: "zoom_snap" },
+  { id: "problem", duration_seconds: 3, motion: "pan_left" },
+  { id: "product_intro", duration_seconds: 3, motion: "zoom_in" },
+  { id: "components", duration_seconds: 3, motion: "card_pop" },
+  { id: "use_case", duration_seconds: 3, motion: "slide" },
+  { id: "why_buy", duration_seconds: 3, motion: "pan_right" },
+  { id: "checklist", duration_seconds: 4.5, motion: "checklist_reveal" },
+  { id: "cta", duration_seconds: 3, motion: "zoom_snap" }
+];
 
 type ExecFileAsync = (
   file: string,
@@ -145,6 +173,16 @@ export function createOneProductLocalVideoGenerator(
       checksum_sha256: createHash("sha256").update(fileBuffer).digest("hex"),
       black_screen_detected: false,
       story_video_generated: true,
+      hook_text: STORY_HOOK_TEXT,
+      problem_text: STORY_PROBLEM_TEXT,
+      why_buy_reason: STORY_WHY_BUY_REASON,
+      target_customer: STORY_TARGET_CUSTOMER,
+      product_benefit: STORY_PRODUCT_BENEFIT,
+      caution_or_check_before_buy: STORY_CAUTION,
+      cta_text: STORY_CTA_TEXT,
+      korean_voiceover_script: STORY_VOICEOVER_SCRIPT,
+      captions: STORY_CAPTIONS,
+      scenes: STORY_SCENES,
       voiceover_audio_present: true,
       voiceover_audio_file_present: true,
       audio_duration_seconds: STORY_DURATION_SECONDS,
@@ -175,6 +213,7 @@ export function createOneProductLocalVideoGenerator(
       contact_sheet_generated: scenePipelineResult.contact_sheet_generated,
       contact_sheet_path: scenePipelineResult.contact_sheet_path,
       contact_sheet_path_present: Boolean(scenePipelineResult.contact_sheet_path),
+      hook_title: STORY_HOOK_TITLE,
       hook_title_present: true,
       hook_title_visible_in_first_1_0_seconds: true,
       hook_title_visible_in_first_1_5_seconds: true,
@@ -212,6 +251,16 @@ export function createOneProductLocalVideoGenerator(
     await writeFile(qualityMetadataPath, JSON.stringify({
       product_candidate_id: candidate.id,
       story_video_generated: result.story_video_generated,
+      hook_text: result.hook_text,
+      problem_text: result.problem_text,
+      why_buy_reason: result.why_buy_reason,
+      target_customer: result.target_customer,
+      product_benefit: result.product_benefit,
+      caution_or_check_before_buy: result.caution_or_check_before_buy,
+      cta_text: result.cta_text,
+      korean_voiceover_script: result.korean_voiceover_script,
+      captions: result.captions,
+      scenes: result.scenes,
       voiceover_audio_present: result.voiceover_audio_present,
       voiceover_audio_file_present: result.voiceover_audio_file_present,
       audio_duration_seconds: result.audio_duration_seconds,
@@ -242,6 +291,7 @@ export function createOneProductLocalVideoGenerator(
       true_scene_change_pass: result.true_scene_change_pass,
       contact_sheet_generated: result.contact_sheet_generated,
       contact_sheet_path_present: result.contact_sheet_path_present,
+      hook_title: result.hook_title,
       hook_title_present: result.hook_title_present,
       hook_title_first_seen_seconds: STORY_HOOK_TITLE_FIRST_SEEN_SECONDS,
       hook_title_visible_in_first_1_0_seconds: result.hook_title_visible_in_first_1_0_seconds,
