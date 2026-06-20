@@ -44,7 +44,11 @@ export type ShortsContentQualityBlocker =
   | "USE_CASE_SCENE_TOO_ABSTRACT"
   | "REAL_USAGE_VISUAL_MISSING"
   | "KITCHEN_CONTEXT_MISSING"
-  | "SHAPE_CARD_SCENE_BLOCKED";
+  | "SHAPE_CARD_SCENE_BLOCKED"
+  | "REAL_USAGE_IMAGE_PROVIDER_NOT_CONFIGURED"
+  | "HUMAN_OR_HAND_USAGE_SIGNAL_TOO_LOW"
+  | "UTENSIL_INTERACTION_MISSING"
+  | "ABSTRACT_SHAPE_CARD_SCENE_BLOCKED";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -94,6 +98,11 @@ export type ShortsContentQualityResult = {
   visual_motion_score: number;
   distinct_frame_ratio_pass: boolean;
   image_generation_provider: string | null;
+  provider_mode: string | null;
+  final_upload_allowed: boolean;
+  local_card_generator_used_for_final: boolean;
+  shape_card_scene_allowed: boolean;
+  abstract_scene_allowed: boolean;
   real_scene_image_provider_configured: boolean;
   generated_scene_image_count: number;
   unique_scene_image_hash_count: number;
@@ -120,6 +129,12 @@ export type ShortsContentQualityResult = {
   use_case_kitchen_context_present: boolean;
   utensil_interaction_present: boolean;
   human_use_signal_scene_count: number;
+  human_or_hand_usage_signal_scene_count: number;
+  kitchen_context_scene_count: number;
+  utensil_interaction_scene_count: number;
+  real_usage_scene_count: number;
+  abstract_shape_card_scene_count: number;
+  real_usage_scene_pass: boolean;
   real_usage_visual_present: boolean;
   shape_card_scene_detected: boolean;
   shape_card_scene_count: number;
@@ -162,6 +177,10 @@ const MAX_COLOR_CARD_ONLY_RATIO = 0;
 const MAX_ABSTRACT_SCENE_RATIO = 0.15;
 const MAX_SHAPE_CARD_SCENE_COUNT = 0;
 const MIN_HUMAN_USE_SIGNAL_SCENE_COUNT = 2;
+const MIN_KITCHEN_CONTEXT_SCENE_COUNT = 3;
+const MIN_UTENSIL_INTERACTION_SCENE_COUNT = 2;
+const MIN_REAL_USAGE_SCENE_COUNT = 5;
+const MAX_ABSTRACT_SHAPE_CARD_SCENE_COUNT = 0;
 const MAX_SAME_FRAME_RATIO = 0.25;
 const MAX_STATIC_BACKGROUND_RATIO = 0.3;
 const MIN_PRODUCT_IMAGE_BBOX_CHANGE_COUNT = 6;
@@ -216,6 +235,11 @@ export function evaluateShortsContentQuality(input: {
   const transitionCount = normalizeNonNegativeNumber(quality.transition_count) ?? 0;
   const visualMotionScore = normalizeNonNegativeNumber(quality.visual_motion_score) ?? 0;
   const imageGenerationProvider = safeTrim(quality.image_generation_provider) || null;
+  const providerMode = safeTrim(quality.provider_mode ?? quality.image_generation_provider_mode) || null;
+  const finalUploadAllowed = quality.final_upload_allowed === true;
+  const localCardGeneratorUsedForFinal = quality.local_card_generator_used_for_final === true;
+  const shapeCardSceneAllowed = quality.shape_card_scene_allowed === true;
+  const abstractSceneAllowed = quality.abstract_scene_allowed === true;
   const realSceneImageProviderConfigured = quality.real_scene_image_provider_configured === true;
   const generatedSceneImageCount = normalizeNonNegativeNumber(quality.generated_scene_image_count) ?? 0;
   const uniqueSceneImageHashCount = normalizeNonNegativeNumber(quality.unique_scene_image_hash_count) ?? 0;
@@ -263,6 +287,14 @@ export function evaluateShortsContentQuality(input: {
   const useCaseKitchenContextPresent = quality.use_case_kitchen_context_present === true;
   const utensilInteractionPresent = quality.utensil_interaction_present === true;
   const humanUseSignalSceneCount = normalizeNonNegativeNumber(quality.human_use_signal_scene_count) ?? 0;
+  const humanOrHandUsageSignalSceneCount = normalizeNonNegativeNumber(
+    quality.human_or_hand_usage_signal_scene_count ?? quality.human_use_signal_scene_count
+  ) ?? 0;
+  const kitchenContextSceneCount = normalizeNonNegativeNumber(quality.kitchen_context_scene_count) ?? 0;
+  const utensilInteractionSceneCount = normalizeNonNegativeNumber(quality.utensil_interaction_scene_count) ?? 0;
+  const realUsageSceneCount = normalizeNonNegativeNumber(quality.real_usage_scene_count) ?? 0;
+  const abstractShapeCardSceneCount = normalizeNonNegativeNumber(quality.abstract_shape_card_scene_count) ?? 0;
+  const realUsageScenePass = quality.real_usage_scene_pass === true;
   const realUsageVisualPresent = quality.real_usage_visual_present === true;
   const shapeCardSceneDetected = quality.shape_card_scene_detected === true;
   const shapeCardSceneCount = normalizeNonNegativeNumber(quality.shape_card_scene_count) ?? 0;
@@ -335,6 +367,11 @@ export function evaluateShortsContentQuality(input: {
     visual_motion_score: visualMotionScore,
     distinct_frame_ratio_pass: distinctFrameRatioPass,
     image_generation_provider: imageGenerationProvider,
+    provider_mode: providerMode,
+    final_upload_allowed: finalUploadAllowed,
+    local_card_generator_used_for_final: localCardGeneratorUsedForFinal,
+    shape_card_scene_allowed: shapeCardSceneAllowed,
+    abstract_scene_allowed: abstractSceneAllowed,
     real_scene_image_provider_configured: realSceneImageProviderConfigured,
     generated_scene_image_count: generatedSceneImageCount,
     unique_scene_image_hash_count: uniqueSceneImageHashCount,
@@ -361,6 +398,12 @@ export function evaluateShortsContentQuality(input: {
     use_case_kitchen_context_present: useCaseKitchenContextPresent,
     utensil_interaction_present: utensilInteractionPresent,
     human_use_signal_scene_count: humanUseSignalSceneCount,
+    human_or_hand_usage_signal_scene_count: humanOrHandUsageSignalSceneCount,
+    kitchen_context_scene_count: kitchenContextSceneCount,
+    utensil_interaction_scene_count: utensilInteractionSceneCount,
+    real_usage_scene_count: realUsageSceneCount,
+    abstract_shape_card_scene_count: abstractShapeCardSceneCount,
+    real_usage_scene_pass: realUsageScenePass,
     real_usage_visual_present: realUsageVisualPresent,
     shape_card_scene_detected: shapeCardSceneDetected,
     shape_card_scene_count: shapeCardSceneCount,
@@ -456,9 +499,15 @@ export function evaluateShortsContentQuality(input: {
   if (result.image_generation_provider === "local_ffmpeg_scene_card_generator") {
     result.blocked_reasons.push("LOCAL_SCENE_CARD_GENERATOR_NOT_ENOUGH");
   }
-  if (!result.real_scene_image_provider_configured) {
+  if (!result.real_scene_image_provider_configured ||
+    result.provider_mode !== "real_usage" ||
+    !result.final_upload_allowed ||
+    result.local_card_generator_used_for_final ||
+    result.shape_card_scene_allowed ||
+    result.abstract_scene_allowed) {
     result.blocked_reasons.push("REAL_SCENE_IMAGE_PROVIDER_REQUIRED");
     result.blocked_reasons.push("BLOCKED_REAL_SCENE_IMAGE_PROVIDER_NOT_CONFIGURED");
+    result.blocked_reasons.push("REAL_USAGE_IMAGE_PROVIDER_NOT_CONFIGURED");
   }
   if (result.generated_scene_image_count < MIN_GENERATED_SCENE_IMAGE_COUNT) {
     result.blocked_reasons.push("REAL_SCENE_IMAGE_MISSING");
@@ -525,22 +574,36 @@ export function evaluateShortsContentQuality(input: {
     result.blocked_reasons.push("USE_CASE_SCENE_MISSING");
   }
   if (!result.use_case_human_context_present ||
-    result.human_use_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT) {
+    result.human_use_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT ||
+    result.human_or_hand_usage_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT) {
     result.blocked_reasons.push("USE_CASE_SCENE_HAS_NO_HUMAN_CONTEXT");
+    result.blocked_reasons.push("HUMAN_OR_HAND_USAGE_SIGNAL_TOO_LOW");
   }
-  if (!result.use_case_kitchen_context_present || !result.kitchen_context_scene_present) {
+  if (!result.use_case_kitchen_context_present ||
+    !result.kitchen_context_scene_present ||
+    result.kitchen_context_scene_count < MIN_KITCHEN_CONTEXT_SCENE_COUNT) {
     result.blocked_reasons.push("KITCHEN_CONTEXT_MISSING");
   }
   if (!result.real_usage_visual_present ||
     !result.utensil_interaction_present ||
-    result.human_use_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT) {
+    result.human_use_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT ||
+    result.human_or_hand_usage_signal_scene_count < MIN_HUMAN_USE_SIGNAL_SCENE_COUNT ||
+    result.real_usage_scene_count < MIN_REAL_USAGE_SCENE_COUNT ||
+    !result.real_usage_scene_pass) {
     result.blocked_reasons.push("REAL_USAGE_VISUAL_MISSING");
+  }
+  if (!result.utensil_interaction_present ||
+    result.utensil_interaction_scene_count < MIN_UTENSIL_INTERACTION_SCENE_COUNT) {
+    result.blocked_reasons.push("UTENSIL_INTERACTION_MISSING");
   }
   if (result.abstract_scene_ratio === null || result.abstract_scene_ratio > MAX_ABSTRACT_SCENE_RATIO) {
     result.blocked_reasons.push("USE_CASE_SCENE_TOO_ABSTRACT");
   }
-  if (result.shape_card_scene_detected || result.shape_card_scene_count > MAX_SHAPE_CARD_SCENE_COUNT) {
+  if (result.shape_card_scene_detected ||
+    result.shape_card_scene_count > MAX_SHAPE_CARD_SCENE_COUNT ||
+    result.abstract_shape_card_scene_count > MAX_ABSTRACT_SHAPE_CARD_SCENE_COUNT) {
     result.blocked_reasons.push("SHAPE_CARD_SCENE_BLOCKED");
+    result.blocked_reasons.push("ABSTRACT_SHAPE_CARD_SCENE_BLOCKED");
   }
   if (result.voiceover_too_slow) {
     result.blocked_reasons.push("VOICEOVER_TOO_SLOW");
@@ -600,6 +663,11 @@ export function evaluateShortsContentQuality(input: {
     result.visual_motion_score >= MIN_VISUAL_MOTION_SCORE,
     result.distinct_frame_ratio_pass,
     result.image_generation_provider !== "local_ffmpeg_scene_card_generator",
+    result.provider_mode === "real_usage",
+    result.final_upload_allowed,
+    !result.local_card_generator_used_for_final,
+    !result.shape_card_scene_allowed,
+    !result.abstract_scene_allowed,
     result.real_scene_image_provider_configured,
     result.generated_scene_image_count >= MIN_GENERATED_SCENE_IMAGE_COUNT,
     result.unique_scene_image_hash_count >= MIN_UNIQUE_SCENE_IMAGE_HASH_COUNT,
@@ -628,6 +696,12 @@ export function evaluateShortsContentQuality(input: {
     result.use_case_kitchen_context_present,
     result.utensil_interaction_present,
     result.human_use_signal_scene_count >= MIN_HUMAN_USE_SIGNAL_SCENE_COUNT,
+    result.human_or_hand_usage_signal_scene_count >= MIN_HUMAN_USE_SIGNAL_SCENE_COUNT,
+    result.kitchen_context_scene_count >= MIN_KITCHEN_CONTEXT_SCENE_COUNT,
+    result.utensil_interaction_scene_count >= MIN_UTENSIL_INTERACTION_SCENE_COUNT,
+    result.real_usage_scene_count >= MIN_REAL_USAGE_SCENE_COUNT,
+    result.abstract_shape_card_scene_count <= MAX_ABSTRACT_SHAPE_CARD_SCENE_COUNT,
+    result.real_usage_scene_pass,
     result.real_usage_visual_present,
     !result.shape_card_scene_detected,
     result.shape_card_scene_count <= MAX_SHAPE_CARD_SCENE_COUNT,
@@ -675,6 +749,11 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   visual_motion_score?: number;
   distinct_frame_ratio_pass?: boolean;
   image_generation_provider?: string | null;
+  provider_mode?: string | null;
+  final_upload_allowed?: boolean;
+  local_card_generator_used_for_final?: boolean;
+  shape_card_scene_allowed?: boolean;
+  abstract_scene_allowed?: boolean;
   real_scene_image_provider_configured?: boolean;
   generated_scene_image_count?: number;
   unique_scene_image_hash_count?: number;
@@ -701,6 +780,12 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   use_case_kitchen_context_present?: boolean;
   utensil_interaction_present?: boolean;
   human_use_signal_scene_count?: number;
+  human_or_hand_usage_signal_scene_count?: number;
+  kitchen_context_scene_count?: number;
+  utensil_interaction_scene_count?: number;
+  real_usage_scene_count?: number;
+  abstract_shape_card_scene_count?: number;
+  real_usage_scene_pass?: boolean;
   real_usage_visual_present?: boolean;
   shape_card_scene_detected?: boolean;
   shape_card_scene_count?: number;
@@ -807,6 +892,11 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       visual_motion_score: input.visual_motion_score ?? null,
       distinct_frame_ratio_pass: input.distinct_frame_ratio_pass === true,
       image_generation_provider: input.image_generation_provider ?? null,
+      provider_mode: input.provider_mode ?? null,
+      final_upload_allowed: input.final_upload_allowed === true,
+      local_card_generator_used_for_final: input.local_card_generator_used_for_final === true,
+      shape_card_scene_allowed: input.shape_card_scene_allowed === true,
+      abstract_scene_allowed: input.abstract_scene_allowed === true,
       real_scene_image_provider_configured: input.real_scene_image_provider_configured === true,
       generated_scene_image_count: input.generated_scene_image_count ?? null,
       unique_scene_image_hash_count: input.unique_scene_image_hash_count ?? null,
@@ -833,6 +923,12 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       use_case_kitchen_context_present: input.use_case_kitchen_context_present === true,
       utensil_interaction_present: input.utensil_interaction_present === true,
       human_use_signal_scene_count: input.human_use_signal_scene_count ?? null,
+      human_or_hand_usage_signal_scene_count: input.human_or_hand_usage_signal_scene_count ?? null,
+      kitchen_context_scene_count: input.kitchen_context_scene_count ?? null,
+      utensil_interaction_scene_count: input.utensil_interaction_scene_count ?? null,
+      real_usage_scene_count: input.real_usage_scene_count ?? null,
+      abstract_shape_card_scene_count: input.abstract_shape_card_scene_count ?? null,
+      real_usage_scene_pass: input.real_usage_scene_pass === true,
       real_usage_visual_present: input.real_usage_visual_present === true,
       shape_card_scene_detected: input.shape_card_scene_detected === true,
       shape_card_scene_count: input.shape_card_scene_count ?? null,
