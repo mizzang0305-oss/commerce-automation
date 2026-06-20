@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   APPROVE_SINGLE_SERVER_ACCESSIBLE_VIDEO_ASSET_REGISTRATION,
+  APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
   RUN_REAL_PRODUCT_VIDEO_ASSET_GENERATION,
   buildOneProductVideoAssetEntryPoint,
   ONE_PRODUCT_VIDEO_ASSET_SAFE_SIDE_EFFECTS
@@ -62,6 +63,10 @@ function candidateLinkedVideoAsset(overrides: Partial<ProductAsset> & Record<str
       size_bytes: 1234567,
       checksum_sha256: "a".repeat(64),
       voiceover_audio_present: true,
+      voiceover_audio_file_present: true,
+      video_has_audio_stream: true,
+      audio_muxed_into_video: true,
+      audio_mime_type: "audio/wav",
       audio_duration_seconds: 24,
       duration_seconds: 25,
       scene_count: 6,
@@ -556,5 +561,46 @@ describe("one-product video asset entrypoint", () => {
     });
     expect(serialized).not.toContain("commerce-assets");
     expect(serialized).not.toMatch(/link\.coupang\.com|product\.jpg|access_token|refresh_token|client_secret|Authorization|Bearer/i);
+  });
+
+  it("accepts the one-shot story voiceover approval for local generation", async () => {
+    const result = await buildOneProductVideoAssetEntryPoint({
+      mode: "generate_local_only",
+      candidate_id: "candidate-real-asset-001",
+      approval: APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE,
+      candidates: [candidate()],
+      localVideoGenerator: async (item) => ({
+        candidate_id: item.id,
+        local_video_path: "C:\\Users\\LOVE\\MyProjects\\commerce-automation\\commerce-assets\\output\\video-packages\\real-product-candidate-real-asset-001\\candidate-real-asset-001_story_voiceover_v001.mp4",
+        mime_type: "video/mp4",
+        size_bytes: 8192,
+        duration_seconds: 25,
+        checksum_sha256: "d".repeat(64),
+        black_screen_detected: false,
+        story_video_generated: true,
+        voiceover_audio_present: true,
+        voiceover_audio_file_present: true,
+        audio_duration_seconds: 25,
+        audio_mime_type: "audio/wav",
+        audio_muxed_into_video: true,
+        video_has_audio_stream: true,
+        scene_count: 6,
+        caption_count: 6,
+        static_single_image_only: false,
+        product_image_present: true,
+        content_quality_score: 100,
+        generated_this_run: true,
+        local_only: true
+      })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.generated_video_asset).toMatchObject({
+      story_video_generated: true,
+      voiceover_audio_present: true,
+      video_has_audio_stream: true,
+      scene_count: 6,
+      caption_count: 6
+    });
   });
 });

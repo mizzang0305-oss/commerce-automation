@@ -4,7 +4,9 @@ import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD,
   MockYouTubeUploadAdapter,
   buildYouTubeProductVideoUploadPackage,
-  buildYouTubeUploadRequest
+  buildYouTubeUploadRequest,
+  hasExactYouTubeUploadConfirmation,
+  APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
 const DISCLOSURE =
@@ -34,6 +36,10 @@ const STORY_QUALITY = {
   cta_text: "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694.",
   korean_voiceover_script: "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c\uac00 \uc11c\ub78d\uc5d0\uc11c \uc790\uc8fc \uc5c9\ud0a8\ub2e4\uba74, 8\uc885 \uc138\ud2b8 \uad6c\uc131\uacfc \uc2a4\ud0e0\ub4dc \ud06c\uae30\ub97c \ud568\uaed8 \ud655\uc778\ud574\ubcf4\uc138\uc694.",
   voiceover_audio_present: true,
+  voiceover_audio_file_present: true,
+  video_has_audio_stream: true,
+  audio_muxed_into_video: true,
+  audio_mime_type: "audio/wav",
   audio_duration_seconds: 24.5,
   captions: [
     "\uc870\ub9ac\ub3c4\uad6c, \uc790\uc8fc \uc5c9\ud0a4\ub098\uc694?",
@@ -98,6 +104,10 @@ async function json(response: Response) {
 }
 
 describe("YouTube Shorts content quality gate", () => {
+  test("one-shot story voiceover approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_GENERATE_STORY_VOICEOVER_MP4_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
   test("static single image package is blocked before private upload", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
@@ -196,6 +206,29 @@ describe("YouTube Shorts content quality gate", () => {
       throw new Error("request builder must block missing voiceover audio");
     }
     expect(result.missing_reasons).toContain("VOICEOVER_AUDIO_REQUIRED");
+  });
+
+  test("voiceover metadata cannot pass without an audio file and video audio stream", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        voiceover_audio_present: true,
+        voiceover_audio_file_present: false,
+        video_has_audio_stream: false,
+        audio_muxed_into_video: false
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("voiceover metadata without audio file and stream must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "VOICEOVER_AUDIO_FILE_MISSING",
+      "VIDEO_AUDIO_STREAM_MISSING",
+      "VOICEOVER_AUDIO_REQUIRED"
+    ]));
   });
 
   test("execute route does not call videos.insert when content quality fails", async () => {

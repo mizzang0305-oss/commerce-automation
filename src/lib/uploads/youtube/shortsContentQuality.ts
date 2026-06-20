@@ -2,6 +2,8 @@ export type ShortsContentQualityBlocker =
   | "CONTENT_QUALITY_FAILED"
   | "STATIC_IMAGE_ONLY_VIDEO_BLOCKED"
   | "VOICEOVER_AUDIO_REQUIRED"
+  | "VOICEOVER_AUDIO_FILE_MISSING"
+  | "VIDEO_AUDIO_STREAM_MISSING"
   | "STORY_SCRIPT_REQUIRED"
   | "WHY_BUY_REASON_REQUIRED"
   | "DEV_PLACEHOLDER_DESCRIPTION_BLOCKED"
@@ -22,6 +24,10 @@ export type ShortsContentQualityResult = {
   cta_present: boolean;
   korean_voiceover_script_present: boolean;
   voiceover_audio_present: boolean;
+  voiceover_audio_file_present: boolean;
+  video_has_audio_stream: boolean;
+  audio_muxed_into_video: boolean;
+  audio_mime_type: string | null;
   explicit_audio_unavailable_blocker: boolean;
   voiceover_audio_ready: boolean;
   caption_count: number;
@@ -77,6 +83,10 @@ export function evaluateShortsContentQuality(input: {
   const staticSingleImageOnly = quality.static_single_image_only !== false;
   const explicitAudioUnavailableBlocker = quality.explicit_audio_unavailable_blocker === true;
   const voiceoverAudioPresent = quality.voiceover_audio_present === true;
+  const voiceoverAudioFilePresent = quality.voiceover_audio_file_present === true;
+  const videoHasAudioStream = quality.video_has_audio_stream === true;
+  const audioMuxedIntoVideo = quality.audio_muxed_into_video === true;
+  const audioMimeType = safeTrim(quality.audio_mime_type) || null;
   const audioVideoDurationDelta = audioDurationSeconds && durationSeconds
     ? Math.abs(audioDurationSeconds - durationSeconds)
     : null;
@@ -93,8 +103,17 @@ export function evaluateShortsContentQuality(input: {
     cta_present: Boolean(safeTrim(quality.cta_text)),
     korean_voiceover_script_present: Boolean(safeTrim(quality.korean_voiceover_script)),
     voiceover_audio_present: voiceoverAudioPresent,
+    voiceover_audio_file_present: voiceoverAudioFilePresent,
+    video_has_audio_stream: videoHasAudioStream,
+    audio_muxed_into_video: audioMuxedIntoVideo,
+    audio_mime_type: audioMimeType,
     explicit_audio_unavailable_blocker: explicitAudioUnavailableBlocker,
-    voiceover_audio_ready: voiceoverAudioPresent && !explicitAudioUnavailableBlocker,
+    voiceover_audio_ready: voiceoverAudioPresent &&
+      voiceoverAudioFilePresent &&
+      videoHasAudioStream &&
+      audioMuxedIntoVideo &&
+      isAllowedAudioMimeType(audioMimeType) &&
+      !explicitAudioUnavailableBlocker,
     caption_count: captions.filter((item) => safeTrim(item)).length,
     scene_count: scenes.filter(isMeaningfulScene).length,
     duration_seconds: durationSeconds ?? 0,
@@ -123,6 +142,12 @@ export function evaluateShortsContentQuality(input: {
   if (!result.why_buy_reason_present) {
     result.blocked_reasons.push("WHY_BUY_REASON_REQUIRED");
   }
+  if (!voiceoverAudioFilePresent) {
+    result.blocked_reasons.push("VOICEOVER_AUDIO_FILE_MISSING");
+  }
+  if (!videoHasAudioStream || !audioMuxedIntoVideo) {
+    result.blocked_reasons.push("VIDEO_AUDIO_STREAM_MISSING");
+  }
   if (!result.voiceover_audio_ready || audioVideoDurationDelta !== null && audioVideoDurationDelta > 2) {
     result.blocked_reasons.push("VOICEOVER_AUDIO_REQUIRED");
   }
@@ -150,6 +175,9 @@ export function evaluateShortsContentQuality(input: {
     storyReady,
     result.why_buy_reason_present,
     result.voiceover_audio_ready,
+    result.voiceover_audio_file_present,
+    result.video_has_audio_stream,
+    result.audio_muxed_into_video,
     result.caption_count >= MIN_CAPTION_COUNT,
     result.scene_count >= MIN_SCENE_COUNT,
     result.duration_seconds >= MIN_DURATION_SECONDS,
@@ -178,6 +206,10 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
   selected_affiliate_url: string;
   product_image_present?: boolean;
   voiceover_audio_present?: boolean;
+  voiceover_audio_file_present?: boolean;
+  video_has_audio_stream?: boolean;
+  audio_muxed_into_video?: boolean;
+  audio_mime_type?: string;
   audio_duration_seconds?: number;
 }): StoryDrivenShortsPackage {
   const productName = safeTrim(input.product_name) ||
@@ -237,6 +269,10 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       cta_text: "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694.",
       korean_voiceover_script: "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c\uac00 \uc11c\ub78d\uc5d0\uc11c \uc5c9\ud0a8\ub2e4\uba74, \uae30\ubcf8 8\uc885 \uad6c\uc131\uacfc \uc2a4\ud0e0\ub4dc \ud06c\uae30\ub97c \ud568\uaed8 \ud655\uc778\ud574\ubcf4\uc138\uc694.",
       voiceover_audio_present: input.voiceover_audio_present === true,
+      voiceover_audio_file_present: input.voiceover_audio_file_present === true,
+      video_has_audio_stream: input.video_has_audio_stream === true,
+      audio_muxed_into_video: input.audio_muxed_into_video === true,
+      audio_mime_type: input.audio_mime_type ?? "audio/wav",
       audio_duration_seconds: input.audio_duration_seconds ?? 25,
       captions,
       scenes,
@@ -246,6 +282,10 @@ export function buildBilibinStainlessCookingToolsShortsPackage(input: {
       black_screen_detected: false
     }
   };
+}
+
+function isAllowedAudioMimeType(value: string | null) {
+  return value === "audio/wav" || value === "audio/wave" || value === "audio/mpeg" || value === "audio/mp4" || value === "audio/aac";
 }
 
 export function containsDevPlaceholder(value: string) {

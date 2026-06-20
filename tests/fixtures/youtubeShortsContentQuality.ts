@@ -8,6 +8,10 @@ export const PASSING_SHORTS_CONTENT_QUALITY = {
   cta_text: "\uac00\uaca9\uacfc \uad6c\uc131\uc740 \ub9c1\ud06c\uc5d0\uc11c \ud655\uc778\ud574\ubcf4\uc138\uc694.",
   korean_voiceover_script: "\uc774 \uc0c1\ud488\uc774 \uc5b4\ub5a4 \uc0ac\uc6a9\uc790\uc5d0\uac8c \ub9de\ub294\uc9c0, \uad6c\uc131\uacfc \ud655\uc778 \ud3ec\uc778\ud2b8\ub97c \uc9e7\uac8c \uc815\ub9ac\ud569\ub2c8\ub2e4.",
   voiceover_audio_present: true,
+  voiceover_audio_file_present: true,
+  video_has_audio_stream: true,
+  audio_muxed_into_video: true,
+  audio_mime_type: "audio/wav",
   audio_duration_seconds: 24,
   captions: [
     "\ud544\uc694\ud55c \uc21c\uac04\uc5d0 \uc27d\uac8c \ucc3e\uae30",
