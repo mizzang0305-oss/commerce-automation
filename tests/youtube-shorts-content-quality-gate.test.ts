@@ -10,7 +10,8 @@ import {
   APPROVE_FIX_SHORTS_RENDERING_PACING_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_SHORTS_HOOK_VISUALS_VOICE_LINK_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
-  APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
+  APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE
 } from "@/lib/uploads/youtube";
 
 const DISCLOSURE =
@@ -63,6 +64,11 @@ const STORY_QUALITY = {
   unique_scene_image_hash_count: 8,
   generated_scene_images_are_not_color_cards: true,
   generated_scene_images_are_visually_distinct: true,
+  provider_mode: "real_usage",
+  final_upload_allowed: true,
+  local_card_generator_used_for_final: false,
+  shape_card_scene_allowed: false,
+  abstract_scene_allowed: false,
   scene_image_color_palette_delta_pass: true,
   scene_image_semantic_kind_unique: true,
   product_image_reuse_ratio: 0.28,
@@ -84,6 +90,12 @@ const STORY_QUALITY = {
   use_case_kitchen_context_present: true,
   utensil_interaction_present: true,
   human_use_signal_scene_count: 2,
+  human_or_hand_usage_signal_scene_count: 3,
+  kitchen_context_scene_count: 8,
+  utensil_interaction_scene_count: 3,
+  real_usage_scene_count: 8,
+  abstract_shape_card_scene_count: 0,
+  real_usage_scene_pass: true,
   real_usage_visual_present: true,
   shape_card_scene_detected: false,
   shape_card_scene_count: 0,
@@ -188,6 +200,10 @@ describe("YouTube Shorts content quality gate", () => {
 
   test("real scene image provider approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
+  });
+
+  test("real usage scene provider approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {
@@ -311,6 +327,51 @@ describe("YouTube Shorts content quality gate", () => {
     expect(result.readiness.content_quality_ready).toBe(false);
   });
 
+  test("real usage provider blocks missing hand, kitchen, and utensil interaction counts", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        human_or_hand_usage_signal_scene_count: 1,
+        kitchen_context_scene_count: 2,
+        utensil_interaction_scene_count: 1,
+        real_usage_scene_count: 4,
+        abstract_shape_card_scene_count: 0,
+        real_usage_scene_pass: false
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("real usage counts below threshold must be blocked");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "HUMAN_OR_HAND_USAGE_SIGNAL_TOO_LOW",
+      "UTENSIL_INTERACTION_MISSING",
+      "KITCHEN_CONTEXT_MISSING",
+      "REAL_USAGE_VISUAL_MISSING"
+    ]));
+  });
+
+  test("shape-card style real usage metadata is blocked even when legacy booleans are true", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        abstract_shape_card_scene_count: 1,
+        shape_card_scene_detected: false,
+        shape_card_scene_count: 0,
+        abstract_scene_ratio: 0
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("shape-card style scenes must be blocked");
+    }
+    expect(result.blocked_reasons).toContain("SHAPE_CARD_SCENE_BLOCKED");
+  });
+
   test("manual review placeholder description is blocked", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
@@ -390,6 +451,12 @@ describe("YouTube Shorts content quality gate", () => {
       use_case_kitchen_context_present: true,
       utensil_interaction_present: true,
       human_use_signal_scene_count: 2,
+      human_or_hand_usage_signal_scene_count: 3,
+      kitchen_context_scene_count: 8,
+      utensil_interaction_scene_count: 3,
+      real_usage_scene_count: 8,
+      abstract_shape_card_scene_count: 0,
+      real_usage_scene_pass: true,
       real_usage_visual_present: true,
       shape_card_scene_detected: false,
       shape_card_scene_count: 0,

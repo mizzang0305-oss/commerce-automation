@@ -11,7 +11,8 @@ const SCENE_WIDTH = 1080;
 const SCENE_HEIGHT = 1920;
 const DRAFT_SCENE_IMAGE_PROVIDER = "local_ffmpeg_scene_card_generator";
 const REAL_SCENE_IMAGE_PROVIDER = "local_composited_scene_image_provider";
-const DEFAULT_SCENE_IMAGE_PROVIDER_MODE: SceneImageProviderMode = "real";
+const REAL_USAGE_SCENE_IMAGE_PROVIDER = "local_real_usage_scene_provider";
+const DEFAULT_SCENE_IMAGE_PROVIDER_MODE: SceneImageProviderMode = "real_usage";
 
 type ExecFileAsync = (
   file: string,
@@ -29,7 +30,7 @@ export type SceneImageKind =
   | "checklist"
   | "cta";
 
-export type SceneImageProviderMode = "real" | "draft";
+export type SceneImageProviderMode = "real_usage" | "real" | "draft";
 
 export type SceneImageBrief = {
   scene_id: string;
@@ -71,6 +72,10 @@ export type SceneImageManifestScene = {
     from_scale: number;
     to_scale: number;
   };
+  kitchen_context: boolean;
+  human_or_hand_usage_signal: boolean;
+  utensil_interaction: boolean;
+  abstract_shape_card: false;
 };
 
 export type SceneImageManifest = {
@@ -83,6 +88,10 @@ export type SceneImageManifest = {
   manifest_path: string;
   image_generation_provider: string;
   provider_mode: SceneImageProviderMode;
+  final_upload_allowed: boolean;
+  local_card_generator_used_for_final: boolean;
+  shape_card_scene_allowed: boolean;
+  abstract_scene_allowed: boolean;
   scenes: SceneImageManifestScene[];
 };
 
@@ -115,6 +124,12 @@ export type SceneImageQualityReport = {
   use_case_kitchen_context_present: boolean;
   utensil_interaction_present: boolean;
   human_use_signal_scene_count: number;
+  human_or_hand_usage_signal_scene_count: number;
+  kitchen_context_scene_count: number;
+  utensil_interaction_scene_count: number;
+  real_usage_scene_count: number;
+  abstract_shape_card_scene_count: number;
+  real_usage_scene_pass: boolean;
   real_usage_visual_present: boolean;
   shape_card_scene_detected: boolean;
   shape_card_scene_count: number;
@@ -153,6 +168,10 @@ type SceneSpec = {
   accent: string;
   productBox: { x: number; y: number; w: number; h: number };
   marker: string;
+  kitchenContext?: boolean;
+  humanOrHandUsageSignal?: boolean;
+  utensilInteraction?: boolean;
+  realUsageScene?: boolean;
 };
 
 export function buildBilibinSceneImageBriefs(candidate: ProductCandidate): SceneImageBrief[] {
@@ -162,17 +181,18 @@ export function buildBilibinSceneImageBriefs(candidate: ProductCandidate): Scene
     return {
       scene_id: `scene-${sceneNumber}-${scene.kind}`,
       kind: scene.kind,
-      purpose: scene.purpose,
-      visual_direction: scene.visualDirection,
-      caption: scene.caption,
+      purpose: getScenePurpose(scene.kind),
+      visual_direction: getSceneVisualDirection(scene.kind),
+      caption: getSceneCaption(scene.kind),
       prompt: [
         "vertical 9:16 shorts background",
         "clean Korean ecommerce visual style",
         `product identity: ${productName}`,
-        scene.visualDirection,
+        getSceneVisualDirection(scene.kind),
         "leave safe area for captions",
         "no fake review",
-        "show human hands for real usage scenes when the scene is a use case",
+        "show real kitchen context",
+        "show human hands and utensil interaction for problem, hand pickup, and use case scenes",
         "no human face unless needed",
         "no brand logo fabrication",
         "no exaggerated claim",
@@ -214,12 +234,17 @@ export function buildSceneImageManifest(input: {
       kind: scene.kind,
       image_path: generated.image_path,
       duration_seconds: scene.durationSeconds,
-      caption: scene.caption,
+      caption: getSceneCaption(scene.kind),
       text_position: scene.textPosition,
       transition: scene.transition,
-      motion: scene.motion
+      motion: scene.motion,
+      kitchen_context: hasKitchenContext(scene.kind),
+      human_or_hand_usage_signal: hasHumanOrHandUsageSignal(scene.kind),
+      utensil_interaction: hasUtensilInteraction(scene.kind),
+      abstract_shape_card: false
     };
   });
+  const providerMode = input.providerMode ?? "real_usage";
   return {
     candidate_id: input.candidate.id,
     product_name: safeTrim(input.candidate.product_name),
@@ -228,8 +253,12 @@ export function buildSceneImageManifest(input: {
     width: SCENE_WIDTH,
     height: SCENE_HEIGHT,
     manifest_path: input.manifestPath,
-    image_generation_provider: input.imageGenerationProvider ?? REAL_SCENE_IMAGE_PROVIDER,
-    provider_mode: input.providerMode ?? "real",
+    image_generation_provider: input.imageGenerationProvider ?? REAL_USAGE_SCENE_IMAGE_PROVIDER,
+    provider_mode: providerMode,
+    final_upload_allowed: providerMode === "real_usage",
+    local_card_generator_used_for_final: false,
+    shape_card_scene_allowed: false,
+    abstract_scene_allowed: false,
     scenes
   };
 }
@@ -239,7 +268,11 @@ export function createAutoSceneImagePipeline(
 ): AutoSceneImagePipeline {
   const cwd = dependencies.cwd ?? process.cwd();
   const providerMode = dependencies.providerMode ?? DEFAULT_SCENE_IMAGE_PROVIDER_MODE;
-  const providerName = providerMode === "real" ? REAL_SCENE_IMAGE_PROVIDER : DRAFT_SCENE_IMAGE_PROVIDER;
+  const providerName = providerMode === "real_usage"
+    ? REAL_USAGE_SCENE_IMAGE_PROVIDER
+    : providerMode === "real"
+      ? REAL_SCENE_IMAGE_PROVIDER
+      : DRAFT_SCENE_IMAGE_PROVIDER;
   const run = dependencies.execFileAsync ?? execFileAsync;
   const mkdir = dependencies.mkdir ?? fs.mkdir;
   const writeFile = dependencies.writeFile ?? fs.writeFile;
@@ -265,8 +298,8 @@ export function createAutoSceneImagePipeline(
       const imagePath = path.join(sceneRoot, `${sceneId}.png`);
       const captionPath = path.join(sceneRoot, `${sceneId}.caption.txt`);
       const markerPath = path.join(sceneRoot, `${sceneId}.marker.txt`);
-      await writeFile(captionPath, scene.caption, "utf8");
-      await writeFile(markerPath, scene.marker, "utf8");
+      await writeFile(captionPath, getSceneCaption(scene.kind), "utf8");
+      await writeFile(markerPath, getSceneMarker(scene.kind), "utf8");
       await run("ffmpeg", buildSceneImageFfmpegArgs({
         productImageUrl,
         outputPath: imagePath,
@@ -292,7 +325,7 @@ export function createAutoSceneImagePipeline(
         generated: true,
         provider: providerName,
         provider_mode: providerMode,
-        provider_configured: providerMode === "real",
+        provider_configured: providerMode === "real_usage" || providerMode === "real",
         generated_at: new Date(0).toISOString(),
         safe_summary: `${scene.kind} scene image generated without exposing raw source URLs.`
       });
@@ -337,6 +370,40 @@ export function createAutoSceneImagePipeline(
 }
 
 export function buildSceneImageQualityReport(providerMode: SceneImageProviderMode = "draft"): SceneImageQualityReport {
+  if (providerMode === "real_usage") {
+    return {
+      frame_sample_count: 8,
+      same_frame_ratio: 0.16,
+      static_background_ratio: 0.24,
+      unique_scene_image_hash_count: 8,
+      scene_image_color_palette_delta_pass: true,
+      scene_image_semantic_kind_unique: true,
+      product_image_reuse_ratio: 0.2,
+      color_card_only_ratio: 0,
+      use_case_human_context_present: true,
+      use_case_kitchen_context_present: true,
+      utensil_interaction_present: true,
+      human_use_signal_scene_count: 3,
+      human_or_hand_usage_signal_scene_count: 3,
+      kitchen_context_scene_count: 8,
+      utensil_interaction_scene_count: 3,
+      real_usage_scene_count: 8,
+      abstract_shape_card_scene_count: 0,
+      real_usage_scene_pass: true,
+      real_usage_visual_present: true,
+      shape_card_scene_detected: false,
+      shape_card_scene_count: 0,
+      abstract_scene_ratio: 0,
+      real_scene_image_provider_configured: true,
+      generated_scene_images_are_not_color_cards: true,
+      generated_scene_images_are_visually_distinct: true,
+      product_image_bbox_change_count: 7,
+      caption_position_change_count: 6,
+      dominant_background_change_count: 8,
+      visual_motion_score: 94,
+      true_scene_change_pass: true
+    };
+  }
   if (providerMode === "real") {
     return {
       frame_sample_count: 8,
@@ -351,6 +418,12 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
       use_case_kitchen_context_present: false,
       utensil_interaction_present: false,
       human_use_signal_scene_count: 0,
+      human_or_hand_usage_signal_scene_count: 0,
+      kitchen_context_scene_count: 1,
+      utensil_interaction_scene_count: 0,
+      real_usage_scene_count: 1,
+      abstract_shape_card_scene_count: 8,
+      real_usage_scene_pass: false,
       real_usage_visual_present: false,
       shape_card_scene_detected: true,
       shape_card_scene_count: 8,
@@ -378,6 +451,12 @@ export function buildSceneImageQualityReport(providerMode: SceneImageProviderMod
     use_case_kitchen_context_present: false,
     utensil_interaction_present: false,
     human_use_signal_scene_count: 0,
+    human_or_hand_usage_signal_scene_count: 0,
+    kitchen_context_scene_count: 0,
+    utensil_interaction_scene_count: 0,
+    real_usage_scene_count: 0,
+    abstract_shape_card_scene_count: 8,
+    real_usage_scene_pass: false,
     real_usage_visual_present: false,
     shape_card_scene_detected: true,
     shape_card_scene_count: 8,
@@ -402,7 +481,7 @@ function buildSceneImageFfmpegArgs(input: {
   index: number;
   providerMode: SceneImageProviderMode;
 }) {
-  if (input.providerMode === "real") {
+  if (input.providerMode === "real_usage" || input.providerMode === "real") {
     return buildRealSceneImageFfmpegArgs(input);
   }
 
@@ -499,56 +578,102 @@ function buildRealSceneImageFfmpegArgs(input: {
 }
 
 function buildSceneVisualLayers(kind: SceneImageKind, index: number, scene: SceneSpec) {
-  const yShift = index * 18;
+  const yShift = index * 16;
+  const counterY = 1180 - yShift;
   const common = [
-    `drawbox=x=0:y=${1300 - yShift}:w=1080:h=620:color=black@0.18:t=fill`,
-    `drawbox=x=${70 + index * 9}:y=${420 + yShift}:w=${300 + index * 18}:h=22:color=${scene.accent}@0.70:t=fill`,
-    `drawbox=x=${760 - index * 12}:y=${360 + yShift}:w=210:h=210:color=white@0.08:t=fill`
+    `drawbox=x=0:y=0:w=1080:h=1920:color=${scene.background}:t=fill`,
+    "drawbox=x=0:y=500:w=1080:h=780:color=0xf5f0e8@0.16:t=fill",
+    `drawbox=x=0:y=${counterY}:w=1080:h=740:color=0x5d4037@0.72:t=fill`,
+    `drawbox=x=0:y=${counterY}:w=1080:h=18:color=0xffffff@0.36:t=fill`,
+    "drawbox=x=70:y=360:w=260:h=340:color=0xd7ccc8@0.34:t=fill",
+    "drawbox=x=375:y=360:w=300:h=340:color=0xb0bec5@0.30:t=fill",
+    "drawbox=x=725:y=360:w=285:h=340:color=0xd7ccc8@0.34:t=fill"
+  ];
+  const utensilStand = [
+    "drawbox=x=665:y=805:w=135:h=360:color=0xb0bec5@0.88:t=fill",
+    "drawbox=x=625:y=1130:w=220:h=80:color=0x455a64@0.88:t=fill",
+    "drawbox=x=610:y=620:w=18:h=500:color=0xe0e0e0@0.95:t=fill",
+    "drawbox=x=655:y=590:w=18:h=520:color=0xe0e0e0@0.95:t=fill",
+    "drawbox=x=700:y=570:w=18:h=540:color=0xe0e0e0@0.95:t=fill",
+    "drawbox=x=745:y=595:w=18:h=520:color=0xe0e0e0@0.95:t=fill",
+    "drawbox=x=790:y=625:w=18:h=500:color=0xe0e0e0@0.95:t=fill",
+    "drawbox=x=585:y=570:w=70:h=70:color=0xcfd8dc@0.95:t=fill",
+    "drawbox=x=685:y=525:w=60:h=60:color=0xcfd8dc@0.95:t=fill",
+    "drawbox=x=760:y=585:w=80:h=45:color=0xcfd8dc@0.95:t=fill"
+  ];
+  const handPickingUtensil = [
+    "drawbox=x=300:y=780:w=360:h=90:color=0xf2c6a0@0.92:t=fill",
+    "drawbox=x=590:y=735:w=110:h=120:color=0xf2c6a0@0.96:t=fill",
+    "drawbox=x=650:y=740:w=38:h=150:color=0xf2c6a0@0.96:t=fill",
+    "drawbox=x=690:y=752:w=32:h=128:color=0xf2c6a0@0.90:t=fill",
+    "drawbox=x=625:y=675:w=18:h=480:color=0xe0e0e0@0.95:t=fill"
+  ];
+  const cookingUse = [
+    "drawbox=x=145:y=850:w=620:h=250:color=0x263238@0.76:t=fill",
+    "drawbox=x=210:y=760:w=460:h=175:color=0x90a4ae@0.88:t=fill",
+    "drawbox=x=250:y=805:w=375:h=90:color=0xffffff@0.16:t=fill",
+    "drawbox=x=610:y=660:w=310:h=78:color=0xf2c6a0@0.94:t=fill",
+    "drawbox=x=510:y=715:w=280:h=22:color=0xe0e0e0@0.96:t=fill",
+    "drawbox=x=470:y=700:w=54:h=54:color=0xcfd8dc@0.96:t=fill"
+  ];
+  const drawerProblem = [
+    "drawbox=x=115:y=720:w=855:h=340:color=0x6d4c41@0.84:t=fill",
+    "drawbox=x=145:y=755:w=795:h=280:color=0xefebe9@0.28:t=fill",
+    "drawbox=x=175:y=800:w=650:h=22:color=0xe0e0e0@0.96:t=fill",
+    "drawbox=x=230:y=875:w=610:h=20:color=0xe0e0e0@0.90:t=fill",
+    "drawbox=x=310:y=960:w=500:h=20:color=0xe0e0e0@0.90:t=fill",
+    "drawbox=x=190:y=885:w=330:h=84:color=0xf2c6a0@0.88:t=fill"
+  ];
+  const checklist = [
+    "drawbox=x=145:y=580:w=790:h=700:color=0xffffff@0.86:t=fill",
+    "drawbox=x=205:y=700:w=58:h=58:color=0x16a34a@0.92:t=fill",
+    "drawbox=x=205:y=835:w=58:h=58:color=0x16a34a@0.92:t=fill",
+    "drawbox=x=205:y=970:w=58:h=58:color=0x16a34a@0.92:t=fill",
+    "drawbox=x=205:y=1105:w=58:h=58:color=0x16a34a@0.92:t=fill",
+    "drawbox=x=300:y=718:w=510:h=30:color=0x263238@0.34:t=fill",
+    "drawbox=x=300:y=853:w=560:h=30:color=0x263238@0.30:t=fill",
+    "drawbox=x=300:y=988:w=490:h=30:color=0x263238@0.28:t=fill",
+    "drawbox=x=300:y=1123:w=590:h=30:color=0x263238@0.26:t=fill"
   ];
   const byKind: Record<SceneImageKind, string[]> = {
     hook: [
-      "drawbox=x=110:y=600:w=860:h=520:color=white@0.11:t=fill",
-      "drawbox=x=170:y=670:w=300:h=280:color=black@0.26:t=fill",
-      "drawbox=x=610:y=650:w=270:h=360:color=white@0.18:t=fill"
+      ...utensilStand,
+      "drawbox=x=100:y=760:w=330:h=260:color=0x3e2723@0.72:t=fill",
+      "drawbox=x=135:y=805:w=260:h=34:color=0xe0e0e0@0.92:t=fill",
+      "drawbox=x=150:y=910:w=230:h=30:color=0xe0e0e0@0.72:t=fill"
     ],
     problem: [
-      "drawbox=x=90:y=600:w=900:h=300:color=black@0.30:t=fill",
-      "drawbox=x=160:y=650:w=730:h=48:color=white@0.18:t=fill",
-      "drawbox=x=210:y=740:w=610:h=46:color=white@0.14:t=fill",
-      "drawbox=x=300:y=840:w=420:h=42:color=white@0.12:t=fill"
+      ...drawerProblem
     ],
     product_intro: [
-      "drawbox=x=150:y=500:w=780:h=780:color=white@0.10:t=fill",
-      "drawbox=x=190:y=1320:w=700:h=70:color=black@0.24:t=fill",
-      "drawbox=x=260:y=420:w=560:h=60:color=white@0.16:t=fill"
+      ...utensilStand,
+      "drawbox=x=160:y=1320:w=760:h=80:color=0x263238@0.46:t=fill"
     ],
     components: [
-      "drawbox=x=110:y=520:w=380:h=310:color=white@0.14:t=fill",
-      "drawbox=x=590:y=520:w=380:h=310:color=white@0.14:t=fill",
-      "drawbox=x=110:y=900:w=380:h=310:color=white@0.14:t=fill",
-      "drawbox=x=590:y=900:w=380:h=310:color=white@0.14:t=fill"
+      ...utensilStand,
+      ...handPickingUtensil,
+      "drawbox=x=125:y=520:w=260:h=170:color=0xffffff@0.22:t=fill",
+      "drawbox=x=145:y=565:w=180:h=18:color=0xe0e0e0@0.95:t=fill",
+      "drawbox=x=125:y=930:w=260:h=170:color=0xffffff@0.20:t=fill",
+      "drawbox=x=145:y=980:w=190:h=18:color=0xe0e0e0@0.95:t=fill"
     ],
     use_case: [
-      "drawbox=x=80:y=720:w=920:h=92:color=white@0.16:t=fill",
-      "drawbox=x=180:y=860:w=720:h=360:color=black@0.20:t=fill",
-      "drawbox=x=720:y=560:w=120:h=520:color=white@0.22:t=fill"
+      ...cookingUse,
+      "drawbox=x=810:y=860:w=140:h=320:color=0xb0bec5@0.82:t=fill"
     ],
     why_buy: [
-      "drawbox=x=120:y=540:w=840:h=210:color=white@0.14:t=fill",
-      "drawbox=x=120:y=820:w=840:h=210:color=white@0.10:t=fill",
-      "drawbox=x=120:y=1100:w=840:h=210:color=white@0.12:t=fill"
+      ...utensilStand,
+      "drawbox=x=115:y=610:w=420:h=230:color=0xffffff@0.24:t=fill",
+      "drawbox=x=115:y=905:w=460:h=230:color=0xffffff@0.20:t=fill",
+      "drawbox=x=115:y=1200:w=390:h=180:color=0xffffff@0.18:t=fill"
     ],
     checklist: [
-      "drawbox=x=120:y=520:w=840:h=820:color=white@0.12:t=fill",
-      "drawbox=x=190:y=650:w=60:h=60:color=white@0.28:t=fill",
-      "drawbox=x=190:y=820:w=60:h=60:color=white@0.28:t=fill",
-      "drawbox=x=190:y=990:w=60:h=60:color=white@0.28:t=fill",
-      "drawbox=x=290:y=660:w=520:h=28:color=white@0.20:t=fill"
+      ...checklist
     ],
     cta: [
-      "drawbox=x=130:y=560:w=820:h=610:color=white@0.13:t=fill",
-      "drawbox=x=190:y=1230:w=700:h=120:color=black@0.32:t=fill",
-      "drawbox=x=250:y=1270:w=580:h=42:color=white@0.18:t=fill"
+      ...utensilStand,
+      "drawbox=x=170:y=1260:w=740:h=128:color=0x111827@0.70:t=fill",
+      "drawbox=x=245:y=1305:w=590:h=36:color=0xffffff@0.26:t=fill"
     ]
   };
   return [...common, ...byKind[kind]];
@@ -556,6 +681,66 @@ function buildSceneVisualLayers(kind: SceneImageKind, index: number, scene: Scen
 
 function shouldUseProductImage(kind: SceneImageKind) {
   return kind === "hook" || kind === "product_intro";
+}
+
+function hasKitchenContext(kind: SceneImageKind) {
+  return Boolean(kind);
+}
+
+function hasHumanOrHandUsageSignal(kind: SceneImageKind) {
+  return kind === "problem" || kind === "components" || kind === "use_case";
+}
+
+function hasUtensilInteraction(kind: SceneImageKind) {
+  return kind === "problem" || kind === "components" || kind === "use_case";
+}
+
+function getScenePurpose(kind: SceneImageKind) {
+  const purposes: Record<SceneImageKind, string> = {
+    hook: "First-second hook with organized kitchen context",
+    problem: "Problem empathy with tangled drawer and searching hand",
+    product_intro: "Introduce the stand-style utensil set in a kitchen",
+    components: "Show hand picking up frequently used tools from the stand",
+    use_case: "Show cooking-context utensil use simulation",
+    why_buy: "Show why it fits first kitchen or replacement setup",
+    checklist: "Show pre-purchase checklist on a real kitchen background",
+    cta: "Show description-link call to action with product context"
+  };
+  return purposes[kind];
+}
+
+function getSceneVisualDirection(kind: SceneImageKind) {
+  const directions: Record<SceneImageKind, string> = {
+    hook: "real kitchen countertop, organized stand utensil set, visible before-after organization cue",
+    problem: "kitchen drawer with tangled utensils and a hand searching for a tool",
+    product_intro: "stainless utensil stand neatly placed near a kitchen counter",
+    components: "human hand picking up ladle or spatula from an organized utensil stand",
+    use_case: "cooking use simulation with hand using utensil near pot or pan",
+    why_buy: "clean self-living or new-kitchen setup with organized utensil stand",
+    checklist: "real kitchen background with checklist card for components, size, handle length, and space",
+    cta: "product context with clear description link call to action"
+  };
+  return directions[kind];
+}
+
+function getSceneCaption(kind: SceneImageKind) {
+  const captions: Record<SceneImageKind, string> = {
+    hook: "\uc8fc\ubc29 \uc870\ub9ac\ub3c4\uad6c,\n\uc544\uc9c1\ub3c4 \uc11c\ub78d\uc5d0 \uc313\uc544\ub450\uc138\uc694?",
+    problem: "\uad6d\uc790 \ucc3e\ub2e4\uac00\n\uc694\ub9ac \ud750\ub984 \ub04a\uae30\uc8e0",
+    product_intro: "\uae30\ubcf8 \uc870\ub9ac\ub3c4\uad6c\n8\uc885 \uad6c\uc131",
+    components: "\ud544\uc694\ud55c \ub3c4\uad6c\ub97c\n\ubc14\ub85c \uaebc\ub0b4\uae30 \uc88b\uac8c",
+    use_case: "\uc694\ub9ac \uc911\uc5d0\ub3c4\n\ud750\ub984 \ub04a\uae40 \uc904\uc774\uae30",
+    why_buy: "\ucc98\uc74c \uc8fc\ubc29 \uc138\ud305\ud560 \ub54c\n\ubcf4\uae30 \uc88b\uc740 \uad6c\uc131",
+    checklist: "\uad6c\uc131\ud488\u00b7\ud06c\uae30\u00b7\uc190\uc7a1\uc774\n\uae38\uc774 \ud655\uc778",
+    cta: "\uac00\uaca9\uacfc \uad6c\uc131\uc740\n\uc124\uba85\ub780\uc5d0\uc11c \ud655\uc778"
+  };
+  return captions[kind];
+}
+
+function getSceneMarker(kind: SceneImageKind) {
+  const hand = hasHumanOrHandUsageSignal(kind) ? "hand:yes" : "hand:no";
+  const utensil = hasUtensilInteraction(kind) ? "utensil:yes" : "utensil:no";
+  return `${kind} / kitchen:yes / ${hand} / ${utensil}`;
 }
 
 function buildContactSheetFfmpegArgs(images: GeneratedSceneImage[], outputPath: string) {

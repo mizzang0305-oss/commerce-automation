@@ -139,6 +139,11 @@ export function createOneProductLocalVideoGenerator(
     }
     const sceneQuality = scenePipelineResult.quality_report;
     const finalSceneImageGateReady = sceneQuality.real_scene_image_provider_configured &&
+      scenePipelineResult.manifest.provider_mode === "real_usage" &&
+      scenePipelineResult.manifest.final_upload_allowed === true &&
+      scenePipelineResult.manifest.local_card_generator_used_for_final === false &&
+      scenePipelineResult.manifest.shape_card_scene_allowed === false &&
+      scenePipelineResult.manifest.abstract_scene_allowed === false &&
       sceneQuality.generated_scene_images_are_not_color_cards &&
       sceneQuality.generated_scene_images_are_visually_distinct &&
       sceneQuality.true_scene_change_pass &&
@@ -146,6 +151,12 @@ export function createOneProductLocalVideoGenerator(
       sceneQuality.use_case_kitchen_context_present &&
       sceneQuality.utensil_interaction_present &&
       sceneQuality.human_use_signal_scene_count >= 2 &&
+      sceneQuality.human_or_hand_usage_signal_scene_count >= 2 &&
+      sceneQuality.kitchen_context_scene_count >= 3 &&
+      sceneQuality.utensil_interaction_scene_count >= 2 &&
+      sceneQuality.real_usage_scene_count >= 5 &&
+      sceneQuality.abstract_shape_card_scene_count === 0 &&
+      sceneQuality.real_usage_scene_pass &&
       sceneQuality.real_usage_visual_present &&
       !sceneQuality.shape_card_scene_detected &&
       sceneQuality.shape_card_scene_count === 0 &&
@@ -207,7 +218,12 @@ export function createOneProductLocalVideoGenerator(
       manual_prompt_required: false,
       image_generation_provider: scenePipelineResult.provider,
       image_generation_provider_mode: scenePipelineResult.manifest.provider_mode,
+      provider_mode: scenePipelineResult.manifest.provider_mode,
+      final_upload_allowed: scenePipelineResult.manifest.final_upload_allowed,
       local_card_generator_final_upload_allowed: false,
+      local_card_generator_used_for_final: scenePipelineResult.manifest.local_card_generator_used_for_final,
+      shape_card_scene_allowed: scenePipelineResult.manifest.shape_card_scene_allowed,
+      abstract_scene_allowed: scenePipelineResult.manifest.abstract_scene_allowed,
       generated_scene_image_count: scenePipelineResult.generated_scene_image_count,
       generated_scene_image_paths_present: scenePipelineResult.generated_scene_image_paths_present,
       unique_scene_image_hash_count: sceneQuality.unique_scene_image_hash_count,
@@ -219,6 +235,12 @@ export function createOneProductLocalVideoGenerator(
       use_case_kitchen_context_present: sceneQuality.use_case_kitchen_context_present,
       utensil_interaction_present: sceneQuality.utensil_interaction_present,
       human_use_signal_scene_count: sceneQuality.human_use_signal_scene_count,
+      human_or_hand_usage_signal_scene_count: sceneQuality.human_or_hand_usage_signal_scene_count,
+      kitchen_context_scene_count: sceneQuality.kitchen_context_scene_count,
+      utensil_interaction_scene_count: sceneQuality.utensil_interaction_scene_count,
+      real_usage_scene_count: sceneQuality.real_usage_scene_count,
+      abstract_shape_card_scene_count: sceneQuality.abstract_shape_card_scene_count,
+      real_usage_scene_pass: sceneQuality.real_usage_scene_pass,
       real_usage_visual_present: sceneQuality.real_usage_visual_present,
       shape_card_scene_detected: sceneQuality.shape_card_scene_detected,
       shape_card_scene_count: sceneQuality.shape_card_scene_count,
@@ -307,7 +329,12 @@ export function createOneProductLocalVideoGenerator(
       manual_prompt_required: result.manual_prompt_required,
       image_generation_provider: result.image_generation_provider,
       image_generation_provider_mode: result.image_generation_provider_mode,
+      provider_mode: result.provider_mode,
+      final_upload_allowed: result.final_upload_allowed,
       local_card_generator_final_upload_allowed: result.local_card_generator_final_upload_allowed,
+      local_card_generator_used_for_final: result.local_card_generator_used_for_final,
+      shape_card_scene_allowed: result.shape_card_scene_allowed,
+      abstract_scene_allowed: result.abstract_scene_allowed,
       generated_scene_image_count: result.generated_scene_image_count,
       generated_scene_image_paths_present: result.generated_scene_image_paths_present,
       unique_scene_image_hash_count: result.unique_scene_image_hash_count,
@@ -319,6 +346,12 @@ export function createOneProductLocalVideoGenerator(
       use_case_kitchen_context_present: result.use_case_kitchen_context_present,
       utensil_interaction_present: result.utensil_interaction_present,
       human_use_signal_scene_count: result.human_use_signal_scene_count,
+      human_or_hand_usage_signal_scene_count: result.human_or_hand_usage_signal_scene_count,
+      kitchen_context_scene_count: result.kitchen_context_scene_count,
+      utensil_interaction_scene_count: result.utensil_interaction_scene_count,
+      real_usage_scene_count: result.real_usage_scene_count,
+      abstract_shape_card_scene_count: result.abstract_shape_card_scene_count,
+      real_usage_scene_pass: result.real_usage_scene_pass,
       real_usage_visual_present: result.real_usage_visual_present,
       shape_card_scene_detected: result.shape_card_scene_detected,
       shape_card_scene_count: result.shape_card_scene_count,

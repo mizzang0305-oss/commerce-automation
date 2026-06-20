@@ -22,3 +22,4 @@ export * from "@/lib/uploads/youtube/shortsRenderingPacingApproval";
 export * from "@/lib/uploads/youtube/shortsHookVisualsVoiceApproval";
 export * from "@/lib/uploads/youtube/autoSceneImagePipelineApproval";
 export * from "@/lib/uploads/youtube/realSceneImageProviderApproval";
+export * from "@/lib/uploads/youtube/realUsageSceneProviderApproval";
