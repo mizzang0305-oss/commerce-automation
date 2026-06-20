@@ -91,7 +91,7 @@ export function createOneProductLocalVideoGenerator(
       productName: candidate.product_name,
       captionFiles
     }), {
-      timeout: 120000,
+      timeout: 240000,
       windowsHide: true,
       maxBuffer: 1024 * 1024 * 8
     });
