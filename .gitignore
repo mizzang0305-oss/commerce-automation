@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+!.env.local.comfyui.example
+.env.local.comfyui
+config/comfyui/*.local.json
 node_modules
 .next
 out
@@ -14,5 +17,7 @@ python-worker/temp/**
 !python-worker/temp/.gitkeep
 python-worker/logs/**
 !python-worker/logs/.gitkeep
+commerce-assets/generated-motion/
+commerce-assets/review/
 *.log
 npm-debug.log*

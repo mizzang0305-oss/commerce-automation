@@ -106,6 +106,14 @@ python -m compileall python-worker
 - Provider disabled or not configured states must not call the ComfyUI client, YouTube execute route, `videos.insert`, R2 writes, DB writes, migrations, deploys, or public/unlisted uploads.
 - ComfyUI, Wan, LTX, CogVideo, and Hunyuan installation or model downloads are out of scope for this PR.
 - Real motion clip generation, GPU execution, and mp4/mov/webm artifact creation are out of scope for this PR.
+- Local setup kit checks run through `npm run comfyui:doctor`, `npm run comfyui:config-check`, and `npm run comfyui:smoke:dry-run`.
+- Setup doctor and config check outputs must expose booleans, basenames, and blocker codes only; they must not expose `.env.local` contents, raw ComfyUI base URL values, full local workflow paths, tokens, secrets, Authorization headers, raw affiliate URLs, raw image URLs, or raw asset URLs.
+- The local smoke dry-run must create exactly the scene briefs `scene-04-hand-pickup`, `scene-05-cooking-use`, and `scene-06-product-rotate` without server calls or media generation.
+- The local smoke dry-run output must keep `server_called=false`, `workflow_submit_attempted=false`, `motion_clip_generation=false`, `youtube_execute=false`, `videos_insert=false`, `r2_upload_write=false`, and `db_write=false`.
+- No YouTube Execute, No videos.insert, No R2 upload/write, and No DB write remain required for all setup-kit and dry-run checks.
+- `.env.local.comfyui.example` is a committed dummy example only. `.env.local`, `.env.local.comfyui`, `config/comfyui/*.local.json`, `commerce-assets/generated-motion/`, and `commerce-assets/review/` must not be committed.
+- `config/comfyui/wan-i2v.workflow.local.example.json` remains a placeholder example only. A real local smoke requires a user-exported workflow JSON in an ignored local file.
+- Local smoke success criteria include `smoke_only=true`, `final_upload_allowed=false`, `clip_count >= 1`, readable `ffprobe` output, frame difference detected, and human review before any future upload-package decision.
 - Run `npm run test -- tests/comfyui-wan-i2v-provider.test.ts` before broader upload and full-suite validation.
 
 ## Operator Command Palette QA
