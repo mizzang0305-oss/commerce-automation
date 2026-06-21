@@ -79,6 +79,35 @@ python -m compileall python-worker
 - Public and unlisted visibility remain blocked.
 - Generated `commerce-assets/**` files are never committed.
 
+## Motion-First ComfyUI Wan I2V QA
+
+- `COMFYUI_WAN_I2V_ENABLED=false` remains the default in `.env.example`.
+- Default readiness returns `COMFYUI_WAN_I2V_PROVIDER_DISABLED`.
+- Enabled readiness without `COMFYUI_BASE_URL` returns `COMFYUI_BASE_URL_MISSING`.
+- Enabled readiness without `COMFYUI_WAN_I2V_WORKFLOW_PATH` returns `COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING`.
+- Missing workflow files return `COMFYUI_WAN_I2V_WORKFLOW_NOT_FOUND`.
+- Invalid workflow JSON or missing required workflow placeholders returns `COMFYUI_WAN_I2V_WORKFLOW_INVALID_JSON`.
+- Configured readiness summaries expose booleans, timeout values, and basenames only; they must not expose the raw ComfyUI URL, full local paths, Authorization headers, token values, client secrets, raw affiliate URLs, image URLs, or asset URLs.
+- `config/comfyui/wan-i2v.workflow.example.json` remains a placeholder template only, with no model paths, absolute local paths, or secrets.
+- Scene mapping defaults to 1080x1920 vertical output.
+- `hand_pickup` scenes require hand interaction, utensil interaction, and kitchen context signals.
+- `cooking_use` scenes require hand interaction, utensil interaction, and kitchen context signals.
+- `product_rotate` scenes require product rotate and kitchen context signals.
+- Prompt mapping requires photorealistic vertical 9:16 kitchen usage context and negative prompts against cartoon/vector/abstract/fake-review/distorted-hand output.
+- Router priority remains `comfyui_wan_i2v`, `ltx_video`, `animated_still`, `slideshow`.
+- Router selects ComfyUI when configured and falls back to LTX when ComfyUI is disabled.
+- Configured ComfyUI generation still returns `COMFYUI_WAN_I2V_LIVE_EXECUTION_NOT_APPROVED` unless a separately approved local smoke path is provided.
+- Tests use mocked `ComfyUIClient` instances only.
+- Mocked ComfyUI clips must have `providerMode=image_to_video_generated`, `realMotion=true`, positive duration, `mimeType` starting with `video/`, and a safe clip reference or local path.
+- Motion quality gate accepts only valid mocked motion clips with enough real motion, hand interaction, utensil interaction, product rotate, and public-upload-blocked evidence.
+- Motion quality gate blocks missing hand interaction.
+- Motion quality gate blocks missing product rotate.
+- Motion quality gate keeps public and unlisted uploads blocked.
+- Provider disabled or not configured states must not call the ComfyUI client, YouTube execute route, `videos.insert`, R2 writes, DB writes, migrations, deploys, or public/unlisted uploads.
+- ComfyUI, Wan, LTX, CogVideo, and Hunyuan installation or model downloads are out of scope for this PR.
+- Real motion clip generation, GPU execution, and mp4/mov/webm artifact creation are out of scope for this PR.
+- Run `npm run test -- tests/comfyui-wan-i2v-provider.test.ts` before broader upload and full-suite validation.
+
 ## Operator Command Palette QA
 
 - `Ctrl+K` and `Cmd+K` open the command palette.
