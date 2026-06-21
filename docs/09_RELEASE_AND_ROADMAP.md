@@ -328,7 +328,7 @@ Not included:
 
 The media planning layer keeps the system plan-only and copy-only while preparing better source material for future approval-gated image generation and video rendering work.
 
-Motion-first shorts research adds a separate roadmap for open-source motion/video providers. See `docs/MOTION_FIRST_SHORTS_ARCHITECTURE.md`, `docs/COMFYUI_WAN_I2V_PROVIDER.md`, `docs/research/OPEN_SOURCE_MOTION_PROVIDER_EVALUATION.md`, `docs/research/COMMERCE_VIDEO_PROVIDER_ROADMAP.md`, `docs/research/SHOPPING_SOURCE_ADAPTER_RESEARCH.md`, and `docs/research/REVIEW_MEMORY_AND_PROMPT_FEEDBACK_RESEARCH.md`. The ComfyUI Wan I2V adapter is now scaffolded behind disabled env readiness and a live-execution approval gate. The default expected blocker is `COMFYUI_WAN_I2V_PROVIDER_DISABLED`; configured local readiness without future smoke approval blocks at `COMFYUI_WAN_I2V_LIVE_EXECUTION_NOT_APPROVED`.
+Motion-first shorts research adds a separate roadmap for open-source motion/video providers. See `docs/MOTION_FIRST_SHORTS_ARCHITECTURE.md`, `docs/COMFYUI_WAN_I2V_PROVIDER.md`, `docs/COMFYUI_WAN_LOCAL_SETUP_RUNBOOK.md`, `docs/COMFYUI_WAN_LOCAL_SMOKE_RUNBOOK.md`, `docs/research/OPEN_SOURCE_MOTION_PROVIDER_EVALUATION.md`, `docs/research/COMMERCE_VIDEO_PROVIDER_ROADMAP.md`, `docs/research/SHOPPING_SOURCE_ADAPTER_RESEARCH.md`, and `docs/research/REVIEW_MEMORY_AND_PROMPT_FEEDBACK_RESEARCH.md`. The ComfyUI Wan I2V adapter is scaffolded behind disabled env readiness and a live-execution approval gate. The local setup kit adds safe doctor/config-check/dry-run commands so an operator can prepare their own local ComfyUI/Wan workflow without repository-managed install, model download, GPU execution, workflow submit, or generated media artifacts. The default expected blocker is `COMFYUI_WAN_I2V_PROVIDER_DISABLED`; configured local readiness without future smoke approval blocks at `COMFYUI_WAN_I2V_LIVE_EXECUTION_NOT_APPROVED`.
 
 Included:
 
@@ -352,10 +352,22 @@ Not included:
 
 Next motion-first milestones:
 
-1. Review and merge the disabled ComfyUI Wan I2V adapter PR.
-2. Prepare a separate local-only ComfyUI smoke prompt using `APPROVE_COMFYUI_WAN_I2V_LOCAL_SMOKE_ONLY`.
-3. In that future smoke, verify local ComfyUI readiness without YouTube, R2, DB writes, migrations, public upload, unlisted upload, production deploy, or committed media artifacts.
-4. Only after local smoke evidence is reviewed, decide whether to connect generated motion clips to a private-upload package gate.
+1. Review and merge the local ComfyUI Wan setup kit PR.
+2. User manually configures local ComfyUI, Wan model files, `.env.local`, and a user-exported workflow JSON outside Git.
+3. Rerun `npm run comfyui:doctor` and `npm run comfyui:config-check` until `provider_configured=true`.
+4. Prepare a separate local-only ComfyUI smoke prompt using `APPROVE_COMFYUI_WAN_I2V_LOCAL_SMOKE_ONLY`.
+5. In that future smoke, verify local ComfyUI readiness without YouTube, R2, DB writes, migrations, public upload, unlisted upload, production deploy, or committed media artifacts.
+6. Only after local smoke evidence is reviewed by a human, decide whether to connect generated motion clips to a private-upload package gate.
+
+Setup kit safety:
+
+- No YouTube Execute.
+- No videos.insert.
+- No R2 upload/write.
+- No DB write.
+- No migration.
+- No production deploy.
+- No public or unlisted upload.
 
 Priority rule:
 
