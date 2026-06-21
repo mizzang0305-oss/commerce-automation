@@ -328,6 +328,8 @@ Not included:
 
 The media planning layer keeps the system plan-only and copy-only while preparing better source material for future approval-gated image generation and video rendering work.
 
+Motion-first shorts research adds a separate roadmap for open-source motion/video providers. See `docs/MOTION_FIRST_SHORTS_ARCHITECTURE.md`, `docs/research/OPEN_SOURCE_MOTION_PROVIDER_EVALUATION.md`, `docs/research/COMMERCE_VIDEO_PROVIDER_ROADMAP.md`, `docs/research/SHOPPING_SOURCE_ADAPTER_RESEARCH.md`, and `docs/research/REVIEW_MEMORY_AND_PROMPT_FEEDBACK_RESEARCH.md`. The next implementation target is a separately approved ComfyUI Wan I2V adapter; until then the expected blocker remains `MOTION_PROVIDER_NOT_CONFIGURED`.
+
 Included:
 
 - Candidate-based image asset plan for `main_product`, `benefit_scene`, `hook_thumbnail`, and `comparison_card`.
