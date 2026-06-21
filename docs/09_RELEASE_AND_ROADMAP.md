@@ -328,7 +328,7 @@ Not included:
 
 The media planning layer keeps the system plan-only and copy-only while preparing better source material for future approval-gated image generation and video rendering work.
 
-Motion-first shorts research adds a separate roadmap for open-source motion/video providers. See `docs/MOTION_FIRST_SHORTS_ARCHITECTURE.md`, `docs/research/OPEN_SOURCE_MOTION_PROVIDER_EVALUATION.md`, `docs/research/COMMERCE_VIDEO_PROVIDER_ROADMAP.md`, `docs/research/SHOPPING_SOURCE_ADAPTER_RESEARCH.md`, and `docs/research/REVIEW_MEMORY_AND_PROMPT_FEEDBACK_RESEARCH.md`. The next implementation target is a separately approved ComfyUI Wan I2V adapter; until then the expected blocker remains `MOTION_PROVIDER_NOT_CONFIGURED`.
+Motion-first shorts research adds a separate roadmap for open-source motion/video providers. See `docs/MOTION_FIRST_SHORTS_ARCHITECTURE.md`, `docs/COMFYUI_WAN_I2V_PROVIDER.md`, `docs/research/OPEN_SOURCE_MOTION_PROVIDER_EVALUATION.md`, `docs/research/COMMERCE_VIDEO_PROVIDER_ROADMAP.md`, `docs/research/SHOPPING_SOURCE_ADAPTER_RESEARCH.md`, and `docs/research/REVIEW_MEMORY_AND_PROMPT_FEEDBACK_RESEARCH.md`. The ComfyUI Wan I2V adapter is now scaffolded behind disabled env readiness and a live-execution approval gate. The default expected blocker is `COMFYUI_WAN_I2V_PROVIDER_DISABLED`; configured local readiness without future smoke approval blocks at `COMFYUI_WAN_I2V_LIVE_EXECUTION_NOT_APPROVED`.
 
 Included:
 
@@ -342,9 +342,20 @@ Not included:
 
 - Image generation API calls.
 - Image-to-video API calls.
+- ComfyUI workflow execution.
+- ComfyUI, Wan, LTX, CogVideo, or Hunyuan installation or model downloads.
+- GPU execution.
+- Real mp4/mov/webm motion clip generation.
 - FFmpeg/MoviePy execution from the planning layer.
 - Google Drive API/OAuth.
 - DB writes, local file writes, queue creation, worker job creation, upload packages, uploads, production deploys, or production smoke.
+
+Next motion-first milestones:
+
+1. Review and merge the disabled ComfyUI Wan I2V adapter PR.
+2. Prepare a separate local-only ComfyUI smoke prompt using `APPROVE_COMFYUI_WAN_I2V_LOCAL_SMOKE_ONLY`.
+3. In that future smoke, verify local ComfyUI readiness without YouTube, R2, DB writes, migrations, public upload, unlisted upload, production deploy, or committed media artifacts.
+4. Only after local smoke evidence is reviewed, decide whether to connect generated motion clips to a private-upload package gate.
 
 Priority rule:
 

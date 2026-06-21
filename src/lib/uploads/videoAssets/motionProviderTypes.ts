@@ -10,8 +10,27 @@ export type MotionProviderName =
   | "animated_still"
   | "slideshow";
 
+export type MotionSceneKind =
+  | "hook"
+  | "problem"
+  | "product_intro"
+  | "hand_pickup"
+  | "cooking_use"
+  | "product_rotate"
+  | "checklist"
+  | "cta"
+  | (string & {});
+
 export type MotionQualityBlocker =
   | "MOTION_PROVIDER_NOT_CONFIGURED"
+  | "COMFYUI_WAN_I2V_PROVIDER_DISABLED"
+  | "COMFYUI_BASE_URL_MISSING"
+  | "COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING"
+  | "COMFYUI_WAN_I2V_WORKFLOW_NOT_FOUND"
+  | "COMFYUI_WAN_I2V_WORKFLOW_INVALID_JSON"
+  | "COMFYUI_WAN_I2V_PROVIDER_NOT_CONFIGURED"
+  | "COMFYUI_WAN_I2V_LIVE_EXECUTION_NOT_APPROVED"
+  | "COMFYUI_WAN_I2V_OUTPUT_INVALID"
   | "REAL_MOTION_CLIP_REQUIRED"
   | "MOTION_SCENE_COUNT_TOO_LOW"
   | "HAND_INTERACTION_SCENE_MISSING"
@@ -24,14 +43,25 @@ export type MotionQualityBlocker =
 
 export type MotionSceneBrief = {
   sceneId: string;
+  kind?: MotionSceneKind;
+  productName?: string;
+  caption?: string;
   prompt: string;
   negativePrompt: string;
   durationSeconds: number;
   productSafeRef: string;
+  sourceImageSafeRef?: string;
+  sourceImageLocalPath?: string;
+  outputPrefix?: string;
+  seed?: number;
+  width?: number;
+  height?: number;
+  requiredSignals?: string[];
   requiredMotion: string;
   handInteraction: boolean;
   utensilInteraction: boolean;
   productRotateScene: boolean;
+  kitchenContext?: boolean;
 };
 
 export type MotionClipResult = {
@@ -39,11 +69,15 @@ export type MotionClipResult = {
   providerName: MotionProviderName;
   providerMode: MotionProviderMode;
   safeClipRef: string;
+  localPath?: string;
+  outputBasename?: string;
+  mimeType?: string;
   durationSeconds: number;
   realMotion: boolean;
   handInteraction: boolean;
   utensilInteraction: boolean;
   productRotateScene: boolean;
+  kitchenContext?: boolean;
   staticFrameRatio: number;
   slideshowLikeRatio: number;
   imageSwapOnly: boolean;

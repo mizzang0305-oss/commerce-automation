@@ -1,0 +1,43 @@
+{
+  "metadata": {
+    "name": "wan-i2v-placeholder-commerce-shorts",
+    "purpose": "Placeholder workflow template for the disabled ComfyUI Wan I2V adapter.",
+    "live_execution": false,
+    "notes": "Replace node classes and model selections only in a separately approved local smoke branch."
+  },
+  "nodes": {
+    "positive_prompt": {
+      "class_type": "WanI2VPositivePromptPlaceholder",
+      "inputs": {
+        "text": "{{PROMPT}}"
+      }
+    },
+    "negative_prompt": {
+      "class_type": "WanI2VNegativePromptPlaceholder",
+      "inputs": {
+        "text": "{{NEGATIVE_PROMPT}}"
+      }
+    },
+    "source_image": {
+      "class_type": "WanI2VSourceImagePlaceholder",
+      "inputs": {
+        "path": "{{SOURCE_IMAGE_PATH}}"
+      }
+    },
+    "motion_settings": {
+      "class_type": "WanI2VMotionSettingsPlaceholder",
+      "inputs": {
+        "seed": "{{SEED}}",
+        "duration_seconds": "{{DURATION_SECONDS}}",
+        "width": "{{WIDTH}}",
+        "height": "{{HEIGHT}}"
+      }
+    },
+    "video_output": {
+      "class_type": "WanI2VVideoOutputPlaceholder",
+      "inputs": {
+        "filename_prefix": "{{OUTPUT_PREFIX}}"
+      }
+    }
+  }
+}
