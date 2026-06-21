@@ -20,12 +20,13 @@ Until those are present, the expected blocker is:
 CLOUD_VIDEO_PROVIDER_NOT_CONFIGURED
 ```
 
-Recommended first adapter after budget approval: `fal` with a Kling image-to-video
-model. Rationale: fal exposes multiple video models, has documented server-side
-API key handling, and publishes output-based video pricing. The first fallback
-adapter should be `replicate` for its broad model catalog and mature prediction
-API shape. Runway or Luma can be evaluated as higher-quality/direct-vendor
-options if budget and commercial terms are accepted.
+Recommended first adapter after budget approval: `fal_kling_i2v`, using fal as
+the API route for a Kling image-to-video model. The current adapter PR adds
+readiness, request mapping, and mock tests only; it does not call the paid API.
+The first fallback adapter should be `replicate` for its broad model catalog and
+mature prediction API shape. Runway or Luma can be evaluated as
+higher-quality/direct-vendor options if budget and commercial terms are
+accepted.
 
 ## Candidate Matrix
 
@@ -54,6 +55,7 @@ The scaffold must keep these states explicit:
 ## Router Priority
 
 ```text
+fal_kling_i2v
 cloud_image_to_video
 comfyui_wan_i2v
 animated_still
@@ -69,6 +71,8 @@ scene, and public/unlisted upload blocking.
 - Do not add vendor SDKs until a provider is chosen.
 - Do not add paid API keys to `.env.example` beyond placeholder names without a
   separate env review.
+- Keep `fal_kling_i2v` disabled by default and block paid execution until a
+  separate `APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY` prompt is supplied.
 - Use server-side requests only for any future live adapter.
 - Keep raw image/affiliate/asset URLs out of logs and reports.
 - Persist generated media only under ignored `commerce-assets/` paths after a

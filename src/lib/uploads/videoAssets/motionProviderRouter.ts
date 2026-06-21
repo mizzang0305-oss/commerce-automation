@@ -1,6 +1,7 @@
 import { buildMotionManifest } from "./motionManifest";
 import { evaluateMotionQualityGate, type MotionQualityGateReport } from "./motionQualityGate";
 import { createCloudImageToVideoProvider } from "./providers/cloudImageToVideoProvider";
+import { createFalKlingI2VProvider } from "./providers/falKlingI2VProvider";
 import { createAnimatedStillProvider } from "./providers/animatedStillProvider";
 import { createComfyUiWanI2VProvider } from "./providers/comfyuiWanI2VProvider";
 import { createSlideshowProvider } from "./providers/slideshowProvider";
@@ -14,6 +15,7 @@ import type {
 } from "./motionProviderTypes";
 
 export const MOTION_PROVIDER_PRIORITY = [
+  "fal_kling_i2v",
   "cloud_image_to_video",
   "comfyui_wan_i2v",
   "animated_still",
@@ -138,6 +140,7 @@ async function generateWithSelectedProvider(
 
 function defaultMotionProviders(): MotionProvider[] {
   return [
+    createFalKlingI2VProvider(),
     createCloudImageToVideoProvider(),
     createComfyUiWanI2VProvider(),
     createAnimatedStillProvider(),

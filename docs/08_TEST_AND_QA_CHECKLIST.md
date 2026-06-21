@@ -383,6 +383,27 @@ python -m compileall python-worker
 - Channel upload package creation returns `manual_ready`, `upload_enabled=false`, and `manual_upload_only=true`.
 - YouTube/TikTok/Threads upload APIs remain absent and public upload stays disabled.
 
+## fal Kling I2V Adapter QA
+
+- `fal_kling_i2v` defaults to `enabled=false`, `configured=false`, and
+  `FAL_KLING_I2V_PROVIDER_DISABLED`.
+- Enabling the provider still requires `FAL_API_KEY`,
+  `FAL_KLING_I2V_MODEL_ID`, and `FAL_KLING_I2V_COST_APPROVED=true`.
+- Missing API key, model id, or cost approval must return explicit blockers and
+  must not call a client.
+- Non-mock live execution must block at
+  `FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED` unless a future paid smoke prompt
+  handles separate approval.
+- Unit tests must use `createMockFalKlingI2VClient`; no network call, vendor SDK,
+  paid API call, or raw provider response is allowed.
+- Scene mapping must use safe image references only and must not log raw source
+  image URLs.
+- Mock results must satisfy the motion clip contract before quality-gate tests:
+  `providerMode=image_to_video_generated`, `realMotion=true`,
+  `durationSeconds > 0`, `mimeType=video/*`, and a safe clip reference.
+- Public/unlisted upload remains blocked unless a later upload approval changes
+  the upload gate.
+
 ## Production Deployment QA
 
 - Current production path is Coupang candidate import, candidate review, content draft, next-batch, Python Worker render, R2/S3 artifact upload, and manual channel upload package.
