@@ -398,6 +398,18 @@ python -m compileall python-worker
   paid API call, or raw provider response is allowed.
 - Scene mapping must use safe image references only and must not log raw source
   image URLs.
+- Paid-smoke payload audit must pass before any future submit. It checks prompt
+  presence, masked `image_url` presence, duration enum, `duration=5` for the
+  one-scene smoke, aspect ratio enum, `aspect_ratio=9:16`, negative prompt
+  presence, valid optional `cfg_scale`, safe source image reference, external
+  image accessibility known, model id presence, API key presence boolean, cost
+  approval, `scene-06-product-rotate`, and `scene_count=1`.
+- The recorded first paid smoke blocker is `FAL_SUBMIT_HTTP_502`. It occurred
+  before `request_id`, so polling, result fetch, retry loop, second submit, and
+  clip generation must remain false.
+- A 502/no-request-id retry requires a manual fal dashboard billing/credit check
+  plus fresh retry approval
+  `APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502`.
 - Mock results must satisfy the motion clip contract before quality-gate tests:
   `providerMode=image_to_video_generated`, `realMotion=true`,
   `durationSeconds > 0`, `mimeType=video/*`, and a safe clip reference.

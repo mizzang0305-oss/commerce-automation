@@ -8,6 +8,36 @@ This PR does not call fal, Kling, Replicate, Luma, Runway, Pika, YouTube, R2,
 or any production database. It does not generate, download, upload, or commit
 mp4/mov/webm artifacts.
 
+## 2026-06-21 Paid Smoke Failure Record
+
+The first approved one-scene paid smoke attempted exactly one submit for:
+
+```text
+scene_id=scene-06-product-rotate
+scene_kind=product_rotate
+duration_seconds=5
+aspect_ratio=9:16
+provider=fal_kling_i2v
+```
+
+Sanitized result:
+
+```text
+blocker=FAL_SUBMIT_HTTP_502
+submit_success=false
+request_id_present=false
+polling_attempted=false
+result_fetch_attempted=false
+retry_loop_attempted=false
+second_submit_attempted=false
+generated_clip_count=0
+```
+
+No clip, manifest, R2 upload, DB write, YouTube Execute, `videos.insert`,
+public upload, or unlisted upload occurred. Because no request id was returned,
+the only valid state is blocked. Do not poll, fetch results, or retry from that
+state.
+
 ## Provider State
 
 Provider name:
@@ -58,6 +88,15 @@ APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY
 
 That phrase is documentation only in this PR. It is not consumed here.
 
+Future retry after the recorded 502 requires a fresh approval phrase:
+
+```text
+APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502
+```
+
+That retry phrase is documentation only in this PR. It does not trigger a
+network call here.
+
 ## Safe Summary Rules
 
 Readiness and provider summaries expose only booleans and non-sensitive
@@ -91,6 +130,41 @@ basenames. They must not include:
 The adapter uses safe image references only. Source image upload/download is not
 implemented in this PR.
 
+## No-Cost Payload Audit
+
+Before any future paid submit, run the no-cost payload audit. It validates only
+shape and booleans:
+
+- `prompt` is present
+- `image_url` is present, but never echoed
+- `duration` is one of `5` or `10`
+- paid smoke duration is exactly `5`
+- `aspect_ratio` is one of `16:9`, `9:16`, or `1:1`
+- paid smoke aspect ratio is exactly `9:16`
+- `negative_prompt` is present
+- `cfg_scale` is a valid number when supplied
+- `sourceImageSafeRef` is present
+- external image accessibility has been checked by the operator
+- model id presence is true
+- API key presence is true
+- cost approval is true
+- scene id is `scene-06-product-rotate`
+- scene count is one
+
+Audit output must mask raw image URLs, raw source image URLs, raw model ids, API
+keys, Authorization headers, full request bodies, and full provider responses.
+
+The fal Kling I2V schema checked for this adapter is:
+
+```text
+prompt: required string
+image_url: required string
+duration: "5" or "10"
+aspect_ratio: "16:9" or "9:16" or "1:1"
+negative_prompt: optional/recommended string
+cfg_scale: optional number
+```
+
 Scene prompts are optimized for:
 
 - photorealistic vertical 9:16 commerce shorts
@@ -113,6 +187,37 @@ interface FalKlingI2VClient {
 
 This PR includes only a mock client for tests. A live client must be added in a
 separate PR after API budget and paid-smoke approval.
+
+## Submit Failure Guard
+
+When submit returns HTTP 5xx without a request id, the guard must produce a
+sanitized blocker and stop:
+
+```text
+if submit_http_status >= 500 and request_id missing:
+  blocker = FAL_SUBMIT_HTTP_<status>
+  polling_attempted = false
+  result_fetch_attempted = false
+  retry_loop_attempted = false
+  generated_clip_count = 0
+  safe_to_retry = false
+  requires_fresh_approval = true
+```
+
+For the observed case, the blocker is:
+
+```text
+FAL_SUBMIT_HTTP_502
+```
+
+The next paid retry is not allowed until all of these are true:
+
+- payload audit passed
+- provider configured
+- cost approved
+- fresh paid retry approval present
+- previous submit had no request id
+- manual fal dashboard billing/credit check completed
 
 ## Router Priority
 

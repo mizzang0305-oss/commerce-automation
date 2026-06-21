@@ -9,10 +9,15 @@ import {
 } from "@/lib/uploads/videoAssets/motionProviderRouter";
 import { evaluateMotionQualityGate } from "@/lib/uploads/videoAssets/motionQualityGate";
 import {
+  auditFalKlingI2VPaidSmokeRequest,
+  buildFalKlingPayloadAudit,
   createFalKlingI2VProvider,
   createMockFalKlingI2VClient,
+  evaluateFalKlingPaidRetryGate,
+  guardFalKlingSubmitFailure,
   mapMotionSceneBriefToFalKlingI2VRequest,
-  resolveFalKlingI2VReadiness
+  resolveFalKlingI2VReadiness,
+  validateFalKlingI2VRequestShape
 } from "@/lib/uploads/videoAssets/providers/falKlingI2VProvider";
 import type {
   MotionProvider,
@@ -179,6 +184,193 @@ describe("fal Kling I2V scene mapping", () => {
       "productRotate",
       "kitchenContext"
     ]));
+  });
+});
+
+describe("fal Kling I2V paid smoke payload audit", () => {
+  test("passes a valid scene-06 product rotate request without exposing raw values", () => {
+    const audit = auditFalKlingI2VPaidSmokeRequest(validPayloadAuditInput());
+
+    expect(audit).toMatchObject({
+      payload_shape_valid: true,
+      prompt_present: true,
+      image_url_present: true,
+      duration_valid: true,
+      duration_is_5_or_10: true,
+      duration_is_paid_smoke_5_seconds: true,
+      aspect_ratio_valid: true,
+      aspect_ratio_is_9_16: true,
+      negative_prompt_present: true,
+      source_image_safe_ref_present: true,
+      external_image_accessibility_known: true,
+      raw_image_url_masked: true,
+      raw_values_masked: true,
+      model_id_present: true,
+      api_key_present_boolean_only: true,
+      cost_approved: true,
+      scene_id_is_product_rotate: true,
+      scene_count_is_one: true,
+      blockers: []
+    });
+    expect(JSON.stringify(audit)).not.toContain("masked-image-url-value");
+    expect(JSON.stringify(audit)).not.toContain("fal-ai/kling-video/v1.6/pro/image-to-video");
+    expect(JSON.stringify(audit)).not.toContain("replace-with-test-fal-key");
+  });
+
+  test("blocks missing image_url", () => {
+    const audit = buildFalKlingPayloadAudit({
+      ...validPayloadAuditInput(),
+      imageUrl: ""
+    });
+
+    expect(audit).toMatchObject({
+      payload_shape_valid: false,
+      image_url_present: false,
+      blockers: expect.arrayContaining(["FAL_KLING_IMAGE_URL_MISSING"])
+    });
+  });
+
+  test("blocks invalid duration and non-5 paid-smoke duration", () => {
+    const invalidDuration = validateFalKlingI2VRequestShape({
+      ...validPayloadAuditInput(),
+      duration: "12"
+    });
+    const tenSecondDuration = validateFalKlingI2VRequestShape({
+      ...validPayloadAuditInput(),
+      duration: "10"
+    });
+
+    expect(invalidDuration).toMatchObject({
+      payload_shape_valid: false,
+      duration_valid: false,
+      blockers: expect.arrayContaining(["FAL_KLING_DURATION_INVALID"])
+    });
+    expect(tenSecondDuration).toMatchObject({
+      payload_shape_valid: false,
+      duration_valid: true,
+      duration_is_5_or_10: true,
+      duration_is_paid_smoke_5_seconds: false,
+      blockers: expect.arrayContaining(["FAL_KLING_PAID_SMOKE_DURATION_NOT_5"])
+    });
+  });
+
+  test("blocks invalid aspect ratio and non-9:16 paid-smoke aspect ratio", () => {
+    const invalidAspect = buildFalKlingPayloadAudit({
+      ...validPayloadAuditInput(),
+      aspectRatio: "4:5"
+    });
+    const horizontalAspect = buildFalKlingPayloadAudit({
+      ...validPayloadAuditInput(),
+      aspectRatio: "16:9"
+    });
+
+    expect(invalidAspect).toMatchObject({
+      payload_shape_valid: false,
+      aspect_ratio_valid: false,
+      blockers: expect.arrayContaining(["FAL_KLING_ASPECT_RATIO_INVALID"])
+    });
+    expect(horizontalAspect).toMatchObject({
+      payload_shape_valid: false,
+      aspect_ratio_valid: true,
+      aspect_ratio_is_9_16: false,
+      blockers: expect.arrayContaining(["FAL_KLING_PAID_SMOKE_ASPECT_RATIO_NOT_9_16"])
+    });
+  });
+
+  test("masks raw image_url in blocked audit output", () => {
+    const audit = buildFalKlingPayloadAudit({
+      ...validPayloadAuditInput(),
+      externalImageAccessibilityKnown: false
+    });
+    const serialized = JSON.stringify(audit);
+
+    expect(audit).toMatchObject({
+      payload_shape_valid: false,
+      raw_image_url_masked: true,
+      raw_values_masked: true,
+      blockers: expect.arrayContaining(["FAL_KLING_EXTERNAL_IMAGE_ACCESSIBILITY_UNKNOWN"])
+    });
+    expect(serialized).not.toContain("masked-image-url-value");
+    expect(serialized).not.toContain("replace-with-test-fal-key");
+    expect(serialized).not.toContain("Author" + "ization");
+  });
+});
+
+describe("fal Kling I2V submit failure guard", () => {
+  test("502 without request_id does not poll, fetch result, or retry", () => {
+    const guard = guardFalKlingSubmitFailure({
+      submitHttpStatus: 502,
+      requestId: null
+    });
+
+    expect(guard).toMatchObject({
+      blocker: "FAL_SUBMIT_HTTP_502",
+      submit_success: false,
+      request_id_present: false,
+      polling_attempted: false,
+      result_fetch_attempted: false,
+      retry_loop_attempted: false,
+      generated_clip_count: 0,
+      safe_to_retry: false,
+      requires_fresh_approval: true,
+      manual_dashboard_billing_check_required: true
+    });
+  });
+
+  test("second paid submit is blocked without fresh retry approval and billing check", () => {
+    const gate = evaluateFalKlingPaidRetryGate({
+      payloadAuditPass: true,
+      providerConfigured: true,
+      costApproved: true,
+      freshPaidRetryApproval: false,
+      previousSubmitHadNoRequestId: true,
+      manualDashboardBillingCheckDone: false
+    });
+
+    expect(gate).toMatchObject({
+      paid_retry_allowed: false,
+      blockers: expect.arrayContaining([
+        "FAL_KLING_FRESH_PAID_RETRY_APPROVAL_REQUIRED",
+        "FAL_KLING_MANUAL_BILLING_CHECK_REQUIRED"
+      ])
+    });
+  });
+
+  test("paid retry gate requires previous no-request-id evidence", () => {
+    const gate = evaluateFalKlingPaidRetryGate({
+      payloadAuditPass: true,
+      providerConfigured: true,
+      costApproved: true,
+      freshPaidRetryApproval: true,
+      previousSubmitHadNoRequestId: false,
+      manualDashboardBillingCheckDone: true
+    });
+
+    expect(gate).toMatchObject({
+      paid_retry_allowed: false,
+      blockers: ["FAL_KLING_PREVIOUS_SUBMIT_REQUEST_ID_PRESENT"]
+    });
+  });
+
+  test("safe summaries do not expose raw model, API key, or media URL values", () => {
+    const audit = buildFalKlingPayloadAudit(validPayloadAuditInput());
+    const guard = guardFalKlingSubmitFailure({
+      submitHttpStatus: 502
+    });
+    const gate = evaluateFalKlingPaidRetryGate({
+      payloadAuditPass: false,
+      providerConfigured: false,
+      costApproved: false,
+      freshPaidRetryApproval: false,
+      previousSubmitHadNoRequestId: true,
+      manualDashboardBillingCheckDone: false
+    });
+    const serialized = JSON.stringify({ audit, guard, gate });
+
+    expect(serialized).not.toContain("replace-with-test-fal-key");
+    expect(serialized).not.toContain("fal-ai/kling-video/v1.6/pro/image-to-video");
+    expect(serialized).not.toContain("masked-image-url-value");
+    expect(serialized).not.toContain("masked-generated-media-value");
   });
 });
 
@@ -416,6 +608,24 @@ function withFalApiKey(env: Record<string, string>, value: string) {
   };
 }
 
+function validPayloadAuditInput() {
+  return {
+    prompt: "Photorealistic vertical 9:16 ecommerce short video with a slow product rotation.",
+    imageUrl: "masked-image-url-value",
+    duration: "5",
+    aspectRatio: "9:16",
+    negativePrompt: "cartoon, anime, watermark, low quality",
+    cfgScale: 0.5,
+    sourceImageSafeRef: "safe:image:candidate-001",
+    externalImageAccessibilityKnown: true,
+    modelId: "fal-ai/kling-video/v1.6/pro/image-to-video",
+    apiKeyPresent: true,
+    costApproved: true,
+    sceneId: "scene-06-product-rotate",
+    sceneCount: 1
+  };
+}
+
 function sceneBriefs(): MotionSceneBrief[] {
   return [
     brief("scene-01-hook"),
@@ -469,10 +679,10 @@ function provider(
     configured,
     safeSummary: `${name} scaffold`,
     generate: vi.fn(async () => ({
-      ok: false,
+      ok: false as const,
       providerName: name,
       providerMode: mode,
-      blockers: ["MOTION_PROVIDER_NOT_CONFIGURED"],
+      blockers: ["MOTION_PROVIDER_NOT_CONFIGURED" as const],
       safeSummary: `${name} unavailable`
     }))
   };
