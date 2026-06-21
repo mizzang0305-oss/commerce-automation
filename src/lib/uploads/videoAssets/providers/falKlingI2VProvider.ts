@@ -1,5 +1,11 @@
 import { basename } from "node:path";
 
+import {
+  DEFAULT_MOTION_COST_POLICY,
+  evaluatePaidMotionProviderPolicy,
+  type MotionCostPolicy,
+  type MotionRouteMode
+} from "../motionCostPolicy";
 import type {
   MotionClipResult,
   MotionProvider,
@@ -187,6 +193,11 @@ export type FalKlingI2VProviderInput = ResolveFalKlingI2VReadinessInput & {
   client?: FalKlingI2VClient;
   executionMode?: FalKlingI2VExecutionMode;
   allowLiveExecution?: boolean;
+  routeMode?: MotionRouteMode;
+  costPolicy?: MotionCostPolicy;
+  premiumManualApproval?: boolean;
+  freshApproval?: boolean;
+  estimatedCostUsd?: number;
 };
 
 export type MapMotionSceneBriefToFalKlingI2VRequestInput = {
@@ -357,6 +368,22 @@ export function createFalKlingI2VProvider(input: FalKlingI2VProviderInput = {}):
         return blockedResult(
           normalizeProviderBlockers(readiness.blockers),
           "fal Kling I2V provider is not configured."
+        );
+      }
+
+      const paidPolicy = evaluatePaidMotionProviderPolicy({
+        providerName: "fal_kling_i2v",
+        routeMode: input.routeMode ?? "autopilot",
+        requestedSceneCount: sceneBriefs.length,
+        estimatedCostUsd: input.estimatedCostUsd ?? 0.01,
+        premiumManualApproval: input.premiumManualApproval,
+        freshApproval: input.freshApproval,
+        policy: input.costPolicy ?? DEFAULT_MOTION_COST_POLICY
+      });
+      if (!paidPolicy.allowed) {
+        return blockedResult(
+          paidPolicy.blockers,
+          "fal Kling I2V is premium/manual only; autopilot paid I2V execution is blocked."
         );
       }
 

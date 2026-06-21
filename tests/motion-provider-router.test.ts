@@ -29,11 +29,16 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "comfyui_wan_i2v",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v"
+      ]
     });
   });
 
-  test("falls back to cloud image-to-video when local ComfyUI Wan is unavailable", () => {
+  test("falls back to animated still instead of paid cloud i2v in autopilot", () => {
     const selection = selectMotionProvider([
       provider("cloud_image_to_video", "image_to_video_generated", true),
       provider("comfyui_wan_i2v", "image_to_video_generated", false),
@@ -43,8 +48,14 @@ describe("motion provider router scaffold", () => {
 
     expect(selection).toMatchObject({
       ok: true,
-      provider_name: "cloud_image_to_video",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video"]
+      provider_name: "animated_still",
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still"
+      ]
     });
   });
 
@@ -59,7 +70,13 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "animated_still",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v", "animated_still"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still"
+      ]
     });
   });
 
@@ -100,7 +117,16 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: false,
       blocker: "MOTION_PROVIDER_NOT_CONFIGURED",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v", "animated_still", "slideshow"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still",
+        "fal_kling_i2v",
+        "cloud_image_to_video",
+        "slideshow"
+      ]
     });
   });
 });

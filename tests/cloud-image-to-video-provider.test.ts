@@ -74,7 +74,7 @@ describe("cloud image-to-video provider scaffold", () => {
     }
   });
 
-  test("router falls back to configured cloud provider when local ComfyUI is unavailable", () => {
+  test("router avoids configured paid cloud provider in autopilot when a low-cost fallback exists", () => {
     const selection = selectMotionProvider([
       createCloudImageToVideoProvider({ env: configuredEnv(), executionMode: "mock" }),
       provider("comfyui_wan_i2v", false),
@@ -84,8 +84,14 @@ describe("cloud image-to-video provider scaffold", () => {
 
     expect(selection).toMatchObject({
       ok: true,
-      provider_name: "cloud_image_to_video",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video"]
+      provider_name: "animated_still",
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still"
+      ]
     });
   });
 

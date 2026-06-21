@@ -264,7 +264,7 @@ describe("ComfyUI Wan I2V provider behavior", () => {
 });
 
 describe("ComfyUI Wan I2V router and quality gate integration", () => {
-  test("router selects ComfyUI after checking cloud provider priority when configured", () => {
+  test("router selects ComfyUI after low-cost source slots when configured", () => {
     const selection = selectMotionProvider([
       createComfyUiWanI2VProvider({
         readiness: configuredReadiness(),
@@ -277,7 +277,12 @@ describe("ComfyUI Wan I2V router and quality gate integration", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "comfyui_wan_i2v",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v"
+      ]
     });
   });
 
@@ -290,7 +295,16 @@ describe("ComfyUI Wan I2V router and quality gate integration", () => {
     expect(selection).toMatchObject({
       ok: false,
       blocker: "MOTION_PROVIDER_NOT_CONFIGURED",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v", "animated_still", "slideshow"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still",
+        "fal_kling_i2v",
+        "cloud_image_to_video",
+        "slideshow"
+      ]
     });
   });
 

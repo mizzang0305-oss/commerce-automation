@@ -116,6 +116,38 @@ python -m compileall python-worker
 - Local smoke success criteria include `smoke_only=true`, `final_upload_allowed=false`, `clip_count >= 1`, readable `ffprobe` output, frame difference detected, and human review before any future upload-package decision.
 - Run `npm run test -- tests/comfyui-wan-i2v-provider.test.ts` before broader upload and full-suite validation.
 
+## Low-Cost Motion Shorts Pivot QA
+
+- Default autopilot blocks paid I2V with `PAID_I2V_AUTOPILOT_BLOCKED`.
+- paid I2V is premium/manual only; fal Kling requires premium/manual approval,
+  a positive scene cap, a positive cost cap, and fresh approval before mock or
+  future live execution.
+- Default paid policy keeps `autopilotPaidI2VEnabled=false`,
+  `maxPaidI2VScenesPerShort=0`, and `maxPaidI2VCostPerShortUsd=0`.
+- Autopilot provider priority starts with `rights_confirmed_source_video`,
+  `advanced_still_motion`, `photorealistic_scene_still`, local ComfyUI fallback,
+  and low-cost still/animated fallbacks before any paid provider.
+- `advanced_still_motion` plans exactly eight scenes and supports product
+  push-in, product orbit illusion, product cutout slide, parallax countertop,
+  slow zoom/pan, before/after split, checklist overlay motion, and CTA hero
+  motion.
+- Low-cost quality requires `paid_i2v_scene_count=0`,
+  `low_cost_motion_scene_count >= 6`, `static_only_ratio <= 0.30`,
+  `same_frame_ratio <= 0.35`, safe captions, voiceover audio, first-second hook
+  visibility, no clipped text, and public upload blocked.
+- The render path remains blocked with `LOW_COST_MOTION_RENDERER_NOT_EXECUTED`
+  until a separately approved local renderer run produces reviewed artifacts.
+- Source video provider remains disabled by default, requires
+  `rights_confirmed=true`, and blocks raw video download.
+- Source-video blockers are `SOURCE_VIDEO_PROVIDER_DISABLED`,
+  `SOURCE_VIDEO_RIGHTS_NOT_CONFIRMED`, and
+  `SOURCE_VIDEO_RAW_DOWNLOAD_BLOCKED`.
+- The pivot path must not call paid APIs, fal/Kling, `videos.insert`, YouTube
+  Execute, R2 writes, product_assets writes, DB writes, migrations, production
+  deploy, or public/unlisted upload.
+- Run `npm run test -- tests/low-cost-motion-shorts-pivot.test.ts` before the
+  broader upload and full-suite validation.
+
 ## Operator Command Palette QA
 
 - `Ctrl+K` and `Cmd+K` open the command palette.

@@ -1,10 +1,15 @@
 export type MotionProviderMode =
+  | "source_video_generated"
   | "real_motion_generated"
   | "image_to_video_generated"
+  | "programmed_still_motion_generated"
   | "animated_still_generated"
   | "slideshow_generated";
 
 export type MotionProviderName =
+  | "rights_confirmed_source_video"
+  | "advanced_still_motion"
+  | "photorealistic_scene_still"
   | "fal_kling_i2v"
   | "cloud_image_to_video"
   | "comfyui_wan_i2v"
@@ -36,6 +41,21 @@ export type MotionQualityBlocker =
   | "FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED"
   | "FAL_KLING_I2V_PAID_API_CALL_BLOCKED"
   | "FAL_SUBMIT_HTTP_502"
+  | "PAID_I2V_MANUAL_PREMIUM_APPROVAL_REQUIRED"
+  | "PAID_I2V_COST_CAP_REQUIRED"
+  | "PAID_I2V_SCENE_CAP_EXCEEDED"
+  | "PAID_I2V_AUTOPILOT_BLOCKED"
+  | "SOURCE_VIDEO_RIGHTS_NOT_CONFIRMED"
+  | "SOURCE_VIDEO_PROVIDER_DISABLED"
+  | "SOURCE_VIDEO_RAW_DOWNLOAD_BLOCKED"
+  | "LOW_COST_MOTION_RENDERER_NOT_EXECUTED"
+  | "LOW_COST_MOTION_SCENE_COUNT_TOO_LOW"
+  | "STATIC_ONLY_RATIO_TOO_HIGH"
+  | "SAME_FRAME_RATIO_TOO_HIGH"
+  | "CAPTION_SAFE_AREA_FAILED"
+  | "VOICEOVER_AUDIO_REQUIRED"
+  | "HOOK_NOT_VISIBLE_FIRST_SECOND"
+  | "TEXT_CLIPPED"
   | "COMFYUI_WAN_I2V_PROVIDER_DISABLED"
   | "COMFYUI_BASE_URL_MISSING"
   | "COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING"
@@ -136,8 +156,10 @@ export type MotionProviderSelection =
     }
   | {
       ok: false;
-      blocker: "MOTION_PROVIDER_NOT_CONFIGURED";
+      blocker: MotionQualityBlocker;
+      blockers: MotionQualityBlocker[];
       fallback_chain: MotionProviderName[];
+      safeSummary: string;
     };
 
 export type MotionManifest = {
