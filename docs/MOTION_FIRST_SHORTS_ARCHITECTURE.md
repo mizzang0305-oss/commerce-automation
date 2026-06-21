@@ -19,23 +19,30 @@ ProductSourceAdapter
 The current production-safe state is:
 
 ```text
-CURRENT_EXPECTED_BLOCKER=CLOUD_VIDEO_PROVIDER_NOT_CONFIGURED
+CURRENT_EXPECTED_BLOCKER=PAID_I2V_AUTOPILOT_BLOCKED for paid provider paths
+CURRENT_RENDER_BLOCKER=LOW_COST_MOTION_RENDERER_NOT_EXECUTED
 ```
 
 ## Provider Router
 
 Priority:
 
-1. `cloud_image_to_video`
-2. `comfyui_wan_i2v`
-3. `animated_still`
-4. `slideshow`
+1. `rights_confirmed_source_video`
+2. `advanced_still_motion`
+3. `photorealistic_scene_still`
+4. `comfyui_wan_i2v` when local runtime is available
+5. `animated_still`
+6. `fal_kling_i2v` or other paid I2V only with premium/manual approval and cost cap
+7. `slideshow`
 
 Rules:
 
-- Prefer cloud image-to-video only when configured and cost-approved.
-- Fall back to ComfyUI Wan I2V when the local runtime is reachable and approved.
+- Prefer rights-confirmed source video only when rights are explicitly confirmed.
+- Use `advanced_still_motion` as the low-cost default autopilot path.
+- Keep ComfyUI Wan I2V as a local fallback, but do not retry until its runtime is available.
 - Fall back to animated still only as a non-final preview path.
+- Treat paid I2V as premium/manual only; paid I2V is premium/manual only.
+- Block autopilot paid I2V with `PAID_I2V_AUTOPILOT_BLOCKED`.
 - Block slideshow for motion-first final upload.
 - Return `MOTION_PROVIDER_NOT_CONFIGURED` when no provider is configured.
 - Return `CLOUD_VIDEO_PROVIDER_NOT_CONFIGURED` when cloud provider name or API
@@ -50,8 +57,40 @@ Rules:
 The provider contract uses:
 
 ```text
-MotionProviderMode = "real_motion_generated" | "image_to_video_generated" | "animated_still_generated" | "slideshow_generated"
-MotionProviderName = "cloud_image_to_video" | "comfyui_wan_i2v" | "ltx_video" | "animated_still" | "slideshow"
+MotionProviderMode = "source_video_generated" | "real_motion_generated" | "image_to_video_generated" | "programmed_still_motion_generated" | "animated_still_generated" | "slideshow_generated"
+MotionProviderName = "rights_confirmed_source_video" | "advanced_still_motion" | "photorealistic_scene_still" | "cloud_image_to_video" | "comfyui_wan_i2v" | "ltx_video" | "animated_still" | "slideshow"
+```
+
+## Low-Cost Advanced Still Motion
+
+The MVP default path is now advanced still motion, not paid cloud I2V. The
+renderer plan uses product push-in, orbit illusion, cutout slide, parallax
+countertop, slow zoom/pan, before/after split, checklist overlay motion, and CTA
+hero motion. It is designed for local FFmpeg/MoviePy execution in a separate
+approval step.
+
+The low-cost quality gate requires at least six programmed-motion scenes, no
+paid I2V scenes, static-only ratio at or below 0.30, same-frame ratio at or
+below 0.35, safe captions, voiceover audio, a visible first-second hook, no
+clipped text, and public upload blocked. Until a local render is executed and
+reviewed, the expected blocker is:
+
+```text
+LOW_COST_MOTION_RENDERER_NOT_EXECUTED
+```
+
+## Source Video Provider Scaffold
+
+`rights_confirmed_source_video` is a scaffold for future product/supplier videos.
+It is disabled by default, requires explicit rights confirmation, and blocks raw
+video download in this PR.
+
+Blockers:
+
+```text
+SOURCE_VIDEO_PROVIDER_DISABLED
+SOURCE_VIDEO_RIGHTS_NOT_CONFIRMED
+SOURCE_VIDEO_RAW_DOWNLOAD_BLOCKED
 ```
 
 ## Cloud Image-To-Video Scaffold
@@ -78,7 +117,8 @@ The local runtime fallback note is in `docs/COMFYUI_LOCAL_RUNTIME_FALLBACK.md`.
 
 The first concrete cloud adapter is `fal_kling_i2v`. It is still disabled by
 default and implements only config parsing, readiness, scene mapping, a client
-interface, and a mock client.
+interface, and a mock client. It is no longer part of the default autopilot path:
+paid I2V is premium/manual only.
 
 Required configuration:
 
@@ -102,6 +142,16 @@ FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED
 Paid API calls remain blocked in this adapter PR. The future paid local smoke
 approval phrase is documented as `APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY`
 and must be handled in a separate prompt/PR.
+
+The default paid policy is:
+
+```text
+autopilotPaidI2VEnabled=false
+maxPaidI2VScenesPerShort=0
+maxPaidI2VCostPerShortUsd=0
+premiumManualOnly=true
+freshApprovalRequired=true
+```
 
 The first one-scene paid smoke reached fal submit once and stopped with:
 
@@ -171,6 +221,14 @@ Required blockers:
 - `FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED`
 - `FAL_KLING_I2V_PAID_API_CALL_BLOCKED`
 - `FAL_SUBMIT_HTTP_502`
+- `PAID_I2V_MANUAL_PREMIUM_APPROVAL_REQUIRED`
+- `PAID_I2V_COST_CAP_REQUIRED`
+- `PAID_I2V_SCENE_CAP_EXCEEDED`
+- `PAID_I2V_AUTOPILOT_BLOCKED`
+- `SOURCE_VIDEO_RIGHTS_NOT_CONFIRMED`
+- `SOURCE_VIDEO_PROVIDER_DISABLED`
+- `SOURCE_VIDEO_RAW_DOWNLOAD_BLOCKED`
+- `LOW_COST_MOTION_RENDERER_NOT_EXECUTED`
 - `COMFYUI_WAN_I2V_PROVIDER_DISABLED`
 - `COMFYUI_BASE_URL_MISSING`
 - `COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING`

@@ -40,6 +40,9 @@ function hasSceneMotion(clip: MotionClipResult) {
 }
 
 function providerModeForName(providerName: MotionProviderName) {
+  if (providerName === "rights_confirmed_source_video") return "source_video_generated";
+  if (providerName === "advanced_still_motion") return "programmed_still_motion_generated";
+  if (providerName === "photorealistic_scene_still") return "animated_still_generated";
   if (providerName === "fal_kling_i2v") return "image_to_video_generated";
   if (providerName === "cloud_image_to_video") return "image_to_video_generated";
   if (providerName === "comfyui_wan_i2v") return "image_to_video_generated";

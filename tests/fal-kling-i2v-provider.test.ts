@@ -88,7 +88,8 @@ describe("fal Kling I2V provider readiness", () => {
   test("blocks live execution without future explicit approval", async () => {
     const provider = createFalKlingI2VProvider({
       env: configuredEnv(),
-      executionMode: "live"
+      executionMode: "live",
+      ...approvedPaidFalOptions()
     });
 
     expect(provider.configured).toBe(true);
@@ -375,19 +376,30 @@ describe("fal Kling I2V submit failure guard", () => {
 });
 
 describe("fal Kling I2V router and quality gate integration", () => {
-  test("router prefers fal Kling when configured and cost approved", () => {
+  test("router allows fal Kling only on premium manual route with cost cap", () => {
     const selection = selectMotionProvider([
-      createFalKlingI2VProvider({ env: configuredEnv(), executionMode: "mock" }),
+      createFalKlingI2VProvider({
+        env: configuredEnv(),
+        executionMode: "mock",
+        ...approvedPaidFalOptions()
+      }),
       provider("cloud_image_to_video", "image_to_video_generated", true),
-      provider("comfyui_wan_i2v", "image_to_video_generated", true),
-      provider("animated_still", "animated_still_generated", true),
+      provider("comfyui_wan_i2v", "image_to_video_generated", false),
+      provider("animated_still", "animated_still_generated", false),
       provider("slideshow", "slideshow_generated", true)
-    ]);
+    ], approvedPaidFalOptions());
 
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "fal_kling_i2v",
-      fallback_chain: ["fal_kling_i2v"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v",
+        "animated_still",
+        "fal_kling_i2v"
+      ]
     });
   });
 
@@ -402,7 +414,12 @@ describe("fal Kling I2V router and quality gate integration", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "comfyui_wan_i2v",
-      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v"]
+      fallback_chain: [
+        "rights_confirmed_source_video",
+        "advanced_still_motion",
+        "photorealistic_scene_still",
+        "comfyui_wan_i2v"
+      ]
     });
   });
 
@@ -432,7 +449,8 @@ describe("fal Kling I2V router and quality gate integration", () => {
     const provider = createFalKlingI2VProvider({
       env: configuredEnv(),
       client: createMockFalKlingI2VClient(),
-      executionMode: "mock"
+      executionMode: "mock",
+      ...approvedPaidFalOptions()
     });
 
     const result = await provider.generate({ sceneBriefs: sceneBriefs() });
@@ -456,7 +474,8 @@ describe("fal Kling I2V router and quality gate integration", () => {
     const provider = createFalKlingI2VProvider({
       env: configuredEnv(),
       client: createMockFalKlingI2VClient(),
-      executionMode: "mock"
+      executionMode: "mock",
+      ...approvedPaidFalOptions()
     });
     const result = await provider.generate({ sceneBriefs: sceneBriefs() });
     expect(result.ok).toBe(true);
@@ -486,7 +505,8 @@ describe("fal Kling I2V router and quality gate integration", () => {
       client: createMockFalKlingI2VClient({
         overrideClip: { handInteraction: false }
       }),
-      executionMode: "mock"
+      executionMode: "mock",
+      ...approvedPaidFalOptions()
     });
     const result = await provider.generate({ sceneBriefs: sceneBriefs() });
     expect(result.ok).toBe(true);
@@ -511,7 +531,8 @@ describe("fal Kling I2V router and quality gate integration", () => {
       client: createMockFalKlingI2VClient({
         overrideClip: { productRotateScene: false }
       }),
-      executionMode: "mock"
+      executionMode: "mock",
+      ...approvedPaidFalOptions()
     });
     const result = await provider.generate({ sceneBriefs: sceneBriefs() });
     expect(result.ok).toBe(true);
@@ -558,7 +579,8 @@ describe("fal Kling I2V router and quality gate integration", () => {
     const provider = createFalKlingI2VProvider({
       env: configuredEnv(),
       client: createMockFalKlingI2VClient(),
-      executionMode: "mock"
+      executionMode: "mock",
+      ...approvedPaidFalOptions()
     });
     const result = await provider.generate({ sceneBriefs: sceneBriefs() });
     expect(result.ok).toBe(true);
@@ -598,6 +620,23 @@ function configuredEnv() {
     FAL_API_KEY: "replace-with-test-fal-key",
     FAL_KLING_I2V_MODEL_ID: "fal-ai/kling-video/v1.6/pro/image-to-video",
     FAL_KLING_I2V_COST_APPROVED: "true"
+  };
+}
+
+function approvedPaidFalOptions() {
+  return {
+    routeMode: "premium_manual" as const,
+    premiumManualApproval: true,
+    freshApproval: true,
+    estimatedCostUsd: 0.08,
+    requestedPaidSceneCount: 4,
+    costPolicy: {
+      autopilotPaidI2VEnabled: false,
+      maxPaidI2VScenesPerShort: 4,
+      maxPaidI2VCostPerShortUsd: 1,
+      premiumManualOnly: true,
+      freshApprovalRequired: true
+    }
   };
 }
 

@@ -8,6 +8,35 @@ This PR does not call fal, Kling, Replicate, Luma, Runway, Pika, YouTube, R2,
 or any production database. It does not generate, download, upload, or commit
 mp4/mov/webm artifacts.
 
+## Low-Cost Pivot State
+
+fal Kling remains in the codebase, but it is no longer a default autopilot
+provider. paid I2V is premium/manual only.
+
+Default paid policy:
+
+```text
+autopilotPaidI2VEnabled=false
+maxPaidI2VScenesPerShort=0
+maxPaidI2VCostPerShortUsd=0
+premiumManualOnly=true
+freshApprovalRequired=true
+```
+
+Default paid-provider blockers:
+
+```text
+PAID_I2V_AUTOPILOT_BLOCKED
+PAID_I2V_MANUAL_PREMIUM_APPROVAL_REQUIRED
+PAID_I2V_COST_CAP_REQUIRED
+PAID_I2V_SCENE_CAP_EXCEEDED
+```
+
+The MVP default is `advanced_still_motion` and local low-cost rendering. fal
+Kling can be used only as a premium/manual option after explicit budget, scene
+cap, and fresh approval checks. ComfyUI local remains a fallback, but the local
+runtime is currently unavailable.
+
 ## 2026-06-21 Paid Smoke Failure Record
 
 The first approved one-scene paid smoke attempted exactly one submit for:
@@ -77,8 +106,9 @@ FAL_KLING_I2V_PAID_API_CALL_BLOCKED
 ```
 
 When enabled, API key, model id, and cost approval are all present, the adapter
-can be selected by the router. Live execution still remains blocked unless a
-future smoke prompt supplies separate approval.
+can be selected by the router only in premium/manual mode with a positive cost
+cap and fresh approval. Live execution still remains blocked unless a future
+smoke prompt supplies separate approval.
 
 Future paid local smoke approval phrase:
 

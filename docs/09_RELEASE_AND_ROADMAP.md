@@ -34,6 +34,37 @@ n8n workflows remain as legacy/optional references. Nightly Scout may still use 
 5. Persist planner/channel edits in Supabase.
 6. Keep public upload as a separate, explicitly reviewed milestone.
 
+## v2.6 Low-Cost Motion Shorts Pivot
+
+The motion shorts MVP now defaults to low-cost advanced still motion instead of
+paid cloud image-to-video. The fal Kling paid smoke produced
+`FAL_SUBMIT_HTTP_502` before a request id and no clip was generated; that cost
+profile is not suitable for default autopilot.
+
+Included:
+
+- Default cost policy that blocks paid I2V autopilot.
+- `advanced_still_motion` plan scaffold for eight programmed scenes.
+- Low-cost motion quality gate for scene count, static ratio, same-frame ratio,
+  captions, voiceover, first-second hook, clipped text, and upload block.
+- Source video provider scaffold with rights-confirmed guard.
+- fal Kling retained as premium/manual only.
+
+Not included:
+
+- paid API call
+- fal/Kling retry
+- mp4/mov/webm generation
+- R2/product_assets/DB write
+- YouTube Execute or `videos.insert`
+- public or unlisted upload
+
+Next milestones:
+
+1. Run one-product low-cost local renderer under separate approval.
+2. Review local clip/contact sheet before upload prep.
+3. Use paid I2V only as premium/manual with explicit budget approval and scene cap.
+
 ## v2.4 Platform Upload Core
 
 The upload layer now has a common readiness and planning model. YouTube has a server-only private smoke path behind explicit readiness and approval gates; TikTok and Threads remain readiness-only.
