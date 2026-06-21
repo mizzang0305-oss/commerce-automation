@@ -85,7 +85,7 @@ describe("cloud image-to-video provider scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "cloud_image_to_video",
-      fallback_chain: ["cloud_image_to_video"]
+      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video"]
     });
   });
 

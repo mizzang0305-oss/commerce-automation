@@ -29,7 +29,7 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "comfyui_wan_i2v",
-      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v"]
+      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v"]
     });
   });
 
@@ -44,7 +44,7 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "cloud_image_to_video",
-      fallback_chain: ["cloud_image_to_video"]
+      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video"]
     });
   });
 
@@ -59,7 +59,7 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "animated_still",
-      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v", "animated_still"]
+      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v", "animated_still"]
     });
   });
 
@@ -100,7 +100,7 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: false,
       blocker: "MOTION_PROVIDER_NOT_CONFIGURED",
-      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v", "animated_still", "slideshow"]
+      fallback_chain: ["fal_kling_i2v", "cloud_image_to_video", "comfyui_wan_i2v", "animated_still", "slideshow"]
     });
   });
 });

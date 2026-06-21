@@ -74,6 +74,37 @@ The cloud scaffold is intentionally conservative:
 Candidate research is in `docs/research/CLOUD_VIDEO_PROVIDER_EVALUATION.md`.
 The local runtime fallback note is in `docs/COMFYUI_LOCAL_RUNTIME_FALLBACK.md`.
 
+## fal Kling I2V Adapter
+
+The first concrete cloud adapter is `fal_kling_i2v`. It is still disabled by
+default and implements only config parsing, readiness, scene mapping, a client
+interface, and a mock client.
+
+Required configuration:
+
+- `FAL_KLING_I2V_ENABLED=true`
+- `FAL_API_KEY` present
+- `FAL_KLING_I2V_MODEL_ID` present
+- `FAL_KLING_I2V_COST_APPROVED=true`
+
+Default blocker:
+
+```text
+FAL_KLING_I2V_PROVIDER_DISABLED
+```
+
+Configured but non-mock live execution still blocks at:
+
+```text
+FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED
+```
+
+Paid API calls remain blocked in this adapter PR. The future paid local smoke
+approval phrase is documented as `APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY`
+and must be handled in a separate prompt/PR.
+
+See `docs/FAL_KLING_I2V_PROVIDER.md`.
+
 ## ComfyUI Wan I2V Adapter
 
 The ComfyUI Wan I2V adapter is a disabled-by-default provider implementation.
@@ -116,6 +147,13 @@ Required blockers:
 - `CLOUD_VIDEO_PROVIDER_NOT_CONFIGURED`
 - `CLOUD_VIDEO_PROVIDER_COST_APPROVAL_REQUIRED`
 - `CLOUD_VIDEO_PROVIDER_LIVE_API_NOT_IMPLEMENTED`
+- `FAL_KLING_I2V_PROVIDER_DISABLED`
+- `FAL_API_KEY_MISSING`
+- `FAL_KLING_I2V_MODEL_ID_MISSING`
+- `FAL_KLING_I2V_COST_APPROVAL_REQUIRED`
+- `FAL_KLING_I2V_PROVIDER_NOT_CONFIGURED`
+- `FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED`
+- `FAL_KLING_I2V_PAID_API_CALL_BLOCKED`
 - `COMFYUI_WAN_I2V_PROVIDER_DISABLED`
 - `COMFYUI_BASE_URL_MISSING`
 - `COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING`
