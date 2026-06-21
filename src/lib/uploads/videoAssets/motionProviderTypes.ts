@@ -5,6 +5,7 @@ export type MotionProviderMode =
   | "slideshow_generated";
 
 export type MotionProviderName =
+  | "cloud_image_to_video"
   | "comfyui_wan_i2v"
   | "ltx_video"
   | "animated_still"
@@ -23,6 +24,9 @@ export type MotionSceneKind =
 
 export type MotionQualityBlocker =
   | "MOTION_PROVIDER_NOT_CONFIGURED"
+  | "CLOUD_VIDEO_PROVIDER_NOT_CONFIGURED"
+  | "CLOUD_VIDEO_PROVIDER_COST_APPROVAL_REQUIRED"
+  | "CLOUD_VIDEO_PROVIDER_LIVE_API_NOT_IMPLEMENTED"
   | "COMFYUI_WAN_I2V_PROVIDER_DISABLED"
   | "COMFYUI_BASE_URL_MISSING"
   | "COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING"

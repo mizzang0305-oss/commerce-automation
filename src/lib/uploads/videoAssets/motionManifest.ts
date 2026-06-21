@@ -40,6 +40,7 @@ function hasSceneMotion(clip: MotionClipResult) {
 }
 
 function providerModeForName(providerName: MotionProviderName) {
+  if (providerName === "cloud_image_to_video") return "image_to_video_generated";
   if (providerName === "comfyui_wan_i2v") return "image_to_video_generated";
   if (providerName === "ltx_video") return "real_motion_generated";
   if (providerName === "animated_still") return "animated_still_generated";
