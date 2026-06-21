@@ -28,6 +28,12 @@ mature prediction API shape. Runway or Luma can be evaluated as
 higher-quality/direct-vendor options if budget and commercial terms are
 accepted.
 
+First paid-smoke status: the one-scene fal Kling submit returned sanitized
+blocker `FAL_SUBMIT_HTTP_502` before request id. No polling, result fetch,
+retry loop, second submit, generated clip, R2 write, DB write, or YouTube action
+occurred. Treat this as a provider/submit-layer blocker, not a successful motion
+provider proof.
+
 ## Candidate Matrix
 
 | Provider | Image-to-video support | Product consistency | Hand motion quality | API support | Cost / quota | Korean / shopping fit | Commercial terms | Automation fit | Decision |
@@ -73,6 +79,9 @@ scene, and public/unlisted upload blocking.
   separate env review.
 - Keep `fal_kling_i2v` disabled by default and block paid execution until a
   separate `APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY` prompt is supplied.
+- After `FAL_SUBMIT_HTTP_502`, require no-cost payload audit, manual fal
+  dashboard billing/credit review, and fresh retry approval before any second
+  paid submit.
 - Use server-side requests only for any future live adapter.
 - Keep raw image/affiliate/asset URLs out of logs and reports.
 - Persist generated media only under ignored `commerce-assets/` paths after a

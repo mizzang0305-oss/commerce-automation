@@ -13,6 +13,9 @@ const DEFAULT_TIMEOUT_MS = 900_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_OUTPUT_DIR = "commerce-assets/generated-motion";
 const DEFAULT_ASPECT_RATIO = "9:16";
+const FAL_KLING_VALID_DURATIONS = new Set(["5", "10"]);
+const FAL_KLING_VALID_ASPECT_RATIOS = new Set(["16:9", "9:16", "1:1"]);
+const PAID_SMOKE_SCENE_ID = "scene-06-product-rotate";
 const DEFAULT_NEGATIVE_PROMPT = [
   "cartoon",
   "anime",
@@ -68,6 +71,111 @@ export type FalKlingI2VReadiness = {
   pollIntervalMs: number;
   outputDir: string;
   safeSummary: FalKlingI2VSafeSummary;
+};
+
+export type FalKlingI2VPayloadAuditBlocker =
+  | "FAL_KLING_PROMPT_MISSING"
+  | "FAL_KLING_IMAGE_URL_MISSING"
+  | "FAL_KLING_DURATION_INVALID"
+  | "FAL_KLING_PAID_SMOKE_DURATION_NOT_5"
+  | "FAL_KLING_ASPECT_RATIO_INVALID"
+  | "FAL_KLING_PAID_SMOKE_ASPECT_RATIO_NOT_9_16"
+  | "FAL_KLING_NEGATIVE_PROMPT_MISSING"
+  | "FAL_KLING_CFG_SCALE_INVALID"
+  | "FAL_KLING_SOURCE_IMAGE_SAFE_REF_MISSING"
+  | "FAL_KLING_EXTERNAL_IMAGE_ACCESSIBILITY_UNKNOWN"
+  | "FAL_KLING_I2V_MODEL_ID_MISSING"
+  | "FAL_API_KEY_MISSING"
+  | "FAL_KLING_I2V_COST_APPROVAL_REQUIRED"
+  | "FAL_KLING_PAID_SMOKE_SCENE_INVALID"
+  | "FAL_KLING_PAID_SMOKE_SCENE_COUNT_INVALID";
+
+export type FalKlingI2VPayloadAuditInput = {
+  prompt?: string | null;
+  imageUrl?: string | null;
+  duration?: string | number | null;
+  aspectRatio?: string | null;
+  negativePrompt?: string | null;
+  cfgScale?: number | null;
+  sourceImageSafeRef?: string | null;
+  externalImageAccessibilityKnown?: boolean;
+  modelId?: string | null;
+  apiKeyPresent?: boolean;
+  costApproved?: boolean;
+  sceneId?: string | null;
+  sceneCount?: number;
+};
+
+export type FalKlingI2VPayloadAudit = {
+  payload_shape_valid: boolean;
+  prompt_present: boolean;
+  image_url_present: boolean;
+  duration_valid: boolean;
+  duration_is_5_or_10: boolean;
+  duration_is_paid_smoke_5_seconds: boolean;
+  aspect_ratio_valid: boolean;
+  aspect_ratio_is_9_16: boolean;
+  negative_prompt_present: boolean;
+  cfg_scale_valid_if_present: boolean;
+  source_image_safe_ref_present: boolean;
+  external_image_accessibility_known: boolean;
+  raw_image_url_masked: true;
+  raw_values_masked: true;
+  model_id_present: boolean;
+  api_key_present_boolean_only: boolean;
+  cost_approved: boolean;
+  scene_id_is_product_rotate: boolean;
+  scene_count_is_one: boolean;
+  blockers: FalKlingI2VPayloadAuditBlocker[];
+  safeSummary: string;
+};
+
+export type FalKlingSubmitFailureGuard = {
+  blocker: `FAL_SUBMIT_HTTP_${number}` | null;
+  submit_http_status: number | null;
+  submit_success: boolean;
+  request_id_present: boolean;
+  polling_attempted: false;
+  result_fetch_attempted: false;
+  retry_loop_attempted: false;
+  generated_clip_count: 0;
+  safe_to_retry: boolean;
+  requires_fresh_approval: boolean;
+  manual_dashboard_billing_check_required: boolean;
+  safeSummary: string;
+};
+
+export type FalKlingSubmitFailureGuardInput = {
+  submitHttpStatus?: number | null;
+  requestId?: string | null;
+};
+
+export type FalKlingPaidRetryGate = {
+  paid_retry_allowed: boolean;
+  payload_audit_pass: boolean;
+  provider_configured: boolean;
+  cost_approved: boolean;
+  fresh_paid_retry_approval: boolean;
+  previous_submit_had_no_request_id: boolean;
+  manual_dashboard_billing_check_done: boolean;
+  blockers: Array<
+    | "FAL_KLING_PAYLOAD_AUDIT_REQUIRED"
+    | "FAL_KLING_I2V_PROVIDER_NOT_CONFIGURED"
+    | "FAL_KLING_I2V_COST_APPROVAL_REQUIRED"
+    | "FAL_KLING_FRESH_PAID_RETRY_APPROVAL_REQUIRED"
+    | "FAL_KLING_PREVIOUS_SUBMIT_REQUEST_ID_PRESENT"
+    | "FAL_KLING_MANUAL_BILLING_CHECK_REQUIRED"
+  >;
+  safeSummary: string;
+};
+
+export type FalKlingPaidRetryGateInput = {
+  payloadAuditPass: boolean;
+  providerConfigured: boolean;
+  costApproved: boolean;
+  freshPaidRetryApproval: boolean;
+  previousSubmitHadNoRequestId: boolean;
+  manualDashboardBillingCheckDone: boolean;
 };
 
 export type ResolveFalKlingI2VReadinessInput = {
@@ -272,6 +380,136 @@ export function createFalKlingI2VProvider(input: FalKlingI2VProviderInput = {}):
         modelId: readiness.modelId
       });
     }
+  };
+}
+
+export function auditFalKlingI2VPaidSmokeRequest(
+  input: FalKlingI2VPayloadAuditInput
+): FalKlingI2VPayloadAudit {
+  return buildFalKlingPayloadAudit(input);
+}
+
+export function validateFalKlingI2VRequestShape(
+  input: FalKlingI2VPayloadAuditInput
+): FalKlingI2VPayloadAudit {
+  return buildFalKlingPayloadAudit(input);
+}
+
+export function buildFalKlingPayloadAudit(input: FalKlingI2VPayloadAuditInput): FalKlingI2VPayloadAudit {
+  const duration = normalizeDuration(input.duration);
+  const promptPresent = hasValue(input.prompt ?? undefined);
+  const imageUrlPresent = hasValue(input.imageUrl ?? undefined);
+  const durationValid = FAL_KLING_VALID_DURATIONS.has(duration);
+  const aspectRatio = input.aspectRatio?.trim() ?? "";
+  const aspectRatioValid = FAL_KLING_VALID_ASPECT_RATIOS.has(aspectRatio);
+  const cfgScaleValid = input.cfgScale === undefined
+    || input.cfgScale === null
+    || Number.isFinite(input.cfgScale) && input.cfgScale >= 0;
+  const sourceImageSafeRefPresent = hasValue(input.sourceImageSafeRef ?? undefined);
+  const externalImageAccessibilityKnown = input.externalImageAccessibilityKnown === true;
+  const modelIdPresent = hasValue(input.modelId ?? undefined);
+  const apiKeyPresent = input.apiKeyPresent === true;
+  const costApproved = input.costApproved === true;
+  const sceneIdIsProductRotate = input.sceneId === undefined
+    || input.sceneId === null
+    || input.sceneId === PAID_SMOKE_SCENE_ID;
+  const sceneCountIsOne = input.sceneCount === undefined || input.sceneCount === 1;
+  const blockers: FalKlingI2VPayloadAuditBlocker[] = [];
+
+  if (!promptPresent) blockers.push("FAL_KLING_PROMPT_MISSING");
+  if (!imageUrlPresent) blockers.push("FAL_KLING_IMAGE_URL_MISSING");
+  if (!durationValid) blockers.push("FAL_KLING_DURATION_INVALID");
+  if (durationValid && duration !== "5") blockers.push("FAL_KLING_PAID_SMOKE_DURATION_NOT_5");
+  if (!aspectRatioValid) blockers.push("FAL_KLING_ASPECT_RATIO_INVALID");
+  if (aspectRatioValid && aspectRatio !== DEFAULT_ASPECT_RATIO) {
+    blockers.push("FAL_KLING_PAID_SMOKE_ASPECT_RATIO_NOT_9_16");
+  }
+  if (!hasValue(input.negativePrompt ?? undefined)) blockers.push("FAL_KLING_NEGATIVE_PROMPT_MISSING");
+  if (!cfgScaleValid) blockers.push("FAL_KLING_CFG_SCALE_INVALID");
+  if (!sourceImageSafeRefPresent) blockers.push("FAL_KLING_SOURCE_IMAGE_SAFE_REF_MISSING");
+  if (!externalImageAccessibilityKnown) blockers.push("FAL_KLING_EXTERNAL_IMAGE_ACCESSIBILITY_UNKNOWN");
+  if (!modelIdPresent) blockers.push("FAL_KLING_I2V_MODEL_ID_MISSING");
+  if (!apiKeyPresent) blockers.push("FAL_API_KEY_MISSING");
+  if (!costApproved) blockers.push("FAL_KLING_I2V_COST_APPROVAL_REQUIRED");
+  if (!sceneIdIsProductRotate) blockers.push("FAL_KLING_PAID_SMOKE_SCENE_INVALID");
+  if (!sceneCountIsOne) blockers.push("FAL_KLING_PAID_SMOKE_SCENE_COUNT_INVALID");
+
+  return {
+    payload_shape_valid: blockers.length === 0,
+    prompt_present: promptPresent,
+    image_url_present: imageUrlPresent,
+    duration_valid: durationValid,
+    duration_is_5_or_10: durationValid,
+    duration_is_paid_smoke_5_seconds: duration === "5",
+    aspect_ratio_valid: aspectRatioValid,
+    aspect_ratio_is_9_16: aspectRatio === DEFAULT_ASPECT_RATIO,
+    negative_prompt_present: hasValue(input.negativePrompt ?? undefined),
+    cfg_scale_valid_if_present: cfgScaleValid,
+    source_image_safe_ref_present: sourceImageSafeRefPresent,
+    external_image_accessibility_known: externalImageAccessibilityKnown,
+    raw_image_url_masked: true,
+    raw_values_masked: true,
+    model_id_present: modelIdPresent,
+    api_key_present_boolean_only: apiKeyPresent,
+    cost_approved: costApproved,
+    scene_id_is_product_rotate: sceneIdIsProductRotate,
+    scene_count_is_one: sceneCountIsOne,
+    blockers,
+    safeSummary: blockers.length === 0
+      ? "fal Kling I2V paid-smoke payload shape is valid; raw image URL, model id, API key, and request body are masked."
+      : `fal Kling I2V paid-smoke payload shape is blocked by ${blockers.length} sanitized issue(s).`
+  };
+}
+
+export function guardFalKlingSubmitFailure(
+  input: FalKlingSubmitFailureGuardInput
+): FalKlingSubmitFailureGuard {
+  const submitHttpStatus = input.submitHttpStatus ?? null;
+  const requestIdPresent = hasValue(input.requestId ?? undefined);
+  const isHttpSubmitFailure = submitHttpStatus !== null && submitHttpStatus >= 500;
+  const blocker = isHttpSubmitFailure && !requestIdPresent
+    ? `FAL_SUBMIT_HTTP_${submitHttpStatus}` as const
+    : null;
+
+  return {
+    blocker,
+    submit_http_status: submitHttpStatus,
+    submit_success: blocker === null && requestIdPresent,
+    request_id_present: requestIdPresent,
+    polling_attempted: false,
+    result_fetch_attempted: false,
+    retry_loop_attempted: false,
+    generated_clip_count: 0,
+    safe_to_retry: false,
+    requires_fresh_approval: blocker !== null,
+    manual_dashboard_billing_check_required: blocker !== null,
+    safeSummary: blocker
+      ? `${blocker}: submit failed before request id; polling, result fetch, and retry are blocked until fresh approval.`
+      : "No no-request-id submit failure detected; live execution remains separately gated."
+  };
+}
+
+export function evaluateFalKlingPaidRetryGate(input: FalKlingPaidRetryGateInput): FalKlingPaidRetryGate {
+  const blockers: FalKlingPaidRetryGate["blockers"] = [];
+  if (!input.payloadAuditPass) blockers.push("FAL_KLING_PAYLOAD_AUDIT_REQUIRED");
+  if (!input.providerConfigured) blockers.push("FAL_KLING_I2V_PROVIDER_NOT_CONFIGURED");
+  if (!input.costApproved) blockers.push("FAL_KLING_I2V_COST_APPROVAL_REQUIRED");
+  if (!input.freshPaidRetryApproval) blockers.push("FAL_KLING_FRESH_PAID_RETRY_APPROVAL_REQUIRED");
+  if (!input.previousSubmitHadNoRequestId) blockers.push("FAL_KLING_PREVIOUS_SUBMIT_REQUEST_ID_PRESENT");
+  if (!input.manualDashboardBillingCheckDone) blockers.push("FAL_KLING_MANUAL_BILLING_CHECK_REQUIRED");
+
+  return {
+    paid_retry_allowed: blockers.length === 0,
+    payload_audit_pass: input.payloadAuditPass,
+    provider_configured: input.providerConfigured,
+    cost_approved: input.costApproved,
+    fresh_paid_retry_approval: input.freshPaidRetryApproval,
+    previous_submit_had_no_request_id: input.previousSubmitHadNoRequestId,
+    manual_dashboard_billing_check_done: input.manualDashboardBillingCheckDone,
+    blockers,
+    safeSummary: blockers.length === 0
+      ? "fal Kling paid retry gate passed; execution still must be exactly one scene and one submit."
+      : "fal Kling paid retry is blocked until payload audit, provider config, fresh approval, previous no-request-id evidence, and manual billing check are all true."
   };
 }
 
@@ -549,6 +787,11 @@ function safeOutputPrefix(sceneId: string) {
 
 function stableSeed(sceneId: string) {
   return Array.from(sceneId).reduce((seed, char) => seed + char.charCodeAt(0), 1_000);
+}
+
+function normalizeDuration(duration: string | number | null | undefined) {
+  if (typeof duration === "number") return Number.isFinite(duration) ? String(duration) : "";
+  return duration?.trim() ?? "";
 }
 
 function positiveInt(value: string | undefined, fallback: number) {

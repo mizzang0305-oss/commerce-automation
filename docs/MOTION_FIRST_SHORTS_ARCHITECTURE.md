@@ -103,6 +103,22 @@ Paid API calls remain blocked in this adapter PR. The future paid local smoke
 approval phrase is documented as `APPROVE_FAL_KLING_I2V_PAID_LOCAL_SMOKE_ONLY`
 and must be handled in a separate prompt/PR.
 
+The first one-scene paid smoke reached fal submit once and stopped with:
+
+```text
+FAL_SUBMIT_HTTP_502
+```
+
+The submit failed before a request id was returned. The architecture now treats
+that as a hard stop: no polling, no result fetch, no retry loop, no second
+submit, and no generated clip. A future retry must first pass a no-cost payload
+audit, confirm provider config and cost approval, complete a manual fal
+dashboard billing/credit check, and provide fresh explicit retry approval:
+
+```text
+APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502
+```
+
 See `docs/FAL_KLING_I2V_PROVIDER.md`.
 
 ## ComfyUI Wan I2V Adapter
@@ -154,6 +170,7 @@ Required blockers:
 - `FAL_KLING_I2V_PROVIDER_NOT_CONFIGURED`
 - `FAL_KLING_I2V_LIVE_EXECUTION_NOT_APPROVED`
 - `FAL_KLING_I2V_PAID_API_CALL_BLOCKED`
+- `FAL_SUBMIT_HTTP_502`
 - `COMFYUI_WAN_I2V_PROVIDER_DISABLED`
 - `COMFYUI_BASE_URL_MISSING`
 - `COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING`
