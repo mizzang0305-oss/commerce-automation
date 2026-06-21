@@ -1,8 +1,8 @@
 import { buildMotionManifest } from "./motionManifest";
 import { evaluateMotionQualityGate, type MotionQualityGateReport } from "./motionQualityGate";
+import { createCloudImageToVideoProvider } from "./providers/cloudImageToVideoProvider";
 import { createAnimatedStillProvider } from "./providers/animatedStillProvider";
 import { createComfyUiWanI2VProvider } from "./providers/comfyuiWanI2VProvider";
-import { createLtxVideoProvider } from "./providers/ltxVideoProvider";
 import { createSlideshowProvider } from "./providers/slideshowProvider";
 import type {
   MotionClipResult,
@@ -14,8 +14,8 @@ import type {
 } from "./motionProviderTypes";
 
 export const MOTION_PROVIDER_PRIORITY = [
+  "cloud_image_to_video",
   "comfyui_wan_i2v",
-  "ltx_video",
   "animated_still",
   "slideshow"
 ] as const satisfies readonly MotionProviderName[];
@@ -138,8 +138,8 @@ async function generateWithSelectedProvider(
 
 function defaultMotionProviders(): MotionProvider[] {
   return [
+    createCloudImageToVideoProvider(),
     createComfyUiWanI2VProvider(),
-    createLtxVideoProvider(),
     createAnimatedStillProvider(),
     createSlideshowProvider()
   ];

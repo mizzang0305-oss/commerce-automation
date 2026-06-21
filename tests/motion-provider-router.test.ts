@@ -20,8 +20,8 @@ import type {
 describe("motion provider router scaffold", () => {
   test("prefers ComfyUI Wan I2V when configured", () => {
     const selection = selectMotionProvider([
+      provider("cloud_image_to_video", "image_to_video_generated", false),
       provider("comfyui_wan_i2v", "image_to_video_generated", true),
-      provider("ltx_video", "real_motion_generated", true),
       provider("animated_still", "animated_still_generated", true),
       provider("slideshow", "slideshow_generated", true)
     ]);
@@ -29,29 +29,29 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "comfyui_wan_i2v",
-      fallback_chain: ["comfyui_wan_i2v"]
+      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v"]
     });
   });
 
-  test("falls back to LTX Video when ComfyUI Wan is not configured", () => {
+  test("falls back to cloud image-to-video when local ComfyUI Wan is unavailable", () => {
     const selection = selectMotionProvider([
+      provider("cloud_image_to_video", "image_to_video_generated", true),
       provider("comfyui_wan_i2v", "image_to_video_generated", false),
-      provider("ltx_video", "real_motion_generated", true),
       provider("animated_still", "animated_still_generated", true),
       provider("slideshow", "slideshow_generated", true)
     ]);
 
     expect(selection).toMatchObject({
       ok: true,
-      provider_name: "ltx_video",
-      fallback_chain: ["comfyui_wan_i2v", "ltx_video"]
+      provider_name: "cloud_image_to_video",
+      fallback_chain: ["cloud_image_to_video"]
     });
   });
 
   test("falls back to animated still when video providers are not configured", () => {
     const selection = selectMotionProvider([
+      provider("cloud_image_to_video", "image_to_video_generated", false),
       provider("comfyui_wan_i2v", "image_to_video_generated", false),
-      provider("ltx_video", "real_motion_generated", false),
       provider("animated_still", "animated_still_generated", true),
       provider("slideshow", "slideshow_generated", true)
     ]);
@@ -59,15 +59,15 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: true,
       provider_name: "animated_still",
-      fallback_chain: ["comfyui_wan_i2v", "ltx_video", "animated_still"]
+      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v", "animated_still"]
     });
   });
 
   test("slideshow provider is blocked for motion-first final upload", async () => {
     const router = createMotionProviderRouter({
       providers: [
+        provider("cloud_image_to_video", "image_to_video_generated", false),
         provider("comfyui_wan_i2v", "image_to_video_generated", false),
-        provider("ltx_video", "real_motion_generated", false),
         provider("animated_still", "animated_still_generated", false),
         provider("slideshow", "slideshow_generated", true)
       ]
@@ -91,8 +91,8 @@ describe("motion provider router scaffold", () => {
 
   test("returns MOTION_PROVIDER_NOT_CONFIGURED when none are configured", () => {
     const selection = selectMotionProvider([
+      provider("cloud_image_to_video", "image_to_video_generated", false),
       provider("comfyui_wan_i2v", "image_to_video_generated", false),
-      provider("ltx_video", "real_motion_generated", false),
       provider("animated_still", "animated_still_generated", false),
       provider("slideshow", "slideshow_generated", false)
     ]);
@@ -100,7 +100,7 @@ describe("motion provider router scaffold", () => {
     expect(selection).toMatchObject({
       ok: false,
       blocker: "MOTION_PROVIDER_NOT_CONFIGURED",
-      fallback_chain: ["comfyui_wan_i2v", "ltx_video", "animated_still", "slideshow"]
+      fallback_chain: ["cloud_image_to_video", "comfyui_wan_i2v", "animated_still", "slideshow"]
     });
   });
 });
