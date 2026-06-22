@@ -265,6 +265,10 @@ python -m compileall python-worker
 - `/api/candidates/import-coupang` accepts only Coupang product detail URLs, strips tracking parameters, validates optional Coupang Partners affiliate URLs, and returns no queue, worker, or upload side effects.
 - Live Coupang Partners import mapping must normalize `selected_affiliate_url`, `affiliate_url`, `landing_url`, `product_url`, `productUrl`, `deeplink_url`, and `shorten_url` into `selected_affiliate_url` when the selected value is a safe `link.coupang.com` Partners URL.
 - Live Coupang Partners import mapping must normalize `thumbnail_url`, `image_url`, `product_image_url`, `productImage`, `productImageUrl`, `imagePath`, and `image_path` into the product image readiness path, including protocol-relative image URLs.
+- Coupang Partners auth diagnostics must report booleans only: env file present, provider enabled, access key present, secret key present, customer/partner id present, signature builder present, timestamp check present, request path present, method present, and raw values masked.
+- Coupang Partners signature self-tests must use dummy credentials only and must not print raw secrets, raw HMAC signatures, Authorization headers, raw API URLs, raw affiliate URLs, or raw image URLs.
+- A generic Coupang Partners HTTP 401 must map to `COUPANG_PARTNERS_API_HTTP_401`, block candidate import, block automatic retry, require fresh approval, and keep render/R2/product_assets/YouTube side effects false.
+- Event-aware live scout must prove `baseline_candidate_excluded=true` before scout provider calls, ranking, or import; failure maps to `BASELINE_CANDIDATE_EXCLUSION_NOT_PROVEN`.
 - Import mapping blockers such as `COUPANG_IMPORT_AFFILIATE_URL_INVALID` and `COUPANG_IMPORT_IMAGE_URL_INVALID` must not collapse into generic `AUTO_REAL_PRODUCT_REQUIRED`.
 - Coupang CSV rows use the same product key and affiliate readiness enrichment as manual `/candidates` input.
 - Coupang candidate image URLs accept only usable `http`/`https` image sources; empty, `file:`, `javascript:`, and other unsafe schemes are blocked from render readiness.

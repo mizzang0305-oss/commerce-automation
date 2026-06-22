@@ -200,6 +200,51 @@ describe("event-aware Coupang candidate scout", () => {
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
   });
+
+  test("proves baseline exclusion before scout provider configuration is required", async () => {
+    const result = await scoutEventAwareCoupangCandidate({
+      today: "2026-06-23",
+      baselineCandidateId,
+      existingCandidates: []
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.blocked_reasons).toEqual(["EVENT_AWARE_SCOUT_PROVIDER_NOT_CONFIGURED"]);
+    expect(result.safe_summary.baseline_candidate_excluded).toBe(true);
+    expect(result.side_effects.candidate_import_written).toBe(false);
+    expect(result.side_effects.db_write_scope).toBe("none");
+  });
+
+  test("blocks live scout before provider call when baseline exclusion is not proven", async () => {
+    const searchProducts = vi.fn(async (): Promise<CoupangCandidateInput[]> => [
+      productInput({
+        productName: "Rainy season drying rack set",
+        productId: "770770770",
+        affiliateSlug: "rain-safe",
+        imageSlug: "rain-safe",
+        keyword: "rainy",
+        category: "?앺솢?⑺뭹"
+      })
+    ]);
+    const repository = {
+      getProductCandidates: vi.fn(async () => []),
+      upsertProductCandidates: vi.fn(async (items: ProductCandidate[]) => items)
+    };
+
+    const result = await scoutEventAwareCoupangCandidate({
+      today: "2026-06-23",
+      baselineCandidateId: "",
+      repository,
+      searchProducts,
+      maxKeywordsToScout: 1
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.blocked_reasons).toEqual(["BASELINE_CANDIDATE_EXCLUSION_NOT_PROVEN"]);
+    expect(result.safe_summary.baseline_candidate_excluded).toBe(false);
+    expect(searchProducts).not.toHaveBeenCalled();
+    expect(repository.upsertProductCandidates).not.toHaveBeenCalled();
+  });
 });
 
 function candidate(input: {

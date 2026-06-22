@@ -46,6 +46,19 @@ describe("Coupang scout compatibility diagnostics", () => {
     }).classification).toBe("COUPANG_SCOUT_AUTH_SIGNATURE_EXPIRED");
   });
 
+  it("maps a generic HTTP 401 to a fresh-approval auth blocker without side effects", () => {
+    const diagnostic = classifyCoupangScoutApiResponse({
+      http_status: 401,
+      body: {}
+    });
+
+    expect(diagnostic.ok).toBe(false);
+    expect(diagnostic.classification).toBe("COUPANG_PARTNERS_API_HTTP_401");
+    expect(diagnostic.external_call_allowed).toBe(false);
+    expect(diagnostic.next_auto_action).toBe("FIX_COUPANG_PARTNERS_AUTHORIZATION");
+    expect(diagnostic.side_effects).toEqual(COUPANG_SCOUT_SIDE_EFFECTS);
+  });
+
   it("blocks endpoint family mismatch before an external call", () => {
     const diagnostic = buildCoupangScoutCompatibilityDiagnostic({
       api_family: "seller_openapi",
