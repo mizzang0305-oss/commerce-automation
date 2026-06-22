@@ -81,13 +81,41 @@ export async function scoutEventAwareCoupangCandidate(input: {
   const keywordPlan = selectedEvent ? buildEventProductKeywordPlan(selectedEvent) : null;
   const existingCandidates = input.existingCandidates ?? await input.repository?.getProductCandidates() ?? [];
   const baseline = existingCandidates.find((candidate) => candidate.id === input.baselineCandidateId);
+  const baselineCandidateExclusionProven = isBaselineCandidateExclusionProven(input.baselineCandidateId);
   const sideEffects = noSideEffects();
 
   if (!selectedEvent || !keywordPlan) {
-    return blockedResult(eventWindow, events, selectedEvent, keywordPlan, ["EVENT_AWARE_EVENT_NOT_FOUND"], sideEffects);
+    return blockedResult(
+      eventWindow,
+      events,
+      selectedEvent,
+      keywordPlan,
+      ["EVENT_AWARE_EVENT_NOT_FOUND"],
+      sideEffects,
+      baselineCandidateExclusionProven
+    );
+  }
+  if (!baselineCandidateExclusionProven) {
+    return blockedResult(
+      eventWindow,
+      events,
+      selectedEvent,
+      keywordPlan,
+      ["BASELINE_CANDIDATE_EXCLUSION_NOT_PROVEN"],
+      sideEffects,
+      false
+    );
   }
   if (!input.searchProducts) {
-    return blockedResult(eventWindow, events, selectedEvent, keywordPlan, ["EVENT_AWARE_SCOUT_PROVIDER_NOT_CONFIGURED"], sideEffects);
+    return blockedResult(
+      eventWindow,
+      events,
+      selectedEvent,
+      keywordPlan,
+      ["EVENT_AWARE_SCOUT_PROVIDER_NOT_CONFIGURED"],
+      sideEffects,
+      true
+    );
   }
 
   const keywordInputs = await collectScoutInputs({
@@ -97,18 +125,32 @@ export async function scoutEventAwareCoupangCandidate(input: {
     maxKeywordsToScout: input.maxKeywordsToScout ?? 3,
     searchLimitPerKeyword: input.searchLimitPerKeyword ?? 5
   });
-  const importedCandidates = keywordInputs.flatMap((candidateInput) =>
-    buildCandidate(candidateInput, existingCandidates)
-  );
+  const baselineProductKeys = baseline?.product_key ? [baseline.product_key] : [];
+  const baselineProductNames = baseline?.product_name ? [baseline.product_name] : [];
+  const importedCandidates = keywordInputs
+    .flatMap((candidateInput) => buildCandidate(candidateInput, existingCandidates))
+    .filter((candidate) => !isBaselineCandidate(candidate, {
+      baselineCandidateId: input.baselineCandidateId,
+      baselineProductKeys,
+      baselineProductNames
+    }));
   const ranked = rankEventAwareCandidates(importedCandidates, keywordPlan, {
     baselineCandidateId: input.baselineCandidateId,
-    baselineProductKeys: baseline?.product_key ? [baseline.product_key] : [],
-    baselineProductNames: baseline?.product_name ? [baseline.product_name] : []
+    baselineProductKeys,
+    baselineProductNames
   });
   const selected = ranked[0] ?? null;
 
   if (!selected) {
-    return blockedResult(eventWindow, events, selectedEvent, keywordPlan, ["EVENT_AWARE_CANDIDATE_NOT_FOUND"], sideEffects);
+    return blockedResult(
+      eventWindow,
+      events,
+      selectedEvent,
+      keywordPlan,
+      ["EVENT_AWARE_CANDIDATE_NOT_FOUND"],
+      sideEffects,
+      true
+    );
   }
 
   if (input.repository) {
@@ -129,7 +171,7 @@ export async function scoutEventAwareCoupangCandidate(input: {
     ready_for_low_cost_motion_v1_1_render: true,
     blocked_reasons: [],
     safe_summary: {
-      baseline_candidate_excluded: selected.candidate.id !== input.baselineCandidateId,
+      baseline_candidate_excluded: baselineCandidateExclusionProven && selected.candidate.id !== input.baselineCandidateId,
       affiliate_url_present: hasAffiliate(selected.candidate),
       product_image_present: hasImage(selected.candidate),
       policy_risk_clear: selected.score.policySafetyScore === 100,
@@ -184,7 +226,8 @@ function blockedResult(
   selectedEvent: CommerceEvent | null,
   keywordPlan: EventProductKeywordPlan | null,
   blockedReasons: string[],
-  sideEffects: EventAwareCandidateScoutSideEffects
+  sideEffects: EventAwareCandidateScoutSideEffects,
+  baselineCandidateExcluded = false
 ): EventAwareCandidateScoutResult {
   return {
     ok: false,
@@ -198,7 +241,7 @@ function blockedResult(
     ready_for_low_cost_motion_v1_1_render: false,
     blocked_reasons: blockedReasons,
     safe_summary: {
-      baseline_candidate_excluded: false,
+      baseline_candidate_excluded: baselineCandidateExcluded,
       affiliate_url_present: false,
       product_image_present: false,
       policy_risk_clear: false,
@@ -232,6 +275,32 @@ function noSideEffects(): EventAwareCandidateScoutSideEffects {
     public_upload: false,
     unlisted_upload: false
   };
+}
+
+function isBaselineCandidateExclusionProven(baselineCandidateId: string) {
+  return Boolean(baselineCandidateId.trim());
+}
+
+function isBaselineCandidate(
+  candidate: ProductCandidate,
+  input: {
+    baselineCandidateId: string;
+    baselineProductKeys: string[];
+    baselineProductNames: string[];
+  }
+) {
+  if (candidate.id === input.baselineCandidateId) {
+    return true;
+  }
+  if (candidate.product_key && input.baselineProductKeys.includes(candidate.product_key)) {
+    return true;
+  }
+  const productName = normalizeComparable(candidate.product_name);
+  return Boolean(productName && input.baselineProductNames.map(normalizeComparable).includes(productName));
+}
+
+function normalizeComparable(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
 function unique<T>(values: T[]) {

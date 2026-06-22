@@ -10,6 +10,7 @@ export type CoupangScoutClassification =
   | "COUPANG_SCOUT_AUTH_SIGNATURE_INVALID"
   | "COUPANG_SCOUT_AUTH_SIGNATURE_EXPIRED"
   | "COUPANG_SCOUT_AUTH_IP_NOT_ALLOWED"
+  | "COUPANG_PARTNERS_API_HTTP_401"
   | "COUPANG_SCOUT_RESPONSE_CONTRACT_MISMATCH"
   | "COUPANG_SCOUT_API_ERROR"
   | "COUPANG_SCOUT_UNKNOWN_400";
@@ -214,10 +215,10 @@ export function classifyCoupangScoutApiResponse(input: {
   const code = safeTrim(body.code);
 
   if (input.http_status >= 200 && input.http_status < 300 && code && code !== "200" && code !== "0") {
-    return apiErrorDiagnostic(classifyMessage(message, code));
+    return apiErrorDiagnostic(classifyMessage(message, code, input.http_status));
   }
   if (input.http_status === 401 || input.http_status === 403) {
-    return apiErrorDiagnostic(classifyMessage(message, code));
+    return apiErrorDiagnostic(classifyMessage(message, code, input.http_status));
   }
   if (Array.isArray(body.data) || Array.isArray(body.products)) {
     return diagnosticResult({
@@ -237,7 +238,7 @@ export function classifyCoupangScoutApiResponse(input: {
   return apiErrorDiagnostic("COUPANG_SCOUT_API_ERROR");
 }
 
-function classifyMessage(message: string, code: string): CoupangScoutClassification {
+function classifyMessage(message: string, code: string, httpStatus?: number): CoupangScoutClassification {
   if (message.includes("keyword is invalid")) {
     return "COUPANG_SCOUT_KEYWORD_INVALID";
   }
@@ -249,6 +250,9 @@ function classifyMessage(message: string, code: string): CoupangScoutClassificat
   }
   if (message.includes("not allowed ip") || message.includes("ip not allowed")) {
     return "COUPANG_SCOUT_AUTH_IP_NOT_ALLOWED";
+  }
+  if (httpStatus === 401) {
+    return "COUPANG_PARTNERS_API_HTTP_401";
   }
   if (code === "400") {
     return "COUPANG_SCOUT_UNKNOWN_400";
@@ -264,9 +268,7 @@ function apiErrorDiagnostic(classification: CoupangScoutClassification) {
     endpoint_family: "partners_affiliate",
     safe_error: safeErrorFor(classification),
     blocked_reasons: [reason],
-    next_auto_action: classification.startsWith("COUPANG_SCOUT_AUTH_")
-      ? "FIX_COUPANG_SCOUT_AUTH_CONTRACT"
-      : "FIX_COUPANG_SCOUT_REQUEST_CONTRACT",
+    next_auto_action: nextActionForClassification(classification),
     external_call_allowed: false,
     attempts: []
   });
@@ -282,11 +284,23 @@ function safeErrorFor(classification: CoupangScoutClassification) {
       return "Coupang scout authentication signature expired.";
     case "COUPANG_SCOUT_AUTH_IP_NOT_ALLOWED":
       return "Coupang scout caller IP is not allowed for this credential.";
+    case "COUPANG_PARTNERS_API_HTTP_401":
+      return "Coupang Partners authentication returned HTTP 401.";
     case "COUPANG_SCOUT_RESPONSE_CONTRACT_MISMATCH":
       return "Coupang scout response contract was not recognized.";
     default:
       return "Coupang scout request failed with a safe classified error.";
   }
+}
+
+function nextActionForClassification(classification: CoupangScoutClassification) {
+  if (classification === "COUPANG_PARTNERS_API_HTTP_401") {
+    return "FIX_COUPANG_PARTNERS_AUTHORIZATION";
+  }
+  if (classification.startsWith("COUPANG_SCOUT_AUTH_")) {
+    return "FIX_COUPANG_SCOUT_AUTH_CONTRACT";
+  }
+  return "FIX_COUPANG_SCOUT_REQUEST_CONTRACT";
 }
 
 function diagnosticResult(input: {

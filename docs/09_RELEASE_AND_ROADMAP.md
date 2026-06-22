@@ -383,12 +383,17 @@ Not included:
 
 Next motion-first milestones:
 
-1. Review and merge the fal Kling adapter/readiness/mock PR.
-2. Decide API budget and provider terms for fal/Kling.
-3. For any retry after `FAL_SUBMIT_HTTP_502`, first run the no-cost payload audit, manually check fal dashboard billing/credit state, and require fresh retry approval `APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502`.
-4. In that future smoke, verify paid call readiness without YouTube, R2, DB writes, migrations, public upload, unlisted upload, production deploy, or committed media artifacts.
-5. Keep local ComfyUI fallback documented while the Desktop/backend runtime remains unavailable.
-6. Only after motion evidence is reviewed by a human, decide whether to connect generated motion clips to a private-upload package gate.
+1. Resolve `COUPANG_PARTNERS_API_HTTP_401` outside the repository by fixing or
+   refreshing Coupang Partners authorization. The guard PR documents the
+   no-retry behavior and requires fresh approval before the next live scout.
+2. Rerun exactly one event-aware live scout/import gate only after baseline
+   exclusion is proven and fresh explicit approval is provided.
+3. Review and merge the fal Kling adapter/readiness/mock PR.
+4. Decide API budget and provider terms for fal/Kling.
+5. For any retry after `FAL_SUBMIT_HTTP_502`, first run the no-cost payload audit, manually check fal dashboard billing/credit state, and require fresh retry approval `APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502`.
+6. In that future smoke, verify paid call readiness without YouTube, R2, DB writes, migrations, public upload, unlisted upload, production deploy, or committed media artifacts.
+7. Keep local ComfyUI fallback documented while the Desktop/backend runtime remains unavailable.
+8. Only after motion evidence is reviewed by a human, decide whether to connect generated motion clips to a private-upload package gate.
 
 Setup kit safety:
 

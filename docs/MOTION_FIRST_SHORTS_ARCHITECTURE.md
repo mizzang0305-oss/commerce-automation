@@ -194,6 +194,24 @@ Do not retry local smoke until the operator manually starts ComfyUI successfully
 
 See `docs/COMFYUI_WAN_I2V_PROVIDER.md`.
 
+## Event-Aware Coupang Scout Guard
+
+The event-aware live Coupang scout is an upstream product-source gate for the
+low-cost motion v1.1 next-product flow. It must prove baseline exclusion before
+any live scout provider call, ranking, or candidate import:
+
+```text
+baseline_candidate_id=candidate-490aa6d25e8ea89d
+baseline_candidate_excluded=true
+```
+
+If baseline exclusion is not proven, the scout stops with
+`BASELINE_CANDIDATE_EXCLUSION_NOT_PROVEN`. If Coupang Partners returns HTTP 401,
+the scout stops with `COUPANG_PARTNERS_API_HTTP_401`; it does not retry, import a
+candidate, render, upload to R2, write `product_assets`, execute YouTube, call
+`videos.insert`, or allow public/unlisted upload. See
+`docs/COUPANG_PARTNERS_AUTH_DIAGNOSTICS.md`.
+
 ## Quality Gate
 
 The final upload gate requires:
