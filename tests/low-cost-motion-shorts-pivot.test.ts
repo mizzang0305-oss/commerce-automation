@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, test, vi } from "vitest";
 
@@ -170,6 +170,28 @@ describe("advanced still motion plan and quality gate", () => {
     ]));
   });
 
+  test("low-cost motion plan uses jitter-safe smoothed transforms", () => {
+    const plan = buildDefaultAdvancedStillMotionPlan({
+      candidateId: "candidate-490aa6d25e8ea89d",
+      productSafeRef: "safe:coupang:candidate-490aa6d25e8ea89d"
+    });
+
+    for (const scene of plan.sceneBriefs) {
+      expect(scene.motionSmoothing).toMatchObject({
+        quantizeCropToEvenIntegers: true,
+        centerLockedWithinScene: true,
+        randomCameraJitter: false,
+        scaleEasingMonotonic: true,
+        easingFunction: "smootherstep"
+      });
+      expect(scene.motionSmoothing.maxScaleDelta).toBeLessThanOrEqual(0.025);
+      expect(scene.motionSmoothing.maxPanDeltaRatio).toBeLessThanOrEqual(0.025);
+    }
+
+    const orbitScene = plan.sceneBriefs.find((scene) => scene.requiredMotion === "product_orbit_illusion");
+    expect(orbitScene?.motionSmoothing.maxOrbitDeltaDegrees).toBeLessThanOrEqual(1.5);
+  });
+
   test("low-cost motion quality gate accepts sufficient programmed motion", () => {
     const report = evaluateLowCostMotionQualityGate({
       paidI2VSceneCount: 0,
@@ -180,13 +202,28 @@ describe("advanced still motion plan and quality gate", () => {
       voiceoverAudioPresent: true,
       hookVisibleFirstSecond: true,
       noTextClipped: true,
-      publicUploadBlocked: true
+      publicUploadBlocked: true,
+      rendererExecuted: true,
+      motionSmoothingApplied: true,
+      subpixelJitterFixed: true,
+      cropCenterDeltaMaxPx: 1,
+      cameraShakeScore: 0.01,
+      microJitterScore: 0.02,
+      maxZoomDelta: 0.02,
+      maxPanDeltaRatio: 0.02,
+      topSafeMarginPx: 180,
+      bottomSafeMarginPx: 260,
+      rightUiMarginPx: 170
     });
 
     expect(report).toMatchObject({
-      final_upload_allowed: false,
+      final_upload_allowed: true,
       low_cost_motion_ready: true,
-      blockers: ["LOW_COST_MOTION_RENDERER_NOT_EXECUTED"]
+      blockers: [],
+      motion_smoothing_applied: true,
+      subpixel_jitter_fixed: true,
+      caption_top_margin_px: 180,
+      caption_bottom_margin_px: 260
     });
   });
 
@@ -209,6 +246,44 @@ describe("advanced still motion plan and quality gate", () => {
         "LOW_COST_MOTION_SCENE_COUNT_TOO_LOW",
         "STATIC_ONLY_RATIO_TOO_HIGH",
         "SAME_FRAME_RATIO_TOO_HIGH"
+      ])
+    });
+  });
+
+  test("low-cost motion quality gate blocks micro jitter and tight top captions", () => {
+    const report = evaluateLowCostMotionQualityGate({
+      paidI2VSceneCount: 0,
+      lowCostMotionSceneCount: 8,
+      staticOnlyRatio: 0.12,
+      sameFrameRatio: 0.2,
+      captionSafeAreaPass: true,
+      voiceoverAudioPresent: true,
+      hookVisibleFirstSecond: true,
+      noTextClipped: true,
+      publicUploadBlocked: true,
+      rendererExecuted: true,
+      motionSmoothingApplied: false,
+      subpixelJitterFixed: false,
+      cropCenterDeltaMaxPx: 2.4,
+      cameraShakeScore: 0.18,
+      microJitterScore: 0.22,
+      maxZoomDelta: 0.05,
+      maxPanDeltaRatio: 0.04,
+      topSafeMarginPx: 132,
+      bottomSafeMarginPx: 230,
+      rightUiMarginPx: 120
+    });
+
+    expect(report).toMatchObject({
+      final_upload_allowed: false,
+      low_cost_motion_ready: false,
+      blockers: expect.arrayContaining([
+        "MICRO_JITTER_DETECTED",
+        "SUBPIXEL_CROP_JITTER_DETECTED",
+        "CAMERA_SHAKE_TOO_HIGH",
+        "TEXT_TOP_SAFE_AREA_TOO_TIGHT",
+        "TEXT_CLIPPED_OR_TOO_CLOSE_TO_EDGE",
+        "LOW_COST_MOTION_TOO_AGGRESSIVE"
       ])
     });
   });
@@ -257,6 +332,25 @@ describe("low-cost motion pivot docs", () => {
     expect(docs).toContain("advanced still motion");
     expect(docs).toContain("PAID_I2V_AUTOPILOT_BLOCKED");
     expect(docs).not.toContain("paid I2V is the default autopilot provider");
+  });
+});
+
+describe("low-cost motion jitter-fixed local render script", () => {
+  test("script is local-only and writes smoothing proof fields", () => {
+    const scriptPath = "scripts/render-low-cost-motion-jitter-fixed.mjs";
+
+    expect(existsSync(scriptPath)).toBe(true);
+    if (!existsSync(scriptPath)) return;
+
+    const script = readFileSync(scriptPath, "utf8");
+    expect(script).toContain("low-cost-motion-shorts-jitter-fixed.mp4");
+    expect(script).toContain("local_review_only");
+    expect(script).toContain("final_upload_allowed");
+    expect(script).toContain("motion_smoothing_applied");
+    expect(script).toContain("subpixel_jitter_fixed");
+    expect(script).toContain("caption_top_margin_px");
+    expect(script).not.toContain("/api/uploads/youtube/execute");
+    expect(script).not.toContain("videos.insert");
   });
 });
 
