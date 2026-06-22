@@ -363,6 +363,11 @@ python -m compileall python-worker
 - `GET /api/events` returns active event seeds without secrets.
 - Upcoming event logic includes only active events inside the 7-30 day window.
 - Event matching excludes duplicate candidates, missing affiliate URLs, and excluded keywords.
+- Event-aware Coupang candidate scout builds an Asia/Seoul rolling 30-day window from the current date.
+- Event-aware scout maps static/seasonal events to primary keywords, secondary keywords, preferred categories, excluded keywords, and blocked categories.
+- Event-aware ranking blocks the baseline candidate, missing affiliate URL, missing product image, policy-risk categories, and low event relevance.
+- Event-aware scout imports at most one candidate and does not render video, create MP4 files, upload to R2, write `product_assets`, execute YouTube uploads, call `videos.insert`, or enable public/unlisted upload.
+- Event-aware safe summaries expose booleans, scores, event names, keyword plans, and candidate id/name/category only; they must not expose raw affiliate URLs, raw image URLs, secrets, tokens, Authorization headers, or raw request URLs.
 - Daily planner prefers `promotion_status=ready`, `duplicate_status=unique`, high candidate score, and higher event priority.
 - Planner excludes product keys already produced on the same plan date.
 - Channel profiles default to `upload_enabled=false` and `manual_upload_only=true`.
