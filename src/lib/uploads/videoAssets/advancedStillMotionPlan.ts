@@ -12,7 +12,19 @@ export type LowCostMotionType =
 
 export type AdvancedStillMotionPlanScene = MotionSceneBrief & {
   requiredMotion: LowCostMotionType;
+  motionSmoothing: AdvancedStillMotionSmoothing;
   programmedMotion: true;
+};
+
+export type AdvancedStillMotionSmoothing = {
+  quantizeCropToEvenIntegers: true;
+  centerLockedWithinScene: true;
+  randomCameraJitter: false;
+  scaleEasingMonotonic: true;
+  easingFunction: "smootherstep";
+  maxScaleDelta: number;
+  maxPanDeltaRatio: number;
+  maxOrbitDeltaDegrees: number;
 };
 
 export type AdvancedStillMotionPlan = {
@@ -81,6 +93,20 @@ function scene(
     handInteraction: overrides.handInteraction ?? false,
     utensilInteraction: overrides.utensilInteraction ?? false,
     productRotateScene: overrides.productRotateScene ?? false,
+    motionSmoothing: buildMotionSmoothing(motionType),
     programmedMotion: true
+  };
+}
+
+function buildMotionSmoothing(motionType: LowCostMotionType): AdvancedStillMotionSmoothing {
+  return {
+    quantizeCropToEvenIntegers: true,
+    centerLockedWithinScene: true,
+    randomCameraJitter: false,
+    scaleEasingMonotonic: true,
+    easingFunction: "smootherstep",
+    maxScaleDelta: motionType === "product_orbit_illusion" ? 0.012 : 0.02,
+    maxPanDeltaRatio: motionType === "product_orbit_illusion" ? 0.012 : 0.02,
+    maxOrbitDeltaDegrees: motionType === "product_orbit_illusion" ? 1.5 : 0
   };
 }

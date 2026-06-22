@@ -7,6 +7,12 @@ export type LowCostMotionQualityBlocker =
   | "VOICEOVER_AUDIO_REQUIRED"
   | "HOOK_NOT_VISIBLE_FIRST_SECOND"
   | "TEXT_CLIPPED"
+  | "TEXT_CLIPPED_OR_TOO_CLOSE_TO_EDGE"
+  | "TEXT_TOP_SAFE_AREA_TOO_TIGHT"
+  | "MICRO_JITTER_DETECTED"
+  | "SUBPIXEL_CROP_JITTER_DETECTED"
+  | "CAMERA_SHAKE_TOO_HIGH"
+  | "LOW_COST_MOTION_TOO_AGGRESSIVE"
   | "PUBLIC_UPLOAD_NOT_BLOCKED"
   | "LOW_COST_MOTION_RENDERER_NOT_EXECUTED";
 
@@ -21,6 +27,17 @@ export type LowCostMotionQualityInput = {
   noTextClipped: boolean;
   publicUploadBlocked: boolean;
   rendererExecuted?: boolean;
+  motionSmoothingApplied?: boolean;
+  subpixelJitterFixed?: boolean;
+  cropCenterDeltaMaxPx?: number;
+  cameraShakeScore?: number;
+  microJitterScore?: number;
+  maxZoomDelta?: number;
+  maxPanDeltaRatio?: number;
+  topSafeMarginPx?: number;
+  bottomSafeMarginPx?: number;
+  rightUiMarginPx?: number;
+  easingFunction?: string;
 };
 
 export type LowCostMotionQualityGateReport = {
@@ -35,6 +52,15 @@ export type LowCostMotionQualityGateReport = {
   hook_visible_first_second: boolean;
   no_text_clipped: boolean;
   public_upload_blocked: boolean;
+  motion_smoothing_applied: boolean;
+  subpixel_jitter_fixed: boolean;
+  max_zoom_delta: number | null;
+  max_pan_delta: number | null;
+  easing_function: string;
+  micro_jitter_score: number | null;
+  caption_top_margin_px: number | null;
+  caption_bottom_margin_px: number | null;
+  right_ui_margin_px: number | null;
   blockers: LowCostMotionQualityBlocker[];
   safeSummary: string;
 };
@@ -42,6 +68,14 @@ export type LowCostMotionQualityGateReport = {
 const MIN_LOW_COST_MOTION_SCENES = 6;
 const MAX_STATIC_ONLY_RATIO = 0.3;
 const MAX_SAME_FRAME_RATIO = 0.35;
+const MAX_CROP_CENTER_DELTA_PX = 1;
+const MAX_CAMERA_SHAKE_SCORE = 0.08;
+const MAX_MICRO_JITTER_SCORE = 0.08;
+const MAX_ZOOM_DELTA = 0.025;
+const MAX_PAN_DELTA_RATIO = 0.025;
+const MIN_TOP_SAFE_MARGIN_PX = 180;
+const MIN_BOTTOM_SAFE_MARGIN_PX = 260;
+const MIN_RIGHT_UI_MARGIN_PX = 170;
 
 export function evaluateLowCostMotionQualityGate(
   input: LowCostMotionQualityInput
@@ -59,6 +93,28 @@ export function evaluateLowCostMotionQualityGate(
   if (!input.hookVisibleFirstSecond) blockers.push("HOOK_NOT_VISIBLE_FIRST_SECOND");
   if (!input.noTextClipped) blockers.push("TEXT_CLIPPED");
   if (!input.publicUploadBlocked) blockers.push("PUBLIC_UPLOAD_NOT_BLOCKED");
+  if (input.motionSmoothingApplied === false || input.subpixelJitterFixed === false) {
+    blockers.push("MICRO_JITTER_DETECTED");
+  }
+  if (isAbove(input.cropCenterDeltaMaxPx, MAX_CROP_CENTER_DELTA_PX)) {
+    blockers.push("SUBPIXEL_CROP_JITTER_DETECTED");
+  }
+  if (isAbove(input.cameraShakeScore, MAX_CAMERA_SHAKE_SCORE)) {
+    blockers.push("CAMERA_SHAKE_TOO_HIGH");
+  }
+  if (isAbove(input.microJitterScore, MAX_MICRO_JITTER_SCORE)) {
+    blockers.push("MICRO_JITTER_DETECTED");
+  }
+  if (isAbove(input.maxZoomDelta, MAX_ZOOM_DELTA) || isAbove(input.maxPanDeltaRatio, MAX_PAN_DELTA_RATIO)) {
+    blockers.push("LOW_COST_MOTION_TOO_AGGRESSIVE");
+  }
+  if (isBelow(input.topSafeMarginPx, MIN_TOP_SAFE_MARGIN_PX)) {
+    blockers.push("TEXT_TOP_SAFE_AREA_TOO_TIGHT");
+  }
+  if (isBelow(input.bottomSafeMarginPx, MIN_BOTTOM_SAFE_MARGIN_PX) ||
+    isBelow(input.rightUiMarginPx, MIN_RIGHT_UI_MARGIN_PX)) {
+    blockers.push("TEXT_CLIPPED_OR_TOO_CLOSE_TO_EDGE");
+  }
 
   const renderReady = blockers.length === 0;
   if (renderReady && input.rendererExecuted !== true) {
@@ -77,9 +133,30 @@ export function evaluateLowCostMotionQualityGate(
     hook_visible_first_second: input.hookVisibleFirstSecond,
     no_text_clipped: input.noTextClipped,
     public_upload_blocked: input.publicUploadBlocked,
-    blockers,
+    motion_smoothing_applied: input.motionSmoothingApplied === true,
+    subpixel_jitter_fixed: input.subpixelJitterFixed === true,
+    max_zoom_delta: normalizeMetric(input.maxZoomDelta),
+    max_pan_delta: normalizeMetric(input.maxPanDeltaRatio),
+    easing_function: input.easingFunction?.trim() || "smootherstep",
+    micro_jitter_score: normalizeMetric(input.microJitterScore),
+    caption_top_margin_px: normalizeMetric(input.topSafeMarginPx),
+    caption_bottom_margin_px: normalizeMetric(input.bottomSafeMarginPx),
+    right_ui_margin_px: normalizeMetric(input.rightUiMarginPx),
+    blockers: [...new Set(blockers)],
     safeSummary: renderReady
       ? "Low-cost programmed motion is ready for a separate local renderer execution; final upload remains blocked until render artifacts pass review."
       : "Low-cost programmed motion is blocked by sanitized quality gates."
   };
+}
+
+function isAbove(value: number | undefined, threshold: number) {
+  return typeof value === "number" && Number.isFinite(value) && value > threshold;
+}
+
+function isBelow(value: number | undefined, threshold: number) {
+  return typeof value === "number" && Number.isFinite(value) && value < threshold;
+}
+
+function normalizeMetric(value: number | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
