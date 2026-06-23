@@ -29,6 +29,24 @@ URLs, raw image URLs, or `.env.local` contents.
 
 ## Network-Free Self-Test
 
+`src/lib/coupang/partnersAuthConfig.ts` is the shared source for Coupang
+Partners env readiness and live search request construction. Readiness
+diagnostics and the live request builder must both use this shared reader so the
+provider-enabled gate, access/secret key family, and customer/partner id
+presence cannot drift.
+
+The shared reader accepts the same key families for both readiness and request
+building:
+
+- `COUPANG_PARTNERS_PROVIDER_ENABLED`
+- `COUPANG_PARTNERS_ACCESS_KEY` or legacy `COUPANG_ACCESS_KEY`
+- `COUPANG_PARTNERS_SECRET_KEY` or legacy `COUPANG_SECRET_KEY`
+- `COUPANG_CUSTOMER_ID`, `COUPANG_PARTNER_ID`, or
+  `COUPANG_PARTNERS_CUSTOMER_ID`
+
+If any required readiness boolean is false, the live request builder returns a
+safe blocker before any Coupang Partners API call is allowed.
+
 `src/lib/coupang/partnersAuthDiagnostics.ts` provides a deterministic self-test
 using dummy credentials only. It checks:
 
@@ -39,6 +57,25 @@ using dummy credentials only. It checks:
 - raw secret, raw signature, and Authorization header values are not returned
 
 This self-test does not call Coupang Partners or any external scout provider.
+
+## Live Request Builder Alignment
+
+The live search request builder blocks before external calls when:
+
+```text
+COUPANG_PARTNERS_PROVIDER_DISABLED
+COUPANG_PARTNERS_ACCESS_KEY_MISSING
+COUPANG_PARTNERS_SECRET_KEY_MISSING
+COUPANG_PARTNERS_CUSTOMER_OR_PARTNER_ID_MISSING
+COUPANG_PARTNERS_KEYWORD_MISSING
+COUPANG_PARTNERS_SIGNED_DATE_INVALID
+```
+
+The n8n nightly scout request builder uses the same env contract and stops
+before the Coupang Product Search HTTP node when the provider flag, key pair, or
+customer/partner id is missing. Safe summaries may include booleans and
+presence flags only; they must not include raw credentials, ids, Authorization
+headers, HMAC signatures, or raw request URLs.
 
 ## HTTP 401 Guard
 

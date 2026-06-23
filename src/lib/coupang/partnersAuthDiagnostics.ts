@@ -1,11 +1,16 @@
-import { createHmac } from "node:crypto";
+import {
+  COUPANG_PARTNERS_METHOD,
+  COUPANG_PARTNERS_SEARCH_PATH,
+  buildCoupangPartnersSearchRequest,
+  buildCoupangPartnersSearchQuery,
+  buildCoupangPartnersSignature,
+  isCoupangSignedDate,
+  readCoupangPartnersEnv
+} from "@/lib/coupang/partnersAuthConfig";
 
-const PARTNERS_SEARCH_PATH = "/v2/providers/affiliate_open_api/apis/openapi/products/search";
-const DUMMY_ACCESS_KEY = "dummy-access-key";
 const DUMMY_SECRET_KEY = "dummy-secret-key";
 const DUMMY_TIMESTAMP = "260623T000000Z";
-const DUMMY_METHOD = "GET";
-const DUMMY_QUERY = "?keyword=%EB%B9%A8%EB%9E%98%EA%B1%B4%EC%A1%B0%EB%8C%80&limit=10";
+const DUMMY_QUERY = buildCoupangPartnersSearchQuery({ keyword: "빨래건조대", limit: 10 });
 
 export type CoupangPartnersAuthDiagnostic = {
   env_file_present: boolean;
@@ -53,16 +58,13 @@ export function buildCoupangPartnersAuthDiagnostic(input: {
   envFilePresent: boolean;
   env?: Record<string, string | undefined>;
 }): CoupangPartnersAuthDiagnostic {
-  const env = input.env ?? process.env;
+  const env = readCoupangPartnersEnv(input.env);
   return {
     env_file_present: input.envFilePresent,
-    partners_provider_enabled: isTruthy(env.COUPANG_PARTNERS_PROVIDER_ENABLED),
-    access_key_present: hasValue(env.COUPANG_PARTNERS_ACCESS_KEY) || hasValue(env.COUPANG_ACCESS_KEY),
-    secret_key_present: hasValue(env.COUPANG_PARTNERS_SECRET_KEY) || hasValue(env.COUPANG_SECRET_KEY),
-    customer_id_or_partner_id_present:
-      hasValue(env.COUPANG_CUSTOMER_ID) ||
-      hasValue(env.COUPANG_PARTNER_ID) ||
-      hasValue(env.COUPANG_PARTNERS_CUSTOMER_ID),
+    partners_provider_enabled: env.readiness.provider_enabled,
+    access_key_present: env.readiness.access_key_present,
+    secret_key_present: env.readiness.secret_key_present,
+    customer_id_or_partner_id_present: env.readiness.customer_id_or_partner_id_present,
     signature_builder_present: true,
     timestamp_present_or_generated: true,
     clock_skew_safe_check_available: true,
@@ -74,28 +76,26 @@ export function buildCoupangPartnersAuthDiagnostic(input: {
 
 export function runCoupangPartnersSignatureSelfTest(): CoupangPartnersSignatureSelfTest {
   const first = buildCoupangPartnersSignature({
-    accessKey: DUMMY_ACCESS_KEY,
     secretKey: DUMMY_SECRET_KEY,
     signedDate: DUMMY_TIMESTAMP,
-    method: DUMMY_METHOD,
-    path: PARTNERS_SEARCH_PATH,
+    method: COUPANG_PARTNERS_METHOD,
+    path: COUPANG_PARTNERS_SEARCH_PATH,
     query: DUMMY_QUERY
   });
   const second = buildCoupangPartnersSignature({
-    accessKey: DUMMY_ACCESS_KEY,
     secretKey: DUMMY_SECRET_KEY,
     signedDate: DUMMY_TIMESTAMP,
-    method: DUMMY_METHOD,
-    path: PARTNERS_SEARCH_PATH,
+    method: COUPANG_PARTNERS_METHOD,
+    path: COUPANG_PARTNERS_SEARCH_PATH,
     query: DUMMY_QUERY
   });
-  const canonical = [DUMMY_TIMESTAMP, DUMMY_METHOD, PARTNERS_SEARCH_PATH, DUMMY_QUERY].join("");
+  const canonical = [DUMMY_TIMESTAMP, COUPANG_PARTNERS_METHOD, COUPANG_PARTNERS_SEARCH_PATH, DUMMY_QUERY].join("");
 
   return {
     signature_builder_present: true,
     deterministic_output: first === second && first.length > 0,
-    method_present: Boolean(DUMMY_METHOD),
-    request_path_present: Boolean(PARTNERS_SEARCH_PATH),
+    method_present: Boolean(COUPANG_PARTNERS_METHOD),
+    request_path_present: Boolean(COUPANG_PARTNERS_SEARCH_PATH),
     query_present: Boolean(DUMMY_QUERY),
     timestamp_check_present: true,
     timestamp_format_valid: isCoupangSignedDate(DUMMY_TIMESTAMP),
@@ -125,28 +125,4 @@ export function buildCoupangPartnersHttpFailureGuard(input: {
   };
 }
 
-function buildCoupangPartnersSignature(input: {
-  accessKey: string;
-  secretKey: string;
-  signedDate: string;
-  method: string;
-  path: string;
-  query: string;
-}) {
-  void input.accessKey;
-  return createHmac("sha256", input.secretKey)
-    .update(`${input.signedDate}${input.method}${input.path}${input.query}`)
-    .digest("hex");
-}
-
-function hasValue(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isTruthy(value: unknown) {
-  return typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
-function isCoupangSignedDate(value: string) {
-  return /^\d{6}T\d{6}Z$/.test(value);
-}
+export { buildCoupangPartnersSearchRequest };
