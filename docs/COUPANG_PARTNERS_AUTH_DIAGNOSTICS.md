@@ -120,3 +120,18 @@ only because no candidate was selected after an upstream auth failure.
 
 Fix or refresh Coupang Partners authorization outside the repository, then rerun
 the event-aware live scout/import gate only with fresh explicit approval.
+
+## Persistent 401 Closure
+
+After PR #119 aligned readiness and live request building, the approved one-shot
+live retry still returned:
+
+```text
+COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_ALIGNMENT
+```
+
+The repository-side closure is recorded in
+`docs/COUPANG_PARTNERS_401_PERSISTENT_BLOCKER.md`. Treat that document as the
+current retry gate: no further live scout/import retry is allowed until external
+credential/account verification is complete and fresh explicit approval is
+provided.
