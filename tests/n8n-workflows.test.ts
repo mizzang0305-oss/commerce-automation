@@ -39,14 +39,33 @@ describe("n8n workflow exports", () => {
       path: "nightly-scout",
       httpMethod: "POST"
     });
+    expect(raw).toContain("COUPANG_PARTNERS_PROVIDER_ENABLED");
+    expect(raw).toContain("COUPANG_PARTNERS_ACCESS_KEY");
+    expect(raw).toContain("COUPANG_PARTNERS_SECRET_KEY");
     expect(raw).toContain("COUPANG_ACCESS_KEY");
     expect(raw).toContain("COUPANG_SECRET_KEY");
+    expect(raw).toContain("COUPANG_CUSTOMER_ID");
+    expect(raw).toContain("COUPANG_PARTNER_ID");
+    expect(raw).toContain("COUPANG_PARTNERS_CUSTOMER_ID");
     expect(raw).toContain("COMMERCE_AUTOMATION_API_SECRET");
     expect(raw).toContain("Authorization");
     expect(raw).toContain("배수구 거름망");
     expect(raw).toContain("고가전자제품");
     expect(raw).toContain("queue_status");
     expect(raw).toContain("scheduled");
+  });
+
+  it("aligns Coupang Partners workflow auth gates with the shared readiness contract", () => {
+    const { raw } = readWorkflow("A_Nightly_Scout_69.json");
+
+    expect(raw).toContain("COUPANG_PARTNERS_PROVIDER_ENABLED");
+    expect(raw).toContain("providerEnabled");
+    expect(raw).toContain("customerOrPartnerId");
+    expect(raw).toContain("accessKey");
+    expect(raw).toContain("secretKey");
+    expect(raw).toContain("signedSearch");
+    expect(raw).toContain("provider enabled");
+    expect(raw).toContain("customer/partner id");
   });
 
   it("defines the next batch workflow without pretending to process missing items", () => {

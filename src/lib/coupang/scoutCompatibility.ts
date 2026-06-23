@@ -1,3 +1,8 @@
+import {
+  COUPANG_PARTNERS_SEARCH_PATH,
+  buildCoupangPartnersSearchQuery
+} from "@/lib/coupang/partnersAuthConfig";
+
 export type CoupangScoutApiFamily = "partners_affiliate" | "seller_openapi" | "unknown";
 
 export type CoupangScoutClassification =
@@ -64,7 +69,6 @@ export const COUPANG_SCOUT_SIDE_EFFECTS: CoupangScoutSideEffects = {
   queue_created: false
 };
 
-const PARTNERS_SEARCH_PATH = "/v2/providers/affiliate_open_api/apis/openapi/products/search";
 const MAX_KEYWORD_ATTEMPTS = 3;
 
 export function normalizeCoupangScoutKeyword(value: unknown): NormalizeKeywordResult {
@@ -125,7 +129,7 @@ export function buildCoupangScoutRequestContract(input: {
   }
 
   const limit = normalizeLimit(input.limit);
-  const query = `keyword=${keyword.encoded_keyword}&limit=${limit}`;
+  const query = buildCoupangPartnersSearchQuery({ keyword: keyword.normalized_keyword, limit });
   return {
     ok: true,
     classification: "COUPANG_SCOUT_READY" as const,
@@ -143,9 +147,9 @@ export function buildCoupangScoutRequestContract(input: {
     },
     signing_contract: {
       method: "GET" as const,
-      path: PARTNERS_SEARCH_PATH,
+      path: COUPANG_PARTNERS_SEARCH_PATH,
       query_present: Boolean(query),
-      query_includes_question_mark: false,
+      query_includes_question_mark: query.startsWith("?"),
       raw_hmac_printed: false
     },
     side_effects: COUPANG_SCOUT_SIDE_EFFECTS

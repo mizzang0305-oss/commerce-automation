@@ -96,7 +96,7 @@ describe("Coupang scout compatibility diagnostics", () => {
     expect(contract.keyword_policy.raw_keyword_printed).toBe(false);
     expect(contract.keyword_policy.normalized_keyword_present).toBe(true);
     expect(contract.keyword_policy.encoded_keyword_present).toBe(true);
-    expect(contract.signing_contract?.query_includes_question_mark).toBe(false);
+    expect(contract.signing_contract?.query_includes_question_mark).toBe(true);
     expect(serialized).not.toContain("청소솔");
     expect(serialized).not.toMatch(/Authorization|Bearer|signature|secret|access-key/i);
     expect(serialized).not.toContain("https://api-gateway.coupang.com");
