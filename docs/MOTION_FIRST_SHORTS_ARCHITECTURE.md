@@ -212,6 +212,16 @@ candidate, render, upload to R2, write `product_assets`, execute YouTube, call
 `videos.insert`, or allow public/unlisted upload. See
 `docs/COUPANG_PARTNERS_AUTH_DIAGNOSTICS.md`.
 
+After external verification, the final one-shot live scout still returned
+`COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_EXTERNAL_VERIFICATION`. The MVP
+live scout path is therefore locked until provider/account support resolves the
+auth issue. The replacement source gate is `manual_event_candidate`, which
+accepts a manually provided rainy-season product name, category, affiliate URL,
+and product image URL, then validates event relevance, baseline exclusion,
+policy safety, URL presence, and low-cost motion suitability without executing
+import, render, R2, DB, or YouTube side effects. See
+`docs/COUPANG_EVENT_AWARE_SCOUT.md`.
+
 ## Quality Gate
 
 The final upload gate requires:
@@ -247,6 +257,17 @@ Required blockers:
 - `SOURCE_VIDEO_PROVIDER_DISABLED`
 - `SOURCE_VIDEO_RAW_DOWNLOAD_BLOCKED`
 - `LOW_COST_MOTION_RENDERER_NOT_EXECUTED`
+- `COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_EXTERNAL_VERIFICATION`
+- `MANUAL_EVENT_CANDIDATE_FALLBACK_REQUIRES_PERSISTENT_401`
+- `MANUAL_EVENT_CANDIDATE_PRODUCT_NAME_MISSING`
+- `MANUAL_EVENT_CANDIDATE_AFFILIATE_URL_MISSING`
+- `MANUAL_EVENT_CANDIDATE_AFFILIATE_URL_INVALID`
+- `MANUAL_EVENT_CANDIDATE_IMAGE_URL_MISSING`
+- `MANUAL_EVENT_CANDIDATE_IMAGE_URL_INVALID`
+- `MANUAL_EVENT_CANDIDATE_BASELINE_BLOCKED`
+- `MANUAL_EVENT_CANDIDATE_EVENT_RELEVANCE_TOO_LOW`
+- `MANUAL_EVENT_CANDIDATE_POLICY_RISK`
+- `MANUAL_EVENT_CANDIDATE_LOW_COST_MOTION_UNSUITABLE`
 - `COMFYUI_WAN_I2V_PROVIDER_DISABLED`
 - `COMFYUI_BASE_URL_MISSING`
 - `COMFYUI_WAN_I2V_WORKFLOW_PATH_MISSING`

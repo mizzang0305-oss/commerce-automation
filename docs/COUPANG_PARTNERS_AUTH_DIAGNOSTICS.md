@@ -135,3 +135,34 @@ The repository-side closure is recorded in
 current retry gate: no further live scout/import retry is allowed until external
 credential/account verification is complete and fresh explicit approval is
 provided.
+
+## Final 401 Lock And Manual Fallback
+
+After external verification was reported complete, the next approved one-shot
+live scout still returned:
+
+```text
+COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_EXTERNAL_VERIFICATION
+```
+
+That is the final MVP lock for the live Coupang Partners scout path. Do not run
+another live scout retry in the MVP flow without provider/account support
+evidence and a separate future approval.
+
+The allowed fallback is now a manual event-aware candidate path:
+
+```text
+source=manual_event_candidate
+selected_event=Rainy season preparation
+selected_keyword=빨래건조대
+```
+
+The fallback accepts operator-provided product name, category, affiliate URL,
+and product image URL, then returns safe booleans, scores, blocker codes, and a
+candidate draft. Safe summaries must not include raw affiliate URLs, raw image
+URLs, raw credentials, Authorization headers, signatures, or raw request URLs.
+
+The fallback is not an execution path. It does not call Coupang Partners, run
+external scout, insert/update candidates, render video, create MP4 files, upload
+to R2, write `product_assets`, write DB rows, execute YouTube, or call
+`videos.insert`.
