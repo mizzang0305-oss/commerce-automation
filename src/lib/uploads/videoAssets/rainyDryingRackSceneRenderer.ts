@@ -100,6 +100,17 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
   story_package: RainyDryingRackStoryPackage;
   story_manifest_path: string;
   quality_report_path: string;
+  hook_text: string;
+  problem_text: string;
+  why_buy_reason: string;
+  target_customer: string;
+  product_benefit: string;
+  caution_or_check_before_buy: string;
+  cta_text: string;
+  korean_voiceover_script: string;
+  hook_title: string;
+  captions: string[];
+  scenes: Array<{ id: string; duration_seconds: number; motion: string }>;
   loss_aversion_hook_present: boolean;
   skip_cost_visible: boolean;
   viewer_gain_clear: boolean;
@@ -263,6 +274,21 @@ export function createRainyDryingRackSceneCardRenderer(
       checksum_sha256: createHash("sha256").update(fileBuffer).digest("hex"),
       black_screen_detected: false,
       story_video_generated: true,
+      hook_text: story.hook_text,
+      problem_text: story.problem_text,
+      why_buy_reason: story.why_buy_reason,
+      target_customer: story.target_customer,
+      product_benefit: story.product_benefit,
+      caution_or_check_before_buy: story.caution_or_check_before_buy,
+      cta_text: story.cta_text,
+      korean_voiceover_script: story.korean_voiceover_script,
+      hook_title: story.hook_text,
+      captions: story.scenes.map((sceneItem) => sceneItem.caption),
+      scenes: story.scenes.map((sceneItem) => ({
+        id: sceneItem.scene_id,
+        duration_seconds: sceneItem.duration_seconds,
+        motion: sceneItem.motion
+      })),
       voiceover_audio_present: true,
       voiceover_audio_file_present: true,
       audio_duration_seconds: STORY_DURATION_SECONDS,
