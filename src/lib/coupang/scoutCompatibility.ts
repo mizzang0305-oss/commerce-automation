@@ -215,16 +215,16 @@ export function classifyCoupangScoutApiResponse(input: {
   body: unknown;
 }): CoupangScoutDiagnostic {
   const body = isRecord(input.body) ? input.body : {};
-  const message = safeTrim(body.message).toLowerCase();
-  const code = safeTrim(body.code);
+  const message = firstSafeTrim(body.message, body.rMessage).toLowerCase();
+  const code = firstSafeTrim(body.code, body.rCode);
 
-  if (input.http_status >= 200 && input.http_status < 300 && code && code !== "200" && code !== "0") {
+  if (input.http_status >= 200 && input.http_status < 300 && code && !isSuccessCode(code)) {
     return apiErrorDiagnostic(classifyMessage(message, code, input.http_status));
   }
   if (input.http_status === 401 || input.http_status === 403) {
     return apiErrorDiagnostic(classifyMessage(message, code, input.http_status));
   }
-  if (Array.isArray(body.data) || Array.isArray(body.products)) {
+  if (Array.isArray(body.data) || Array.isArray(body.products) || hasNestedProductData(body)) {
     return diagnosticResult({
       ok: true,
       classification: "COUPANG_SCOUT_READY",
@@ -359,9 +359,34 @@ function normalizeLimit(value: unknown) {
 }
 
 function safeTrim(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return "";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function firstSafeTrim(...values: unknown[]) {
+  for (const value of values) {
+    const text = safeTrim(value);
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function isSuccessCode(code: string) {
+  return ["0", "200", "SUCCESS"].includes(code.toUpperCase());
+}
+
+function hasNestedProductData(body: Record<string, unknown>) {
+  const data = body.data;
+  return isRecord(data) && Array.isArray(data.productData);
 }
