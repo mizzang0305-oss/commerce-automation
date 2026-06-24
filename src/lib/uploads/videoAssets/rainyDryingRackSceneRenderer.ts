@@ -54,11 +54,9 @@ const STORY_CTA_TEXT =
   "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778\uD574\uBCF4\uC138\uC694.";
 
 const STORY_VOICEOVER_SCRIPT = [
-  "\uC7A5\uB9C8\uCCA0 \uBE68\uB798, \uADF8\uB0E5 \uCC38\uC73C\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4.",
-  "\uBE44 \uC624\uB294 \uB0A0\uC5D4 \uC9D1 \uC548 \uC2B5\uAE30\uAC00 \uB0A8\uACE0 \uC138\uD0C1\uBB3C\uC740 \uB354\uB514\uAC8C \uB9C8\uB985\uB2C8\uB2E4.",
-  "\uC811\uC774\uC2DD \uC2E4\uB0B4 \uBE68\uB798\uAC74\uC870\uB300\uB294 \uD544\uC694\uD560 \uB54C \uD3BC\uCE58\uACE0 \uC548 \uC4F8 \uB54C \uC811\uC5B4 \uBCF4\uAD00\uD558\uAE30 \uC88B\uC2B5\uB2C8\uB2E4.",
-  "\uC218\uAC74, \uC154\uCE20, \uC591\uB9D0\uCC98\uB7FC \uC790\uC8FC \uBE68\uB798\uD558\uB294 \uBB3C\uAC74\uC744 \uD55C \uBC88\uC5D0 \uC815\uB9AC\uD574\uBCF4\uC138\uC694.",
-  "\uAD6C\uB9E4 \uC804\uC5D0\uB294 \uD06C\uAE30, \uD558\uC911, \uC124\uCE58 \uACF5\uAC04\uC744 \uBC18\uB4DC\uC2DC \uD655\uC778\uD558\uC138\uC694.",
+  "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\uB294 \uBBF8\uB8E8\uBA74 \uB0C4\uC0C8\uC640 \uC2B5\uAE30\uAC00 \uB0A8\uC2B5\uB2C8\uB2E4.",
+  "\uC811\uC774\uC2DD \uC2E4\uB0B4 \uBE68\uB798\uAC74\uC870\uB300\uB294 \uD544\uC694\uD560 \uB54C \uD3BC\uCE58\uACE0 \uC811\uC5B4 \uBCF4\uAD00\uD569\uB2C8\uB2E4.",
+  "\uC218\uAC74\uACFC \uC154\uCE20\uB97C \uD55C \uBC88\uC5D0 \uB110\uACE0, \uAD6C\uB9E4 \uC804 \uD06C\uAE30\uC640 \uD558\uC911\uC744 \uD655\uC778\uD558\uC138\uC694.",
   "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778\uD574\uBCF4\uC138\uC694."
 ].join(" ");
 
@@ -148,14 +146,14 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
 
 export function buildRainyDryingRackStoryPackage(candidate: ProductCandidate): RainyDryingRackStoryPackage {
   const scenes: RainyDryingRackScene[] = [
-    scene("scene-01-hook", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uAC71\uC815\n\uADF8\uB0E5 \uCC38\uC73C\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4", "hook_push_in", "rainy window, damp laundry worry, strong hook title", "scene-01-hook.png"),
-    scene("scene-02-problem", 3, "layout_problem_card", "\uBE44 \uC624\uB294 \uB0A0\uC5D4\n\uC2B5\uAE30\uAE4C\uC9C0 \uB0A8\uC2B5\uB2C8\uB2E4", "slow_pan_left", "indoor laundry congestion and humidity problem", "scene-02-problem.png"),
-    scene("scene-03-product-intro", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uC2E4\uB0B4 \uAC74\uC870\uB300\n\uACF5\uAC04\uC744 \uC544\uAEF4\uC90D\uB2C8\uB2E4", "product_lift", "product hero, foldable indoor drying rack", "scene-03-product-intro.png"),
-    scene("scene-04-space-saving", 3, "layout_feature_grid", "\uC881\uC740 \uACF5\uAC04\uC5D0\uB3C4\n\uD3BC\uCE58\uACE0 \uC811\uAE30 \uC27D\uAC8C", "space_saving_split", "space-saving folded vs opened rack", "scene-04-space-saving.png"),
-    scene("scene-05-use-case", 3, "layout_use_case_graphic", "\uC218\uAC74\u00B7\uC154\uCE20\u00B7\uC591\uB9D0\uAE4C\uC9C0\n\uD55C \uBC88\uC5D0 \uB110\uAE30", "laundry_items_reveal", "towel shirts socks arranged on rack", "scene-05-use-case.png"),
-    scene("scene-06-why-buy", 3, "layout_why_buy_cards", "\uC7A5\uB9C8\uCCA0 \uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4\uAC00 \uBA3C\uC800", "benefit_pan_right", "clear indoor drying setup in small home", "scene-06-why-buy.png"),
-    scene("scene-07-checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\u00B7\uC124\uCE58 \uACF5\uAC04\n\uAD6C\uB9E4 \uC804 \uD655\uC778", "checklist_pop", "purchase checklist with dimensions load and floor space", "scene-07-checklist.png"),
-    scene("scene-08-cta", 3, "layout_cta_card", "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740\n\uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778", "cta_zoom", "final product card and description CTA", "scene-08-cta.png")
+    scene("scene-01-hook", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC", "hook_push_in", "rainy window, damp laundry worry, strong hook title", "scene-01-hook.png"),
+    scene("scene-02-problem", 3, "layout_problem_card", "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870", "slow_pan_left", "indoor laundry congestion and humidity problem", "scene-02-problem.png"),
+    scene("scene-03-product-intro", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D", "product_lift", "product hero, foldable indoor drying rack", "scene-03-product-intro.png"),
+    scene("scene-04-space-saving", 3, "layout_feature_grid", "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00", "space_saving_split", "space-saving folded vs opened rack", "scene-04-space-saving.png"),
+    scene("scene-05-use-case", 3, "layout_use_case_graphic", "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0", "laundry_items_reveal", "towel shirts socks arranged on rack", "scene-05-use-case.png"),
+    scene("scene-06-why-buy", 3, "layout_why_buy_cards", "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4", "benefit_pan_right", "clear indoor drying setup in small home", "scene-06-why-buy.png"),
+    scene("scene-07-checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778", "checklist_pop", "purchase checklist with dimensions load and floor space", "scene-07-checklist.png"),
+    scene("scene-08-cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final product card and description CTA", "scene-08-cta.png")
   ];
 
   return {
@@ -584,11 +582,13 @@ function buildStoryVideoFfmpegArgs(input: {
   voiceoverAudioPath: string;
   outputVideoPath: string;
 }) {
-  const imageInputs = input.sceneImagePaths.flatMap((sceneImagePath, index) => [
+  const imageInputs = input.sceneImagePaths.flatMap((sceneImagePath) => [
     "-loop",
     "1",
+    "-framerate",
+    "1",
     "-t",
-    String(input.sceneDurations[index] ?? 3),
+    "1",
     "-i",
     sceneImagePath
   ]);
@@ -621,8 +621,9 @@ function buildStoryVideoFfmpegArgs(input: {
     "-c:a",
     "aac",
     "-af",
-    "loudnorm=I=-16:TP=-1.5:LRA=11",
-    "-shortest",
+    "silenceremove=stop_periods=-1:stop_duration=0.10:stop_threshold=-35dB,atempo=1.25,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "-t",
+    String(STORY_DURATION_SECONDS),
     "-movflags",
     "+faststart",
     input.outputVideoPath
@@ -843,7 +844,7 @@ async function runWindowsSapiTts(input: {
   const command = [
     "Add-Type -AssemblyName System.Speech;",
     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
-    "$s.Rate = 2;",
+    "$s.Rate = 4;",
     "$s.Volume = 95;",
     `$text = Get-Content -LiteralPath '${input.scriptPath.replace(/'/g, "''")}' -Raw;`,
     `$s.SetOutputToWaveFile('${input.audioPath.replace(/'/g, "''")}');`,
@@ -889,6 +890,7 @@ function toQualityReport(result: RainyDryingRackSceneCardRenderResult) {
     story_video_generated: result.story_video_generated,
     actual_render_probe: result.actual_render_probe,
     hook_text: result.story_package.hook_text,
+    hook_title: result.hook_title,
     problem_text: result.story_package.problem_text,
     why_buy_reason: result.story_package.why_buy_reason,
     target_customer: result.story_package.target_customer,
@@ -898,6 +900,7 @@ function toQualityReport(result: RainyDryingRackSceneCardRenderResult) {
     korean_voiceover_script: result.story_package.korean_voiceover_script,
     captions: result.story_package.scenes.map((sceneItem) => sceneItem.caption),
     scenes: result.story_package.scenes.map((sceneItem) => ({
+      id: sceneItem.scene_id,
       scene_id: sceneItem.scene_id,
       duration_seconds: sceneItem.duration_seconds,
       layout_template: sceneItem.layout_template,

@@ -217,7 +217,12 @@ describe("rainy drying rack scene-card renderer", () => {
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
     expect(execFileAsync.mock.calls.filter(([file]) => file === "ffmpeg").length).toBeGreaterThanOrEqual(10);
-    expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.includes("-af") && args.includes("loudnorm=I=-16:TP=-1.5:LRA=11"))).toBe(true);
+    expect(execFileAsync.mock.calls.some(([file, args]) =>
+      file === "ffmpeg" &&
+      args.includes("-af") &&
+      args.join(" ").includes("silenceremove=") &&
+      args.join(" ").includes("loudnorm=I=-16:TP=-1.5:LRA=11")
+    )).toBe(true);
     expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.join(" ").includes("zoompan=z="))).toBe(true);
     expect(execFileAsync.mock.calls.some(([file]) => file === "ffprobe")).toBe(true);
   });
