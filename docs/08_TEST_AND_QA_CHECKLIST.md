@@ -372,6 +372,11 @@ python -m compileall python-worker
 - Event-aware ranking blocks the baseline candidate, missing affiliate URL, missing product image, policy-risk categories, and low event relevance.
 - Event-aware scout imports at most one candidate and does not render video, create MP4 files, upload to R2, write `product_assets`, execute YouTube uploads, call `videos.insert`, or enable public/unlisted upload.
 - Event-aware safe summaries expose booleans, scores, event names, keyword plans, and candidate id/name/category only; they must not expose raw affiliate URLs, raw image URLs, secrets, tokens, Authorization headers, or raw request URLs.
+- After external verification, persistent Coupang Partners HTTP 401 maps to `COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_EXTERNAL_VERIFICATION` and locks live scout retries for the MVP path.
+- The `manual_event_candidate` fallback accepts only event-relevant, non-baseline, policy-safe candidates with product name, `https://link.coupang.com` affiliate URL, and HTTP(S) product image URL.
+- Manual event candidate fallback safe summaries expose booleans and scores only; raw affiliate/image URLs, credentials, Authorization headers, signatures, and raw request URLs remain masked.
+- Manual event candidate fallback marks `ready_for_low_cost_motion_v1_1_render=true` only after validation passes.
+- Manual event candidate fallback does not call Coupang Partners, call external scout, insert/update candidates, render video, create MP4 files, upload to R2, write `product_assets`, write DB rows, execute YouTube, call `videos.insert`, or enable public/unlisted upload.
 - Daily planner prefers `promotion_status=ready`, `duplicate_status=unique`, high candidate score, and higher event priority.
 - Planner excludes product keys already produced on the same plan date.
 - Channel profiles default to `upload_enabled=false` and `manual_upload_only=true`.

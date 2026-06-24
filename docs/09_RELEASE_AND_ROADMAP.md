@@ -383,11 +383,13 @@ Not included:
 
 Next motion-first milestones:
 
-1. Resolve `COUPANG_PARTNERS_API_HTTP_401` outside the repository by fixing or
-   refreshing Coupang Partners authorization. The guard PR documents the
-   no-retry behavior and requires fresh approval before the next live scout.
-2. Rerun exactly one event-aware live scout/import gate only after baseline
-   exclusion is proven and fresh explicit approval is provided.
+1. Treat `COUPANG_PARTNERS_API_HTTP_401_PERSISTED_AFTER_EXTERNAL_VERIFICATION`
+   as the final MVP lock for live Coupang Partners scout. Do not retry without
+   provider/account support evidence and a separate future approval.
+2. Use the `manual_event_candidate` fallback for the next rainy-season
+   drying-rack candidate. It validates product name, category, affiliate URL,
+   product image URL, baseline exclusion, policy safety, event relevance, and
+   low-cost motion suitability without import/render/R2/DB/YouTube side effects.
 3. Review and merge the fal Kling adapter/readiness/mock PR.
 4. Decide API budget and provider terms for fal/Kling.
 5. For any retry after `FAL_SUBMIT_HTTP_502`, first run the no-cost payload audit, manually check fal dashboard billing/credit state, and require fresh retry approval `APPROVE_FAL_KLING_ONE_SCENE_PAID_SMOKE_RETRY_AFTER_502`.
