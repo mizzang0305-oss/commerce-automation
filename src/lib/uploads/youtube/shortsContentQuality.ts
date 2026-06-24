@@ -1,3 +1,5 @@
+import { evaluateRenderRealityCheck } from "@/lib/uploads/videoAssets/renderOutputRealityCheck";
+
 export type ShortsContentQualityBlocker =
   | "CONTENT_QUALITY_FAILED"
   | "STATIC_IMAGE_ONLY_VIDEO_BLOCKED"
@@ -69,7 +71,22 @@ export type ShortsContentQualityBlocker =
   | "MOTION_MANIFEST_NOT_USED"
   | "SCENE_MANIFEST_NOT_USED"
   | "FALLBACK_TO_SINGLE_PRODUCT_IMAGE"
-  | "FALLBACK_TO_SLIDESHOW_ONLY";
+  | "FALLBACK_TO_SLIDESHOW_ONLY"
+  | "FOREGROUND_PRODUCT_STATIC_TOO_LONG"
+  | "BACKGROUND_ONLY_CHANGED"
+  | "TRUE_SCENE_CHANGE_FALSE_POSITIVE"
+  | "VISUAL_MOTION_SCORE_UNTRUSTED"
+  | "ACTUAL_FRAME_HASH_DELTA_TOO_LOW"
+  | "ACTUAL_CONTACT_SHEET_TOO_SIMILAR"
+  | "CAPTION_OUT_OF_ACTUAL_FRAME"
+  | "CAPTION_OVERLAPS_SHORTS_UI"
+  | "CAPTION_CLIPPED_IN_RENDERED_FRAME"
+  | "CAPTION_TOO_LONG_FOR_TWO_LINES"
+  | "HOOK_TITLE_LOW_VISIBILITY_ACTUAL"
+  | "VOICEOVER_SEGMENT_GAPS_TOO_LONG"
+  | "VOICEOVER_HARD_CUTS_DETECTED"
+  | "VOICEOVER_UNINTELLIGIBLE"
+  | "VOICEOVER_LOUDNESS_UNNORMALIZED";
 
 export type ShortsContentQualityResult = {
   passed: boolean;
@@ -201,6 +218,27 @@ export type ShortsContentQualityResult = {
   alternate_voice_used: boolean;
   max_silence_between_segments_ms: number | null;
   voiceover_too_slow: boolean;
+  actual_render_probe_present: boolean;
+  rendered_frame_contact_sheet_generated: boolean;
+  actual_frame_sample_count: number;
+  actual_frame_hash_unique_ratio: number | null;
+  foreground_product_position_change_count: number;
+  foreground_product_scale_change_count: number;
+  layout_structure_change_count: number;
+  background_only_change_ratio: number | null;
+  same_composition_ratio: number | null;
+  actual_true_scene_change_pass: boolean | null;
+  actual_caption_safe_area_pass: boolean | null;
+  actual_no_text_clipped: boolean | null;
+  actual_no_caption_overlaps_right_ui: boolean | null;
+  hook_title_visible_actual: boolean | null;
+  hook_title_contrast_actual_pass: boolean | null;
+  audio_stream_present_actual: boolean | null;
+  hard_cut_count: number;
+  audio_loudness_normalized: boolean | null;
+  audio_peak_not_clipped: boolean | null;
+  speech_continuity_score: number | null;
+  audio_continuity_pass: boolean | null;
 };
 
 export type StoryDrivenShortsPackage = {
@@ -277,6 +315,9 @@ export function evaluateShortsContentQuality(input: {
   affiliate_url_present?: boolean;
 }): ShortsContentQualityResult {
   const quality = isRecord(input.shorts_content_quality) ? input.shorts_content_quality : {};
+  const actualRenderProbe = isRecord(quality.actual_render_probe)
+    ? evaluateRenderRealityCheck(quality.actual_render_probe)
+    : null;
   const description = safeTrim(input.description);
   const scenes = Array.isArray(quality.scenes) ? quality.scenes : [];
   const captions = Array.isArray(quality.captions) ? quality.captions : [];
@@ -299,6 +340,11 @@ export function evaluateShortsContentQuality(input: {
   const visualMotionScore = normalizeNonNegativeNumber(quality.visual_motion_score) ?? 0;
   const imageGenerationProvider = safeTrim(quality.image_generation_provider) || null;
   const providerMode = safeTrim(quality.provider_mode ?? quality.image_generation_provider_mode) || null;
+  const actualRenderProbeRequired =
+    safeTrim(quality.provider) === "advanced_still_motion" ||
+    imageGenerationProvider === "rainy_drying_rack_scene_card_renderer" ||
+    imageGenerationProvider === "advanced_still_motion" ||
+    providerMode === "animated_still_generated";
   const finalUploadAllowed = quality.final_upload_allowed === true;
   const motionFirstPipelineEnabled = quality.motion_first_pipeline_enabled === true ||
     isMotionFirstProviderMode(providerMode);
@@ -543,8 +589,36 @@ export function evaluateShortsContentQuality(input: {
     voiceover_too_robotic: voiceoverTooRobotic,
     alternate_voice_used: alternateVoiceUsed,
     max_silence_between_segments_ms: maxSilenceBetweenSegmentsMs,
-    voiceover_too_slow: voiceoverTooSlow
+    voiceover_too_slow: voiceoverTooSlow,
+    actual_render_probe_present: actualRenderProbe !== null,
+    rendered_frame_contact_sheet_generated: actualRenderProbe?.rendered_frame_contact_sheet_generated ?? false,
+    actual_frame_sample_count: actualRenderProbe?.actual_frame_sample_count ?? 0,
+    actual_frame_hash_unique_ratio: actualRenderProbe?.actual_frame_hash_unique_ratio ?? null,
+    foreground_product_position_change_count: actualRenderProbe?.foreground_product_position_change_count ?? 0,
+    foreground_product_scale_change_count: actualRenderProbe?.foreground_product_scale_change_count ?? 0,
+    layout_structure_change_count: actualRenderProbe?.layout_structure_change_count ?? 0,
+    background_only_change_ratio: actualRenderProbe?.background_only_change_ratio ?? null,
+    same_composition_ratio: actualRenderProbe?.same_composition_ratio ?? null,
+    actual_true_scene_change_pass: actualRenderProbe?.actual_true_scene_change_pass ?? null,
+    actual_caption_safe_area_pass: actualRenderProbe?.actual_caption_safe_area_pass ?? null,
+    actual_no_text_clipped: actualRenderProbe?.actual_no_text_clipped ?? null,
+    actual_no_caption_overlaps_right_ui: actualRenderProbe?.actual_no_caption_overlaps_right_ui ?? null,
+    hook_title_visible_actual: actualRenderProbe?.hook_title_visible_actual ?? null,
+    hook_title_contrast_actual_pass: actualRenderProbe?.hook_title_contrast_actual_pass ?? null,
+    audio_stream_present_actual: actualRenderProbe?.audio_stream_present ?? null,
+    hard_cut_count: actualRenderProbe?.hard_cut_count ?? 0,
+    audio_loudness_normalized: actualRenderProbe?.audio_loudness_normalized ?? null,
+    audio_peak_not_clipped: actualRenderProbe?.audio_peak_not_clipped ?? null,
+    speech_continuity_score: actualRenderProbe?.speech_continuity_score ?? null,
+    audio_continuity_pass: actualRenderProbe?.audio_continuity_pass ?? null
   };
+  if (actualRenderProbe) {
+    result.blocked_reasons.push(...actualRenderProbe.blocked_reasons);
+  }
+  if (actualRenderProbeRequired && !actualRenderProbe) {
+    result.blocked_reasons.push("VISUAL_MOTION_SCORE_UNTRUSTED");
+    result.blocked_reasons.push("TRUE_SCENE_CHANGE_FALSE_POSITIVE");
+  }
 
   const storyReady = [
     result.hook_text_present,
@@ -952,7 +1026,8 @@ export function evaluateShortsContentQuality(input: {
     result.voiceover_naturalness_score !== null &&
       result.voiceover_naturalness_score >= MIN_VOICEOVER_NATURALNESS_SCORE,
     !result.voiceover_too_robotic,
-    result.alternate_voice_used
+    result.alternate_voice_used,
+    !actualRenderProbeRequired || actualRenderProbe?.passed === true
   ];
   if (result.motion_first_pipeline_enabled) {
     checks.push(

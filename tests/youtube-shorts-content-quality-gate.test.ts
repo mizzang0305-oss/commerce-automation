@@ -322,6 +322,135 @@ describe("YouTube Shorts content quality gate", () => {
     expect(result.readiness.content_quality_ready).toBe(false);
   });
 
+  test("actual render probe blocks static foreground and background-only changes before videos.insert", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        provider: "advanced_still_motion",
+        image_generation_provider: "rainy_drying_rack_scene_card_renderer",
+        actual_render_probe: {
+          rendered_frame_contact_sheet_generated: true,
+          actual_frame_probe: {
+            actual_frame_sample_count: 12,
+            actual_frame_hash_unique_ratio: 0.38,
+            foreground_product_position_change_count: 1,
+            foreground_product_scale_change_count: 1,
+            layout_structure_change_count: 2,
+            background_only_change_ratio: 0.76,
+            same_composition_ratio: 0.82
+          },
+          caption_bbox_probe: {
+            actual_caption_safe_area_pass: true,
+            actual_no_text_clipped: true,
+            actual_no_caption_overlaps_right_ui: true,
+            max_caption_lines: 2,
+            hook_title_visible_actual: true,
+            hook_title_contrast_actual_pass: true
+          },
+          audio_continuity_probe: {
+            audio_stream_present: true,
+            max_silence_between_segments_ms: 180,
+            hard_cut_count: 0,
+            audio_loudness_normalized: true,
+            audio_peak_not_clipped: true,
+            speech_continuity_score: 84,
+            voiceover_naturalness_score: 84
+          }
+        }
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("actual static render probe must block the package before upload");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "FOREGROUND_PRODUCT_STATIC_TOO_LONG",
+      "BACKGROUND_ONLY_CHANGED",
+      "TRUE_SCENE_CHANGE_FALSE_POSITIVE",
+      "ACTUAL_FRAME_HASH_DELTA_TOO_LOW"
+    ]));
+    expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
+  test("advanced still motion packages require an actual rendered-frame probe", () => {
+    const result = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        provider: "advanced_still_motion",
+        image_generation_provider: "rainy_drying_rack_scene_card_renderer"
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("advanced still motion must not pass without actual render probe evidence");
+    }
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "VISUAL_MOTION_SCORE_UNTRUSTED",
+      "TRUE_SCENE_CHANGE_FALSE_POSITIVE"
+    ]));
+    expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
+  test("execute route does not call videos.insert when actual render probe fails", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        ...READY_PACKAGE_INPUT,
+        confirmation: APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+        shorts_content_quality: {
+          ...STORY_QUALITY,
+          provider: "advanced_still_motion",
+          image_generation_provider: "rainy_drying_rack_scene_card_renderer",
+          actual_render_probe: {
+            rendered_frame_contact_sheet_generated: true,
+            actual_frame_probe: {
+              actual_frame_sample_count: 12,
+              actual_frame_hash_unique_ratio: 0.38,
+              foreground_product_position_change_count: 1,
+              foreground_product_scale_change_count: 1,
+              layout_structure_change_count: 2,
+              background_only_change_ratio: 0.76,
+              same_composition_ratio: 0.82
+            },
+            caption_bbox_probe: {
+              actual_caption_safe_area_pass: true,
+              actual_no_text_clipped: true,
+              actual_no_caption_overlaps_right_ui: true,
+              max_caption_lines: 2,
+              hook_title_visible_actual: true,
+              hook_title_contrast_actual_pass: true
+            },
+            audio_continuity_probe: {
+              audio_stream_present: true,
+              max_silence_between_segments_ms: 180,
+              hard_cut_count: 0,
+              audio_loudness_normalized: true,
+              audio_peak_not_clipped: true,
+              speech_continuity_score: 84,
+              voiceover_naturalness_score: 84
+            }
+          }
+        }
+      })
+    }));
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_PRODUCT_UPLOAD_PACKAGE_NOT_READY",
+      missing_reasons: expect.arrayContaining(["TRUE_SCENE_CHANGE_FALSE_POSITIVE"])
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("local deterministic color-card scene generator cannot pass final private upload gate", () => {
     const result = buildYouTubeProductVideoUploadPackage({
       ...READY_PACKAGE_INPUT,
