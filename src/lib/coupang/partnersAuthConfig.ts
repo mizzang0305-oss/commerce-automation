@@ -17,7 +17,9 @@ export type CoupangPartnersEnvReadiness = {
   access_key_present: boolean;
   secret_key_present: boolean;
   customer_id_or_partner_id_present: boolean;
+  base_url_configured: boolean;
   signature_builder_present: true;
+  endpoint_contract_valid: true;
   raw_values_masked: true;
 };
 
@@ -68,6 +70,7 @@ type ResolvedCoupangPartnersEnv = {
   accessKey: string | null;
   secretKey: string | null;
   customerOrPartnerId: string | null;
+  baseUrl: string;
 };
 
 export function readCoupangPartnersEnv(env: Record<string, string | undefined> = process.env): ResolvedCoupangPartnersEnv {
@@ -78,6 +81,8 @@ export function readCoupangPartnersEnv(env: Record<string, string | undefined> =
     env.COUPANG_PARTNER_ID,
     env.COUPANG_PARTNERS_CUSTOMER_ID
   );
+  const configuredBaseUrl = firstPresent(env.COUPANG_PARTNERS_BASE_URL);
+  const baseUrl = normalizeBaseUrl(configuredBaseUrl) ?? COUPANG_PARTNERS_API_HOST;
 
   return {
     readiness: {
@@ -85,12 +90,15 @@ export function readCoupangPartnersEnv(env: Record<string, string | undefined> =
       access_key_present: Boolean(accessKey),
       secret_key_present: Boolean(secretKey),
       customer_id_or_partner_id_present: Boolean(customerOrPartnerId),
+      base_url_configured: Boolean(configuredBaseUrl),
       signature_builder_present: true,
+      endpoint_contract_valid: true,
       raw_values_masked: true
     },
     accessKey,
     secretKey,
-    customerOrPartnerId
+    customerOrPartnerId,
+    baseUrl
   };
 }
 
@@ -139,7 +147,7 @@ export function buildCoupangPartnersSearchRequest(input: {
     external_api_called: false,
     safe_summary: resolved.readiness,
     no_call_alignment_check: alignment,
-    request: safeRequest(`${COUPANG_PARTNERS_API_HOST}${COUPANG_PARTNERS_SEARCH_PATH}${query}`, authorization)
+    request: safeRequest(`${resolved.baseUrl}${COUPANG_PARTNERS_SEARCH_PATH}?${query}`, authorization)
   };
 }
 
@@ -150,13 +158,18 @@ export function buildCoupangPartnersSignature(input: {
   path: string;
   query: string;
 }) {
+  const query = canonicalizeCoupangPartnersQuery(input.query);
   return createHmac("sha256", input.secretKey)
-    .update(`${input.signedDate}${input.method}${input.path}${input.query}`)
+    .update(`${input.signedDate}${input.method}${input.path}${query}`)
     .digest("hex");
 }
 
 export function buildCoupangPartnersSearchQuery(input: { keyword: string; limit?: number }) {
-  return `?keyword=${encodeURIComponent(input.keyword)}&limit=${normalizeLimit(input.limit)}`;
+  return `keyword=${encodeURIComponent(input.keyword)}&limit=${normalizeLimit(input.limit)}`;
+}
+
+export function canonicalizeCoupangPartnersQuery(query: string) {
+  return query.startsWith("?") ? query.slice(1) : query;
 }
 
 export function buildCoupangSignedDate(date: Date) {
@@ -240,6 +253,21 @@ function hasValue(value: unknown): value is string {
 
 function isTruthy(value: unknown) {
   return typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function normalizeBaseUrl(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.origin.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLimit(value: unknown) {

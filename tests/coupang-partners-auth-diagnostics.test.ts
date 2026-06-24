@@ -6,6 +6,10 @@ import {
   buildCoupangPartnersSearchRequest,
   runCoupangPartnersSignatureSelfTest
 } from "@/lib/coupang/partnersAuthDiagnostics";
+import {
+  buildCoupangPartnersSearchQuery,
+  buildCoupangPartnersSignature
+} from "@/lib/coupang/partnersAuthConfig";
 
 describe("Coupang Partners auth diagnostics", () => {
   test("reports auth readiness as booleans without exposing credentials or raw request data", () => {
@@ -25,7 +29,9 @@ describe("Coupang Partners auth diagnostics", () => {
       access_key_present: true,
       secret_key_present: true,
       customer_id_or_partner_id_present: false,
+      base_url_configured: false,
       signature_builder_present: true,
+      endpoint_contract_valid: true,
       timestamp_present_or_generated: true,
       clock_skew_safe_check_available: true,
       request_path_present: true,
@@ -108,7 +114,9 @@ describe("Coupang Partners auth diagnostics", () => {
       access_key_present: true,
       secret_key_present: true,
       customer_id_or_partner_id_present: true,
+      base_url_configured: false,
       signature_builder_present: true,
+      endpoint_contract_valid: true,
       raw_values_masked: true
     });
     expect(request.no_call_alignment_check).toMatchObject({
@@ -123,6 +131,46 @@ describe("Coupang Partners auth diagnostics", () => {
     expect(serialized).not.toContain("partner-id-value");
     expect(serialized).not.toMatch(/Authorization|access-key|signature=|HmacSHA256/i);
     expect(serialized).not.toContain("https://api-gateway.coupang.com");
+  });
+
+  test("signs canonical query without a leading question mark while request URL keeps the delimiter", () => {
+    const query = buildCoupangPartnersSearchQuery({ keyword: "빨래건조대", limit: 10 });
+    const withoutQuestionMark = buildCoupangPartnersSignature({
+      secretKey: "dummy-secret",
+      signedDate: "260623T000000Z",
+      method: "GET",
+      path: "/v2/providers/affiliate_open_api/apis/openapi/products/search",
+      query
+    });
+    const withQuestionMark = buildCoupangPartnersSignature({
+      secretKey: "dummy-secret",
+      signedDate: "260623T000000Z",
+      method: "GET",
+      path: "/v2/providers/affiliate_open_api/apis/openapi/products/search",
+      query: `?${query}`
+    });
+    const request = buildCoupangPartnersSearchRequest({
+      env: {
+        COUPANG_PARTNERS_PROVIDER_ENABLED: "true",
+        COUPANG_ACCESS_KEY: "access-value",
+        COUPANG_SECRET_KEY: "secret-value",
+        COUPANG_CUSTOMER_ID: "customer-value",
+        COUPANG_PARTNERS_BASE_URL: "https://api-gateway.coupang.com/"
+      },
+      keyword: "빨래건조대",
+      signedDate: "260623T000000Z"
+    });
+    const serialized = JSON.stringify(request);
+
+    expect(query.startsWith("?")).toBe(false);
+    expect(withQuestionMark).toBe(withoutQuestionMark);
+    expect(request.ok).toBe(true);
+    expect(request.request.url).toContain("/products/search?keyword=");
+    expect(request.safe_summary.base_url_configured).toBe(true);
+    expect(serialized).not.toContain("access-value");
+    expect(serialized).not.toContain("secret-value");
+    expect(serialized).not.toContain("customer-value");
+    expect(serialized).not.toMatch(/Authorization|access-key|signature=|HmacSHA256/i);
   });
 
   test("blocks before a live API call when provider or customer/partner id readiness is missing", () => {

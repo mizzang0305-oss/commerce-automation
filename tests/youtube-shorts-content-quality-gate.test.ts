@@ -12,6 +12,7 @@ import {
   APPROVE_AUTO_SCENE_IMAGE_PIPELINE_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD
 } from "@/lib/uploads/youtube";
 
@@ -255,6 +256,10 @@ describe("YouTube Shorts content quality gate", () => {
 
   test("motion-first private upload approval is accepted as private execute confirmation", () => {
     expect(hasExactYouTubeUploadConfirmation(APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD)).toBe(true);
+  });
+
+  test("auto product source provider upload approval is accepted as private execute confirmation", () => {
+    expect(hasExactYouTubeUploadConfirmation(APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE)).toBe(true);
   });
 
   test("static single image package is blocked before private upload", () => {

@@ -39,6 +39,7 @@ The shared reader accepts the same key families for both readiness and request
 building:
 
 - `COUPANG_PARTNERS_PROVIDER_ENABLED`
+- `COUPANG_PARTNERS_BASE_URL` (optional; defaults to the Coupang gateway)
 - `COUPANG_PARTNERS_ACCESS_KEY` or legacy `COUPANG_ACCESS_KEY`
 - `COUPANG_PARTNERS_SECRET_KEY` or legacy `COUPANG_SECRET_KEY`
 - `COUPANG_CUSTOMER_ID`, `COUPANG_PARTNER_ID`, or
@@ -53,6 +54,8 @@ using dummy credentials only. It checks:
 - signature builder is present
 - method, request path, query, and timestamp are present
 - timestamp uses the Coupang signed-date shape
+- HMAC signs the encoded query string without a leading `?`; the final request
+  URL adds `?` only when joining the path and query
 - canonicalized signing input does not contain `undefined`
 - raw secret, raw signature, and Authorization header values are not returned
 
@@ -166,3 +169,25 @@ The fallback is not an execution path. It does not call Coupang Partners, run
 external scout, insert/update candidates, render video, create MP4 files, upload
 to R2, write `product_assets`, write DB rows, execute YouTube, or call
 `videos.insert`.
+
+## 2026-06-24 Signer Contract Alignment
+
+The repository signer now matches the Coupang HMAC examples: the HMAC message
+uses the encoded query string without a leading `?`, while the final request URL
+adds `?` only when joining path and query. The same contract is used by the
+server-side request builder and the n8n nightly scout builder.
+
+The approved safe live probe after this alignment no longer reproduced HTTP
+401. It returned an HTTP 200 Coupang Partners business response that classified
+as:
+
+```text
+COUPANG_SCOUT_KEYWORD_INVALID
+```
+
+No candidate was selected or imported from that probe, and no render, R2,
+`product_assets`, YouTube Execute, `videos.insert`, public upload, or unlisted
+upload side effect occurred. The response classifier now recognizes
+`rCode`/`rMessage` business errors and the normal `data.productData` success
+shape without exposing raw request URLs, affiliate URLs, image URLs,
+credentials, Authorization headers, or signatures.

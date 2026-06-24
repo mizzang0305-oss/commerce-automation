@@ -18,7 +18,9 @@ export type CoupangPartnersAuthDiagnostic = {
   access_key_present: boolean;
   secret_key_present: boolean;
   customer_id_or_partner_id_present: boolean;
+  base_url_configured: boolean;
   signature_builder_present: true;
+  endpoint_contract_valid: true;
   timestamp_present_or_generated: true;
   clock_skew_safe_check_available: true;
   request_path_present: true;
@@ -65,7 +67,9 @@ export function buildCoupangPartnersAuthDiagnostic(input: {
     access_key_present: env.readiness.access_key_present,
     secret_key_present: env.readiness.secret_key_present,
     customer_id_or_partner_id_present: env.readiness.customer_id_or_partner_id_present,
+    base_url_configured: env.readiness.base_url_configured,
     signature_builder_present: true,
+    endpoint_contract_valid: true,
     timestamp_present_or_generated: true,
     clock_skew_safe_check_available: true,
     request_path_present: true,

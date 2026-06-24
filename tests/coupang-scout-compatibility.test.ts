@@ -35,6 +35,46 @@ describe("Coupang scout compatibility diagnostics", () => {
     expect(result.side_effects).toEqual(COUPANG_SCOUT_SIDE_EFFECTS);
   });
 
+  it("maps Coupang Partners rCode/rMessage keyword errors without exposing raw request data", () => {
+    const result = classifyCoupangScoutApiResponse({
+      http_status: 200,
+      body: { rCode: "400", rMessage: "keyword is invalid" }
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.ok).toBe(false);
+    expect(result.classification).toBe("COUPANG_SCOUT_KEYWORD_INVALID");
+    expect(result.external_call_allowed).toBe(false);
+    expect(result.side_effects).toEqual(COUPANG_SCOUT_SIDE_EFFECTS);
+    expect(serialized).not.toMatch(/Authorization|Bearer|HmacSHA256|access-key|secret|signature/i);
+  });
+
+  it("accepts Coupang Partners data.productData success response shape", () => {
+    const result = classifyCoupangScoutApiResponse({
+      http_status: 200,
+      body: {
+        rCode: "0",
+        rMessage: "",
+        data: {
+          productData: [
+            {
+              productName: "safe product name",
+              productUrl: "https://link.example.test/masked",
+              productImage: "https://image.example.test/masked.jpg"
+            }
+          ]
+        }
+      }
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.ok).toBe(true);
+    expect(result.classification).toBe("COUPANG_SCOUT_READY");
+    expect(result.external_call_allowed).toBe(true);
+    expect(serialized).not.toContain("https://link.example.test");
+    expect(serialized).not.toContain("https://image.example.test");
+  });
+
   it("maps auth signature and expiry failures separately", () => {
     expect(classifyCoupangScoutApiResponse({
       http_status: 401,
@@ -96,7 +136,7 @@ describe("Coupang scout compatibility diagnostics", () => {
     expect(contract.keyword_policy.raw_keyword_printed).toBe(false);
     expect(contract.keyword_policy.normalized_keyword_present).toBe(true);
     expect(contract.keyword_policy.encoded_keyword_present).toBe(true);
-    expect(contract.signing_contract?.query_includes_question_mark).toBe(true);
+    expect(contract.signing_contract?.query_includes_question_mark).toBe(false);
     expect(serialized).not.toContain("청소솔");
     expect(serialized).not.toMatch(/Authorization|Bearer|signature|secret|access-key/i);
     expect(serialized).not.toContain("https://api-gateway.coupang.com");
