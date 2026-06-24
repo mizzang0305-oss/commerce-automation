@@ -25,3 +25,4 @@ export * from "@/lib/uploads/youtube/realSceneImageProviderApproval";
 export * from "@/lib/uploads/youtube/realUsageSceneProviderApproval";
 export * from "@/lib/uploads/youtube/photorealisticUsageSceneProviderApproval";
 export * from "@/lib/uploads/youtube/autoTrendProductSourceUploadApproval";
+export * from "@/lib/uploads/youtube/rainyDryingRackPrivateUploadApproval";
