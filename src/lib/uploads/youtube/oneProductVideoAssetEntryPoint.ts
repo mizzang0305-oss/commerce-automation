@@ -15,6 +15,7 @@ import { APPROVE_IMPLEMENT_REAL_SCENE_IMAGE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } fr
 import { APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/realUsageSceneProviderApproval";
 import { APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/photorealisticUsageSceneProviderApproval";
 import { APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE } from "@/lib/uploads/youtube/autoTrendProductSourceUploadApproval";
+import { APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD } from "@/lib/uploads/youtube/rainyDryingRackPrivateUploadApproval";
 import { APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 
@@ -27,6 +28,7 @@ export {
   APPROVE_REAL_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_PHOTOREALISTIC_USAGE_SCENE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
   APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+  APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD,
   APPROVE_MOTION_FIRST_SHORTS_PRIVATE_UPLOAD
 };
 

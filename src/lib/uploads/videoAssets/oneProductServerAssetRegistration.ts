@@ -111,7 +111,7 @@ export function createOneProductServerAssetRegistrar(
       });
     }
 
-    const localVideoPath = buildExpectedLocalVideoPath({ cwd, candidateId: candidate.id });
+    const localVideoPath = await resolveExpectedLocalVideoPath({ cwd, candidateId: candidate.id, stat });
     const qualityMetadata = await readQualityMetadataSidecar(readFile, localVideoPath);
     let fileBuffer: Buffer;
     let sizeBytes: number;
@@ -438,14 +438,36 @@ function readR2Config():
   };
 }
 
-function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string }) {
+async function resolveExpectedLocalVideoPath(input: {
+  cwd: string;
+  candidateId: string;
+  stat: typeof fs.stat;
+}) {
+  const paths = [
+    buildExpectedLocalVideoPath({ cwd: input.cwd, candidateId: input.candidateId, version: "v009" }),
+    buildExpectedLocalVideoPath({ cwd: input.cwd, candidateId: input.candidateId, version: "v008" })
+  ];
+  for (const localVideoPath of paths) {
+    try {
+      const fileStat = await input.stat(localVideoPath);
+      if (fileStat.isFile() && fileStat.size > 0) {
+        return localVideoPath;
+      }
+    } catch {
+      // Try the next supported local render version.
+    }
+  }
+  return paths[0];
+}
+
+function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string; version: "v008" | "v009" }) {
   const safeCandidateId = toSafeSlug(input.candidateId);
   return path.join(
     input.cwd,
     "commerce-assets",
     "generated-videos",
     safeCandidateId,
-    "v008",
+    input.version,
     "story-shorts.mp4"
   );
 }
