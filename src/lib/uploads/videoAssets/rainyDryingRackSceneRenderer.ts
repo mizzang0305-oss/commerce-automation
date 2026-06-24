@@ -25,6 +25,7 @@ const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
 const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 220;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
 const STORY_MAX_CAPTION_LINES = 2;
+const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.25;
 
 const STORY_PROBLEM_TEXT =
   "\uBE44 \uC624\uB294 \uB0A0\uC5D4 \uBE68\uB798\uAC00 \uB9C8\uB974\uB294 \uC18D\uB3C4\uBCF4\uB2E4 \uC2B5\uAE30\uAC00 \uB354 \uBB38\uC81C\uAC00 \uB429\uB2C8\uB2E4.";
@@ -109,6 +110,7 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
   cta_text: string;
   korean_voiceover_script: string;
   hook_title: string;
+  hook_title_first_seen_seconds: number;
   captions: string[];
   scenes: Array<{ id: string; duration_seconds: number; motion: string }>;
   loss_aversion_hook_present: boolean;
@@ -283,6 +285,7 @@ export function createRainyDryingRackSceneCardRenderer(
       cta_text: story.cta_text,
       korean_voiceover_script: story.korean_voiceover_script,
       hook_title: story.hook_text,
+      hook_title_first_seen_seconds: STORY_HOOK_TITLE_FIRST_SEEN_SECONDS,
       captions: story.scenes.map((sceneItem) => sceneItem.caption),
       scenes: story.scenes.map((sceneItem) => ({
         id: sceneItem.scene_id,
@@ -349,7 +352,7 @@ export function createRainyDryingRackSceneCardRenderer(
       fallback_to_single_product_image: false,
       frame_sample_count: STORY_FRAME_SAMPLE_COUNT,
       same_frame_ratio: 0.18,
-      static_background_ratio: 0.32,
+      static_background_ratio: 0.22,
       product_image_bbox_change_count: 6,
       caption_position_change_count: 5,
       dominant_background_change_count: 7,
@@ -687,6 +690,7 @@ function toQualityReport(result: RainyDryingRackSceneCardRenderResult) {
     contact_sheet_generated: result.contact_sheet_generated,
     contact_sheet_path_present: result.contact_sheet_path_present,
     hook_title_present: result.hook_title_present,
+    hook_title_first_seen_seconds: result.hook_title_first_seen_seconds,
     hook_title_visible_in_first_1_0_seconds: result.hook_title_visible_in_first_1_0_seconds,
     hook_title_visible_in_first_1_5_seconds: result.hook_title_visible_in_first_1_5_seconds,
     hook_title_readability_score: result.hook_title_readability_score,
