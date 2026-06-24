@@ -7,6 +7,7 @@ import {
   buildRainyDryingRackStoryPackage,
   createRainyDryingRackSceneCardRenderer
 } from "@/lib/uploads/videoAssets/rainyDryingRackSceneRenderer";
+import { evaluateRenderRealityCheck } from "@/lib/uploads/videoAssets/renderOutputRealityCheck";
 import { APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD } from "@/lib/uploads/youtube/rainyDryingRackPrivateUploadApproval";
 import { hasExactYouTubeUploadConfirmation } from "@/lib/uploads/youtube/youtubeUploadGuards";
 import {
@@ -85,6 +86,16 @@ describe("rainy drying rack scene-card renderer", () => {
       "scene-07-checklist",
       "scene-08-cta"
     ]);
+    expect(story.scenes.map((scene) => scene.layout_template)).toEqual([
+      "layout_hook_full_title",
+      "layout_problem_card",
+      "layout_product_intro_split",
+      "layout_feature_grid",
+      "layout_use_case_graphic",
+      "layout_why_buy_cards",
+      "layout_checklist_fullscreen",
+      "layout_cta_card"
+    ]);
     expect(story.user_prompt_required).toBe(false);
     expect(story.description).not.toMatch(/manual review package|prepared package|test upload|smoke upload|debug/i);
   });
@@ -104,6 +115,7 @@ describe("rainy drying rack scene-card renderer", () => {
       execFileAsync,
       mkdir: vi.fn(async () => undefined),
       writeFile: vi.fn(async () => undefined),
+      copyFile: vi.fn(async () => undefined),
       stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never,
       readFile: vi.fn(async () => Buffer.from("fake-rainy-drying-rack-video")) as never
     });
@@ -151,15 +163,62 @@ describe("rainy drying rack scene-card renderer", () => {
       content_quality_score: 100,
       generated_scene_image_count: 8,
       scene_manifest_created: true,
-      contact_sheet_generated: true
+      contact_sheet_generated: true,
+      actual_render_probe: {
+        rendered_frame_contact_sheet_generated: true,
+        actual_frame_probe: {
+          actual_frame_sample_count: 12,
+          actual_frame_hash_unique_ratio: 0.72,
+          foreground_product_position_change_count: 6,
+          foreground_product_scale_change_count: 5,
+          layout_structure_change_count: 8,
+          background_only_change_ratio: 0.18,
+          same_composition_ratio: 0.24
+        },
+        caption_bbox_probe: {
+          actual_caption_safe_area_pass: true,
+          actual_no_text_clipped: true,
+          actual_no_caption_overlaps_right_ui: true,
+          max_caption_lines: 2,
+          hook_title_visible_actual: true,
+          hook_title_contrast_actual_pass: true
+        },
+        audio_continuity_probe: {
+          audio_stream_present: true,
+          max_silence_between_segments_ms: 220,
+          hard_cut_count: 1,
+          audio_loudness_normalized: true,
+          audio_peak_not_clipped: true,
+          speech_continuity_score: 84,
+          voiceover_naturalness_score: 84
+        }
+      }
     });
     expect(result.captions).toHaveLength(8);
     expect(result.scenes).toHaveLength(8);
+    expect(result.scenes.map((scene) => scene.layout_template)).toEqual([
+      "layout_hook_full_title",
+      "layout_problem_card",
+      "layout_product_intro_split",
+      "layout_feature_grid",
+      "layout_use_case_graphic",
+      "layout_why_buy_cards",
+      "layout_checklist_fullscreen",
+      "layout_cta_card"
+    ]);
+    expect(evaluateRenderRealityCheck(result.actual_render_probe)).toMatchObject({
+      passed: true,
+      actual_true_scene_change_pass: true,
+      actual_caption_safe_area_pass: true,
+      audio_continuity_pass: true
+    });
     expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v009", "story-shorts.mp4"));
     expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v009", "scene-manifest.json"));
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
     expect(execFileAsync.mock.calls.filter(([file]) => file === "ffmpeg").length).toBeGreaterThanOrEqual(10);
+    expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.includes("-af") && args.includes("loudnorm=I=-16:TP=-1.5:LRA=11"))).toBe(true);
+    expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.join(" ").includes("zoompan=z="))).toBe(true);
     expect(execFileAsync.mock.calls.some(([file]) => file === "ffprobe")).toBe(true);
   });
 });
