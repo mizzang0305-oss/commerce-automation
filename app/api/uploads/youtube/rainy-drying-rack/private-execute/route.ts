@@ -133,12 +133,30 @@ async function runRainyDryingRackPrivatePipeline(input: {
 }): Promise<SafePipelineReport> {
   let externalApiCallCount = 0;
   const existingCandidates = await input.repository.getProductCandidates();
+  const existingAssets = await input.repository.getProductAssets();
   const baseline = existingCandidates.find((candidate) => candidate.id === BASELINE_CANDIDATE_ID);
   const baselineProductNames = baseline?.product_name ? [baseline.product_name] : [];
   const baselineProductKeys = baseline?.product_key ? [baseline.product_key] : [];
   const collectedCandidates: ProductCandidate[] = [];
   let selectedKeyword: string | null = null;
   let lastBlockedReason: string | null = null;
+
+  const existingSelection = selectExistingRainyDryingRackCandidateWithPreparedAsset({
+    candidates: existingCandidates,
+    assets: existingAssets,
+    baselineProductNames,
+    baselineProductKeys
+  });
+  if (existingSelection) {
+    return renderRegisterAndUpload({
+      repository: input.repository,
+      candidate: existingSelection.candidate,
+      candidateScore: existingSelection.score,
+      selectedKeyword: readPayloadString(existingSelection.candidate, "source_keyword") || "existing rainy drying rack candidate",
+      keywordExpansionUsed: false,
+      externalApiCallCount: 0
+    });
+  }
 
   for (const keyword of input.keywords) {
     selectedKeyword = keyword;
@@ -210,6 +228,26 @@ async function runRainyDryingRackPrivatePipeline(input: {
     blockedReasons: [lastBlockedReason ?? "rainy_drying_rack_candidate_not_found"],
     selectedKeyword,
     externalApiCallCount
+  });
+}
+
+function selectExistingRainyDryingRackCandidateWithPreparedAsset(input: {
+  candidates: ProductCandidate[];
+  assets: ProductAsset[];
+  baselineProductNames: string[];
+  baselineProductKeys: string[];
+}) {
+  const candidateIdsWithVideoAssets = new Set(
+    input.assets
+      .filter((asset) => asset.asset_type === "video" && Boolean(buildPreparedVideoAssetFromProductAsset(asset)))
+      .map((asset) => asset.product_candidate_id)
+      .filter((candidateId): candidateId is string => typeof candidateId === "string" && candidateId.trim().length > 0)
+  );
+  const eligibleCandidates = input.candidates.filter((candidate) => candidateIdsWithVideoAssets.has(candidate.id));
+  return selectRainyDryingRackCandidate(eligibleCandidates, {
+    baselineCandidateId: BASELINE_CANDIDATE_ID,
+    baselineProductNames: input.baselineProductNames,
+    baselineProductKeys: input.baselineProductKeys
   });
 }
 
