@@ -117,6 +117,15 @@ describe("rainy drying rack scene-card renderer", () => {
       story_video_generated: true,
       local_only: true,
       mime_type: "video/mp4",
+      hook_text: RAINY_DRYING_RACK_HOOK_TEXT,
+      problem_text: expect.any(String),
+      why_buy_reason: expect.any(String),
+      target_customer: expect.any(String),
+      product_benefit: expect.any(String),
+      caution_or_check_before_buy: expect.any(String),
+      cta_text: expect.any(String),
+      korean_voiceover_script: expect.any(String),
+      hook_title: RAINY_DRYING_RACK_HOOK_TEXT,
       scene_count: 8,
       transition_count: 8,
       frame_sample_count: 8,
@@ -143,6 +152,8 @@ describe("rainy drying rack scene-card renderer", () => {
       scene_manifest_created: true,
       contact_sheet_generated: true
     });
+    expect(result.captions).toHaveLength(8);
+    expect(result.scenes).toHaveLength(8);
     expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v009", "story-shorts.mp4"));
     expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v009", "scene-manifest.json"));
     expect(serialized).not.toContain("link.coupang.com");
