@@ -24,7 +24,8 @@ import {
   getYouTubeUploadAccessTokenForServerUpload
 } from "@/lib/uploads/youtube";
 import { APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD } from "@/lib/uploads/youtube/rainyDryingRackPrivateUploadApproval";
-import type { ProductCandidate } from "@/types/automation";
+import { normalizePreparedVideoAssetRef, type PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import type { ProductAsset, ProductCandidate } from "@/types/automation";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -222,12 +223,38 @@ async function renderRegisterAndUpload(input: {
 }): Promise<SafePipelineReport> {
   const renderer = createRainyDryingRackSceneCardRenderer();
   const asset = await renderer(input.candidate);
-  const registrar = createOneProductServerAssetRegistrar(input.repository);
-  const registration = await registrar({ candidate: input.candidate });
-  if (!registration.ok) {
+  const existingAssetRef = await findExistingPreparedVideoAssetRef(input.repository, input.candidate.id);
+  let preparedVideoAssetRef: PreparedVideoAssetRef | null = existingAssetRef;
+  let r2Uploaded = false;
+  let productAssetsWritten = false;
+  let rowsWritten = 0;
+
+  if (!preparedVideoAssetRef) {
+    const registrar = createOneProductServerAssetRegistrar(input.repository);
+    const registration = await registrar({ candidate: input.candidate });
+    if (!registration.ok) {
+      return blockedReport({
+        errorCode: registration.error_code,
+        blockedReasons: registration.blocked_reasons,
+        selectedKeyword: input.selectedKeyword,
+        externalApiCallCount: input.externalApiCallCount,
+        candidate: input.candidate,
+        candidateScore: input.candidateScore,
+        renderAttempted: true,
+        mp4Created: true,
+        asset
+      });
+    }
+    preparedVideoAssetRef = registration.asset_ref;
+    r2Uploaded = registration.r2_uploaded;
+    productAssetsWritten = registration.db_written;
+    rowsWritten = registration.rows_inserted_or_upserted;
+  }
+
+  if (!preparedVideoAssetRef) {
     return blockedReport({
-      errorCode: registration.error_code,
-      blockedReasons: registration.blocked_reasons,
+      errorCode: "VIDEO_ASSET_REGISTRATION_NOT_READY",
+      blockedReasons: ["prepared_video_asset_ref"],
       selectedKeyword: input.selectedKeyword,
       externalApiCallCount: input.externalApiCallCount,
       candidate: input.candidate,
@@ -243,8 +270,8 @@ async function renderRegisterAndUpload(input: {
     product_name: input.candidate.product_name,
     product_source: "coupang",
     selected_affiliate_url: input.candidate.selected_affiliate_url,
-    prepared_video_asset: registration.asset_ref,
-    video_path_or_url: registration.asset_ref.prepared_video_asset_url ?? registration.asset_ref.signed_url ?? "",
+    prepared_video_asset: preparedVideoAssetRef,
+    video_path_or_url: preparedVideoAssetRef.prepared_video_asset_url ?? preparedVideoAssetRef.signed_url ?? "",
     visibility: "private",
     title: buildTitle(input.candidate.product_name),
     description: asset.story_package.description,
@@ -264,9 +291,9 @@ async function renderRegisterAndUpload(input: {
       renderAttempted: true,
       mp4Created: true,
       asset,
-      r2Uploaded: registration.r2_uploaded,
-      productAssetsWritten: registration.db_written,
-      rowsWritten: registration.rows_inserted_or_upserted,
+      r2Uploaded,
+      productAssetsWritten,
+      rowsWritten,
       preparedVideoAssetRefPresent: true,
       productPackagePrepare: "BLOCKED",
       readinessCanUpload: false,
@@ -289,9 +316,9 @@ async function renderRegisterAndUpload(input: {
       renderAttempted: true,
       mp4Created: true,
       asset,
-      r2Uploaded: registration.r2_uploaded,
-      productAssetsWritten: registration.db_written,
-      rowsWritten: registration.rows_inserted_or_upserted,
+      r2Uploaded,
+      productAssetsWritten,
+      rowsWritten,
       preparedVideoAssetRefPresent: true,
       productPackagePrepare: "PASS",
       readinessCanUpload: false,
@@ -320,9 +347,9 @@ async function renderRegisterAndUpload(input: {
       renderAttempted: true,
       mp4Created: true,
       asset,
-      r2Uploaded: registration.r2_uploaded,
-      productAssetsWritten: registration.db_written,
-      rowsWritten: registration.rows_inserted_or_upserted,
+      r2Uploaded,
+      productAssetsWritten,
+      rowsWritten,
       preparedVideoAssetRefPresent: true,
       productPackagePrepare: "PASS",
       readinessCanUpload: false,
@@ -345,10 +372,10 @@ async function renderRegisterAndUpload(input: {
     ok: uploadResult.succeeded,
     error_code: uploadResult.succeeded ? null : "YOUTUBE_PRIVATE_UPLOAD_FAILED",
     blocked_reasons: uploadResult.succeeded ? [] : uploadResult.blocked_reasons,
-    r2_upload_attempted: true,
-    r2_uploaded: registration.r2_uploaded,
-    product_assets_written: registration.db_written,
-    rows_written: registration.rows_inserted_or_upserted,
+    r2_upload_attempted: !existingAssetRef,
+    r2_uploaded: r2Uploaded,
+    product_assets_written: productAssetsWritten,
+    rows_written: rowsWritten,
     prepared_video_asset_ref_present: true,
     product_package_prepare: "PASS",
     readiness_can_upload: true,
@@ -457,6 +484,38 @@ function extractPartnersProducts(payload: unknown): PartnersProduct[] {
     }
   }
   return [];
+}
+
+async function findExistingPreparedVideoAssetRef(
+  repository: AutomationRepository,
+  candidateId: string
+): Promise<PreparedVideoAssetRef | null> {
+  const assets = await repository.getProductAssets();
+  const matching = assets
+    .filter((asset) => asset.product_candidate_id === candidateId && asset.asset_type === "video")
+    .sort((left, right) => String(right.updated_at ?? right.created_at).localeCompare(String(left.updated_at ?? left.created_at)))[0];
+  if (!matching) {
+    return null;
+  }
+  return buildPreparedVideoAssetFromProductAsset(matching);
+}
+
+function buildPreparedVideoAssetFromProductAsset(asset: ProductAsset): PreparedVideoAssetRef | null {
+  const metadata = isRecord(asset.render_qa_metadata) ? asset.render_qa_metadata : {};
+  return normalizePreparedVideoAssetRef({
+    prepared_video_asset: {
+      asset_id: readString(metadata, "asset_id") || asset.id,
+      provider: readString(metadata, "prepared_video_asset_provider") || inferProviderFromBucket(asset.bucket),
+      storage_key: readString(metadata, "storage_key"),
+      prepared_video_asset_url: readString(metadata, "prepared_video_asset_url") || asset.url,
+      signed_url: readString(metadata, "signed_url"),
+      mime_type: readString(metadata, "mime_type") || "video/mp4",
+      size_bytes: readNumber(metadata, "size_bytes"),
+      checksum_sha256: readString(metadata, "checksum_sha256"),
+      expires_at: readString(metadata, "expires_at"),
+      server_accessible: metadata.server_accessible === true || /^https:\/\//i.test(asset.url)
+    }
+  });
 }
 
 async function safeJson(response: Response) {
@@ -655,6 +714,15 @@ function readString(record: Record<string, unknown>, ...keys: string[]) {
     }
   }
   return "";
+}
+
+function readNumber(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function inferProviderFromBucket(bucket: string) {
+  return bucket === "r2-rendered-videos" ? "r2" : "external_https";
 }
 
 function readCandidateInputString(input: RainyCandidateInput, key: string) {
