@@ -32,6 +32,7 @@ export type RenderRealityCheckBlocker =
   | "KOREAN_DISCLOSURE_GARBLED"
   | "AUDIO_ASR_PROVIDER_NOT_CONFIGURED"
   | "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED"
+  | "VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING"
   | "VOICEOVER_KEYWORD_ANCHORS_MISSING"
   | "VOICEOVER_TOO_FAST"
   | "STATIC_PRODUCT_CARD_FEELING"
@@ -96,6 +97,9 @@ export type KoreanAsrProbeInput = {
   real_asr_probe_executed?: unknown;
   korean_transcript_present?: unknown;
   transcript_similarity_score?: unknown;
+  core_anchor_recognition_pass?: unknown;
+  recognized_core_anchors?: unknown;
+  recognized_context_anchors?: unknown;
   recognized_keyword_anchor_count?: unknown;
   speech_rate_wpm?: unknown;
   max_silence_between_segments_ms?: unknown;
@@ -280,6 +284,7 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     !isScriptAlignmentAsrProvider(asrProvider);
   const koreanTranscriptPresent = koreanAsrProbe.korean_transcript_present === true;
   const transcriptSimilarityScore = normalizeRatio(koreanAsrProbe.transcript_similarity_score);
+  const coreAnchorRecognitionPass = koreanAsrProbe.core_anchor_recognition_pass === true;
   const recognizedKeywordAnchorCount =
     normalizeNonNegativeNumber(koreanAsrProbe.recognized_keyword_anchor_count) ?? 0;
   const speechRateWpm = normalizeNonNegativeNumber(koreanAsrProbe.speech_rate_wpm);
@@ -435,6 +440,9 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     if (recognizedKeywordAnchorCount < MIN_RECOGNIZED_KEYWORD_ANCHOR_COUNT) {
       blockedReasons.push("VOICEOVER_KEYWORD_ANCHORS_MISSING");
     }
+    if (!coreAnchorRecognitionPass) {
+      blockedReasons.push("VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING");
+    }
     if (speechRateWpm === null ||
       speechRateWpm < MIN_SPEECH_RATE_WPM ||
       speechRateWpm > MAX_SPEECH_RATE_WPM) {
@@ -510,6 +518,7 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     transcriptSimilarityScore !== null &&
     transcriptSimilarityScore >= MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE &&
     recognizedKeywordAnchorCount >= MIN_RECOGNIZED_KEYWORD_ANCHOR_COUNT &&
+    coreAnchorRecognitionPass &&
     speechRateWpm !== null &&
     speechRateWpm >= MIN_SPEECH_RATE_WPM &&
     speechRateWpm <= MAX_SPEECH_RATE_WPM &&

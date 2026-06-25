@@ -11,7 +11,7 @@
     "comfyui:doctor": "node scripts/comfyui-wan-local-setup-doctor.mjs",
     "comfyui:config-check": "node scripts/comfyui-wan-local-config-check.mjs",
     "comfyui:smoke:dry-run": "node scripts/comfyui-wan-local-smoke-dry-run.mjs",
-    "asr:v011-review": "node scripts/generate-local-asr-v011-review-packet.mjs",
+    "asr:v012-review": "node scripts/generate-local-asr-v012-review-packet.mjs",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
     "lint": "eslint .",
     "test": "vitest run",

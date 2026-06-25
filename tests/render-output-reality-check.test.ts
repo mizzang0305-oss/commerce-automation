@@ -59,6 +59,9 @@ const PASSING_REALITY_CHECK = {
     real_asr_probe_executed: true,
     korean_transcript_present: true,
     transcript_similarity_score: 0.88,
+    core_anchor_recognition_pass: true,
+    recognized_core_anchors: ["빨래", "건조대", "공간"],
+    recognized_context_anchors: ["장마철", "냄새", "습기", "확인"],
     recognized_keyword_anchor_count: 6,
     speech_rate_wpm: 152,
     max_silence_between_segments_ms: 140,
@@ -298,6 +301,30 @@ describe("render output reality check", () => {
       "VOICEOVER_SEGMENT_GAPS_TOO_LONG",
       "VOICEOVER_HARD_CUTS_DETECTED"
     ]));
+  });
+
+  test("missing product core ASR anchors block upload even when generic anchor count passes", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      korean_asr_probe: {
+        asr_provider: "faster-whisper",
+        asr_probe_executed: true,
+        real_asr_probe_executed: true,
+        korean_transcript_present: true,
+        transcript_similarity_score: 0.86,
+        core_anchor_recognition_pass: false,
+        recognized_core_anchors: ["빨래"],
+        recognized_context_anchors: ["장마철", "냄새", "습기", "확인"],
+        recognized_keyword_anchor_count: 6,
+        speech_rate_wpm: 148,
+        max_silence_between_segments_ms: 140,
+        hard_cut_count: 0,
+        voiceover_naturalness_score: 88
+      }
+    });
+
+    expect(result.audio_intelligibility_pass).toBe(false);
+    expect(result.blocked_reasons).toContain("VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING");
   });
 
   test("script alignment alone is not treated as real ASR readiness", () => {

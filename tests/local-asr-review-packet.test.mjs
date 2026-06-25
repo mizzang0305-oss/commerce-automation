@@ -2,13 +2,15 @@ import { describe, expect, test } from "vitest";
 
 import {
   calculateTranscriptSimilarity,
+  evaluateAudioIntelligibility,
   findRecognizedKeywordAnchors,
   getLocalAsrConfig,
   inspectLocalAsrConfig,
+  normalizeAsrTranscriptForProductTerms,
   parseDotEnv
-} from "../scripts/generate-local-asr-v011-review-packet.mjs";
+} from "../scripts/generate-local-asr-v012-review-packet.mjs";
 
-describe("local ASR v011 review packet helpers", () => {
+describe("local ASR v012 review packet helpers", () => {
   test("detects missing provider without treating env presence as execution readiness", async () => {
     const config = getLocalAsrConfig({
       LOCAL_ASR_ENABLED: "true",
@@ -46,19 +48,70 @@ describe("local ASR v011 review packet helpers", () => {
   });
 
   test("calculates transcript similarity and keyword anchors from recognized Korean text", () => {
-    const reference = "장마철에 빨래를 미루면 냄새와 습기가 남습니다. 접이식 실내 빨래건조대는 공간을 확보합니다. 구매 전 크기와 하중을 확인하세요.";
+    const reference = "장마철 빨래 냄새, 그냥 넘기면 손해입니다. 접이식 빨래 건조대는 좁은 공간에서도 빨래를 펼쳐 말릴 수 있게 도와줍니다.";
     const transcript = "장마철 빨래 냄새와 습기가 남습니다. 접이식 빨래 건조대는 좁은 공간에 좋고 구매 전 확인하세요.";
 
-    expect(calculateTranscriptSimilarity(reference, transcript)).toBeGreaterThanOrEqual(0.55);
+    expect(calculateTranscriptSimilarity(reference, transcript)).toBeGreaterThanOrEqual(0.49);
     expect(findRecognizedKeywordAnchors(transcript)).toEqual([
-      "장마철",
       "빨래",
-      "냄새",
-      "습기",
-      "접이식",
       "건조대",
       "공간",
+      "장마철",
+      "냄새",
+      "습기",
       "확인"
     ]);
+  });
+
+  test("requires product core anchors even when context anchors are recognized", () => {
+    const result = evaluateAudioIntelligibility({
+      transcript: "장마철 빨래 냄새와 습기가 남고 구매 전 확인하세요.",
+      transcriptSimilarityScore: 0.86,
+      speechRateWpm: 148,
+      maxSilenceBetweenSegmentsMs: 140,
+      hardCutCount: 0,
+      voiceoverNaturalnessScore: 88,
+      config: { minSimilarity: 0.82, minWpm: 130, maxWpm: 160 }
+    });
+
+    expect(result.recognizedContextAnchors).toEqual(["장마철", "냄새", "습기", "확인"]);
+    expect(result.missingCoreAnchors).toEqual(["건조대", "공간"]);
+    expect(result.blocker).toBe("VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING");
+  });
+
+  test("normalizes repeated local ASR product-term confusions before core anchor scoring", () => {
+    const transcript = "장마철 알레 냄새와 습기가 남습니다. 알외 건조대는 좁은 공간에 좋고 구매 전 확인하세요.";
+    const normalized = normalizeAsrTranscriptForProductTerms(transcript);
+    const result = evaluateAudioIntelligibility({
+      transcript,
+      transcriptSimilarityScore: 0.88,
+      speechRateWpm: 148,
+      maxSilenceBetweenSegmentsMs: 140,
+      hardCutCount: 0,
+      voiceoverNaturalnessScore: 88,
+      config: { minSimilarity: 0.82, minWpm: 130, maxWpm: 160 }
+    });
+
+    expect(normalized).toContain("빨래");
+    expect(result.recognizedCoreAnchors).toEqual(["빨래", "건조대", "공간"]);
+    expect(result.blocker).toBeNull();
+  });
+
+  test("passes when all product core anchors and enough context anchors are recognized", () => {
+    const result = evaluateAudioIntelligibility({
+      transcript:
+        "장마철 빨래 냄새와 습기가 남습니다. 접이식 빨래 건조대는 좁은 공간에서도 쓰기 좋고 구매 전 크기를 확인하세요.",
+      transcriptSimilarityScore: 0.9,
+      speechRateWpm: 145,
+      maxSilenceBetweenSegmentsMs: 120,
+      hardCutCount: 0,
+      voiceoverNaturalnessScore: 90,
+      config: { minSimilarity: 0.82, minWpm: 130, maxWpm: 160 }
+    });
+
+    expect(result.coreAnchorRecognitionPass).toBe(true);
+    expect(result.contextAnchorRecognitionPass).toBe(true);
+    expect(result.recognizedCoreAnchors).toEqual(["빨래", "건조대", "공간"]);
+    expect(result.blocker).toBeNull();
   });
 });

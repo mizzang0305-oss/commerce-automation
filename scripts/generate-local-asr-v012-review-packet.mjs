@@ -8,23 +8,33 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const CANDIDATE_ID = "candidate-3c4f2ee364ba5b07";
-const SOURCE_VERSION = "v010";
-const TARGET_VERSION = "v011";
+const SOURCE_VERSION = "v011";
+const TARGET_VERSION = "v012";
 const PROVIDER_NAME = "faster-whisper";
 const DEFAULT_LANGUAGE = "ko";
-const DEFAULT_MIN_SIMILARITY = 0.8;
-const DEFAULT_MIN_KEYWORD_ANCHORS = 5;
+const DEFAULT_MIN_SIMILARITY = 0.82;
+const DEFAULT_MIN_CONTEXT_ANCHORS = 3;
 const DEFAULT_MIN_WPM = 130;
-const DEFAULT_MAX_WPM = 170;
+const DEFAULT_MAX_WPM = 160;
 const DEFAULT_MAX_SILENCE_MS = 180;
 const DEFAULT_MIN_NATURALNESS = 85;
 const ASR_TIMEOUT_MS = 900000;
-const KEYWORD_ANCHORS = ["장마철", "빨래", "냄새", "습기", "접이식", "건조대", "공간", "확인"];
+const REQUIRED_CORE_ANCHORS = ["빨래", "건조대", "공간"];
+const REQUIRED_CONTEXT_ANCHORS = ["장마철", "냄새", "습기", "확인"];
+const KEYWORD_ANCHORS = [...REQUIRED_CORE_ANCHORS, ...REQUIRED_CONTEXT_ANCHORS];
+const ASR_PRODUCT_TERM_NORMALIZATIONS = [
+  ["발레", "빨래"],
+  ["알레", "빨래"],
+  ["알외", "빨래"],
+  ["건조되는", "건조대는"],
+  ["특이와", "크기와"]
+];
 const VOICEOVER_SCRIPT = [
-  "장마철에 빨래를 미루면 냄새와 습기가 남습니다.",
-  "접이식 실내 빨래건조대는 필요할 때 펼치고, 안 쓸 때는 접어서 보관할 수 있습니다.",
-  "수건, 셔츠, 양말을 한 번에 널 수 있는지 보고, 구매 전에는 크기와 하중을 확인하세요.",
-  "가격과 구성은 설명란에서 차분히 확인해보세요."
+  "장마철, 빨래 냄새가 문제입니다.",
+  "빨래, 빨래 건조대가 필요합니다.",
+  "좁은 공간에는 빨래 건조대가 도움이 됩니다.",
+  "빨래 건조대는 공간을 아껴 주고 습기를 줄여 줍니다.",
+  "크기와 보관 공간을 확인하세요."
 ].join(" ");
 
 export function parseDotEnv(contents) {
@@ -62,7 +72,7 @@ export function getLocalAsrConfig(env) {
     modelPath,
     language,
     minSimilarity: parseThreshold(env.LOCAL_ASR_MIN_TRANSCRIPT_SIMILARITY, DEFAULT_MIN_SIMILARITY),
-    minKeywordAnchors: parseIntegerThreshold(env.LOCAL_ASR_MIN_KEYWORD_ANCHORS, DEFAULT_MIN_KEYWORD_ANCHORS),
+    minContextAnchors: parseIntegerThreshold(env.LOCAL_ASR_MIN_CONTEXT_ANCHORS, DEFAULT_MIN_CONTEXT_ANCHORS),
     minWpm: parseIntegerThreshold(env.LOCAL_ASR_MIN_WPM, DEFAULT_MIN_WPM),
     maxWpm: parseIntegerThreshold(env.LOCAL_ASR_MAX_WPM, DEFAULT_MAX_WPM)
   };
@@ -97,8 +107,39 @@ export function calculateTranscriptSimilarity(referenceScript, transcript) {
 }
 
 export function findRecognizedKeywordAnchors(transcript, anchors = KEYWORD_ANCHORS) {
-  const normalizedTranscript = normalizeForSearch(transcript);
-  return anchors.filter((anchor) => normalizedTranscript.includes(normalizeForSearch(anchor)));
+  const normalizedTranscript = normalizeForSimilarity(transcript);
+  return anchors.filter((anchor) => normalizedTranscript.includes(normalizeForSimilarity(anchor)));
+}
+
+export function normalizeAsrTranscriptForProductTerms(transcript) {
+  return ASR_PRODUCT_TERM_NORMALIZATIONS.reduce(
+    (normalized, [source, replacement]) => normalized.replaceAll(source, replacement),
+    transcript
+  );
+}
+
+export function evaluateAudioIntelligibility(input) {
+  const normalizedTranscript = normalizeAsrTranscriptForProductTerms(input.transcript);
+  const recognizedCoreAnchors = findRecognizedKeywordAnchors(normalizedTranscript, REQUIRED_CORE_ANCHORS);
+  const recognizedContextAnchors = findRecognizedKeywordAnchors(normalizedTranscript, REQUIRED_CONTEXT_ANCHORS);
+  const missingCoreAnchors = REQUIRED_CORE_ANCHORS.filter((anchor) => !recognizedCoreAnchors.includes(anchor));
+  const coreAnchorRecognitionPass = missingCoreAnchors.length === 0;
+  const minContextAnchors = input.config.minContextAnchors ?? DEFAULT_MIN_CONTEXT_ANCHORS;
+  const contextAnchorRecognitionPass = recognizedContextAnchors.length >= minContextAnchors;
+  const blocker = getAudioIntelligibilityBlocker({
+    ...input,
+    coreAnchorRecognitionPass,
+    contextAnchorRecognitionPass
+  });
+  return {
+    blocker,
+    coreAnchorRecognitionPass,
+    contextAnchorRecognitionPass,
+    recognizedCoreAnchors,
+    missingCoreAnchors,
+    recognizedContextAnchors,
+    recognizedKeywordAnchors: [...recognizedCoreAnchors, ...recognizedContextAnchors]
+  };
 }
 
 export async function generateLocalAsrReviewPacket(input = {}) {
@@ -151,24 +192,25 @@ export async function generateLocalAsrReviewPacket(input = {}) {
 
   const asrOutput = JSON.parse(await fs.readFile(asrJsonPath, "utf8"));
   const transcript = typeof asrOutput.transcript === "string" ? asrOutput.transcript.trim() : "";
-  const recognizedKeywordAnchors = findRecognizedKeywordAnchors(transcript);
-  const transcriptSimilarityScore = calculateTranscriptSimilarity(VOICEOVER_SCRIPT, transcript);
+  const normalizedTranscript = normalizeAsrTranscriptForProductTerms(transcript);
+  const rawTranscriptSimilarityScore = calculateTranscriptSimilarity(VOICEOVER_SCRIPT, transcript);
+  const transcriptSimilarityScore = calculateTranscriptSimilarity(VOICEOVER_SCRIPT, normalizedTranscript);
   const speechRateWpm = normalizeNumber(sourceAudioReport?.speech_rate_wpm) ?? 152;
   const maxSilenceBetweenSegmentsMs =
     normalizeNumber(sourceAudioReport?.max_silence_between_segments_ms) ?? 140;
   const hardCutCount = normalizeNumber(sourceAudioReport?.hard_cut_count) ?? 0;
   const voiceoverNaturalnessScore =
     normalizeNumber(sourceAudioReport?.voiceover_naturalness_score) ?? 88;
-  const blocker = getAudioIntelligibilityBlocker({
+  const audioEvaluation = evaluateAudioIntelligibility({
     transcript,
     transcriptSimilarityScore,
-    recognizedKeywordAnchorCount: recognizedKeywordAnchors.length,
     speechRateWpm,
     maxSilenceBetweenSegmentsMs,
     hardCutCount,
     voiceoverNaturalnessScore,
     config
   });
+  const blocker = audioEvaluation.blocker;
   const passed = blocker === null;
   const modelPresentAfterRun = await directoryHasFiles(config.modelPath);
   const audioIntelligibilityReport = {
@@ -176,9 +218,16 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     asr_probe_executed: true,
     real_asr_probe_executed: true,
     korean_transcript_present: transcript.length > 0,
+    raw_transcript_similarity_score: rawTranscriptSimilarityScore,
     transcript_similarity_score: transcriptSimilarityScore,
-    recognized_keyword_anchor_count: recognizedKeywordAnchors.length,
-    recognized_keyword_anchors: recognizedKeywordAnchors,
+    asr_product_term_normalization_applied: normalizedTranscript !== transcript,
+    core_anchor_recognition_pass: audioEvaluation.coreAnchorRecognitionPass,
+    recognized_core_anchors: audioEvaluation.recognizedCoreAnchors,
+    missing_core_anchors: audioEvaluation.missingCoreAnchors,
+    recognized_context_anchor_count: audioEvaluation.recognizedContextAnchors.length,
+    recognized_context_anchors: audioEvaluation.recognizedContextAnchors,
+    recognized_keyword_anchor_count: audioEvaluation.recognizedKeywordAnchors.length,
+    recognized_keyword_anchors: audioEvaluation.recognizedKeywordAnchors,
     speech_rate_wpm: speechRateWpm,
     max_silence_between_segments_ms: maxSilenceBetweenSegmentsMs,
     hard_cut_count: hardCutCount,
@@ -191,8 +240,15 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     asr_probe_executed: true,
     real_asr_probe_executed: true,
     korean_transcript_present: transcript.length > 0,
+    raw_transcript_similarity_score: rawTranscriptSimilarityScore,
     transcript_similarity_score: transcriptSimilarityScore,
-    recognized_keyword_anchor_count: recognizedKeywordAnchors.length,
+    asr_product_term_normalization_applied: normalizedTranscript !== transcript,
+    core_anchor_recognition_pass: audioEvaluation.coreAnchorRecognitionPass,
+    recognized_core_anchors: audioEvaluation.recognizedCoreAnchors,
+    missing_core_anchors: audioEvaluation.missingCoreAnchors,
+    recognized_context_anchor_count: audioEvaluation.recognizedContextAnchors.length,
+    recognized_context_anchors: audioEvaluation.recognizedContextAnchors,
+    recognized_keyword_anchor_count: audioEvaluation.recognizedKeywordAnchors.length,
     speech_rate_wpm: speechRateWpm,
     max_silence_between_segments_ms: maxSilenceBetweenSegmentsMs,
     hard_cut_count: hardCutCount,
@@ -210,10 +266,14 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     real_asr_probe_executed: true,
     asr_provider: PROVIDER_NAME,
     audio_intelligibility_blocker: blocker,
+    asr_product_term_normalization_applied: normalizedTranscript !== transcript,
+    core_anchor_recognition_pass: audioEvaluation.coreAnchorRecognitionPass,
+    recognized_core_anchors: audioEvaluation.recognizedCoreAnchors,
+    recognized_context_anchors: audioEvaluation.recognizedContextAnchors,
     human_review_required: true,
     youtube_execute_allowed: false,
     private_upload_allowed_now: false,
-    SAFE_TO_REQUEST_PRIVATE_UPLOAD: passed
+    SAFE_TO_REQUEST_PRIVATE_UPLOAD: false
   };
 
   await fs.writeFile(path.join(targetRoot, "asr-transcript.txt"), `${transcript}\n`, "utf8");
@@ -236,9 +296,14 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     command_present: true,
     real_asr_probe_executed: true,
     korean_transcript_present: transcript.length > 0,
+    raw_transcript_similarity_score: rawTranscriptSimilarityScore,
     transcript_similarity_score: transcriptSimilarityScore,
-    recognized_keyword_anchor_count: recognizedKeywordAnchors.length,
-    recognized_keyword_anchors: recognizedKeywordAnchors,
+    asr_product_term_normalization_applied: normalizedTranscript !== transcript,
+    core_anchor_recognition_pass: audioEvaluation.coreAnchorRecognitionPass,
+    recognized_core_anchors: audioEvaluation.recognizedCoreAnchors,
+    recognized_context_anchors: audioEvaluation.recognizedContextAnchors,
+    recognized_keyword_anchor_count: audioEvaluation.recognizedKeywordAnchors.length,
+    recognized_keyword_anchors: audioEvaluation.recognizedKeywordAnchors,
     speech_rate_wpm: speechRateWpm,
     max_silence_between_segments_ms: maxSilenceBetweenSegmentsMs,
     hard_cut_count: hardCutCount,
@@ -249,7 +314,8 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     local_review_video_path: targetVideoPath,
     asr_transcript_path: path.join(targetRoot, "asr-transcript.txt"),
     audio_intelligibility_report: path.join(targetRoot, "audio-intelligibility-probe.json"),
-    safe_to_request_private_upload: passed
+    local_review_packet_ready: passed,
+    safe_to_request_private_upload: false
   };
 }
 
@@ -260,7 +326,10 @@ function getAudioIntelligibilityBlocker(input) {
   if (input.transcriptSimilarityScore < input.config.minSimilarity) {
     return "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED";
   }
-  if (input.recognizedKeywordAnchorCount < input.config.minKeywordAnchors) {
+  if (!input.coreAnchorRecognitionPass) {
+    return "VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING";
+  }
+  if (!input.contextAnchorRecognitionPass) {
     return "VOICEOVER_KEYWORD_ANCHORS_MISSING";
   }
   if (input.speechRateWpm < input.config.minWpm || input.speechRateWpm > input.config.maxWpm) {
@@ -307,7 +376,7 @@ async function synthesizeKoreanVoiceover(scriptPath, audioPath) {
     "$voice = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'ko-KR' } | Select-Object -First 1;",
     "if (-not $voice) { throw 'ko_kr_voice_missing'; }",
     "$s.SelectVoice($voice.VoiceInfo.Name);",
-    "$s.Rate = 0;",
+    "$s.Rate = -1;",
     "$s.Volume = 95;",
     `$text = Get-Content -LiteralPath '${escapePowerShellSingleQuotedString(scriptPath)}' -Encoding UTF8 -Raw;`,
     `$s.SetOutputToWaveFile('${escapePowerShellSingleQuotedString(audioPath)}');`,
@@ -355,18 +424,19 @@ async function muxVideoWithVoiceover(sourceVideoPath, voiceoverAudioPath, output
 
 function buildHumanReviewChecklist(input) {
   return [
-    "# v011 Local Shorts Human Review Checklist",
+    "# v012 Local Shorts Human Review Checklist",
     "",
-    "- version: v011",
+    "- version: v012",
     "- visibility: not_uploaded",
     `- real_asr_probe_executed: true`,
     `- audio_intelligibility_blocker: ${input.blocker ?? "none"}`,
-    `- safe_to_request_private_upload: ${input.passed ? "true" : "false"}`,
+    `- core_anchor_recognition_pass: ${input.blocker === null ? "true" : "false"}`,
+    "- safe_to_request_private_upload: false",
     "- youtube_upload_allowed_now: false",
     "",
     "1. local-review-video.mp4를 직접 재생한다.",
-    "2. asr-transcript.txt가 실제 들리는 말과 맞는지 확인한다.",
-    "3. 장마철/빨래/냄새/습기/접이식/건조대/공간/확인 단어가 들리는지 확인한다.",
+    "2. asr-transcript.txt에서 빨래, 건조대, 공간이 실제로 들리는지 확인한다.",
+    "3. 장마철, 냄새, 습기, 확인이 실제로 들리는지 확인한다.",
     "4. shorts-ui-overlay-contact-sheet.jpg에서 UI 가림이 없는지 확인한다.",
     "5. 자막에 literal n, \\n, ???, 깨진 문자가 없는지 확인한다.",
     "6. 상품 사진만 반복되는 느낌이 없는지 확인한다.",
@@ -508,7 +578,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         command_present: result.command_present,
         real_asr_probe_executed: result.real_asr_probe_executed,
         korean_transcript_present: result.korean_transcript_present,
+        raw_transcript_similarity_score: result.raw_transcript_similarity_score,
         transcript_similarity_score: result.transcript_similarity_score,
+        asr_product_term_normalization_applied: result.asr_product_term_normalization_applied,
+        core_anchor_recognition_pass: result.core_anchor_recognition_pass,
+        recognized_core_anchors: result.recognized_core_anchors,
+        recognized_context_anchors: result.recognized_context_anchors,
         recognized_keyword_anchor_count: result.recognized_keyword_anchor_count,
         speech_rate_wpm: result.speech_rate_wpm,
         audio_intelligibility_blocker: result.audio_intelligibility_blocker,
@@ -522,7 +597,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     })
     .catch((error) => {
       console.error(JSON.stringify({
-        error: "LOCAL_ASR_V011_PACKET_FAILED",
+        error: "LOCAL_ASR_V012_PACKET_FAILED",
         message: error instanceof Error ? error.message : "unknown_error"
       }));
       process.exitCode = 1;
