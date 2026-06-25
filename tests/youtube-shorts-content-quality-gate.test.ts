@@ -113,9 +113,9 @@ const STORY_QUALITY = {
   shape_card_scene_count: 0,
   abstract_scene_ratio: 0,
   before_after_or_problem_scene_present: true,
-  voiceover_speed_wpm: 190,
-  voiceover_speed_multiplier: 1.25,
-  max_silence_between_segments_ms: 260,
+  voiceover_speed_wpm: 152,
+  voiceover_speed_multiplier: 1,
+  max_silence_between_segments_ms: 160,
   hook_title_readability_score: 92,
   hook_title_font_size_large: true,
   hook_title_contrast_pass: true,
@@ -372,6 +372,130 @@ describe("YouTube Shorts content quality gate", () => {
       "ACTUAL_FRAME_HASH_DELTA_TOO_LOW"
     ]));
     expect(result.readiness.content_quality_ready).toBe(false);
+  });
+
+  test("Shorts overlay, caption text, ASR, and static-card regressions block before videos.insert", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const failingActualRenderProbe = {
+      rendered_frame_contact_sheet_generated: true,
+      actual_frame_probe: {
+        actual_frame_sample_count: 12,
+        actual_frame_hash_unique_ratio: 0.72,
+        foreground_product_position_change_count: 6,
+        foreground_product_scale_change_count: 5,
+        layout_structure_change_count: 8,
+        background_only_change_ratio: 0.18,
+        same_composition_ratio: 0.24
+      },
+      caption_bbox_probe: {
+        actual_caption_safe_area_pass: true,
+        actual_no_text_clipped: true,
+        actual_no_caption_overlaps_right_ui: true,
+        max_caption_lines: 2,
+        hook_title_visible_actual: true,
+        hook_title_contrast_actual_pass: true
+      },
+      audio_continuity_probe: {
+        audio_stream_present: true,
+        max_silence_between_segments_ms: 180,
+        hard_cut_count: 0,
+        audio_loudness_normalized: true,
+        audio_peak_not_clipped: true,
+        speech_continuity_score: 84,
+        voiceover_naturalness_score: 84
+      },
+      shorts_ui_overlay_probe: {
+        shorts_overlay_probe_executed: true,
+        no_text_in_top_ui_zone: false,
+        no_critical_text_in_right_ui_zone: false,
+        no_caption_in_bottom_meta_zone: false,
+        no_caption_in_bottom_nav_zone: false,
+        hook_visible_below_top_ui: false,
+        main_caption_inside_safe_window: false
+      },
+      caption_text_integrity_probe: {
+        caption_newline_probe_executed: true,
+        captions: ["장마철 빨래건조n공간 절약", "속건\\n하중 먼저 확인"]
+      },
+      title_description_integrity_probe: {
+        mojibake_probe_executed: true,
+        title: "??? ???? ??",
+        description: "?? \u5360\u5360 \uCC59\uCC59"
+      },
+      korean_asr_probe: {
+        asr_provider: "fixture",
+        asr_probe_executed: true,
+        real_asr_probe_executed: true,
+        korean_transcript_present: true,
+        transcript_similarity_score: 0.42,
+        recognized_keyword_anchor_count: 2,
+        speech_rate_wpm: 212,
+        max_silence_between_segments_ms: 240,
+        hard_cut_count: 2,
+        voiceover_naturalness_score: 70
+      },
+      scene_layout_probe: {
+        static_product_card_feeling: true,
+        product_dominates_too_many_scenes: true,
+        background_only_motion: true,
+        scene_layout_too_similar: true,
+        problem_visual_before_product: false,
+        distinct_layout_templates: 3
+      }
+    };
+
+    const packageResult = buildYouTubeProductVideoUploadPackage({
+      ...READY_PACKAGE_INPUT,
+      shorts_content_quality: {
+        ...STORY_QUALITY,
+        provider: "advanced_still_motion",
+        image_generation_provider: "rainy_drying_rack_scene_card_renderer",
+        actual_render_probe: failingActualRenderProbe
+      }
+    });
+
+    expect(packageResult.ok).toBe(false);
+    if (packageResult.ok) {
+      throw new Error("Shorts UI and audio regressions must not pass package readiness");
+    }
+    expect(packageResult.blocked_reasons).toEqual(expect.arrayContaining([
+      "SHORTS_UI_OVERLAY_TEXT_BLOCKED",
+      "CAPTION_NEWLINE_ESCAPED_AS_LITERAL_N",
+      "CAPTION_LITERAL_BACKSLASH_N_VISIBLE",
+      "YOUTUBE_TITLE_MOJIBAKE",
+      "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED",
+      "VOICEOVER_TOO_FAST",
+      "STATIC_PRODUCT_CARD_FEELING",
+      "NO_PROBLEM_VISUAL_BEFORE_PRODUCT"
+    ]));
+
+    const response = await postYouTubeExecute(new Request("http://localhost/api/uploads/youtube/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        ...READY_PACKAGE_INPUT,
+        confirmation: APPROVE_FIX_AUTO_PRODUCT_SOURCE_PROVIDER_AND_UPLOAD_ONE_PRIVATE,
+        shorts_content_quality: {
+          ...STORY_QUALITY,
+          provider: "advanced_still_motion",
+          image_generation_provider: "rainy_drying_rack_scene_card_renderer",
+          actual_render_probe: failingActualRenderProbe
+        }
+      })
+    }));
+    const payload = await json(response);
+
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_PRODUCT_UPLOAD_PACKAGE_NOT_READY",
+      missing_reasons: expect.arrayContaining([
+        "SHORTS_UI_OVERLAY_TEXT_BLOCKED",
+        "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED"
+      ])
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test("advanced still motion packages require an actual rendered-frame probe", () => {
@@ -827,7 +951,7 @@ describe("YouTube Shorts content quality gate", () => {
       checklist_scene_present: true,
       cta_scene_present: true,
       cta_mentions_description_or_comment: true,
-      voiceover_speed_wpm: 190,
+      voiceover_speed_wpm: 152,
       voiceover_naturalness_score: 84,
       voiceover_too_slow: false,
       voiceover_too_robotic: false
@@ -852,8 +976,8 @@ describe("YouTube Shorts content quality gate", () => {
         visual_motion_score: 45,
         distinct_frame_ratio_pass: false,
         use_case_scene_present: false,
-        voiceover_speed_wpm: 145,
-        voiceover_speed_multiplier: 1,
+        voiceover_speed_wpm: 112,
+        voiceover_speed_multiplier: 0.9,
         max_silence_between_segments_ms: 700
       }
     });

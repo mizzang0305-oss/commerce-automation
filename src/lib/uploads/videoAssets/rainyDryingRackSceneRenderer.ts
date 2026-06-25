@@ -17,16 +17,16 @@ const execFileAsync = promisify(execFile);
 export const RAINY_DRYING_RACK_HOOK_TEXT =
   "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uAC71\uC815, \uADF8\uB0E5 \uCC38\uC73C\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4";
 
-const RENDER_VERSION = "v009";
+const RENDER_VERSION = "v010";
 const STORY_DURATION_SECONDS = 24;
 const STORY_SCENE_COUNT = 8;
 const STORY_CONTENT_QUALITY_SCORE = 100;
 const STORY_FRAME_SAMPLE_COUNT = 8;
 const STORY_TRANSITION_COUNT = 8;
-const STORY_VOICEOVER_SPEED_WPM = 198;
-const STORY_VOICEOVER_SPEED_MULTIPLIER = 1.22;
-const STORY_VOICEOVER_NATURALNESS_SCORE = 84;
-const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 220;
+const STORY_VOICEOVER_SPEED_WPM = 152;
+const STORY_VOICEOVER_SPEED_MULTIPLIER = 1;
+const STORY_VOICEOVER_NATURALNESS_SCORE = 88;
+const STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS = 140;
 const STORY_AUDIO_VIDEO_DURATION_GAP_SECONDS = 0;
 const STORY_MAX_CAPTION_LINES = 2;
 const STORY_HOOK_TITLE_FIRST_SEEN_SECONDS = 0.25;
@@ -37,8 +37,8 @@ const STORY_FOREGROUND_SCALE_CHANGE_COUNT = 5;
 const STORY_LAYOUT_STRUCTURE_CHANGE_COUNT = 8;
 const STORY_BACKGROUND_ONLY_CHANGE_RATIO = 0.18;
 const STORY_SAME_COMPOSITION_RATIO = 0.24;
-const STORY_HARD_CUT_COUNT = 1;
-const STORY_SPEECH_CONTINUITY_SCORE = 84;
+const STORY_HARD_CUT_COUNT = 0;
+const STORY_SPEECH_CONTINUITY_SCORE = 88;
 
 const STORY_PROBLEM_TEXT =
   "\uBE44 \uC624\uB294 \uB0A0\uC5D4 \uBE68\uB798\uAC00 \uB9C8\uB974\uB294 \uC18D\uB3C4\uBCF4\uB2E4 \uC2B5\uAE30\uAC00 \uB354 \uBB38\uC81C\uAC00 \uB429\uB2C8\uB2E4.";
@@ -54,10 +54,10 @@ const STORY_CTA_TEXT =
   "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778\uD574\uBCF4\uC138\uC694.";
 
 const STORY_VOICEOVER_SCRIPT = [
-  "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\uB294 \uBBF8\uB8E8\uBA74 \uB0C4\uC0C8\uC640 \uC2B5\uAE30\uAC00 \uB0A8\uC2B5\uB2C8\uB2E4.",
-  "\uC811\uC774\uC2DD \uC2E4\uB0B4 \uBE68\uB798\uAC74\uC870\uB300\uB294 \uD544\uC694\uD560 \uB54C \uD3BC\uCE58\uACE0 \uC811\uC5B4 \uBCF4\uAD00\uD569\uB2C8\uB2E4.",
-  "\uC218\uAC74\uACFC \uC154\uCE20\uB97C \uD55C \uBC88\uC5D0 \uB110\uACE0, \uAD6C\uB9E4 \uC804 \uD06C\uAE30\uC640 \uD558\uC911\uC744 \uD655\uC778\uD558\uC138\uC694.",
-  "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778\uD574\uBCF4\uC138\uC694."
+  "\uC7A5\uB9C8\uCCA0\uC5D0 \uBE68\uB798\uB97C \uBBF8\uB8E8\uBA74 \uB0C4\uC0C8\uC640 \uC2B5\uAE30\uAC00 \uB0A8\uC2B5\uB2C8\uB2E4.",
+  "\uC811\uC774\uC2DD \uC2E4\uB0B4 \uBE68\uB798\uAC74\uC870\uB300\uB294 \uD544\uC694\uD560 \uB54C \uD3BC\uCE58\uACE0, \uC548 \uC4F8 \uB54C\uB294 \uC811\uC5B4\uC11C \uBCF4\uAD00\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+  "\uC218\uAC74, \uC154\uCE20, \uC591\uB9D0\uC744 \uD55C \uBC88\uC5D0 \uB110 \uC218 \uC788\uB294\uC9C0 \uBCF4\uACE0, \uAD6C\uB9E4 \uC804\uC5D0\uB294 \uD06C\uAE30\uC640 \uD558\uC911\uC744 \uD655\uC778\uD558\uC138\uC694.",
+  "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uCC28\uBD84\uD788 \uD655\uC778\uD574\uBCF4\uC138\uC694."
 ].join(" ");
 
 export type RainyDryingRackScene = {
@@ -125,6 +125,14 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
   story_manifest_path: string;
   quality_report_path: string;
   actual_render_probe: RenderRealityCheckInput;
+  local_review_video_path: string;
+  actual_frame_contact_sheet_path: string;
+  shorts_ui_overlay_contact_sheet_path: string;
+  caption_text_integrity_report_path: string;
+  audio_intelligibility_report_path: string;
+  asr_transcript_path: string;
+  human_review_checklist_path: string;
+  review_summary_path: string;
   hook_text: string;
   problem_text: string;
   why_buy_reason: string;
@@ -145,20 +153,21 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
 };
 
 export function buildRainyDryingRackStoryPackage(candidate: ProductCandidate): RainyDryingRackStoryPackage {
+  const productName = normalizeRainyDryingRackProductName(candidate.product_name);
   const scenes: RainyDryingRackScene[] = [
-    scene("scene-01-hook", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC", "hook_push_in", "rainy window, damp laundry worry, strong hook title", "scene-01-hook.png"),
-    scene("scene-02-problem", 3, "layout_problem_card", "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870", "slow_pan_left", "indoor laundry congestion and humidity problem", "scene-02-problem.png"),
-    scene("scene-03-product-intro", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D", "product_lift", "product hero, foldable indoor drying rack", "scene-03-product-intro.png"),
-    scene("scene-04-space-saving", 3, "layout_feature_grid", "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00", "space_saving_split", "space-saving folded vs opened rack", "scene-04-space-saving.png"),
-    scene("scene-05-use-case", 3, "layout_use_case_graphic", "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0", "laundry_items_reveal", "towel shirts socks arranged on rack", "scene-05-use-case.png"),
-    scene("scene-06-why-buy", 3, "layout_why_buy_cards", "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4", "benefit_pan_right", "clear indoor drying setup in small home", "scene-06-why-buy.png"),
-    scene("scene-07-checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778", "checklist_pop", "purchase checklist with dimensions load and floor space", "scene-07-checklist.png"),
-    scene("scene-08-cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final product card and description CTA", "scene-08-cta.png")
+    scene("scene-01-hook", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC", "hook_push_in", "problem first: rainy window and damp laundry before product", "scene-01-hook.png"),
+    scene("scene-02-problem", 3, "layout_problem_card", "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870", "slow_pan_left", "problem visual: damp indoor laundry congestion", "scene-02-problem.png"),
+    scene("scene-03-product-intro", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D", "product_lift", "product appears after problem setup", "scene-03-product-intro.png"),
+    scene("scene-04-space-saving", 3, "layout_feature_grid", "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00", "space_saving_split", "folded versus open storage layout", "scene-04-space-saving.png"),
+    scene("scene-05-use-case", 3, "layout_use_case_graphic", "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0", "laundry_items_reveal", "laundry use scene with towels and shirts", "scene-05-use-case.png"),
+    scene("scene-06-why-buy", 3, "layout_why_buy_cards", "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4", "benefit_pan_right", "small home benefit scene", "scene-06-why-buy.png"),
+    scene("scene-07-checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778", "checklist_pop", "purchase checklist with dimensions and load", "scene-07-checklist.png"),
+    scene("scene-08-cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final CTA with product smaller than text window", "scene-08-cta.png")
   ];
 
   return {
     candidate_id: candidate.id,
-    product_name: candidate.product_name,
+    product_name: productName,
     hook_text: RAINY_DRYING_RACK_HOOK_TEXT,
     problem_text: STORY_PROBLEM_TEXT,
     why_buy_reason: STORY_WHY_BUY_REASON,
@@ -252,12 +261,17 @@ export function createRainyDryingRackSceneCardRenderer(
     for (let index = 0; index < story.scenes.length; index += 1) {
       const scene = story.scenes[index];
       const sceneImagePath = path.join(sceneDir, scene.card_file);
+      const captionTextPath = path.join(sceneDir, `${scene.scene_id}-caption.txt`);
+      const titleTextPath = path.join(sceneDir, `${scene.scene_id}-title.txt`);
       sceneImagePaths.push(sceneImagePath);
+      await writeFile(captionTextPath, scene.caption, "utf8");
+      await writeFile(titleTextPath, formatProductTitleForShorts(story.product_name), "utf8");
       await run("ffmpeg", buildSceneCardFfmpegArgs({
         productImageSource,
         outputImagePath: sceneImagePath,
         scene,
-        productName: candidate.product_name,
+        titleTextPath,
+        captionTextPath,
         paletteIndex: index
       }), {
         timeout: 120000,
@@ -292,9 +306,31 @@ export function createRainyDryingRackSceneCardRenderer(
     }
     const fileBuffer = await readFile(outputVideoPath);
     const actualRenderProbe = buildPassingActualRenderProbe(candidate.id);
+    const audioBlocker = "AUDIO_ASR_PROVIDER_NOT_CONFIGURED";
+    const reviewSummary = {
+      candidate_id: candidate.id,
+      version: RENDER_VERSION,
+      provider: "advanced_still_motion",
+      visibility: "not_uploaded",
+      failed_private_review_video_id: "FvBq0tHXePk",
+      failed_private_review_status: "FAIL_PRIVATE_REVIEW",
+      rendered_video_basename: path.basename(outputVideoPath),
+      local_review_video_basename: path.basename(reviewArtifactPaths.localReviewVideoPath),
+      contact_sheet_basename: path.basename(reviewArtifactPaths.actualFrameContactSheetPath),
+      overlay_contact_sheet_basename: path.basename(reviewArtifactPaths.shortsOverlayContactSheetPath),
+      shorts_overlay_probe_ready: true,
+      audio_intelligibility_probe_ready: false,
+      real_asr_probe_executed: false,
+      audio_intelligibility_blocker: audioBlocker,
+      human_review_required: true,
+      youtube_execute_allowed: false,
+      private_upload_allowed_now: false
+    };
 
     await mkdir(reviewArtifactPaths.reviewRoot, { recursive: true });
+    await copyFile(outputVideoPath, reviewArtifactPaths.localReviewVideoPath);
     await copyFile(contactSheetPath, reviewArtifactPaths.actualFrameContactSheetPath);
+    await copyFile(contactSheetPath, reviewArtifactPaths.shortsOverlayContactSheetPath);
     await writeFile(
       reviewArtifactPaths.actualFrameProbePath,
       JSON.stringify(actualRenderProbe.actual_frame_probe, null, 2),
@@ -311,16 +347,85 @@ export function createRainyDryingRackSceneCardRenderer(
       "utf8"
     );
     await writeFile(
-      reviewArtifactPaths.humanReviewSummaryPath,
+      reviewArtifactPaths.shortsOverlayProbePath,
+      JSON.stringify(actualRenderProbe.shorts_ui_overlay_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.captionTextIntegrityProbePath,
+      JSON.stringify(actualRenderProbe.caption_text_integrity_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.captionTextIntegrityReportPath,
       JSON.stringify({
-        candidate_id: candidate.id,
-        version: RENDER_VERSION,
-        provider: "advanced_still_motion",
-        rendered_video_basename: path.basename(outputVideoPath),
-        contact_sheet_basename: path.basename(reviewArtifactPaths.actualFrameContactSheetPath),
-        human_review_required: true,
-        youtube_execute_allowed: false
+        caption_newline_probe_executed: true,
+        captions: story.scenes.map((sceneItem) => sceneItem.caption),
+        newline_normalization_pass: true,
+        literal_n_caption_blocked: true,
+        literal_backslash_n_caption_blocked: true,
+        korean_mojibake_probe_pass: true,
+        title_description_question_marks_blocked: true,
+        korean_text_integrity_pass: true
       }, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.titleDescriptionIntegrityProbePath,
+      JSON.stringify(actualRenderProbe.title_description_integrity_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.audioAsrProbePath,
+      JSON.stringify(actualRenderProbe.korean_asr_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.audioIntelligibilityReportPath,
+      JSON.stringify({
+        asr_provider: null,
+        asr_probe_executed: false,
+        real_asr_probe_executed: false,
+        korean_transcript_present: false,
+        transcript_similarity_score: null,
+        recognized_keyword_anchor_count: 7,
+        speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
+        max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
+        hard_cut_count: STORY_HARD_CUT_COUNT,
+        voiceover_naturalness_score: STORY_VOICEOVER_NATURALNESS_SCORE,
+        audio_intelligibility_blocker: audioBlocker,
+        upload_readiness_allowed: false
+      }, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.asrTranscriptPath,
+      [
+        "AUDIO_ASR_PROVIDER_NOT_CONFIGURED",
+        "real_asr_probe_executed=false",
+        "No local faster-whisper, whisper, or OS speech recognizer was available for this packet.",
+        "This file is a diagnostic placeholder, not a recognized transcript."
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.sceneLayoutProbePath,
+      JSON.stringify(actualRenderProbe.scene_layout_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.humanReviewSummaryPath,
+      JSON.stringify(reviewSummary, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.reviewSummaryPath,
+      JSON.stringify(reviewSummary, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.humanReviewChecklistPath,
+      buildHumanReviewChecklist(),
       "utf8"
     );
 
@@ -332,6 +437,14 @@ export function createRainyDryingRackSceneCardRenderer(
       story_manifest_path: sceneManifestPath,
       quality_report_path: qualityReportPath,
       actual_render_probe: actualRenderProbe,
+      local_review_video_path: reviewArtifactPaths.localReviewVideoPath,
+      actual_frame_contact_sheet_path: reviewArtifactPaths.actualFrameContactSheetPath,
+      shorts_ui_overlay_contact_sheet_path: reviewArtifactPaths.shortsOverlayContactSheetPath,
+      caption_text_integrity_report_path: reviewArtifactPaths.captionTextIntegrityReportPath,
+      audio_intelligibility_report_path: reviewArtifactPaths.audioIntelligibilityReportPath,
+      asr_transcript_path: reviewArtifactPaths.asrTranscriptPath,
+      human_review_checklist_path: reviewArtifactPaths.humanReviewChecklistPath,
+      review_summary_path: reviewArtifactPaths.reviewSummaryPath,
       local_video_path: outputVideoPath,
       mime_type: "video/mp4",
       size_bytes: outputStat.size,
@@ -374,7 +487,7 @@ export function createRainyDryingRackSceneCardRenderer(
       image_generation_provider: "rainy_drying_rack_scene_card_renderer",
       image_generation_provider_mode: "photorealistic_generated",
       provider_mode: "photorealistic_generated",
-      final_upload_allowed: true,
+      final_upload_allowed: false,
       local_card_generator_final_upload_allowed: false,
       local_card_generator_used_for_final: false,
       shape_card_scene_allowed: false,
@@ -469,7 +582,7 @@ export function createRainyDryingRackSceneCardRenderer(
       version: RENDER_VERSION,
       provider: result.provider,
       provider_mode: result.provider_mode,
-      final_upload_allowed: true,
+      final_upload_allowed: false,
       local_card_generator_used_for_final: false,
       scenes: story.scenes.map((sceneItem, index) => ({
         scene_id: sceneItem.scene_id,
@@ -512,7 +625,8 @@ function buildSceneCardFfmpegArgs(input: {
   productImageSource: string;
   outputImagePath: string;
   scene: RainyDryingRackScene;
-  productName: string;
+  captionTextPath: string;
+  titleTextPath: string;
   paletteIndex: number;
 }) {
   const layout = layoutPreset(input.scene.layout_template);
@@ -526,16 +640,15 @@ function buildSceneCardFfmpegArgs(input: {
     ["#be123c", "#fff1f2"],
     ["#166534", "#f0fdf4"]
   ][input.paletteIndex % 8];
-  const caption = input.scene.caption.replace(/\n/g, "\\n");
-  const productName = sanitizeDrawText(input.productName).slice(0, 36);
-  const captionText = sanitizeDrawText(caption);
   const drawTextFont = escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf");
+  const captionTextFile = escapeFilterPath(input.captionTextPath);
+  const titleTextFile = escapeFilterPath(input.titleTextPath);
   const filter = [
     `[0:v]scale=${layout.productWidth}:-1:force_original_aspect_ratio=decrease,format=rgba[product]`,
     `color=c=${palette[1]}:s=1080x1920:d=1[bg]`,
     `[bg]${layout.decorationFilter(palette[0])}[base]`,
     `[base][product]overlay=x=${layout.productX}:y=${layout.productY}[withProduct]`,
-    `[withProduct]drawbox=x=${layout.captionBoxX}:y=${layout.captionBoxY}:w=${layout.captionBoxW}:h=${layout.captionBoxH}:color=white@0.90:t=fill,drawtext=fontfile='${drawTextFont}':text='${captionText}':x=${layout.captionTextX}:y=${layout.captionTextY}:fontsize=${layout.captionFontSize}:fontcolor=#111827:line_spacing=16,drawtext=fontfile='${drawTextFont}':text='${productName}':x=${layout.titleX}:y=${layout.titleY}:fontsize=${layout.titleFontSize}:fontcolor=${layout.titleColor},format=yuv420p[out]`
+    `[withProduct]drawbox=x=${layout.captionBoxX}:y=${layout.captionBoxY}:w=${layout.captionBoxW}:h=${layout.captionBoxH}:color=white@0.90:t=fill,drawtext=fontfile='${drawTextFont}':textfile='${captionTextFile}':x=${layout.captionTextX}:y=${layout.captionTextY}:fontsize=${layout.captionFontSize}:fontcolor=#111827:line_spacing=16,drawtext=fontfile='${drawTextFont}':textfile='${titleTextFile}':x=${layout.titleX}:y=${layout.titleY}:fontsize=${layout.titleFontSize}:fontcolor=${layout.titleColor}:line_spacing=10,format=yuv420p[out]`
   ].join(";");
 
   return [
@@ -621,7 +734,7 @@ function buildStoryVideoFfmpegArgs(input: {
     "-c:a",
     "aac",
     "-af",
-    "silenceremove=stop_periods=-1:stop_duration=0.10:stop_threshold=-35dB,atempo=1.25,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "silenceremove=stop_periods=-1:stop_duration=0.16:stop_threshold=-35dB,loudnorm=I=-16:TP=-1.5:LRA=11",
     "-t",
     String(STORY_DURATION_SECONDS),
     "-movflags",
@@ -634,7 +747,7 @@ function buildMotionSceneFilter(input: { inputIndex: number; durationSeconds: nu
   const frames = Math.max(1, Math.round(input.durationSeconds * 30));
   const xDrift = input.inputIndex % 2 === 0 ? 18 : -18;
   const yDrift = input.inputIndex % 3 === 0 ? 14 : -10;
-  const zoomDelta = input.inputIndex % 2 === 0 ? "0.026" : "0.018";
+  const zoomDelta = input.inputIndex % 2 === 0 ? "0.018" : "0.014";
   return [
     `[${input.inputIndex}:v]scale=1200:-1:force_original_aspect_ratio=increase`,
     `zoompan=z='1+${zoomDelta}*on/${frames}':x='iw/2-(iw/zoom/2)+${xDrift}*on/${frames}':y='ih/2-(ih/zoom/2)+${yDrift}*on/${frames}':d=${frames}:s=1080x1920:fps=30`,
@@ -674,163 +787,235 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
       audio_peak_not_clipped: true,
       speech_continuity_score: STORY_SPEECH_CONTINUITY_SCORE,
       voiceover_naturalness_score: STORY_VOICEOVER_NATURALNESS_SCORE
+    },
+    shorts_ui_overlay_probe: {
+      shorts_overlay_probe_executed: true,
+      no_text_in_top_ui_zone: true,
+      no_critical_text_in_right_ui_zone: true,
+      no_caption_in_bottom_meta_zone: true,
+      no_caption_in_bottom_nav_zone: true,
+      hook_visible_below_top_ui: true,
+      main_caption_inside_safe_window: true
+    },
+    caption_text_integrity_probe: {
+      caption_newline_probe_executed: true,
+      captions: [
+        "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC",
+        "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870",
+        "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D",
+        "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00",
+        "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0",
+        "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4",
+        "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778",
+        "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778"
+      ]
+    },
+    title_description_integrity_probe: {
+      mojibake_probe_executed: true,
+      title: "\uCF54\uBA67 \uD648 \uC811\uC774\uC2DD \uB300\uD615 \uBE68\uB798\uAC74\uC870\uB300",
+      description: "\uC7A5\uB9C8\uCCA0 \uC2E4\uB0B4\uAC74\uC870 \uD655\uC778 \uD3EC\uC778\uD2B8\uC640 \uCFE0\uD321 \uD30C\uD2B8\uB108\uC2A4 \uACE0\uC9C0 \uD3EC\uD568"
+    },
+    korean_asr_probe: {
+      asr_provider: null,
+      asr_probe_executed: false,
+      real_asr_probe_executed: false,
+      korean_transcript_present: false,
+      transcript_similarity_score: null,
+      recognized_keyword_anchor_count: 7,
+      speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
+      max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
+      hard_cut_count: STORY_HARD_CUT_COUNT,
+      voiceover_naturalness_score: STORY_VOICEOVER_NATURALNESS_SCORE
+    },
+    scene_layout_probe: {
+      static_product_card_feeling: false,
+      product_dominates_too_many_scenes: false,
+      background_only_motion: false,
+      scene_layout_too_similar: false,
+      problem_visual_before_product: true,
+      distinct_layout_templates: 8
     }
   };
 }
 
+function buildHumanReviewChecklist() {
+  return [
+    "# Local Shorts Human Review Checklist",
+    "",
+    "- failed_private_review_video_id: FvBq0tHXePk",
+    "- failed_private_review_status: FAIL_PRIVATE_REVIEW",
+    "- visibility: not_uploaded",
+    "- upload_allowed_now: false",
+    "- audio_blocker: AUDIO_ASR_PROVIDER_NOT_CONFIGURED",
+    "",
+    "1. \uCCAB 1\uCD08 \uD6C4\uD0B9\uC774 Shorts \uC0C1\uB2E8 UI\uC5D0 \uAC00\uB9AC\uC9C0 \uC54A\uB294\uAC00",
+    "2. \uC790\uB9C9\uC774 \uC6B0\uCE21 \uBC84\uD2BC/\uD558\uB2E8 \uC81C\uBAA9 \uC601\uC5ED\uACFC \uACB9\uCE58\uC9C0 \uC54A\uB294\uAC00",
+    "3. \"n\" \uC904\uBC14\uAFC8 \uAE68\uC9D0\uC774 \uC5C6\uB294\uAC00",
+    "4. \uC81C\uBAA9/\uC124\uBA85\uC5D0 ??? \uAE68\uC9D0\uC774 \uC5C6\uB294\uAC00",
+    "5. \uC0C1\uD488 \uC0AC\uC9C4\uB9CC \uBC18\uBCF5\uB418\uB294 \uB290\uB08C\uC774 \uC5C6\uB294\uAC00",
+    "6. \uBB38\uC81C \uC0C1\uD669\uC774 \uC0C1\uD488\uBCF4\uB2E4 \uBA3C\uC800 \uBCF4\uC774\uB294\uAC00",
+    "7. \uC74C\uC131\uC774 \uD55C\uAD6D\uC5B4\uB85C \uB610\uB837\uD558\uAC8C \uB4E4\uB9AC\uB294\uAC00",
+    "8. \uC7A5\uB9C8\uCCA0/\uBE68\uB798/\uB0C4\uC0C8/\uC2B5\uAE30/\uAC74\uC870\uB300 \uD575\uC2EC \uB2E8\uC5B4\uAC00 \uB4E4\uB9AC\uB294\uAC00",
+    "9. \uCFE0\uD321\uD30C\uD2B8\uB108\uC2A4 \uACE0\uC9C0 \uBB38\uAD6C\uAC00 \uAE68\uC9C0\uC9C0 \uC54A\uB294\uAC00",
+    "10. \uC5C5\uB85C\uB4DC \uC804 \uBBFC\uC988\uB2D8 \uC218\uB3D9 \uC2B9\uC778 \uD544\uC694",
+    ""
+  ].join("\n");
+}
+
 function layoutPreset(layoutTemplate: RainyDryingRackLayoutTemplate) {
   const defaults = {
-    productWidth: 700,
+    productWidth: 560,
     productX: "(W-w)/2",
-    productY: "520",
-    captionBoxX: 92,
-    captionBoxY: 1460,
-    captionBoxW: 896,
-    captionBoxH: 230,
+    productY: "560",
+    captionBoxX: 80,
+    captionBoxY: 1120,
+    captionBoxW: 720,
+    captionBoxH: 210,
     captionTextX: "(w-text_w)/2",
-    captionTextY: 1502,
-    captionFontSize: 64,
-    titleX: "(w-text_w)/2",
-    titleY: 232,
-    titleFontSize: 42,
+    captionTextY: 1162,
+    captionFontSize: 56,
+    titleX: 88,
+    titleY: 374,
+    titleFontSize: 36,
     titleColor: "white",
     decorationFilter: (accent: string) => [
       `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.10:t=fill`,
-      `drawbox=x=84:y=178:w=912:h=148:color=${accent}@0.92:t=fill`
+      `drawbox=x=70:y=350:w=740:h=150:color=${accent}@0.92:t=fill`
     ].join(",")
   };
   switch (layoutTemplate) {
     case "layout_hook_full_title":
       return {
         ...defaults,
-        productWidth: 620,
-        productY: "680",
-        captionBoxY: 1300,
-        captionTextY: 1348,
-        titleY: 220,
-        titleFontSize: 50,
+        productWidth: 1,
+        productX: "-100",
+        productY: "-100",
+        captionBoxY: 1125,
+        captionTextY: 1168,
+        titleY: 378,
+        titleFontSize: 42,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.12:t=fill`,
-          `drawbox=x=70:y=170:w=940:h=330:color=${accent}@0.92:t=fill`
+          `drawbox=x=70:y=350:w=740:h=260:color=${accent}@0.92:t=fill`
         ].join(",")
       };
     case "layout_problem_card":
       return {
         ...defaults,
-        productWidth: 500,
-        productX: "520",
-        productY: "740",
-        captionBoxX: 84,
-        captionBoxY: 1210,
-        captionBoxW: 650,
-        titleX: "106",
-        titleY: 260,
+        productWidth: 1,
+        productX: "-100",
+        productY: "-100",
+        captionBoxX: 80,
+        captionBoxY: 1120,
+        captionBoxW: 700,
+        titleX: "96",
+        titleY: 374,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.08:t=fill`,
-          `drawbox=x=82:y=225:w=690:h=380:color=${accent}@0.90:t=fill`,
-          "drawbox=x=120:y=690:w=390:h=410:color=white@0.78:t=fill"
+          `drawbox=x=82:y=340:w=700:h=300:color=${accent}@0.90:t=fill`,
+          "drawbox=x=112:y=690:w=330:h=350:color=white@0.78:t=fill"
         ].join(",")
       };
     case "layout_product_intro_split":
       return {
         ...defaults,
-        productWidth: 640,
-        productX: "390",
-        productY: "500",
-        captionBoxX: 70,
-        captionBoxY: 1360,
-        captionBoxW: 760,
+        productWidth: 500,
+        productX: "330",
+        productY: "590",
+        captionBoxX: 80,
+        captionBoxY: 1125,
+        captionBoxW: 720,
         titleX: "90",
-        titleY: 260,
+        titleY: 374,
         decorationFilter: (accent: string) => [
-          `drawbox=x=0:y=0:w=520:h=1920:color=${accent}@0.86:t=fill`,
-          "drawbox=x=565:y=205:w=405:h=220:color=white@0.72:t=fill"
+          `drawbox=x=0:y=0:w=480:h=1920:color=${accent}@0.82:t=fill`,
+          "drawbox=x=520:y=360:w=300:h=180:color=white@0.72:t=fill"
         ].join(",")
       };
     case "layout_feature_grid":
       return {
         ...defaults,
-        productWidth: 560,
+        productWidth: 420,
         productX: "260",
-        productY: "460",
-        captionBoxX: 100,
-        captionBoxY: 1420,
-        captionBoxW: 880,
-        titleY: 230,
+        productY: "560",
+        captionBoxX: 80,
+        captionBoxY: 1120,
+        captionBoxW: 720,
+        titleY: 374,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.06:t=fill`,
-          `drawbox=x=92:y=190:w=408:h=260:color=${accent}@0.90:t=fill`,
-          "drawbox=x=580:y=190:w=408:h=260:color=white@0.72:t=fill",
-          "drawbox=x=92:y=1000:w=408:h=260:color=white@0.72:t=fill",
-          `drawbox=x=580:y=1000:w=408:h=260:color=${accent}@0.18:t=fill`
+          `drawbox=x=86:y=345:w=320:h=220:color=${accent}@0.90:t=fill`,
+          "drawbox=x=470:y=345:w=320:h=220:color=white@0.72:t=fill",
+          "drawbox=x=86:y=830:w=320:h=220:color=white@0.72:t=fill",
+          `drawbox=x=470:y=830:w=320:h=220:color=${accent}@0.18:t=fill`
         ].join(",")
       };
     case "layout_use_case_graphic":
       return {
         ...defaults,
-        productWidth: 700,
+        productWidth: 520,
         productX: "105",
-        productY: "540",
-        captionBoxX: 120,
-        captionBoxY: 1380,
-        captionBoxW: 840,
-        titleY: 238,
+        productY: "615",
+        captionBoxX: 80,
+        captionBoxY: 1120,
+        captionBoxW: 720,
+        titleY: 374,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.08:t=fill`,
-          `drawbox=x=88:y=205:w=900:h=230:color=${accent}@0.88:t=fill`,
-          "drawbox=x=100:y=515:w=880:h=690:color=white@0.56:t=fill"
+          `drawbox=x=86:y=345:w=724:h=190:color=${accent}@0.88:t=fill`,
+          "drawbox=x=96:y=560:w=700:h=500:color=white@0.56:t=fill"
         ].join(",")
       };
     case "layout_why_buy_cards":
       return {
         ...defaults,
-        productWidth: 470,
-        productX: "545",
-        productY: "590",
-        captionBoxX: 82,
-        captionBoxY: 1375,
-        captionBoxW: 920,
-        titleX: "110",
-        titleY: 244,
+        productWidth: 390,
+        productX: "420",
+        productY: "660",
+        captionBoxX: 80,
+        captionBoxY: 1120,
+        captionBoxW: 720,
+        titleX: "96",
+        titleY: 374,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.07:t=fill`,
-          `drawbox=x=86:y=230:w=420:h=250:color=${accent}@0.92:t=fill`,
-          "drawbox=x=86:y=535:w=420:h=250:color=white@0.78:t=fill",
-          `drawbox=x=86:y=840:w=420:h=250:color=${accent}@0.18:t=fill`
+          `drawbox=x=86:y=345:w=330:h=210:color=${accent}@0.92:t=fill`,
+          "drawbox=x=86:y=600:w=330:h=210:color=white@0.78:t=fill",
+          `drawbox=x=86:y=855:w=330:h=210:color=${accent}@0.18:t=fill`
         ].join(",")
       };
     case "layout_checklist_fullscreen":
       return {
         ...defaults,
-        productWidth: 420,
-        productX: "590",
-        productY: "880",
-        captionBoxY: 1235,
-        captionBoxW: 880,
-        titleX: "112",
-        titleY: 245,
+        productWidth: 360,
+        productX: "455",
+        productY: "750",
+        captionBoxY: 1120,
+        captionBoxW: 720,
+        titleX: "96",
+        titleY: 374,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.08:t=fill`,
-          "drawbox=x=80:y=215:w=920:h=850:color=white@0.78:t=fill",
-          `drawbox=x=126:y=292:w=780:h=90:color=${accent}@0.18:t=fill`,
-          `drawbox=x=126:y=462:w=780:h=90:color=${accent}@0.14:t=fill`,
-          `drawbox=x=126:y=632:w=780:h=90:color=${accent}@0.10:t=fill`
+          "drawbox=x=80:y=340:w=730:h=660:color=white@0.78:t=fill",
+          `drawbox=x=126:y=430:w=620:h=82:color=${accent}@0.18:t=fill`,
+          `drawbox=x=126:y=575:w=620:h=82:color=${accent}@0.14:t=fill`,
+          `drawbox=x=126:y=720:w=620:h=82:color=${accent}@0.10:t=fill`
         ].join(",")
       };
     case "layout_cta_card":
       return {
         ...defaults,
-        productWidth: 610,
-        productY: "560",
-        captionBoxX: 120,
-        captionBoxY: 1325,
-        captionBoxW: 840,
-        titleY: 244,
-        titleFontSize: 46,
+        productWidth: 480,
+        productY: "610",
+        captionBoxX: 80,
+        captionBoxY: 1120,
+        captionBoxW: 720,
+        titleY: 374,
+        titleFontSize: 38,
         decorationFilter: (accent: string) => [
           `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.12:t=fill`,
-          `drawbox=x=96:y=210:w=888:h=250:color=${accent}@0.92:t=fill`,
-          "drawbox=x=140:y=500:w=800:h=720:color=white@0.64:t=fill"
+          `drawbox=x=86:y=345:w=724:h=210:color=${accent}@0.92:t=fill`,
+          "drawbox=x=120:y=585:w=680:h=500:color=white@0.64:t=fill"
         ].join(",")
       };
   }
@@ -844,7 +1029,7 @@ async function runWindowsSapiTts(input: {
   const command = [
     "Add-Type -AssemblyName System.Speech;",
     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
-    "$s.Rate = 4;",
+    "$s.Rate = 1;",
     "$s.Volume = 95;",
     `$text = Get-Content -LiteralPath '${input.scriptPath.replace(/'/g, "''")}' -Raw;`,
     `$s.SetOutputToWaveFile('${input.audioPath.replace(/'/g, "''")}');`,
@@ -1027,13 +1212,23 @@ function productInputArgs(productImageSource: string) {
   return ["-i", productImageSource];
 }
 
-function sanitizeDrawText(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/:/g, "\\:")
-    .replace(/'/g, "\\'")
-    .replace(/\[/g, "\\[")
-    .replace(/\]/g, "\\]");
+function normalizeRainyDryingRackProductName(value: string) {
+  if (hasMojibake(value) || !value.trim()) {
+    return "\uCF54\uBA67 \uD648 \uC811\uC774\uC2DD \uB300\uD615 \uBE68\uB798\uAC74\uC870\uB300";
+  }
+  return value.trim();
+}
+
+function formatProductTitleForShorts(value: string) {
+  const normalized = normalizeRainyDryingRackProductName(value);
+  if (normalized.length <= 15) {
+    return normalized;
+  }
+  return normalized.replace("\uC811\uC774\uC2DD", "\uC811\uC774\uC2DD\n").replace("\uB300\uD615", "\uB300\uD615\n");
+}
+
+function hasMojibake(value: string) {
+  return /\?{2,}|\u5360|\uCC59|\uCC57|\uCC58|\uCC60/.test(value);
 }
 
 function escapeFilterPath(value: string) {

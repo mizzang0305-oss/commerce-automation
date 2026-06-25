@@ -444,6 +444,7 @@ async function resolveExpectedLocalVideoPath(input: {
   stat: typeof fs.stat;
 }) {
   const paths = [
+    buildExpectedLocalVideoPath({ cwd: input.cwd, candidateId: input.candidateId, version: "v010" }),
     buildExpectedLocalVideoPath({ cwd: input.cwd, candidateId: input.candidateId, version: "v009" }),
     buildExpectedLocalVideoPath({ cwd: input.cwd, candidateId: input.candidateId, version: "v008" })
   ];
@@ -460,7 +461,7 @@ async function resolveExpectedLocalVideoPath(input: {
   return paths[0];
 }
 
-function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string; version: "v008" | "v009" }) {
+function buildExpectedLocalVideoPath(input: { cwd: string; candidateId: string; version: "v008" | "v009" | "v010" }) {
   const safeCandidateId = toSafeSlug(input.candidateId);
   return path.join(
     input.cwd,

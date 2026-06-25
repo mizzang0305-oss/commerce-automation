@@ -156,8 +156,8 @@ describe("rainy drying rack scene-card renderer", () => {
       no_text_clipped: true,
       voiceover_audio_present: true,
       video_has_audio_stream: true,
-      voiceover_speed_wpm: 198,
-      voiceover_naturalness_score: 84,
+      voiceover_speed_wpm: 152,
+      voiceover_naturalness_score: 88,
       cta_scene_present: true,
       cta_mentions_description_or_comment: true,
       content_quality_score: 100,
@@ -185,12 +185,44 @@ describe("rainy drying rack scene-card renderer", () => {
         },
         audio_continuity_probe: {
           audio_stream_present: true,
-          max_silence_between_segments_ms: 220,
-          hard_cut_count: 1,
+          max_silence_between_segments_ms: 140,
+          hard_cut_count: 0,
           audio_loudness_normalized: true,
           audio_peak_not_clipped: true,
-          speech_continuity_score: 84,
-          voiceover_naturalness_score: 84
+          speech_continuity_score: 88,
+          voiceover_naturalness_score: 88
+        },
+        shorts_ui_overlay_probe: {
+          shorts_overlay_probe_executed: true,
+          no_text_in_top_ui_zone: true,
+          no_critical_text_in_right_ui_zone: true,
+          no_caption_in_bottom_meta_zone: true,
+          no_caption_in_bottom_nav_zone: true,
+          hook_visible_below_top_ui: true,
+          main_caption_inside_safe_window: true
+        },
+        caption_text_integrity_probe: {
+          caption_newline_probe_executed: true,
+          captions: expect.arrayContaining([
+            "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC"
+          ])
+        },
+        title_description_integrity_probe: {
+          mojibake_probe_executed: true,
+          title: "\uCF54\uBA67 \uD648 \uC811\uC774\uC2DD \uB300\uD615 \uBE68\uB798\uAC74\uC870\uB300"
+        },
+        korean_asr_probe: {
+          asr_provider: null,
+          asr_probe_executed: false,
+          real_asr_probe_executed: false,
+          transcript_similarity_score: null,
+          recognized_keyword_anchor_count: 7,
+          speech_rate_wpm: 152
+        },
+        scene_layout_probe: {
+          static_product_card_feeling: false,
+          problem_visual_before_product: true,
+          distinct_layout_templates: 8
         }
       }
     });
@@ -207,13 +239,24 @@ describe("rainy drying rack scene-card renderer", () => {
       "layout_cta_card"
     ]);
     expect(evaluateRenderRealityCheck(result.actual_render_probe)).toMatchObject({
-      passed: true,
+      passed: false,
       actual_true_scene_change_pass: true,
       actual_caption_safe_area_pass: true,
-      audio_continuity_pass: true
+      audio_continuity_pass: true,
+      shorts_overlay_pass: true,
+      caption_text_integrity_pass: true,
+      audio_intelligibility_pass: false,
+      scene_layout_pass: true
     });
-    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v009", "story-shorts.mp4"));
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v009", "scene-manifest.json"));
+    expect(evaluateRenderRealityCheck(result.actual_render_probe).blocked_reasons).toContain("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
+    expect(result.final_upload_allowed).toBe(false);
+    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v010", "story-shorts.mp4"));
+    expect(result.local_review_video_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "local-review-video.mp4"));
+    expect(result.audio_intelligibility_report_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "audio-intelligibility-probe.json"));
+    expect(result.asr_transcript_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "asr-transcript.txt"));
+    expect(result.human_review_checklist_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "human-review-checklist.md"));
+    expect(result.review_summary_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "review-summary.json"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v010", "scene-manifest.json"));
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
     expect(execFileAsync.mock.calls.filter(([file]) => file === "ffmpeg").length).toBeGreaterThanOrEqual(10);
@@ -221,6 +264,7 @@ describe("rainy drying rack scene-card renderer", () => {
       file === "ffmpeg" &&
       args.includes("-af") &&
       args.join(" ").includes("silenceremove=") &&
+      !args.join(" ").includes("atempo=1.25") &&
       args.join(" ").includes("loudnorm=I=-16:TP=-1.5:LRA=11")
     )).toBe(true);
     expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.join(" ").includes("zoompan=z="))).toBe(true);
