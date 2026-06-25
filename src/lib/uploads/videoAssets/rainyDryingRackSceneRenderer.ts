@@ -1029,9 +1029,11 @@ async function runWindowsSapiTts(input: {
   const command = [
     "Add-Type -AssemblyName System.Speech;",
     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
+    "$voice = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -eq 'ko-KR' } | Select-Object -First 1;",
+    "if ($voice) { $s.SelectVoice($voice.VoiceInfo.Name); }",
     "$s.Rate = 1;",
     "$s.Volume = 95;",
-    `$text = Get-Content -LiteralPath '${input.scriptPath.replace(/'/g, "''")}' -Raw;`,
+    `$text = Get-Content -LiteralPath '${input.scriptPath.replace(/'/g, "''")}' -Encoding UTF8 -Raw;`,
     `$s.SetOutputToWaveFile('${input.audioPath.replace(/'/g, "''")}');`,
     "$s.Speak($text);",
     "$s.Dispose();"
