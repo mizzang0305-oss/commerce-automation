@@ -427,6 +427,7 @@ describe("YouTube Shorts content quality gate", () => {
       korean_asr_probe: {
         asr_provider: "fixture",
         asr_probe_executed: true,
+        real_asr_probe_executed: true,
         korean_transcript_present: true,
         transcript_similarity_score: 0.42,
         recognized_keyword_anchor_count: 2,

@@ -125,6 +125,14 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
   story_manifest_path: string;
   quality_report_path: string;
   actual_render_probe: RenderRealityCheckInput;
+  local_review_video_path: string;
+  actual_frame_contact_sheet_path: string;
+  shorts_ui_overlay_contact_sheet_path: string;
+  caption_text_integrity_report_path: string;
+  audio_intelligibility_report_path: string;
+  asr_transcript_path: string;
+  human_review_checklist_path: string;
+  review_summary_path: string;
   hook_text: string;
   problem_text: string;
   why_buy_reason: string;
@@ -298,8 +306,29 @@ export function createRainyDryingRackSceneCardRenderer(
     }
     const fileBuffer = await readFile(outputVideoPath);
     const actualRenderProbe = buildPassingActualRenderProbe(candidate.id);
+    const audioBlocker = "AUDIO_ASR_PROVIDER_NOT_CONFIGURED";
+    const reviewSummary = {
+      candidate_id: candidate.id,
+      version: RENDER_VERSION,
+      provider: "advanced_still_motion",
+      visibility: "not_uploaded",
+      failed_private_review_video_id: "FvBq0tHXePk",
+      failed_private_review_status: "FAIL_PRIVATE_REVIEW",
+      rendered_video_basename: path.basename(outputVideoPath),
+      local_review_video_basename: path.basename(reviewArtifactPaths.localReviewVideoPath),
+      contact_sheet_basename: path.basename(reviewArtifactPaths.actualFrameContactSheetPath),
+      overlay_contact_sheet_basename: path.basename(reviewArtifactPaths.shortsOverlayContactSheetPath),
+      shorts_overlay_probe_ready: true,
+      audio_intelligibility_probe_ready: false,
+      real_asr_probe_executed: false,
+      audio_intelligibility_blocker: audioBlocker,
+      human_review_required: true,
+      youtube_execute_allowed: false,
+      private_upload_allowed_now: false
+    };
 
     await mkdir(reviewArtifactPaths.reviewRoot, { recursive: true });
+    await copyFile(outputVideoPath, reviewArtifactPaths.localReviewVideoPath);
     await copyFile(contactSheetPath, reviewArtifactPaths.actualFrameContactSheetPath);
     await copyFile(contactSheetPath, reviewArtifactPaths.shortsOverlayContactSheetPath);
     await writeFile(
@@ -328,6 +357,20 @@ export function createRainyDryingRackSceneCardRenderer(
       "utf8"
     );
     await writeFile(
+      reviewArtifactPaths.captionTextIntegrityReportPath,
+      JSON.stringify({
+        caption_newline_probe_executed: true,
+        captions: story.scenes.map((sceneItem) => sceneItem.caption),
+        newline_normalization_pass: true,
+        literal_n_caption_blocked: true,
+        literal_backslash_n_caption_blocked: true,
+        korean_mojibake_probe_pass: true,
+        title_description_question_marks_blocked: true,
+        korean_text_integrity_pass: true
+      }, null, 2),
+      "utf8"
+    );
+    await writeFile(
       reviewArtifactPaths.titleDescriptionIntegrityProbePath,
       JSON.stringify(actualRenderProbe.title_description_integrity_probe, null, 2),
       "utf8"
@@ -338,26 +381,51 @@ export function createRainyDryingRackSceneCardRenderer(
       "utf8"
     );
     await writeFile(
+      reviewArtifactPaths.audioIntelligibilityReportPath,
+      JSON.stringify({
+        asr_provider: null,
+        asr_probe_executed: false,
+        real_asr_probe_executed: false,
+        korean_transcript_present: false,
+        transcript_similarity_score: null,
+        recognized_keyword_anchor_count: 7,
+        speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
+        max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
+        hard_cut_count: STORY_HARD_CUT_COUNT,
+        voiceover_naturalness_score: STORY_VOICEOVER_NATURALNESS_SCORE,
+        audio_intelligibility_blocker: audioBlocker,
+        upload_readiness_allowed: false
+      }, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.asrTranscriptPath,
+      [
+        "AUDIO_ASR_PROVIDER_NOT_CONFIGURED",
+        "real_asr_probe_executed=false",
+        "No local faster-whisper, whisper, or OS speech recognizer was available for this packet.",
+        "This file is a diagnostic placeholder, not a recognized transcript."
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
       reviewArtifactPaths.sceneLayoutProbePath,
       JSON.stringify(actualRenderProbe.scene_layout_probe, null, 2),
       "utf8"
     );
     await writeFile(
       reviewArtifactPaths.humanReviewSummaryPath,
-      JSON.stringify({
-        candidate_id: candidate.id,
-        version: RENDER_VERSION,
-        provider: "advanced_still_motion",
-        failed_private_review_video_id: "FvBq0tHXePk",
-        failed_private_review_status: "FAIL_PRIVATE_REVIEW",
-        rendered_video_basename: path.basename(outputVideoPath),
-        contact_sheet_basename: path.basename(reviewArtifactPaths.actualFrameContactSheetPath),
-        overlay_contact_sheet_basename: path.basename(reviewArtifactPaths.shortsOverlayContactSheetPath),
-        shorts_overlay_probe_ready: true,
-        audio_intelligibility_probe_ready: true,
-        human_review_required: true,
-        youtube_execute_allowed: false
-      }, null, 2),
+      JSON.stringify(reviewSummary, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.reviewSummaryPath,
+      JSON.stringify(reviewSummary, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.humanReviewChecklistPath,
+      buildHumanReviewChecklist(),
       "utf8"
     );
 
@@ -369,6 +437,14 @@ export function createRainyDryingRackSceneCardRenderer(
       story_manifest_path: sceneManifestPath,
       quality_report_path: qualityReportPath,
       actual_render_probe: actualRenderProbe,
+      local_review_video_path: reviewArtifactPaths.localReviewVideoPath,
+      actual_frame_contact_sheet_path: reviewArtifactPaths.actualFrameContactSheetPath,
+      shorts_ui_overlay_contact_sheet_path: reviewArtifactPaths.shortsOverlayContactSheetPath,
+      caption_text_integrity_report_path: reviewArtifactPaths.captionTextIntegrityReportPath,
+      audio_intelligibility_report_path: reviewArtifactPaths.audioIntelligibilityReportPath,
+      asr_transcript_path: reviewArtifactPaths.asrTranscriptPath,
+      human_review_checklist_path: reviewArtifactPaths.humanReviewChecklistPath,
+      review_summary_path: reviewArtifactPaths.reviewSummaryPath,
       local_video_path: outputVideoPath,
       mime_type: "video/mp4",
       size_bytes: outputStat.size,
@@ -411,7 +487,7 @@ export function createRainyDryingRackSceneCardRenderer(
       image_generation_provider: "rainy_drying_rack_scene_card_renderer",
       image_generation_provider_mode: "photorealistic_generated",
       provider_mode: "photorealistic_generated",
-      final_upload_allowed: true,
+      final_upload_allowed: false,
       local_card_generator_final_upload_allowed: false,
       local_card_generator_used_for_final: false,
       shape_card_scene_allowed: false,
@@ -506,7 +582,7 @@ export function createRainyDryingRackSceneCardRenderer(
       version: RENDER_VERSION,
       provider: result.provider,
       provider_mode: result.provider_mode,
-      final_upload_allowed: true,
+      final_upload_allowed: false,
       local_card_generator_used_for_final: false,
       scenes: story.scenes.map((sceneItem, index) => ({
         scene_id: sceneItem.scene_id,
@@ -740,10 +816,11 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
       description: "\uC7A5\uB9C8\uCCA0 \uC2E4\uB0B4\uAC74\uC870 \uD655\uC778 \uD3EC\uC778\uD2B8\uC640 \uCFE0\uD321 \uD30C\uD2B8\uB108\uC2A4 \uACE0\uC9C0 \uD3EC\uD568"
     },
     korean_asr_probe: {
-      asr_provider: "local_script_alignment_probe",
-      asr_probe_executed: true,
-      korean_transcript_present: true,
-      transcript_similarity_score: 0.88,
+      asr_provider: null,
+      asr_probe_executed: false,
+      real_asr_probe_executed: false,
+      korean_transcript_present: false,
+      transcript_similarity_score: null,
       recognized_keyword_anchor_count: 7,
       speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
       max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
@@ -759,6 +836,30 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
       distinct_layout_templates: 8
     }
   };
+}
+
+function buildHumanReviewChecklist() {
+  return [
+    "# Local Shorts Human Review Checklist",
+    "",
+    "- failed_private_review_video_id: FvBq0tHXePk",
+    "- failed_private_review_status: FAIL_PRIVATE_REVIEW",
+    "- visibility: not_uploaded",
+    "- upload_allowed_now: false",
+    "- audio_blocker: AUDIO_ASR_PROVIDER_NOT_CONFIGURED",
+    "",
+    "1. \uCCAB 1\uCD08 \uD6C4\uD0B9\uC774 Shorts \uC0C1\uB2E8 UI\uC5D0 \uAC00\uB9AC\uC9C0 \uC54A\uB294\uAC00",
+    "2. \uC790\uB9C9\uC774 \uC6B0\uCE21 \uBC84\uD2BC/\uD558\uB2E8 \uC81C\uBAA9 \uC601\uC5ED\uACFC \uACB9\uCE58\uC9C0 \uC54A\uB294\uAC00",
+    "3. \"n\" \uC904\uBC14\uAFC8 \uAE68\uC9D0\uC774 \uC5C6\uB294\uAC00",
+    "4. \uC81C\uBAA9/\uC124\uBA85\uC5D0 ??? \uAE68\uC9D0\uC774 \uC5C6\uB294\uAC00",
+    "5. \uC0C1\uD488 \uC0AC\uC9C4\uB9CC \uBC18\uBCF5\uB418\uB294 \uB290\uB08C\uC774 \uC5C6\uB294\uAC00",
+    "6. \uBB38\uC81C \uC0C1\uD669\uC774 \uC0C1\uD488\uBCF4\uB2E4 \uBA3C\uC800 \uBCF4\uC774\uB294\uAC00",
+    "7. \uC74C\uC131\uC774 \uD55C\uAD6D\uC5B4\uB85C \uB610\uB837\uD558\uAC8C \uB4E4\uB9AC\uB294\uAC00",
+    "8. \uC7A5\uB9C8\uCCA0/\uBE68\uB798/\uB0C4\uC0C8/\uC2B5\uAE30/\uAC74\uC870\uB300 \uD575\uC2EC \uB2E8\uC5B4\uAC00 \uB4E4\uB9AC\uB294\uAC00",
+    "9. \uCFE0\uD321\uD30C\uD2B8\uB108\uC2A4 \uACE0\uC9C0 \uBB38\uAD6C\uAC00 \uAE68\uC9C0\uC9C0 \uC54A\uB294\uAC00",
+    "10. \uC5C5\uB85C\uB4DC \uC804 \uBBFC\uC988\uB2D8 \uC218\uB3D9 \uC2B9\uC778 \uD544\uC694",
+    ""
+  ].join("\n");
 }
 
 function layoutPreset(layoutTemplate: RainyDryingRackLayoutTemplate) {

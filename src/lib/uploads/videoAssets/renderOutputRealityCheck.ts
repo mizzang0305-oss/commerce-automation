@@ -93,6 +93,7 @@ export type TitleDescriptionIntegrityProbeInput = {
 export type KoreanAsrProbeInput = {
   asr_provider?: unknown;
   asr_probe_executed?: unknown;
+  real_asr_probe_executed?: unknown;
   korean_transcript_present?: unknown;
   transcript_similarity_score?: unknown;
   recognized_keyword_anchor_count?: unknown;
@@ -165,6 +166,7 @@ export type RenderRealityCheckResult = {
   korean_text_integrity_pass: boolean;
   asr_provider: string | null;
   asr_probe_executed: boolean;
+  real_asr_probe_executed: boolean;
   korean_transcript_present: boolean;
   transcript_similarity_score: number | null;
   recognized_keyword_anchor_count: number;
@@ -184,10 +186,16 @@ export type RenderRealityReviewArtifactPaths = {
   shortsOverlayContactSheetPath: string;
   shortsOverlayProbePath: string;
   captionTextIntegrityProbePath: string;
+  captionTextIntegrityReportPath: string;
   titleDescriptionIntegrityProbePath: string;
   audioAsrProbePath: string;
+  audioIntelligibilityReportPath: string;
+  asrTranscriptPath: string;
   sceneLayoutProbePath: string;
   humanReviewSummaryPath: string;
+  humanReviewChecklistPath: string;
+  localReviewVideoPath: string;
+  reviewSummaryPath: string;
 };
 
 const MIN_ACTUAL_FRAME_SAMPLE_COUNT = 10;
@@ -211,6 +219,10 @@ const MIN_ASR_VOICEOVER_NATURALNESS_SCORE = 85;
 const MIN_DISTINCT_LAYOUT_TEMPLATE_COUNT = 8;
 const MAX_CAPTION_CHARS_PER_LINE = 14;
 const MOJIBAKE_PATTERNS = [/\?{3,}/, /\u5360/, /\uCC59|\uCC57|\uCC58|\uCC60/];
+const SCRIPT_ALIGNMENT_ASR_PROVIDERS = new Set([
+  "local_script_alignment_probe",
+  "script_alignment_probe"
+]);
 
 export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): RenderRealityCheckResult {
   const frameProbe = isRecord(input.actual_frame_probe) ? input.actual_frame_probe : {};
@@ -263,6 +275,9 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const description = safeTrim(titleDescriptionProbe.description);
   const asrProvider = safeTrim(koreanAsrProbe.asr_provider);
   const asrProbeExecuted = koreanAsrProbe.asr_probe_executed === true;
+  const realAsrProbeExecuted =
+    koreanAsrProbe.real_asr_probe_executed === true &&
+    !isScriptAlignmentAsrProvider(asrProvider);
   const koreanTranscriptPresent = koreanAsrProbe.korean_transcript_present === true;
   const transcriptSimilarityScore = normalizeRatio(koreanAsrProbe.transcript_similarity_score);
   const recognizedKeywordAnchorCount =
@@ -409,7 +424,7 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     }
   }
 
-  if (!asrProvider || !asrProbeExecuted) {
+  if (!asrProvider || !asrProbeExecuted || !realAsrProbeExecuted) {
     blockedReasons.push("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
   } else {
     if (!koreanTranscriptPresent ||
@@ -490,6 +505,7 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const audioIntelligibilityPass =
     Boolean(asrProvider) &&
     asrProbeExecuted &&
+    realAsrProbeExecuted &&
     koreanTranscriptPresent &&
     transcriptSimilarityScore !== null &&
     transcriptSimilarityScore >= MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE &&
@@ -550,6 +566,7 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     korean_text_integrity_pass: koreanTextIntegrityPass,
     asr_provider: asrProvider,
     asr_probe_executed: asrProbeExecuted,
+    real_asr_probe_executed: realAsrProbeExecuted,
     korean_transcript_present: koreanTranscriptPresent,
     transcript_similarity_score: transcriptSimilarityScore,
     recognized_keyword_anchor_count: recognizedKeywordAnchorCount,
@@ -578,10 +595,16 @@ export function buildRenderRealityReviewArtifactPaths(input: {
     shortsOverlayContactSheetPath: path.join(reviewRoot, "shorts-ui-overlay-contact-sheet.jpg"),
     shortsOverlayProbePath: path.join(reviewRoot, "shorts-ui-overlay-probe.json"),
     captionTextIntegrityProbePath: path.join(reviewRoot, "caption-text-integrity-probe.json"),
+    captionTextIntegrityReportPath: path.join(reviewRoot, "caption-text-integrity.json"),
     titleDescriptionIntegrityProbePath: path.join(reviewRoot, "title-description-integrity-probe.json"),
     audioAsrProbePath: path.join(reviewRoot, "audio-asr-probe.json"),
+    audioIntelligibilityReportPath: path.join(reviewRoot, "audio-intelligibility-probe.json"),
+    asrTranscriptPath: path.join(reviewRoot, "asr-transcript.txt"),
     sceneLayoutProbePath: path.join(reviewRoot, "scene-layout-probe.json"),
-    humanReviewSummaryPath: path.join(reviewRoot, "human-review-summary.json")
+    humanReviewSummaryPath: path.join(reviewRoot, "human-review-summary.json"),
+    humanReviewChecklistPath: path.join(reviewRoot, "human-review-checklist.md"),
+    localReviewVideoPath: path.join(reviewRoot, "local-review-video.mp4"),
+    reviewSummaryPath: path.join(reviewRoot, "review-summary.json")
   };
 }
 
@@ -618,6 +641,10 @@ function normalizeRatio(value: unknown) {
 
 function safeTrim(value: unknown) {
   return typeof value === "string" ? value.trim() : null;
+}
+
+function isScriptAlignmentAsrProvider(value: string | null) {
+  return Boolean(value && SCRIPT_ALIGNMENT_ASR_PROVIDERS.has(value));
 }
 
 function hasMojibake(value: string | null) {

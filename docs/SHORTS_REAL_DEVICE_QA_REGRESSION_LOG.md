@@ -28,3 +28,9 @@
 - Keep the renderer problem-first and layout-varied so the output does not feel like a static product-photo card.
 
 No YouTube execute, `videos.insert`, R2 upload, DB write, public conversion, or unlisted conversion was performed for this record.
+
+## Local Review Packet Rule
+
+`local_script_alignment_probe` is diagnostic-only and must not be treated as real ASR readiness.
+If local faster-whisper, whisper, or OS speech recognition is unavailable, the local review packet must record
+`AUDIO_ASR_PROVIDER_NOT_CONFIGURED` and keep upload readiness blocked until a real ASR pass is available.

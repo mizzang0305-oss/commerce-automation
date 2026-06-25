@@ -56,6 +56,7 @@ const PASSING_REALITY_CHECK = {
   korean_asr_probe: {
     asr_provider: "fixture",
     asr_probe_executed: true,
+    real_asr_probe_executed: true,
     korean_transcript_present: true,
     transcript_similarity_score: 0.88,
     recognized_keyword_anchor_count: 6,
@@ -201,9 +202,15 @@ describe("render output reality check", () => {
     expect(artifactPaths.shortsOverlayContactSheetPath).toContain("shorts-ui-overlay-contact-sheet.jpg");
     expect(artifactPaths.shortsOverlayProbePath).toContain("shorts-ui-overlay-probe.json");
     expect(artifactPaths.captionTextIntegrityProbePath).toContain("caption-text-integrity-probe.json");
+    expect(artifactPaths.captionTextIntegrityReportPath).toContain("caption-text-integrity.json");
     expect(artifactPaths.audioAsrProbePath).toContain("audio-asr-probe.json");
+    expect(artifactPaths.audioIntelligibilityReportPath).toContain("audio-intelligibility-probe.json");
+    expect(artifactPaths.asrTranscriptPath).toContain("asr-transcript.txt");
     expect(artifactPaths.sceneLayoutProbePath).toContain("scene-layout-probe.json");
     expect(artifactPaths.humanReviewSummaryPath).toContain("human-review-summary.json");
+    expect(artifactPaths.humanReviewChecklistPath).toContain("human-review-checklist.md");
+    expect(artifactPaths.localReviewVideoPath).toContain("local-review-video.mp4");
+    expect(artifactPaths.reviewSummaryPath).toContain("review-summary.json");
     expect(result.passed).toBe(true);
     expect(result.actual_true_scene_change_pass).toBe(true);
     expect(result.actual_caption_safe_area_pass).toBe(true);
@@ -271,6 +278,7 @@ describe("render output reality check", () => {
       korean_asr_probe: {
         asr_provider: "fixture",
         asr_probe_executed: true,
+        real_asr_probe_executed: true,
         korean_transcript_present: true,
         transcript_similarity_score: 0.42,
         recognized_keyword_anchor_count: 2,
@@ -290,6 +298,28 @@ describe("render output reality check", () => {
       "VOICEOVER_SEGMENT_GAPS_TOO_LONG",
       "VOICEOVER_HARD_CUTS_DETECTED"
     ]));
+  });
+
+  test("script alignment alone is not treated as real ASR readiness", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      korean_asr_probe: {
+        asr_provider: "local_script_alignment_probe",
+        asr_probe_executed: true,
+        real_asr_probe_executed: false,
+        korean_transcript_present: true,
+        transcript_similarity_score: 0.9,
+        recognized_keyword_anchor_count: 8,
+        speech_rate_wpm: 150,
+        max_silence_between_segments_ms: 120,
+        hard_cut_count: 0,
+        voiceover_naturalness_score: 90
+      }
+    });
+
+    expect(result.real_asr_probe_executed).toBe(false);
+    expect(result.audio_intelligibility_pass).toBe(false);
+    expect(result.blocked_reasons).toContain("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
   });
 
   test("static product-card layouts fail even with passing motion metrics", () => {

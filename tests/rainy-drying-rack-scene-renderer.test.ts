@@ -212,9 +212,10 @@ describe("rainy drying rack scene-card renderer", () => {
           title: "\uCF54\uBA67 \uD648 \uC811\uC774\uC2DD \uB300\uD615 \uBE68\uB798\uAC74\uC870\uB300"
         },
         korean_asr_probe: {
-          asr_provider: "local_script_alignment_probe",
-          asr_probe_executed: true,
-          transcript_similarity_score: 0.88,
+          asr_provider: null,
+          asr_probe_executed: false,
+          real_asr_probe_executed: false,
+          transcript_similarity_score: null,
           recognized_keyword_anchor_count: 7,
           speech_rate_wpm: 152
         },
@@ -238,16 +239,23 @@ describe("rainy drying rack scene-card renderer", () => {
       "layout_cta_card"
     ]);
     expect(evaluateRenderRealityCheck(result.actual_render_probe)).toMatchObject({
-      passed: true,
+      passed: false,
       actual_true_scene_change_pass: true,
       actual_caption_safe_area_pass: true,
       audio_continuity_pass: true,
       shorts_overlay_pass: true,
       caption_text_integrity_pass: true,
-      audio_intelligibility_pass: true,
+      audio_intelligibility_pass: false,
       scene_layout_pass: true
     });
+    expect(evaluateRenderRealityCheck(result.actual_render_probe).blocked_reasons).toContain("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
+    expect(result.final_upload_allowed).toBe(false);
     expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v010", "story-shorts.mp4"));
+    expect(result.local_review_video_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "local-review-video.mp4"));
+    expect(result.audio_intelligibility_report_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "audio-intelligibility-probe.json"));
+    expect(result.asr_transcript_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "asr-transcript.txt"));
+    expect(result.human_review_checklist_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "human-review-checklist.md"));
+    expect(result.review_summary_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "review-summary.json"));
     expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v010", "scene-manifest.json"));
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
