@@ -269,6 +269,11 @@ describe("rainy drying rack scene-card renderer", () => {
     )).toBe(true);
     expect(execFileAsync.mock.calls.some(([file, args]) => file === "ffmpeg" && args.join(" ").includes("zoompan=z="))).toBe(true);
     expect(execFileAsync.mock.calls.some(([file]) => file === "ffprobe")).toBe(true);
+    expect(execFileAsync.mock.calls.some(([file, args]) =>
+      file === "powershell" &&
+      args.join(" ").includes("ko-KR") &&
+      args.join(" ").includes("-Encoding UTF8")
+    )).toBe(true);
   });
 });
 
