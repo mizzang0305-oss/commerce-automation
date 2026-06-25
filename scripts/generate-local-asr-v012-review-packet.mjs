@@ -203,6 +203,7 @@ export async function generateLocalAsrReviewPacket(input = {}) {
     normalizeNumber(sourceAudioReport?.voiceover_naturalness_score) ?? 88;
   const audioEvaluation = evaluateAudioIntelligibility({
     transcript,
+    rawTranscriptSimilarityScore: rawTranscriptSimilarityScore,
     transcriptSimilarityScore,
     speechRateWpm,
     maxSilenceBetweenSegmentsMs,
@@ -323,6 +324,9 @@ function getAudioIntelligibilityBlocker(input) {
   if (!input.transcript) {
     return "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED";
   }
+  if (input.rawTranscriptSimilarityScore < input.config.minSimilarity) {
+    return "RAW_ASR_SIMILARITY_TOO_LOW";
+  }
   if (input.transcriptSimilarityScore < input.config.minSimilarity) {
     return "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED";
   }
@@ -330,7 +334,7 @@ function getAudioIntelligibilityBlocker(input) {
     return "VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING";
   }
   if (!input.contextAnchorRecognitionPass) {
-    return "VOICEOVER_KEYWORD_ANCHORS_MISSING";
+    return "VOICEOVER_CONTEXT_ANCHORS_MISSING";
   }
   if (input.speechRateWpm < input.config.minWpm || input.speechRateWpm > input.config.maxWpm) {
     return "VOICEOVER_TOO_FAST";

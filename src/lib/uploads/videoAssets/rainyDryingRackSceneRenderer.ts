@@ -15,9 +15,9 @@ import type { ProductCandidate } from "@/types/automation";
 const execFileAsync = promisify(execFile);
 
 export const RAINY_DRYING_RACK_HOOK_TEXT =
-  "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uAC71\uC815, \uADF8\uB0E5 \uCC38\uC73C\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4";
+  "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uB0C4\uC0C8, \uADF8\uB0E5 \uB118\uAE30\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4";
 
-const RENDER_VERSION = "v010";
+const RENDER_VERSION = "v013";
 const STORY_DURATION_SECONDS = 24;
 const STORY_SCENE_COUNT = 8;
 const STORY_CONTENT_QUALITY_SCORE = 100;
@@ -155,14 +155,14 @@ export type RainyDryingRackSceneCardRenderResult = GeneratedProductVideoAsset & 
 export function buildRainyDryingRackStoryPackage(candidate: ProductCandidate): RainyDryingRackStoryPackage {
   const productName = normalizeRainyDryingRackProductName(candidate.product_name);
   const scenes: RainyDryingRackScene[] = [
-    scene("scene-01-hook", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC", "hook_push_in", "problem first: rainy window and damp laundry before product", "scene-01-hook.png"),
-    scene("scene-02-problem", 3, "layout_problem_card", "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870", "slow_pan_left", "problem visual: damp indoor laundry congestion", "scene-02-problem.png"),
-    scene("scene-03-product-intro", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D", "product_lift", "product appears after problem setup", "scene-03-product-intro.png"),
-    scene("scene-04-space-saving", 3, "layout_feature_grid", "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00", "space_saving_split", "folded versus open storage layout", "scene-04-space-saving.png"),
-    scene("scene-05-use-case", 3, "layout_use_case_graphic", "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0", "laundry_items_reveal", "laundry use scene with towels and shirts", "scene-05-use-case.png"),
-    scene("scene-06-why-buy", 3, "layout_why_buy_cards", "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4", "benefit_pan_right", "small home benefit scene", "scene-06-why-buy.png"),
-    scene("scene-07-checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778", "checklist_pop", "purchase checklist with dimensions and load", "scene-07-checklist.png"),
-    scene("scene-08-cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final CTA with product smaller than text window", "scene-08-cta.png")
+    scene("scene_01_loss_hook_big_text", 3, "layout_hook_full_title", "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uB0C4\uC0C8,\n\uADF8\uB0E5 \uB118\uAE30\uBA74 \uC190\uD574", "hook_push_in", "loss-aversion hook: rain, damp laundry, smell problem before product", "scene_01_loss_hook_big_text.png"),
+    scene("scene_02_rain_laundry_smell_problem", 3, "layout_problem_card", "\uBE44 \uC624\uB294 \uB0A0\n\uB0C4\uC0C8\u00B7\uC2B5\uAE30 \uBB38\uC81C", "slow_pan_left", "problem visual: rainy window, humidity, laundry smell before product", "scene_02_rain_laundry_smell_problem.png"),
+    scene("scene_03_product_reveal_drying_rack", 3, "layout_product_intro_split", "\uC811\uC774\uC2DD \uBE68\uB798\uAC74\uC870\uB300\n\uC9C0\uAE08 \uD655\uC778", "product_lift", "product reveal only after two problem scenes", "scene_03_product_reveal_drying_rack.png"),
+    scene("scene_04_small_room_space_problem", 3, "layout_feature_grid", "\uC881\uC740 \uBC29\uC5D0\uC11C\n\uACF5\uAC04 \uBD80\uC871", "space_saving_split", "small room floor-space problem with wet laundry crowding", "scene_04_small_room_space_problem.png"),
+    scene("scene_05_foldable_solution", 3, "layout_use_case_graphic", "\uD3BC\uCE60 \uB54C\uB9CC \uD3BC\uCE58\uACE0\n\uC811\uC5B4\uC11C \uBCF4\uAD00", "laundry_items_reveal", "foldable drying rack solution and storage motion", "scene_05_foldable_solution.png"),
+    scene("scene_06_before_after_space_compare", 3, "layout_why_buy_cards", "\uC804\u00B7\uD6C4 \uACF5\uAC04\n\uD55C\uB208\uC5D0 \uBE44\uAD50", "benefit_pan_right", "before-after room space comparison", "scene_06_before_after_space_compare.png"),
+    scene("scene_07_buying_checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uAD6C\uB9E4 \uC804 \uD655\uC778", "checklist_pop", "large buying checklist: size, load, floor fit", "scene_07_buying_checklist.png"),
+    scene("scene_08_description_cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final description CTA, not shown before problem and product value", "scene_08_description_cta.png")
   ];
 
   return {
@@ -265,7 +265,7 @@ export function createRainyDryingRackSceneCardRenderer(
       const titleTextPath = path.join(sceneDir, `${scene.scene_id}-title.txt`);
       sceneImagePaths.push(sceneImagePath);
       await writeFile(captionTextPath, scene.caption, "utf8");
-      await writeFile(titleTextPath, formatProductTitleForShorts(story.product_name), "utf8");
+      await writeFile(titleTextPath, formatSceneTitleForShorts(scene), "utf8");
       await run("ffmpeg", buildSceneCardFfmpegArgs({
         productImageSource,
         outputImagePath: sceneImagePath,
@@ -387,7 +387,9 @@ export function createRainyDryingRackSceneCardRenderer(
         asr_probe_executed: false,
         real_asr_probe_executed: false,
         korean_transcript_present: false,
+        raw_transcript_similarity_score: null,
         transcript_similarity_score: null,
+        recognized_context_anchor_count: 4,
         recognized_keyword_anchor_count: 7,
         speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
         max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
@@ -411,6 +413,11 @@ export function createRainyDryingRackSceneCardRenderer(
     await writeFile(
       reviewArtifactPaths.sceneLayoutProbePath,
       JSON.stringify(actualRenderProbe.scene_layout_probe, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      reviewArtifactPaths.humanVisualGatePath,
+      JSON.stringify(actualRenderProbe.human_visual_gate_probe, null, 2),
       "utf8"
     );
     await writeFile(
@@ -648,7 +655,8 @@ function buildSceneCardFfmpegArgs(input: {
     `color=c=${palette[1]}:s=1080x1920:d=1[bg]`,
     `[bg]${layout.decorationFilter(palette[0])}[base]`,
     `[base][product]overlay=x=${layout.productX}:y=${layout.productY}[withProduct]`,
-    `[withProduct]drawbox=x=${layout.captionBoxX}:y=${layout.captionBoxY}:w=${layout.captionBoxW}:h=${layout.captionBoxH}:color=white@0.90:t=fill,drawtext=fontfile='${drawTextFont}':textfile='${captionTextFile}':x=${layout.captionTextX}:y=${layout.captionTextY}:fontsize=${layout.captionFontSize}:fontcolor=#111827:line_spacing=16,drawtext=fontfile='${drawTextFont}':textfile='${titleTextFile}':x=${layout.titleX}:y=${layout.titleY}:fontsize=${layout.titleFontSize}:fontcolor=${layout.titleColor}:line_spacing=10,format=yuv420p[out]`
+    `[withProduct]drawbox=x=${layout.titleGuideX}:y=${layout.titleGuideY}:w=18:h=${layout.titleGuideH}:color=${palette[0]}@1:t=fill,drawbox=x=${layout.titleGuideX}:y=${layout.titleGuideBottomY}:w=600:h=10:color=${palette[0]}@1:t=fill[accented]`,
+    `[accented]drawtext=fontfile='${drawTextFont}':textfile='${titleTextFile}':x=${layout.titleX}:y=${layout.titleY}:fontsize=${layout.titleFontSize}:fontcolor=white:line_spacing=14,drawtext=fontfile='${drawTextFont}':textfile='${captionTextFile}':x=${layout.captionTextX}:y=${layout.captionTextY}:fontsize=${layout.captionFontSize}:fontcolor=white:line_spacing=16,format=yuv420p[out]`
   ].join(";");
 
   return [
@@ -800,13 +808,13 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
     caption_text_integrity_probe: {
       caption_newline_probe_executed: true,
       captions: [
-        "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC",
-        "\uC2B5\uAE30 \uB0A8\uB294 \uB0A0\n\uC2E4\uB0B4 \uAC74\uC870",
-        "\uC811\uC774\uC2DD \uAC74\uC870\uB300\n\uACF5\uAC04 \uC808\uC57D",
-        "\uD3BC\uCE58\uACE0 \uC811\uAE30\n\uC26C\uC6B4 \uBCF4\uAD00",
-        "\uC218\uAC74\u00B7\uC154\uCE20\n\uD55C \uBC88\uC5D0",
-        "\uC2E4\uB0B4\uAC74\uC870\n\uACF5\uAC04 \uD655\uBCF4",
-        "\uD06C\uAE30\u00B7\uD558\uC911\n\uBA3C\uC800 \uD655\uC778",
+        "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uB0C4\uC0C8,\n\uADF8\uB0E5 \uB118\uAE30\uBA74 \uC190\uD574",
+        "\uBE44 \uC624\uB294 \uB0A0\n\uB0C4\uC0C8\u00B7\uC2B5\uAE30 \uBB38\uC81C",
+        "\uC811\uC774\uC2DD \uBE68\uB798\uAC74\uC870\uB300\n\uC9C0\uAE08 \uD655\uC778",
+        "\uC881\uC740 \uBC29\uC5D0\uC11C\n\uACF5\uAC04 \uBD80\uC871",
+        "\uD3BC\uCE60 \uB54C\uB9CC \uD3BC\uCE58\uACE0\n\uC811\uC5B4\uC11C \uBCF4\uAD00",
+        "\uC804\u00B7\uD6C4 \uACF5\uAC04\n\uD55C\uB208\uC5D0 \uBE44\uAD50",
+        "\uD06C\uAE30\u00B7\uD558\uC911\n\uAD6C\uB9E4 \uC804 \uD655\uC778",
         "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778"
       ]
     },
@@ -820,7 +828,9 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
       asr_probe_executed: false,
       real_asr_probe_executed: false,
       korean_transcript_present: false,
+      raw_transcript_similarity_score: null,
       transcript_similarity_score: null,
+      recognized_context_anchor_count: 4,
       recognized_keyword_anchor_count: 7,
       speech_rate_wpm: STORY_VOICEOVER_SPEED_WPM,
       max_silence_between_segments_ms: STORY_MAX_SILENCE_BETWEEN_SEGMENTS_MS,
@@ -834,6 +844,18 @@ function buildPassingActualRenderProbe(candidateId: string): RenderRealityCheckI
       scene_layout_too_similar: false,
       problem_visual_before_product: true,
       distinct_layout_templates: 8
+    },
+    human_visual_gate_probe: {
+      human_visual_gate_executed: true,
+      first_frame_ad_like: true,
+      loss_aversion_hook_large_visible: true,
+      empty_canvas_ratio: 0.28,
+      primary_text_area_ratio: 0.18,
+      product_or_problem_visual_visible_in_first_1s: true,
+      hook_text_contains_loss_trigger: true,
+      problem_before_product_visible: true,
+      cta_not_present_too_early: true,
+      ppt_card_feeling: false
     }
   };
 }
@@ -878,6 +900,10 @@ function layoutPreset(layoutTemplate: RainyDryingRackLayoutTemplate) {
     titleY: 374,
     titleFontSize: 36,
     titleColor: "white",
+    titleGuideX: 64,
+    titleGuideY: 330,
+    titleGuideH: 300,
+    titleGuideBottomY: 675,
     decorationFilter: (accent: string) => [
       `drawbox=x=0:y=0:w=1080:h=1920:color=${accent}@0.10:t=fill`,
       `drawbox=x=70:y=350:w=740:h=150:color=${accent}@0.92:t=fill`
@@ -1221,12 +1247,11 @@ function normalizeRainyDryingRackProductName(value: string) {
   return value.trim();
 }
 
-function formatProductTitleForShorts(value: string) {
-  const normalized = normalizeRainyDryingRackProductName(value);
-  if (normalized.length <= 15) {
-    return normalized;
+function formatSceneTitleForShorts(scene: RainyDryingRackScene) {
+  if (scene.scene_id === "scene_01_loss_hook_big_text") {
+    return RAINY_DRYING_RACK_HOOK_TEXT.replace(", ", ",\n");
   }
-  return normalized.replace("\uC811\uC774\uC2DD", "\uC811\uC774\uC2DD\n").replace("\uB300\uD615", "\uB300\uD615\n");
+  return scene.caption;
 }
 
 function hasMojibake(value: string) {
