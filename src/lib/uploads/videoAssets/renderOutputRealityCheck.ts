@@ -54,7 +54,12 @@ export type RenderRealityCheckBlocker =
   | "VOICEOVER_PACE_REJECTED_BY_OWNER"
   | "REPEATED_SINGLE_PRODUCT_PHOTO"
   | "TEXT_COLOR_ONLY_VARIATION"
-  | "VISUAL_STORYBOARD_TOO_STATIC";
+  | "VISUAL_STORYBOARD_TOO_STATIC"
+  | "PRODUCT_PHOTO_DOMINATES_STORY"
+  | "NO_REAL_PROBLEM_SCENE_SOURCE"
+  | "NO_REAL_USE_CASE_SCENE_SOURCE"
+  | "NO_BEFORE_AFTER_COMPARISON"
+  | "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED";
 
 export type ActualFrameProbeInput = {
   actual_frame_sample_count?: unknown;
@@ -155,6 +160,30 @@ export type VisualDiversityProbeInput = {
   product_photo_reuse_ratio?: unknown;
 };
 
+export type RealStoryboardProbeInput = {
+  real_storyboard_gate_executed?: unknown;
+  single_product_photo_reuse_count?: unknown;
+  product_photo_dominant_scene_count?: unknown;
+  unique_non_product_scene_source_count?: unknown;
+  problem_scene_count?: unknown;
+  use_case_scene_count?: unknown;
+  comparison_scene_count?: unknown;
+  checklist_scene_count?: unknown;
+  cta_scene_count?: unknown;
+  problem_before_product_visible?: unknown;
+  before_after_comparison_present?: unknown;
+  use_case_visual_present?: unknown;
+  text_color_only_variation?: unknown;
+};
+
+export type VoiceProviderProbeInput = {
+  voice_provider_review_executed?: unknown;
+  voice_provider_name?: unknown;
+  voice_provider_approved?: unknown;
+  windows_sapi_used?: unknown;
+  voiceover_rejected_local_sapi_voice?: unknown;
+};
+
 export type SceneLayoutProbeInput = {
   static_product_card_feeling?: unknown;
   product_dominates_too_many_scenes?: unknown;
@@ -179,6 +208,8 @@ export type RenderRealityCheckInput = {
   human_visual_gate_probe?: unknown;
   voiceover_review_probe?: unknown;
   visual_diversity_probe?: unknown;
+  real_storyboard_probe?: unknown;
+  voice_provider_probe?: unknown;
 };
 
 export type RenderRealityCheckResult = {
@@ -256,6 +287,24 @@ export type RenderRealityCheckResult = {
   unique_scene_compositions: number;
   product_photo_reuse_ratio: number | null;
   visual_diversity_pass: boolean;
+  real_storyboard_gate_executed: boolean;
+  single_product_photo_reuse_count: number;
+  product_photo_dominant_scene_count: number;
+  unique_non_product_scene_source_count: number;
+  problem_scene_count: number;
+  use_case_scene_count: number;
+  comparison_scene_count: number;
+  checklist_scene_count: number;
+  cta_scene_count: number;
+  before_after_comparison_present: boolean;
+  use_case_visual_present: boolean;
+  real_storyboard_gate_pass: boolean;
+  voice_provider_review_executed: boolean;
+  voice_provider_name: string | null;
+  voice_provider_approved: boolean;
+  windows_sapi_used: boolean;
+  voiceover_rejected_local_sapi_voice: boolean;
+  voice_provider_gate_pass: boolean;
 };
 
 export type RenderRealityReviewArtifactPaths = {
@@ -305,6 +354,11 @@ const MAX_EMPTY_CANVAS_RATIO = 0.35;
 const MIN_PRIMARY_TEXT_AREA_RATIO = 0.12;
 const MIN_VISUAL_DIVERSITY_SCENE_COMPOSITIONS = 5;
 const MAX_PRODUCT_PHOTO_REUSE_RATIO = 0.85;
+const MAX_SINGLE_PRODUCT_PHOTO_REUSE_COUNT = 2;
+const MAX_PRODUCT_PHOTO_DOMINANT_SCENE_COUNT = 2;
+const MIN_UNIQUE_NON_PRODUCT_SCENE_SOURCE_COUNT = 5;
+const MIN_REAL_PROBLEM_SCENE_COUNT = 2;
+const MIN_REAL_USE_CASE_SCENE_COUNT = 2;
 const MOJIBAKE_PATTERNS = [/\?{3,}/, /\u5360/, /\uCC59|\uCC57|\uCC58|\uCC60/];
 const SCRIPT_ALIGNMENT_ASR_PROVIDERS = new Set([
   "local_script_alignment_probe",
@@ -332,6 +386,12 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     : {};
   const visualDiversityProbe = isRecord(input.visual_diversity_probe)
     ? input.visual_diversity_probe
+    : {};
+  const realStoryboardProbe = isRecord(input.real_storyboard_probe)
+    ? input.real_storyboard_probe
+    : {};
+  const voiceProviderProbe = isRecord(input.voice_provider_probe)
+    ? input.voice_provider_probe
     : {};
   const renderedFrameContactSheetGenerated = input.rendered_frame_contact_sheet_generated === true;
   const actualFrameSampleCount = normalizeNonNegativeNumber(frameProbe.actual_frame_sample_count) ?? 0;
@@ -421,6 +481,31 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const uniqueSceneCompositions =
     normalizeNonNegativeNumber(visualDiversityProbe.unique_scene_compositions) ?? 0;
   const productPhotoReuseRatio = normalizeRatio(visualDiversityProbe.product_photo_reuse_ratio);
+  const realStoryboardGateExecuted = realStoryboardProbe.real_storyboard_gate_executed === true;
+  const singleProductPhotoReuseCount =
+    normalizeNonNegativeNumber(realStoryboardProbe.single_product_photo_reuse_count) ?? 0;
+  const productPhotoDominantSceneCount =
+    normalizeNonNegativeNumber(realStoryboardProbe.product_photo_dominant_scene_count) ?? 0;
+  const uniqueNonProductSceneSourceCount =
+    normalizeNonNegativeNumber(realStoryboardProbe.unique_non_product_scene_source_count) ?? 0;
+  const problemSceneCount = normalizeNonNegativeNumber(realStoryboardProbe.problem_scene_count) ?? 0;
+  const useCaseSceneCount = normalizeNonNegativeNumber(realStoryboardProbe.use_case_scene_count) ?? 0;
+  const comparisonSceneCount = normalizeNonNegativeNumber(realStoryboardProbe.comparison_scene_count) ?? 0;
+  const checklistSceneCount = normalizeNonNegativeNumber(realStoryboardProbe.checklist_scene_count) ?? 0;
+  const ctaSceneCount = normalizeNonNegativeNumber(realStoryboardProbe.cta_scene_count) ?? 0;
+  const realStoryboardProblemBeforeProduct =
+    realStoryboardProbe.problem_before_product_visible === true;
+  const beforeAfterComparisonPresent =
+    realStoryboardProbe.before_after_comparison_present === true;
+  const useCaseVisualPresent = realStoryboardProbe.use_case_visual_present === true;
+  const realStoryboardTextColorOnlyVariation =
+    realStoryboardProbe.text_color_only_variation === true;
+  const voiceProviderReviewExecuted = voiceProviderProbe.voice_provider_review_executed === true;
+  const voiceProviderName = safeTrim(voiceProviderProbe.voice_provider_name);
+  const voiceProviderApproved = voiceProviderProbe.voice_provider_approved === true;
+  const windowsSapiUsed = voiceProviderProbe.windows_sapi_used === true;
+  const voiceoverRejectedLocalSapiVoice =
+    voiceProviderProbe.voiceover_rejected_local_sapi_voice === true;
   const blockedReasons: RenderRealityCheckBlocker[] = [];
 
   if (!renderedFrameContactSheetGenerated) {
@@ -641,6 +726,41 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     }
   }
 
+  if (realStoryboardGateExecuted) {
+    if (singleProductPhotoReuseCount > MAX_SINGLE_PRODUCT_PHOTO_REUSE_COUNT) {
+      blockedReasons.push("REPEATED_SINGLE_PRODUCT_PHOTO");
+    }
+    if (productPhotoDominantSceneCount > MAX_PRODUCT_PHOTO_DOMINANT_SCENE_COUNT) {
+      blockedReasons.push("PRODUCT_PHOTO_DOMINATES_STORY");
+    }
+    if (uniqueNonProductSceneSourceCount < MIN_UNIQUE_NON_PRODUCT_SCENE_SOURCE_COUNT ||
+      checklistSceneCount < 1 ||
+      ctaSceneCount < 1) {
+      blockedReasons.push("VISUAL_STORYBOARD_TOO_STATIC");
+    }
+    if (problemSceneCount < MIN_REAL_PROBLEM_SCENE_COUNT || !realStoryboardProblemBeforeProduct) {
+      blockedReasons.push("NO_REAL_PROBLEM_SCENE_SOURCE");
+    }
+    if (useCaseSceneCount < MIN_REAL_USE_CASE_SCENE_COUNT || !useCaseVisualPresent) {
+      blockedReasons.push("NO_REAL_USE_CASE_SCENE_SOURCE");
+    }
+    if (comparisonSceneCount < 1 || !beforeAfterComparisonPresent) {
+      blockedReasons.push("NO_BEFORE_AFTER_COMPARISON");
+    }
+    if (realStoryboardTextColorOnlyVariation) {
+      blockedReasons.push("TEXT_COLOR_ONLY_VARIATION");
+    }
+  }
+
+  if (voiceProviderReviewExecuted) {
+    if (!voiceProviderName || !voiceProviderApproved) {
+      blockedReasons.push("BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED");
+    }
+    if (windowsSapiUsed || voiceoverRejectedLocalSapiVoice) {
+      blockedReasons.push("VOICEOVER_REJECTED_LOCAL_SAPI_VOICE");
+    }
+  }
+
   if (staticProductCardFeeling) {
     blockedReasons.push("STATIC_PRODUCT_CARD_FEELING");
   }
@@ -743,6 +863,26 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
       !textColorOnlyVariation &&
       uniqueSceneCompositions >= MIN_VISUAL_DIVERSITY_SCENE_COMPOSITIONS &&
       (productPhotoReuseRatio === null || productPhotoReuseRatio <= MAX_PRODUCT_PHOTO_REUSE_RATIO));
+  const realStoryboardGatePass =
+    !realStoryboardGateExecuted ||
+    (singleProductPhotoReuseCount <= MAX_SINGLE_PRODUCT_PHOTO_REUSE_COUNT &&
+      productPhotoDominantSceneCount <= MAX_PRODUCT_PHOTO_DOMINANT_SCENE_COUNT &&
+      uniqueNonProductSceneSourceCount >= MIN_UNIQUE_NON_PRODUCT_SCENE_SOURCE_COUNT &&
+      problemSceneCount >= MIN_REAL_PROBLEM_SCENE_COUNT &&
+      useCaseSceneCount >= MIN_REAL_USE_CASE_SCENE_COUNT &&
+      comparisonSceneCount >= 1 &&
+      checklistSceneCount >= 1 &&
+      ctaSceneCount >= 1 &&
+      realStoryboardProblemBeforeProduct &&
+      beforeAfterComparisonPresent &&
+      useCaseVisualPresent &&
+      !realStoryboardTextColorOnlyVariation);
+  const voiceProviderGatePass =
+    !voiceProviderReviewExecuted ||
+    (Boolean(voiceProviderName) &&
+      voiceProviderApproved &&
+      !windowsSapiUsed &&
+      !voiceoverRejectedLocalSapiVoice);
 
   return {
     passed: uniqueBlockedReasons.length === 0,
@@ -818,7 +958,25 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     text_color_only_variation: textColorOnlyVariation,
     unique_scene_compositions: uniqueSceneCompositions,
     product_photo_reuse_ratio: productPhotoReuseRatio,
-    visual_diversity_pass: visualDiversityPass
+    visual_diversity_pass: visualDiversityPass,
+    real_storyboard_gate_executed: realStoryboardGateExecuted,
+    single_product_photo_reuse_count: singleProductPhotoReuseCount,
+    product_photo_dominant_scene_count: productPhotoDominantSceneCount,
+    unique_non_product_scene_source_count: uniqueNonProductSceneSourceCount,
+    problem_scene_count: problemSceneCount,
+    use_case_scene_count: useCaseSceneCount,
+    comparison_scene_count: comparisonSceneCount,
+    checklist_scene_count: checklistSceneCount,
+    cta_scene_count: ctaSceneCount,
+    before_after_comparison_present: beforeAfterComparisonPresent,
+    use_case_visual_present: useCaseVisualPresent,
+    real_storyboard_gate_pass: realStoryboardGatePass,
+    voice_provider_review_executed: voiceProviderReviewExecuted,
+    voice_provider_name: voiceProviderName,
+    voice_provider_approved: voiceProviderApproved,
+    windows_sapi_used: windowsSapiUsed,
+    voiceover_rejected_local_sapi_voice: voiceoverRejectedLocalSapiVoice,
+    voice_provider_gate_pass: voiceProviderGatePass
   };
 }
 

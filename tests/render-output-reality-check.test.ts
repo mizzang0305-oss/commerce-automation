@@ -515,4 +515,87 @@ describe("render output reality check", () => {
       "VISUAL_STORYBOARD_TOO_STATIC"
     ]));
   });
+
+  test("real storyboard gate passes when problem, use-case, comparison, checklist, and CTA sources are present", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      real_storyboard_probe: {
+        real_storyboard_gate_executed: true,
+        single_product_photo_reuse_count: 2,
+        product_photo_dominant_scene_count: 2,
+        unique_non_product_scene_source_count: 6,
+        problem_scene_count: 3,
+        use_case_scene_count: 2,
+        comparison_scene_count: 1,
+        checklist_scene_count: 1,
+        cta_scene_count: 1,
+        problem_before_product_visible: true,
+        before_after_comparison_present: true,
+        use_case_visual_present: true,
+        text_color_only_variation: false
+      },
+      voice_provider_probe: {
+        voice_provider_review_executed: true,
+        voice_provider_name: "approved-local-korean-voice",
+        voice_provider_approved: true,
+        windows_sapi_used: false,
+        voiceover_rejected_local_sapi_voice: false
+      }
+    });
+
+    expect(result.real_storyboard_gate_pass).toBe(true);
+    expect(result.voice_provider_gate_pass).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  test("real storyboard gate blocks product-photo-dominant static card storyboards", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      real_storyboard_probe: {
+        real_storyboard_gate_executed: true,
+        single_product_photo_reuse_count: 8,
+        product_photo_dominant_scene_count: 7,
+        unique_non_product_scene_source_count: 2,
+        problem_scene_count: 1,
+        use_case_scene_count: 0,
+        comparison_scene_count: 0,
+        checklist_scene_count: 1,
+        cta_scene_count: 1,
+        problem_before_product_visible: false,
+        before_after_comparison_present: false,
+        use_case_visual_present: false,
+        text_color_only_variation: true
+      }
+    });
+
+    expect(result.real_storyboard_gate_pass).toBe(false);
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "REPEATED_SINGLE_PRODUCT_PHOTO",
+      "TEXT_COLOR_ONLY_VARIATION",
+      "VISUAL_STORYBOARD_TOO_STATIC",
+      "PRODUCT_PHOTO_DOMINATES_STORY",
+      "NO_REAL_PROBLEM_SCENE_SOURCE",
+      "NO_REAL_USE_CASE_SCENE_SOURCE",
+      "NO_BEFORE_AFTER_COMPARISON"
+    ]));
+  });
+
+  test("voice provider gate blocks Windows SAPI and unapproved Korean voice providers", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      voice_provider_probe: {
+        voice_provider_review_executed: true,
+        voice_provider_name: "Windows SAPI",
+        voice_provider_approved: false,
+        windows_sapi_used: true,
+        voiceover_rejected_local_sapi_voice: true
+      }
+    });
+
+    expect(result.voice_provider_gate_pass).toBe(false);
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED",
+      "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE"
+    ]));
+  });
 });
