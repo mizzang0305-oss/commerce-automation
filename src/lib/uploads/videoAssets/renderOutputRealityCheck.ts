@@ -63,7 +63,9 @@ export type RenderRealityCheckBlocker =
   | "VOICE_PROVIDER_NOT_APPROVED"
   | "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE"
   | "VOICE_PROVIDER_GENERATION_FAILED"
-  | "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL";
+  | "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
+  | "OWNER_RECORDED_VOICE_FILE_NOT_FOUND"
+  | "OWNER_RECORDED_VOICE_FILE_INVALID";
 
 export type ActualFrameProbeInput = {
   actual_frame_sample_count?: unknown;
@@ -1093,7 +1095,9 @@ function normalizeVoiceProviderBlocker(value: unknown): RenderRealityCheckBlocke
     "VOICE_PROVIDER_NOT_APPROVED",
     "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE",
     "VOICE_PROVIDER_GENERATION_FAILED",
-    "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
+    "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL",
+    "OWNER_RECORDED_VOICE_FILE_NOT_FOUND",
+    "OWNER_RECORDED_VOICE_FILE_INVALID"
   ];
   return allowed.includes(value as RenderRealityCheckBlocker)
     ? value as RenderRealityCheckBlocker
