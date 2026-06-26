@@ -75,16 +75,17 @@ describe("rainy drying rack scene-card renderer", () => {
     expect(story.viewer_gain_clear).toBe(true);
     expect(story.save_worthy_value_present).toBe(true);
     expect(story.hook_text).toBe(RAINY_DRYING_RACK_HOOK_TEXT);
+    expect(story.hook_text).toBe("\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uB0C4\uC0C8, \uADF8\uB0E5 \uB118\uAE30\uBA74 \uC190\uD574\uC785\uB2C8\uB2E4");
     expect(story.scenes).toHaveLength(8);
     expect(story.scenes.map((scene) => scene.scene_id)).toEqual([
-      "scene-01-hook",
-      "scene-02-problem",
-      "scene-03-product-intro",
-      "scene-04-space-saving",
-      "scene-05-use-case",
-      "scene-06-why-buy",
-      "scene-07-checklist",
-      "scene-08-cta"
+      "scene_01_loss_hook_big_text",
+      "scene_02_rain_laundry_smell_problem",
+      "scene_03_product_reveal_drying_rack",
+      "scene_04_small_room_space_problem",
+      "scene_05_foldable_solution",
+      "scene_06_before_after_space_compare",
+      "scene_07_buying_checklist",
+      "scene_08_description_cta"
     ]);
     expect(story.scenes.map((scene) => scene.layout_template)).toEqual([
       "layout_hook_full_title",
@@ -204,7 +205,7 @@ describe("rainy drying rack scene-card renderer", () => {
         caption_text_integrity_probe: {
           caption_newline_probe_executed: true,
           captions: expect.arrayContaining([
-            "\uC7A5\uB9C8\uCCA0 \uBE68\uB798\n\uC624\uB298 \uC815\uB9AC"
+            "\uC7A5\uB9C8\uCCA0 \uBE68\uB798 \uB0C4\uC0C8,\n\uADF8\uB0E5 \uB118\uAE30\uBA74 \uC190\uD574"
           ])
         },
         title_description_integrity_probe: {
@@ -223,6 +224,18 @@ describe("rainy drying rack scene-card renderer", () => {
           static_product_card_feeling: false,
           problem_visual_before_product: true,
           distinct_layout_templates: 8
+        },
+        human_visual_gate_probe: {
+          human_visual_gate_executed: true,
+          first_frame_ad_like: true,
+          loss_aversion_hook_large_visible: true,
+          empty_canvas_ratio: 0.28,
+          primary_text_area_ratio: 0.18,
+          product_or_problem_visual_visible_in_first_1s: true,
+          hook_text_contains_loss_trigger: true,
+          problem_before_product_visible: true,
+          cta_not_present_too_early: true,
+          ppt_card_feeling: false
         }
       }
     });
@@ -246,17 +259,18 @@ describe("rainy drying rack scene-card renderer", () => {
       shorts_overlay_pass: true,
       caption_text_integrity_pass: true,
       audio_intelligibility_pass: false,
-      scene_layout_pass: true
+      scene_layout_pass: true,
+      human_visual_gate_pass: true
     });
     expect(evaluateRenderRealityCheck(result.actual_render_probe).blocked_reasons).toContain("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
     expect(result.final_upload_allowed).toBe(false);
-    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v010", "story-shorts.mp4"));
-    expect(result.local_review_video_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "local-review-video.mp4"));
-    expect(result.audio_intelligibility_report_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "audio-intelligibility-probe.json"));
-    expect(result.asr_transcript_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "asr-transcript.txt"));
-    expect(result.human_review_checklist_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "human-review-checklist.md"));
-    expect(result.review_summary_path).toContain(path.join("commerce-assets", "review", candidate.id, "v010", "review-summary.json"));
-    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v010", "scene-manifest.json"));
+    expect(result.local_video_path).toContain(path.join("commerce-assets", "generated-videos", candidate.id, "v013", "story-shorts.mp4"));
+    expect(result.local_review_video_path).toContain(path.join("commerce-assets", "review", candidate.id, "v013", "local-review-video.mp4"));
+    expect(result.audio_intelligibility_report_path).toContain(path.join("commerce-assets", "review", candidate.id, "v013", "audio-intelligibility-probe.json"));
+    expect(result.asr_transcript_path).toContain(path.join("commerce-assets", "review", candidate.id, "v013", "asr-transcript.txt"));
+    expect(result.human_review_checklist_path).toContain(path.join("commerce-assets", "review", candidate.id, "v013", "human-review-checklist.md"));
+    expect(result.review_summary_path).toContain(path.join("commerce-assets", "review", candidate.id, "v013", "review-summary.json"));
+    expect(result.scene_manifest_path).toContain(path.join("commerce-assets", "generated-scenes", candidate.id, "v013", "scene-manifest.json"));
     expect(serialized).not.toContain("link.coupang.com");
     expect(serialized).not.toContain("image.example.com");
     expect(execFileAsync.mock.calls.filter(([file]) => file === "ffmpeg").length).toBeGreaterThanOrEqual(10);

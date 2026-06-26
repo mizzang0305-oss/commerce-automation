@@ -58,10 +58,12 @@ const PASSING_REALITY_CHECK = {
     asr_probe_executed: true,
     real_asr_probe_executed: true,
     korean_transcript_present: true,
+    raw_transcript_similarity_score: 0.88,
     transcript_similarity_score: 0.88,
     core_anchor_recognition_pass: true,
     recognized_core_anchors: ["빨래", "건조대", "공간"],
     recognized_context_anchors: ["장마철", "냄새", "습기", "확인"],
+    recognized_context_anchor_count: 4,
     recognized_keyword_anchor_count: 6,
     speech_rate_wpm: 152,
     max_silence_between_segments_ms: 140,
@@ -75,6 +77,18 @@ const PASSING_REALITY_CHECK = {
     scene_layout_too_similar: false,
     problem_visual_before_product: true,
     distinct_layout_templates: 8
+  },
+  human_visual_gate_probe: {
+    human_visual_gate_executed: true,
+    first_frame_ad_like: true,
+    loss_aversion_hook_large_visible: true,
+    empty_canvas_ratio: 0.28,
+    primary_text_area_ratio: 0.18,
+    product_or_problem_visual_visible_in_first_1s: true,
+    hook_text_contains_loss_trigger: true,
+    problem_before_product_visible: true,
+    cta_not_present_too_early: true,
+    ppt_card_feeling: false
   }
 };
 
@@ -210,6 +224,7 @@ describe("render output reality check", () => {
     expect(artifactPaths.audioIntelligibilityReportPath).toContain("audio-intelligibility-probe.json");
     expect(artifactPaths.asrTranscriptPath).toContain("asr-transcript.txt");
     expect(artifactPaths.sceneLayoutProbePath).toContain("scene-layout-probe.json");
+    expect(artifactPaths.humanVisualGatePath).toContain("human-visual-gate.json");
     expect(artifactPaths.humanReviewSummaryPath).toContain("human-review-summary.json");
     expect(artifactPaths.humanReviewChecklistPath).toContain("human-review-checklist.md");
     expect(artifactPaths.localReviewVideoPath).toContain("local-review-video.mp4");
@@ -222,6 +237,7 @@ describe("render output reality check", () => {
     expect(result.caption_text_integrity_pass).toBe(true);
     expect(result.audio_intelligibility_pass).toBe(true);
     expect(result.scene_layout_pass).toBe(true);
+    expect(result.human_visual_gate_pass).toBe(true);
   });
 
   test("Shorts UI overlay collisions fail even when frame hashes pass", () => {
@@ -283,6 +299,7 @@ describe("render output reality check", () => {
         asr_probe_executed: true,
         real_asr_probe_executed: true,
         korean_transcript_present: true,
+        raw_transcript_similarity_score: 0.42,
         transcript_similarity_score: 0.42,
         recognized_keyword_anchor_count: 2,
         speech_rate_wpm: 212,
@@ -311,10 +328,12 @@ describe("render output reality check", () => {
         asr_probe_executed: true,
         real_asr_probe_executed: true,
         korean_transcript_present: true,
+        raw_transcript_similarity_score: 0.86,
         transcript_similarity_score: 0.86,
         core_anchor_recognition_pass: false,
         recognized_core_anchors: ["빨래"],
         recognized_context_anchors: ["장마철", "냄새", "습기", "확인"],
+        recognized_context_anchor_count: 4,
         recognized_keyword_anchor_count: 6,
         speech_rate_wpm: 148,
         max_silence_between_segments_ms: 140,
@@ -335,6 +354,7 @@ describe("render output reality check", () => {
         asr_probe_executed: true,
         real_asr_probe_executed: false,
         korean_transcript_present: true,
+        raw_transcript_similarity_score: 0.9,
         transcript_similarity_score: 0.9,
         recognized_keyword_anchor_count: 8,
         speech_rate_wpm: 150,
@@ -369,6 +389,68 @@ describe("render output reality check", () => {
       "BACKGROUND_ONLY_MOTION",
       "SCENE_LAYOUT_TOO_SIMILAR",
       "NO_PROBLEM_VISUAL_BEFORE_PRODUCT"
+    ]));
+  });
+
+  test("raw Korean ASR similarity is gated before normalized transcript similarity can pass", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      korean_asr_probe: {
+        ...PASSING_REALITY_CHECK.korean_asr_probe,
+        raw_transcript_similarity_score: 0.779,
+        transcript_similarity_score: 1,
+        core_anchor_recognition_pass: true,
+        recognized_context_anchor_count: 4,
+        recognized_keyword_anchor_count: 7
+      }
+    });
+
+    expect(result.audio_intelligibility_pass).toBe(false);
+    expect(result.blocked_reasons).toContain("RAW_ASR_SIMILARITY_TOO_LOW");
+  });
+
+  test("context ASR anchors require at least three recognized rainy-season signals", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      korean_asr_probe: {
+        ...PASSING_REALITY_CHECK.korean_asr_probe,
+        raw_transcript_similarity_score: 0.9,
+        transcript_similarity_score: 0.9,
+        recognized_context_anchor_count: 2,
+        recognized_keyword_anchor_count: 5
+      }
+    });
+
+    expect(result.audio_intelligibility_pass).toBe(false);
+    expect(result.blocked_reasons).toContain("VOICEOVER_CONTEXT_ANCHORS_MISSING");
+  });
+
+  test("human visual gate blocks weak first frames with too much empty canvas", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      human_visual_gate_probe: {
+        human_visual_gate_executed: true,
+        first_frame_ad_like: false,
+        loss_aversion_hook_large_visible: false,
+        empty_canvas_ratio: 0.62,
+        primary_text_area_ratio: 0.07,
+        product_or_problem_visual_visible_in_first_1s: false,
+        hook_text_contains_loss_trigger: false,
+        problem_before_product_visible: false,
+        cta_not_present_too_early: false,
+        ppt_card_feeling: true
+      }
+    });
+
+    expect(result.human_visual_gate_pass).toBe(false);
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "FIRST_FRAME_NOT_AD_LIKE",
+      "LOSS_AVERSION_NOT_VISIBLE",
+      "EMPTY_CANVAS_TOO_LARGE",
+      "PRIMARY_TEXT_TOO_SMALL",
+      "PRODUCT_OR_PROBLEM_VISUAL_MISSING_FIRST_SECOND",
+      "PPT_CARD_FEELING",
+      "HOOK_COPY_WEAK"
     ]));
   });
 });

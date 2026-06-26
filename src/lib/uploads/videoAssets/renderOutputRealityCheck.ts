@@ -32,14 +32,23 @@ export type RenderRealityCheckBlocker =
   | "KOREAN_DISCLOSURE_GARBLED"
   | "AUDIO_ASR_PROVIDER_NOT_CONFIGURED"
   | "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED"
+  | "RAW_ASR_SIMILARITY_TOO_LOW"
   | "VOICEOVER_PRODUCT_CORE_ANCHORS_MISSING"
+  | "VOICEOVER_CONTEXT_ANCHORS_MISSING"
   | "VOICEOVER_KEYWORD_ANCHORS_MISSING"
   | "VOICEOVER_TOO_FAST"
   | "STATIC_PRODUCT_CARD_FEELING"
   | "PRODUCT_IMAGE_DOMINATES_TOO_MANY_SCENES"
   | "BACKGROUND_ONLY_MOTION"
   | "SCENE_LAYOUT_TOO_SIMILAR"
-  | "NO_PROBLEM_VISUAL_BEFORE_PRODUCT";
+  | "NO_PROBLEM_VISUAL_BEFORE_PRODUCT"
+  | "FIRST_FRAME_NOT_AD_LIKE"
+  | "LOSS_AVERSION_NOT_VISIBLE"
+  | "EMPTY_CANVAS_TOO_LARGE"
+  | "PRIMARY_TEXT_TOO_SMALL"
+  | "PRODUCT_OR_PROBLEM_VISUAL_MISSING_FIRST_SECOND"
+  | "PPT_CARD_FEELING"
+  | "HOOK_COPY_WEAK";
 
 export type ActualFrameProbeInput = {
   actual_frame_sample_count?: unknown;
@@ -96,15 +105,30 @@ export type KoreanAsrProbeInput = {
   asr_probe_executed?: unknown;
   real_asr_probe_executed?: unknown;
   korean_transcript_present?: unknown;
+  raw_transcript_similarity_score?: unknown;
   transcript_similarity_score?: unknown;
   core_anchor_recognition_pass?: unknown;
   recognized_core_anchors?: unknown;
   recognized_context_anchors?: unknown;
+  recognized_context_anchor_count?: unknown;
   recognized_keyword_anchor_count?: unknown;
   speech_rate_wpm?: unknown;
   max_silence_between_segments_ms?: unknown;
   hard_cut_count?: unknown;
   voiceover_naturalness_score?: unknown;
+};
+
+export type HumanVisualGateProbeInput = {
+  human_visual_gate_executed?: unknown;
+  first_frame_ad_like?: unknown;
+  loss_aversion_hook_large_visible?: unknown;
+  empty_canvas_ratio?: unknown;
+  primary_text_area_ratio?: unknown;
+  product_or_problem_visual_visible_in_first_1s?: unknown;
+  hook_text_contains_loss_trigger?: unknown;
+  problem_before_product_visible?: unknown;
+  cta_not_present_too_early?: unknown;
+  ppt_card_feeling?: unknown;
 };
 
 export type SceneLayoutProbeInput = {
@@ -128,6 +152,7 @@ export type RenderRealityCheckInput = {
   title_description_integrity_probe?: unknown;
   korean_asr_probe?: unknown;
   scene_layout_probe?: unknown;
+  human_visual_gate_probe?: unknown;
 };
 
 export type RenderRealityCheckResult = {
@@ -172,13 +197,25 @@ export type RenderRealityCheckResult = {
   asr_probe_executed: boolean;
   real_asr_probe_executed: boolean;
   korean_transcript_present: boolean;
+  raw_transcript_similarity_score: number | null;
   transcript_similarity_score: number | null;
+  recognized_context_anchor_count: number;
   recognized_keyword_anchor_count: number;
   speech_rate_wpm: number | null;
   audio_intelligibility_pass: boolean;
   scene_layout_pass: boolean;
   problem_visual_before_product: boolean;
   distinct_layout_templates: number;
+  human_visual_gate_executed: boolean;
+  first_frame_ad_like: boolean;
+  loss_aversion_hook_large_visible: boolean;
+  empty_canvas_ratio: number | null;
+  primary_text_area_ratio: number | null;
+  product_or_problem_visual_visible_in_first_1s: boolean;
+  hook_text_contains_loss_trigger: boolean;
+  cta_not_present_too_early: boolean;
+  ppt_card_feeling: boolean;
+  human_visual_gate_pass: boolean;
 };
 
 export type RenderRealityReviewArtifactPaths = {
@@ -196,6 +233,7 @@ export type RenderRealityReviewArtifactPaths = {
   audioIntelligibilityReportPath: string;
   asrTranscriptPath: string;
   sceneLayoutProbePath: string;
+  humanVisualGatePath: string;
   humanReviewSummaryPath: string;
   humanReviewChecklistPath: string;
   localReviewVideoPath: string;
@@ -214,14 +252,17 @@ const MAX_SILENCE_BETWEEN_SEGMENTS_MS = 250;
 const MAX_HARD_CUT_COUNT = 1;
 const MIN_SPEECH_CONTINUITY_SCORE = 80;
 const MIN_VOICEOVER_NATURALNESS_SCORE = 82;
-const MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE = 0.8;
+const MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE = 0.82;
 const MIN_RECOGNIZED_KEYWORD_ANCHOR_COUNT = 5;
+const MIN_RECOGNIZED_CONTEXT_ANCHOR_COUNT = 3;
 const MIN_SPEECH_RATE_WPM = 130;
 const MAX_SPEECH_RATE_WPM = 170;
 const MAX_ASR_SILENCE_BETWEEN_SEGMENTS_MS = 180;
 const MIN_ASR_VOICEOVER_NATURALNESS_SCORE = 85;
 const MIN_DISTINCT_LAYOUT_TEMPLATE_COUNT = 8;
 const MAX_CAPTION_CHARS_PER_LINE = 14;
+const MAX_EMPTY_CANVAS_RATIO = 0.35;
+const MIN_PRIMARY_TEXT_AREA_RATIO = 0.12;
 const MOJIBAKE_PATTERNS = [/\?{3,}/, /\u5360/, /\uCC59|\uCC57|\uCC58|\uCC60/];
 const SCRIPT_ALIGNMENT_ASR_PROVIDERS = new Set([
   "local_script_alignment_probe",
@@ -241,6 +282,9 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     : {};
   const koreanAsrProbe = isRecord(input.korean_asr_probe) ? input.korean_asr_probe : {};
   const sceneLayoutProbe = isRecord(input.scene_layout_probe) ? input.scene_layout_probe : {};
+  const humanVisualGateProbe = isRecord(input.human_visual_gate_probe)
+    ? input.human_visual_gate_probe
+    : {};
   const renderedFrameContactSheetGenerated = input.rendered_frame_contact_sheet_generated === true;
   const actualFrameSampleCount = normalizeNonNegativeNumber(frameProbe.actual_frame_sample_count) ?? 0;
   const actualFrameHashUniqueRatio = normalizeRatio(frameProbe.actual_frame_hash_unique_ratio);
@@ -283,8 +327,13 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     koreanAsrProbe.real_asr_probe_executed === true &&
     !isScriptAlignmentAsrProvider(asrProvider);
   const koreanTranscriptPresent = koreanAsrProbe.korean_transcript_present === true;
+  const rawTranscriptSimilarityScore =
+    normalizeRatio(koreanAsrProbe.raw_transcript_similarity_score);
   const transcriptSimilarityScore = normalizeRatio(koreanAsrProbe.transcript_similarity_score);
   const coreAnchorRecognitionPass = koreanAsrProbe.core_anchor_recognition_pass === true;
+  const recognizedContextAnchorCount =
+    normalizeNonNegativeNumber(koreanAsrProbe.recognized_context_anchor_count) ??
+    normalizeStringArray(koreanAsrProbe.recognized_context_anchors).length;
   const recognizedKeywordAnchorCount =
     normalizeNonNegativeNumber(koreanAsrProbe.recognized_keyword_anchor_count) ?? 0;
   const speechRateWpm = normalizeNonNegativeNumber(koreanAsrProbe.speech_rate_wpm);
@@ -299,6 +348,17 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const sceneLayoutTooSimilar = sceneLayoutProbe.scene_layout_too_similar === true;
   const problemVisualBeforeProduct = sceneLayoutProbe.problem_visual_before_product === true;
   const distinctLayoutTemplates = normalizeNonNegativeNumber(sceneLayoutProbe.distinct_layout_templates) ?? 0;
+  const humanVisualGateExecuted = humanVisualGateProbe.human_visual_gate_executed === true;
+  const firstFrameAdLike = humanVisualGateProbe.first_frame_ad_like === true;
+  const lossAversionHookLargeVisible = humanVisualGateProbe.loss_aversion_hook_large_visible === true;
+  const emptyCanvasRatio = normalizeRatio(humanVisualGateProbe.empty_canvas_ratio);
+  const primaryTextAreaRatio = normalizeRatio(humanVisualGateProbe.primary_text_area_ratio);
+  const productOrProblemVisualVisibleInFirst1s =
+    humanVisualGateProbe.product_or_problem_visual_visible_in_first_1s === true;
+  const hookTextContainsLossTrigger = humanVisualGateProbe.hook_text_contains_loss_trigger === true;
+  const humanProblemBeforeProduct = humanVisualGateProbe.problem_before_product_visible === true;
+  const ctaNotPresentTooEarly = humanVisualGateProbe.cta_not_present_too_early === true;
+  const pptCardFeeling = humanVisualGateProbe.ppt_card_feeling === true;
   const blockedReasons: RenderRealityCheckBlocker[] = [];
 
   if (!renderedFrameContactSheetGenerated) {
@@ -432,10 +492,17 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   if (!asrProvider || !asrProbeExecuted || !realAsrProbeExecuted) {
     blockedReasons.push("AUDIO_ASR_PROVIDER_NOT_CONFIGURED");
   } else {
+    if (rawTranscriptSimilarityScore === null ||
+      rawTranscriptSimilarityScore < MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE) {
+      blockedReasons.push("RAW_ASR_SIMILARITY_TOO_LOW");
+    }
     if (!koreanTranscriptPresent ||
       transcriptSimilarityScore === null ||
       transcriptSimilarityScore < MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE) {
       blockedReasons.push("VOICEOVER_UNINTELLIGIBLE_ASR_FAILED");
+    }
+    if (recognizedContextAnchorCount < MIN_RECOGNIZED_CONTEXT_ANCHOR_COUNT) {
+      blockedReasons.push("VOICEOVER_CONTEXT_ANCHORS_MISSING");
     }
     if (recognizedKeywordAnchorCount < MIN_RECOGNIZED_KEYWORD_ANCHOR_COUNT) {
       blockedReasons.push("VOICEOVER_KEYWORD_ANCHORS_MISSING");
@@ -458,6 +525,30 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     if (asrVoiceoverNaturalnessScore === null ||
       asrVoiceoverNaturalnessScore < MIN_ASR_VOICEOVER_NATURALNESS_SCORE) {
       blockedReasons.push("VOICEOVER_TOO_ROBOTIC");
+    }
+  }
+
+  if (humanVisualGateExecuted) {
+    if (!firstFrameAdLike) {
+      blockedReasons.push("FIRST_FRAME_NOT_AD_LIKE");
+    }
+    if (!lossAversionHookLargeVisible) {
+      blockedReasons.push("LOSS_AVERSION_NOT_VISIBLE");
+    }
+    if (emptyCanvasRatio === null || emptyCanvasRatio > MAX_EMPTY_CANVAS_RATIO) {
+      blockedReasons.push("EMPTY_CANVAS_TOO_LARGE");
+    }
+    if (primaryTextAreaRatio === null || primaryTextAreaRatio < MIN_PRIMARY_TEXT_AREA_RATIO) {
+      blockedReasons.push("PRIMARY_TEXT_TOO_SMALL");
+    }
+    if (!productOrProblemVisualVisibleInFirst1s) {
+      blockedReasons.push("PRODUCT_OR_PROBLEM_VISUAL_MISSING_FIRST_SECOND");
+    }
+    if (!hookTextContainsLossTrigger || !humanProblemBeforeProduct || !ctaNotPresentTooEarly) {
+      blockedReasons.push("HOOK_COPY_WEAK");
+    }
+    if (pptCardFeeling) {
+      blockedReasons.push("PPT_CARD_FEELING");
     }
   }
 
@@ -515,8 +606,11 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     asrProbeExecuted &&
     realAsrProbeExecuted &&
     koreanTranscriptPresent &&
+    rawTranscriptSimilarityScore !== null &&
+    rawTranscriptSimilarityScore >= MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE &&
     transcriptSimilarityScore !== null &&
     transcriptSimilarityScore >= MIN_ASR_TRANSCRIPT_SIMILARITY_SCORE &&
+    recognizedContextAnchorCount >= MIN_RECOGNIZED_CONTEXT_ANCHOR_COUNT &&
     recognizedKeywordAnchorCount >= MIN_RECOGNIZED_KEYWORD_ANCHOR_COUNT &&
     coreAnchorRecognitionPass &&
     speechRateWpm !== null &&
@@ -534,6 +628,19 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     !sceneLayoutTooSimilar &&
     problemVisualBeforeProduct &&
     distinctLayoutTemplates >= MIN_DISTINCT_LAYOUT_TEMPLATE_COUNT;
+  const humanVisualGatePass =
+    !humanVisualGateExecuted ||
+    (firstFrameAdLike &&
+      lossAversionHookLargeVisible &&
+      emptyCanvasRatio !== null &&
+      emptyCanvasRatio <= MAX_EMPTY_CANVAS_RATIO &&
+      primaryTextAreaRatio !== null &&
+      primaryTextAreaRatio >= MIN_PRIMARY_TEXT_AREA_RATIO &&
+      productOrProblemVisualVisibleInFirst1s &&
+      hookTextContainsLossTrigger &&
+      humanProblemBeforeProduct &&
+      ctaNotPresentTooEarly &&
+      !pptCardFeeling);
 
   return {
     passed: uniqueBlockedReasons.length === 0,
@@ -577,13 +684,25 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     asr_probe_executed: asrProbeExecuted,
     real_asr_probe_executed: realAsrProbeExecuted,
     korean_transcript_present: koreanTranscriptPresent,
+    raw_transcript_similarity_score: rawTranscriptSimilarityScore,
     transcript_similarity_score: transcriptSimilarityScore,
+    recognized_context_anchor_count: recognizedContextAnchorCount,
     recognized_keyword_anchor_count: recognizedKeywordAnchorCount,
     speech_rate_wpm: speechRateWpm,
     audio_intelligibility_pass: audioIntelligibilityPass,
     scene_layout_pass: sceneLayoutPass,
     problem_visual_before_product: problemVisualBeforeProduct,
-    distinct_layout_templates: distinctLayoutTemplates
+    distinct_layout_templates: distinctLayoutTemplates,
+    human_visual_gate_executed: humanVisualGateExecuted,
+    first_frame_ad_like: firstFrameAdLike,
+    loss_aversion_hook_large_visible: lossAversionHookLargeVisible,
+    empty_canvas_ratio: emptyCanvasRatio,
+    primary_text_area_ratio: primaryTextAreaRatio,
+    product_or_problem_visual_visible_in_first_1s: productOrProblemVisualVisibleInFirst1s,
+    hook_text_contains_loss_trigger: hookTextContainsLossTrigger,
+    cta_not_present_too_early: ctaNotPresentTooEarly,
+    ppt_card_feeling: pptCardFeeling,
+    human_visual_gate_pass: humanVisualGatePass
   };
 }
 
@@ -610,6 +729,7 @@ export function buildRenderRealityReviewArtifactPaths(input: {
     audioIntelligibilityReportPath: path.join(reviewRoot, "audio-intelligibility-probe.json"),
     asrTranscriptPath: path.join(reviewRoot, "asr-transcript.txt"),
     sceneLayoutProbePath: path.join(reviewRoot, "scene-layout-probe.json"),
+    humanVisualGatePath: path.join(reviewRoot, "human-visual-gate.json"),
     humanReviewSummaryPath: path.join(reviewRoot, "human-review-summary.json"),
     humanReviewChecklistPath: path.join(reviewRoot, "human-review-checklist.md"),
     localReviewVideoPath: path.join(reviewRoot, "local-review-video.mp4"),

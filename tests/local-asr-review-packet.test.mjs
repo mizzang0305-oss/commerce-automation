@@ -8,9 +8,9 @@ import {
   inspectLocalAsrConfig,
   normalizeAsrTranscriptForProductTerms,
   parseDotEnv
-} from "../scripts/generate-local-asr-v012-review-packet.mjs";
+} from "../scripts/generate-local-asr-v013-review-packet.mjs";
 
-describe("local ASR v012 review packet helpers", () => {
+describe("local ASR v013 review packet helpers", () => {
   test("detects missing provider without treating env presence as execution readiness", async () => {
     const config = getLocalAsrConfig({
       LOCAL_ASR_ENABLED: "true",
@@ -66,6 +66,7 @@ describe("local ASR v012 review packet helpers", () => {
   test("requires product core anchors even when context anchors are recognized", () => {
     const result = evaluateAudioIntelligibility({
       transcript: "장마철 빨래 냄새와 습기가 남고 구매 전 확인하세요.",
+      rawTranscriptSimilarityScore: 0.86,
       transcriptSimilarityScore: 0.86,
       speechRateWpm: 148,
       maxSilenceBetweenSegmentsMs: 140,
@@ -84,6 +85,7 @@ describe("local ASR v012 review packet helpers", () => {
     const normalized = normalizeAsrTranscriptForProductTerms(transcript);
     const result = evaluateAudioIntelligibility({
       transcript,
+      rawTranscriptSimilarityScore: 0.88,
       transcriptSimilarityScore: 0.88,
       speechRateWpm: 148,
       maxSilenceBetweenSegmentsMs: 140,
@@ -97,10 +99,26 @@ describe("local ASR v012 review packet helpers", () => {
     expect(result.blocker).toBeNull();
   });
 
+  test("blocks normalized-pass transcripts when raw ASR similarity is still too low", () => {
+    const result = evaluateAudioIntelligibility({
+      transcript: "raw similarity low fixture",
+      rawTranscriptSimilarityScore: 0.779,
+      transcriptSimilarityScore: 1,
+      speechRateWpm: 148,
+      maxSilenceBetweenSegmentsMs: 140,
+      hardCutCount: 0,
+      voiceoverNaturalnessScore: 88,
+      config: { minSimilarity: 0.82, minWpm: 130, maxWpm: 160 }
+    });
+
+    expect(result.blocker).toBe("RAW_ASR_SIMILARITY_TOO_LOW");
+  });
+
   test("passes when all product core anchors and enough context anchors are recognized", () => {
     const result = evaluateAudioIntelligibility({
       transcript:
         "장마철 빨래 냄새와 습기가 남습니다. 접이식 빨래 건조대는 좁은 공간에서도 쓰기 좋고 구매 전 크기를 확인하세요.",
+      rawTranscriptSimilarityScore: 0.9,
       transcriptSimilarityScore: 0.9,
       speechRateWpm: 145,
       maxSilenceBetweenSegmentsMs: 120,
