@@ -2,8 +2,12 @@ import { describe, expect, test } from "vitest";
 
 import {
   buildKoreanVoiceProviderSafeSummary,
-  evaluateKoreanVoiceProviderReadiness
+  evaluateKoreanVoiceProviderReadiness,
+  validateOwnerRecordedVoiceFile
 } from "../scripts/korean-voice-provider-readiness.mjs";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 describe("approved Korean voice provider readiness contract", () => {
   test("blocks missing provider without exposing raw values", () => {
@@ -87,7 +91,7 @@ describe("approved Korean voice provider readiness contract", () => {
     const result = evaluateKoreanVoiceProviderReadiness({
       KOREAN_VOICE_PROVIDER: "owner_recorded",
       KOREAN_VOICE_PROVIDER_APPROVED: "true",
-      KOREAN_VOICE_MODEL_PATH: "C:/private/voice/owner.wav",
+      KOREAN_VOICE_SOURCE_PATH: "C:/private/voice/owner.wav",
       KOREAN_VOICE_LANGUAGE: "ko"
     });
 
@@ -98,8 +102,37 @@ describe("approved Korean voice provider readiness contract", () => {
       koreanCapable: true,
       canGenerate: true,
       blocker: null,
-      modelPathPresent: true
+      sourcePathPresent: true
     });
     expect(buildKoreanVoiceProviderSafeSummary(result)).not.toContain("owner.wav");
+  });
+
+  test("reports owner recorded voice files as missing without exposing the raw path", async () => {
+    const result = await validateOwnerRecordedVoiceFile("C:/private/voice/missing.wav");
+
+    expect(result).toMatchObject({
+      filePresent: false,
+      fileValid: false,
+      extensionValid: true,
+      blocker: "OWNER_RECORDED_VOICE_FILE_NOT_FOUND",
+      rawPathMasked: true
+    });
+    expect(JSON.stringify(result)).not.toContain("missing.wav");
+  });
+
+  test("rejects invalid owner recorded voice extensions", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "owner-voice-invalid-"));
+    const badPath = path.join(tempDir, "voice.txt");
+    await writeFile(badPath, "not audio", "utf8");
+
+    const result = await validateOwnerRecordedVoiceFile(badPath);
+
+    expect(result).toMatchObject({
+      filePresent: true,
+      fileValid: false,
+      extensionValid: false,
+      blocker: "OWNER_RECORDED_VOICE_FILE_INVALID",
+      rawPathMasked: true
+    });
   });
 });

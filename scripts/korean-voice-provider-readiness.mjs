@@ -1,9 +1,14 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 const ALLOWED_PROVIDER_TYPES = new Set(["local", "approved_cloud", "owner_recorded"]);
+const OWNER_RECORDED_EXTENSIONS = new Set([".wav", ".mp3", ".m4a"]);
 
 export function evaluateKoreanVoiceProviderReadiness(env = {}) {
   const providerName = readString(env.KOREAN_VOICE_PROVIDER);
   const providerType = inferProviderType(providerName);
   const commandPresent = Boolean(readString(env.KOREAN_VOICE_COMMAND));
+  const sourcePathPresent = Boolean(readString(env.KOREAN_VOICE_SOURCE_PATH));
   const modelPathPresent = Boolean(readString(env.KOREAN_VOICE_MODEL_PATH));
   const outputFormat = readString(env.KOREAN_VOICE_OUTPUT_FORMAT) ?? "wav";
   const language = readString(env.KOREAN_VOICE_LANGUAGE) ?? "";
@@ -12,7 +17,7 @@ export function evaluateKoreanVoiceProviderReadiness(env = {}) {
   const paidOrCloudApproval = readBool(env.KOREAN_VOICE_PAID_OR_CLOUD_APPROVAL);
   const sapiRejected = rejectWindowsSapi && hasSapiMarker(providerName, env.KOREAN_VOICE_COMMAND);
   const koreanCapable = language.toLowerCase().startsWith("ko");
-  const configured = isConfigured({ providerName, providerType, commandPresent, modelPathPresent });
+  const configured = isConfigured({ providerName, providerType, commandPresent, sourcePathPresent, modelPathPresent });
   const paidOrCloudRequiresExplicitApproval = providerType === "approved_cloud" && !paidOrCloudApproval;
   const blocker = resolveBlocker({
     providerName,
@@ -35,6 +40,7 @@ export function evaluateKoreanVoiceProviderReadiness(env = {}) {
     canGenerate: approved,
     blocker,
     commandPresent,
+    sourcePathPresent,
     modelPathPresent,
     outputFormat,
     languagePresent: Boolean(language),
@@ -54,6 +60,7 @@ export function buildKoreanVoiceProviderSafeSummary(readiness) {
     canGenerate: readiness.canGenerate,
     blocker: readiness.blocker,
     commandPresent: readiness.commandPresent,
+    sourcePathPresent: readiness.sourcePathPresent,
     modelPathPresent: readiness.modelPathPresent,
     outputFormat: readiness.outputFormat,
     languagePresent: readiness.languagePresent,
@@ -80,6 +87,45 @@ function resolveBlocker(input) {
   return null;
 }
 
+export async function validateOwnerRecordedVoiceFile(sourcePath) {
+  const extension = path.extname(readString(sourcePath) ?? "").toLowerCase();
+  const extensionValid = OWNER_RECORDED_EXTENSIONS.has(extension);
+  if (!extensionValid) {
+    return {
+      filePresent: await fileExists(sourcePath),
+      fileValid: false,
+      extensionValid: false,
+      durationSeconds: null,
+      hasAudioStream: false,
+      blocker: "OWNER_RECORDED_VOICE_FILE_INVALID",
+      rawPathMasked: true
+    };
+  }
+  try {
+    const stat = await fs.stat(sourcePath);
+    const fileValid = stat.isFile() && stat.size > 44;
+    return {
+      filePresent: stat.isFile(),
+      fileValid,
+      extensionValid,
+      durationSeconds: null,
+      hasAudioStream: fileValid,
+      blocker: fileValid ? null : "OWNER_RECORDED_VOICE_FILE_INVALID",
+      rawPathMasked: true
+    };
+  } catch {
+    return {
+      filePresent: false,
+      fileValid: false,
+      extensionValid,
+      durationSeconds: null,
+      hasAudioStream: false,
+      blocker: "OWNER_RECORDED_VOICE_FILE_NOT_FOUND",
+      rawPathMasked: true
+    };
+  }
+}
+
 function isConfigured(input) {
   if (!input.providerName || !input.providerType || !ALLOWED_PROVIDER_TYPES.has(input.providerType)) {
     return false;
@@ -88,9 +134,18 @@ function isConfigured(input) {
     return input.commandPresent;
   }
   if (input.providerType === "owner_recorded") {
-    return input.modelPathPresent;
+    return input.sourcePathPresent || input.modelPathPresent;
   }
   return true;
+}
+
+async function fileExists(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
 }
 
 function inferProviderType(providerName) {

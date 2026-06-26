@@ -15,6 +15,7 @@
     "asr:v014-review": "node scripts/generate-local-asr-v014-review-packet.mjs",
     "asr:v015-review": "node scripts/generate-local-asr-v015-review-packet.mjs",
     "asr:v016-review": "node scripts/generate-local-asr-v016-review-packet.mjs",
+    "asr:v017-review": "node scripts/generate-local-asr-v017-review-packet.mjs",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
     "lint": "eslint .",
     "test": "vitest run",
