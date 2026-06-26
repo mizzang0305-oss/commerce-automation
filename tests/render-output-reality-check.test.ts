@@ -537,9 +537,15 @@ describe("render output reality check", () => {
       voice_provider_probe: {
         voice_provider_review_executed: true,
         voice_provider_name: "approved-local-korean-voice",
+        voice_provider_type: "local",
+        voice_provider_configured: true,
         voice_provider_approved: true,
+        korean_capable: true,
         windows_sapi_used: false,
-        voiceover_rejected_local_sapi_voice: false
+        voiceover_rejected_local_sapi_voice: false,
+        paid_or_cloud_requires_approval: false,
+        can_generate: true,
+        voice_provider_blocker: null
       }
     });
 
