@@ -59,7 +59,11 @@ export type RenderRealityCheckBlocker =
   | "NO_REAL_PROBLEM_SCENE_SOURCE"
   | "NO_REAL_USE_CASE_SCENE_SOURCE"
   | "NO_BEFORE_AFTER_COMPARISON"
-  | "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED";
+  | "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED"
+  | "VOICE_PROVIDER_NOT_APPROVED"
+  | "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE"
+  | "VOICE_PROVIDER_GENERATION_FAILED"
+  | "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL";
 
 export type ActualFrameProbeInput = {
   actual_frame_sample_count?: unknown;
@@ -179,9 +183,15 @@ export type RealStoryboardProbeInput = {
 export type VoiceProviderProbeInput = {
   voice_provider_review_executed?: unknown;
   voice_provider_name?: unknown;
+  voice_provider_type?: unknown;
+  voice_provider_configured?: unknown;
   voice_provider_approved?: unknown;
+  korean_capable?: unknown;
   windows_sapi_used?: unknown;
   voiceover_rejected_local_sapi_voice?: unknown;
+  paid_or_cloud_requires_approval?: unknown;
+  can_generate?: unknown;
+  voice_provider_blocker?: unknown;
 };
 
 export type SceneLayoutProbeInput = {
@@ -502,10 +512,15 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     realStoryboardProbe.text_color_only_variation === true;
   const voiceProviderReviewExecuted = voiceProviderProbe.voice_provider_review_executed === true;
   const voiceProviderName = safeTrim(voiceProviderProbe.voice_provider_name);
+  const voiceProviderConfigured = voiceProviderProbe.voice_provider_configured === true;
   const voiceProviderApproved = voiceProviderProbe.voice_provider_approved === true;
+  const koreanVoiceCapable = voiceProviderProbe.korean_capable === true;
   const windowsSapiUsed = voiceProviderProbe.windows_sapi_used === true;
   const voiceoverRejectedLocalSapiVoice =
     voiceProviderProbe.voiceover_rejected_local_sapi_voice === true;
+  const paidOrCloudRequiresApproval = voiceProviderProbe.paid_or_cloud_requires_approval === true;
+  const voiceProviderCanGenerate = voiceProviderProbe.can_generate === true;
+  const voiceProviderBlocker = normalizeVoiceProviderBlocker(voiceProviderProbe.voice_provider_blocker);
   const blockedReasons: RenderRealityCheckBlocker[] = [];
 
   if (!renderedFrameContactSheetGenerated) {
@@ -753,11 +768,24 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   }
 
   if (voiceProviderReviewExecuted) {
-    if (!voiceProviderName || !voiceProviderApproved) {
-      blockedReasons.push("BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED");
-    }
     if (windowsSapiUsed || voiceoverRejectedLocalSapiVoice) {
       blockedReasons.push("VOICEOVER_REJECTED_LOCAL_SAPI_VOICE");
+    }
+    if (voiceProviderBlocker) {
+      blockedReasons.push(voiceProviderBlocker);
+    } else {
+      if (!voiceProviderName || !voiceProviderConfigured || !voiceProviderCanGenerate) {
+        blockedReasons.push("BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED");
+      }
+      if (!voiceProviderApproved) {
+        blockedReasons.push("VOICE_PROVIDER_NOT_APPROVED");
+      }
+      if (!koreanVoiceCapable) {
+        blockedReasons.push("KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE");
+      }
+      if (paidOrCloudRequiresApproval) {
+        blockedReasons.push("VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL");
+      }
     }
   }
 
@@ -880,9 +908,14 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const voiceProviderGatePass =
     !voiceProviderReviewExecuted ||
     (Boolean(voiceProviderName) &&
+      voiceProviderConfigured &&
       voiceProviderApproved &&
+      koreanVoiceCapable &&
+      voiceProviderCanGenerate &&
+      !paidOrCloudRequiresApproval &&
       !windowsSapiUsed &&
-      !voiceoverRejectedLocalSapiVoice);
+      !voiceoverRejectedLocalSapiVoice &&
+      !voiceProviderBlocker);
 
   return {
     passed: uniqueBlockedReasons.length === 0,
@@ -1048,6 +1081,23 @@ function safeTrim(value: unknown) {
 
 function isScriptAlignmentAsrProvider(value: string | null) {
   return Boolean(value && SCRIPT_ALIGNMENT_ASR_PROVIDERS.has(value));
+}
+
+function normalizeVoiceProviderBlocker(value: unknown): RenderRealityCheckBlocker | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const allowed: RenderRealityCheckBlocker[] = [
+    "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED",
+    "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE",
+    "VOICE_PROVIDER_NOT_APPROVED",
+    "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE",
+    "VOICE_PROVIDER_GENERATION_FAILED",
+    "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
+  ];
+  return allowed.includes(value as RenderRealityCheckBlocker)
+    ? value as RenderRealityCheckBlocker
+    : null;
 }
 
 function hasMojibake(value: string | null) {
