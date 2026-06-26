@@ -64,9 +64,9 @@ describe("approved Korean voice provider readiness contract", () => {
     });
   });
 
-  test("accepts an approved local Korean TTS command contract without exposing paths", () => {
+  test("accepts an approved local_command Korean TTS contract without exposing paths", () => {
     const result = evaluateKoreanVoiceProviderReadiness({
-      KOREAN_VOICE_PROVIDER: "local_approved_korean_tts",
+      KOREAN_VOICE_PROVIDER: "local_command",
       KOREAN_VOICE_PROVIDER_APPROVED: "true",
       KOREAN_VOICE_COMMAND: "C:/private/tools/tts.exe --voice ko",
       KOREAN_VOICE_LANGUAGE: "ko",
@@ -74,7 +74,7 @@ describe("approved Korean voice provider readiness contract", () => {
     });
 
     expect(result).toMatchObject({
-      providerType: "local",
+      providerType: "local_command",
       configured: true,
       approved: true,
       koreanCapable: true,

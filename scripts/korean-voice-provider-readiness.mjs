@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const ALLOWED_PROVIDER_TYPES = new Set(["local", "approved_cloud", "owner_recorded"]);
+const ALLOWED_PROVIDER_TYPES = new Set(["local_command", "approved_cloud", "owner_recorded"]);
 const OWNER_RECORDED_EXTENSIONS = new Set([".wav", ".mp3", ".m4a"]);
 
 export function evaluateKoreanVoiceProviderReadiness(env = {}) {
@@ -130,7 +130,7 @@ function isConfigured(input) {
   if (!input.providerName || !input.providerType || !ALLOWED_PROVIDER_TYPES.has(input.providerType)) {
     return false;
   }
-  if (input.providerType === "local") {
+  if (input.providerType === "local_command") {
     return input.commandPresent;
   }
   if (input.providerType === "owner_recorded") {
@@ -159,7 +159,7 @@ function inferProviderType(providerName) {
   if (value.includes("cloud") || value.includes("api") || value.includes("eleven") || value.includes("openai")) {
     return "approved_cloud";
   }
-  return "local";
+  return "local_command";
 }
 
 function hasSapiMarker(providerName, command) {
