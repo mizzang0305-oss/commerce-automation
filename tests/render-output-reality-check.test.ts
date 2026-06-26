@@ -453,4 +453,66 @@ describe("render output reality check", () => {
       "HOOK_COPY_WEAK"
     ]));
   });
+
+  test("voice review gate blocks locally rejected SAPI voices even when ASR is acceptable", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      korean_asr_probe: {
+        ...PASSING_REALITY_CHECK.korean_asr_probe,
+        asr_provider: "faster-whisper",
+        asr_probe_executed: true,
+        real_asr_probe_executed: true,
+        korean_transcript_present: true,
+        raw_transcript_similarity_score: 0.9,
+        transcript_similarity_score: 0.91,
+        core_anchor_recognition_pass: true,
+        recognized_core_anchors: ["빨래", "건조대", "공간"],
+        recognized_context_anchor_count: 4,
+        recognized_context_anchors: ["장마철", "냄새", "습기", "확인"],
+        recognized_keyword_anchor_count: 7,
+        speech_rate_wpm: 148,
+        max_silence_between_segments_ms: 120,
+        hard_cut_count: 0,
+        voiceover_naturalness_score: 90
+      },
+      voiceover_review_probe: {
+        voiceover_review_executed: true,
+        selected_voice_name: "Microsoft Heami Desktop",
+        selected_voice_gender: "Female",
+        selected_voice_culture: "ko-KR",
+        owner_rejected_voice_gender: "Female",
+        voice_tone_owner_acceptable: false,
+        speech_pace_owner_acceptable: false
+      }
+    });
+
+    expect(result.voiceover_review_pass).toBe(false);
+    expect(result.passed).toBe(false);
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE",
+      "VOICEOVER_TONE_REJECTED_BY_OWNER",
+      "VOICEOVER_PACE_REJECTED_BY_OWNER"
+    ]));
+  });
+
+  test("visual diversity gate blocks repeated single product photo with color-only text changes", () => {
+    const result = evaluateRenderRealityCheck({
+      ...PASSING_REALITY_CHECK,
+      visual_diversity_probe: {
+        visual_diversity_probe_executed: true,
+        repeated_single_product_photo: true,
+        text_color_only_variation: true,
+        unique_scene_compositions: 2,
+        product_photo_reuse_ratio: 1
+      }
+    });
+
+    expect(result.visual_diversity_pass).toBe(false);
+    expect(result.passed).toBe(false);
+    expect(result.blocked_reasons).toEqual(expect.arrayContaining([
+      "REPEATED_SINGLE_PRODUCT_PHOTO",
+      "TEXT_COLOR_ONLY_VARIATION",
+      "VISUAL_STORYBOARD_TOO_STATIC"
+    ]));
+  });
 });

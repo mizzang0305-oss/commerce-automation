@@ -48,7 +48,13 @@ export type RenderRealityCheckBlocker =
   | "PRIMARY_TEXT_TOO_SMALL"
   | "PRODUCT_OR_PROBLEM_VISUAL_MISSING_FIRST_SECOND"
   | "PPT_CARD_FEELING"
-  | "HOOK_COPY_WEAK";
+  | "HOOK_COPY_WEAK"
+  | "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE"
+  | "VOICEOVER_TONE_REJECTED_BY_OWNER"
+  | "VOICEOVER_PACE_REJECTED_BY_OWNER"
+  | "REPEATED_SINGLE_PRODUCT_PHOTO"
+  | "TEXT_COLOR_ONLY_VARIATION"
+  | "VISUAL_STORYBOARD_TOO_STATIC";
 
 export type ActualFrameProbeInput = {
   actual_frame_sample_count?: unknown;
@@ -131,6 +137,24 @@ export type HumanVisualGateProbeInput = {
   ppt_card_feeling?: unknown;
 };
 
+export type VoiceoverReviewProbeInput = {
+  voiceover_review_executed?: unknown;
+  selected_voice_name?: unknown;
+  selected_voice_gender?: unknown;
+  selected_voice_culture?: unknown;
+  owner_rejected_voice_gender?: unknown;
+  voice_tone_owner_acceptable?: unknown;
+  speech_pace_owner_acceptable?: unknown;
+};
+
+export type VisualDiversityProbeInput = {
+  visual_diversity_probe_executed?: unknown;
+  repeated_single_product_photo?: unknown;
+  text_color_only_variation?: unknown;
+  unique_scene_compositions?: unknown;
+  product_photo_reuse_ratio?: unknown;
+};
+
 export type SceneLayoutProbeInput = {
   static_product_card_feeling?: unknown;
   product_dominates_too_many_scenes?: unknown;
@@ -153,6 +177,8 @@ export type RenderRealityCheckInput = {
   korean_asr_probe?: unknown;
   scene_layout_probe?: unknown;
   human_visual_gate_probe?: unknown;
+  voiceover_review_probe?: unknown;
+  visual_diversity_probe?: unknown;
 };
 
 export type RenderRealityCheckResult = {
@@ -216,6 +242,20 @@ export type RenderRealityCheckResult = {
   cta_not_present_too_early: boolean;
   ppt_card_feeling: boolean;
   human_visual_gate_pass: boolean;
+  voiceover_review_executed: boolean;
+  selected_voice_name: string | null;
+  selected_voice_gender: string | null;
+  selected_voice_culture: string | null;
+  owner_rejected_voice_gender: string | null;
+  voice_tone_owner_acceptable: boolean;
+  speech_pace_owner_acceptable: boolean;
+  voiceover_review_pass: boolean;
+  visual_diversity_probe_executed: boolean;
+  repeated_single_product_photo: boolean;
+  text_color_only_variation: boolean;
+  unique_scene_compositions: number;
+  product_photo_reuse_ratio: number | null;
+  visual_diversity_pass: boolean;
 };
 
 export type RenderRealityReviewArtifactPaths = {
@@ -263,6 +303,8 @@ const MIN_DISTINCT_LAYOUT_TEMPLATE_COUNT = 8;
 const MAX_CAPTION_CHARS_PER_LINE = 14;
 const MAX_EMPTY_CANVAS_RATIO = 0.35;
 const MIN_PRIMARY_TEXT_AREA_RATIO = 0.12;
+const MIN_VISUAL_DIVERSITY_SCENE_COMPOSITIONS = 5;
+const MAX_PRODUCT_PHOTO_REUSE_RATIO = 0.85;
 const MOJIBAKE_PATTERNS = [/\?{3,}/, /\u5360/, /\uCC59|\uCC57|\uCC58|\uCC60/];
 const SCRIPT_ALIGNMENT_ASR_PROVIDERS = new Set([
   "local_script_alignment_probe",
@@ -284,6 +326,12 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const sceneLayoutProbe = isRecord(input.scene_layout_probe) ? input.scene_layout_probe : {};
   const humanVisualGateProbe = isRecord(input.human_visual_gate_probe)
     ? input.human_visual_gate_probe
+    : {};
+  const voiceoverReviewProbe = isRecord(input.voiceover_review_probe)
+    ? input.voiceover_review_probe
+    : {};
+  const visualDiversityProbe = isRecord(input.visual_diversity_probe)
+    ? input.visual_diversity_probe
     : {};
   const renderedFrameContactSheetGenerated = input.rendered_frame_contact_sheet_generated === true;
   const actualFrameSampleCount = normalizeNonNegativeNumber(frameProbe.actual_frame_sample_count) ?? 0;
@@ -359,6 +407,20 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
   const humanProblemBeforeProduct = humanVisualGateProbe.problem_before_product_visible === true;
   const ctaNotPresentTooEarly = humanVisualGateProbe.cta_not_present_too_early === true;
   const pptCardFeeling = humanVisualGateProbe.ppt_card_feeling === true;
+  const voiceoverReviewExecuted = voiceoverReviewProbe.voiceover_review_executed === true;
+  const selectedVoiceName = safeTrim(voiceoverReviewProbe.selected_voice_name);
+  const selectedVoiceGender = safeTrim(voiceoverReviewProbe.selected_voice_gender);
+  const selectedVoiceCulture = safeTrim(voiceoverReviewProbe.selected_voice_culture);
+  const ownerRejectedVoiceGender = safeTrim(voiceoverReviewProbe.owner_rejected_voice_gender);
+  const voiceToneOwnerAcceptable = voiceoverReviewProbe.voice_tone_owner_acceptable === true;
+  const speechPaceOwnerAcceptable = voiceoverReviewProbe.speech_pace_owner_acceptable === true;
+  const visualDiversityProbeExecuted =
+    visualDiversityProbe.visual_diversity_probe_executed === true;
+  const repeatedSingleProductPhoto = visualDiversityProbe.repeated_single_product_photo === true;
+  const textColorOnlyVariation = visualDiversityProbe.text_color_only_variation === true;
+  const uniqueSceneCompositions =
+    normalizeNonNegativeNumber(visualDiversityProbe.unique_scene_compositions) ?? 0;
+  const productPhotoReuseRatio = normalizeRatio(visualDiversityProbe.product_photo_reuse_ratio);
   const blockedReasons: RenderRealityCheckBlocker[] = [];
 
   if (!renderedFrameContactSheetGenerated) {
@@ -552,6 +614,33 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     }
   }
 
+  if (voiceoverReviewExecuted) {
+    if (selectedVoiceGender &&
+      ownerRejectedVoiceGender &&
+      selectedVoiceGender.toLowerCase() === ownerRejectedVoiceGender.toLowerCase()) {
+      blockedReasons.push("VOICEOVER_REJECTED_LOCAL_SAPI_VOICE");
+    }
+    if (!voiceToneOwnerAcceptable) {
+      blockedReasons.push("VOICEOVER_TONE_REJECTED_BY_OWNER");
+    }
+    if (!speechPaceOwnerAcceptable) {
+      blockedReasons.push("VOICEOVER_PACE_REJECTED_BY_OWNER");
+    }
+  }
+
+  if (visualDiversityProbeExecuted) {
+    if (repeatedSingleProductPhoto ||
+      (productPhotoReuseRatio !== null && productPhotoReuseRatio > MAX_PRODUCT_PHOTO_REUSE_RATIO)) {
+      blockedReasons.push("REPEATED_SINGLE_PRODUCT_PHOTO");
+    }
+    if (textColorOnlyVariation) {
+      blockedReasons.push("TEXT_COLOR_ONLY_VARIATION");
+    }
+    if (uniqueSceneCompositions < MIN_VISUAL_DIVERSITY_SCENE_COMPOSITIONS) {
+      blockedReasons.push("VISUAL_STORYBOARD_TOO_STATIC");
+    }
+  }
+
   if (staticProductCardFeeling) {
     blockedReasons.push("STATIC_PRODUCT_CARD_FEELING");
   }
@@ -641,6 +730,19 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
       humanProblemBeforeProduct &&
       ctaNotPresentTooEarly &&
       !pptCardFeeling);
+  const voiceoverReviewPass =
+    !voiceoverReviewExecuted ||
+    (voiceToneOwnerAcceptable &&
+      speechPaceOwnerAcceptable &&
+      (!selectedVoiceGender ||
+        !ownerRejectedVoiceGender ||
+        selectedVoiceGender.toLowerCase() !== ownerRejectedVoiceGender.toLowerCase()));
+  const visualDiversityPass =
+    !visualDiversityProbeExecuted ||
+    (!repeatedSingleProductPhoto &&
+      !textColorOnlyVariation &&
+      uniqueSceneCompositions >= MIN_VISUAL_DIVERSITY_SCENE_COMPOSITIONS &&
+      (productPhotoReuseRatio === null || productPhotoReuseRatio <= MAX_PRODUCT_PHOTO_REUSE_RATIO));
 
   return {
     passed: uniqueBlockedReasons.length === 0,
@@ -702,7 +804,21 @@ export function evaluateRenderRealityCheck(input: RenderRealityCheckInput): Rend
     hook_text_contains_loss_trigger: hookTextContainsLossTrigger,
     cta_not_present_too_early: ctaNotPresentTooEarly,
     ppt_card_feeling: pptCardFeeling,
-    human_visual_gate_pass: humanVisualGatePass
+    human_visual_gate_pass: humanVisualGatePass,
+    voiceover_review_executed: voiceoverReviewExecuted,
+    selected_voice_name: selectedVoiceName,
+    selected_voice_gender: selectedVoiceGender,
+    selected_voice_culture: selectedVoiceCulture,
+    owner_rejected_voice_gender: ownerRejectedVoiceGender,
+    voice_tone_owner_acceptable: voiceToneOwnerAcceptable,
+    speech_pace_owner_acceptable: speechPaceOwnerAcceptable,
+    voiceover_review_pass: voiceoverReviewPass,
+    visual_diversity_probe_executed: visualDiversityProbeExecuted,
+    repeated_single_product_photo: repeatedSingleProductPhoto,
+    text_color_only_variation: textColorOnlyVariation,
+    unique_scene_compositions: uniqueSceneCompositions,
+    product_photo_reuse_ratio: productPhotoReuseRatio,
+    visual_diversity_pass: visualDiversityPass
   };
 }
 
