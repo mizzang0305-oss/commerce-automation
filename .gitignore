@@ -18,6 +18,7 @@ python-worker/temp/**
 python-worker/logs/**
 !python-worker/logs/.gitkeep
 commerce-assets/generated-motion/
+commerce-assets/autopilot/
 commerce-assets/review/
 *.log
 npm-debug.log*

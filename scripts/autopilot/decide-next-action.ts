@@ -1,0 +1,213 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  type AutopilotPhase,
+  type AutopilotState,
+  type HumanReviewDecision,
+  type OwnerUploadApproval,
+  type Visibility,
+  createDefaultAutopilotState,
+  evaluateAutopilotSafety,
+  evaluatePrivateUploadGate,
+  shouldBuildV020FromFailReasons
+} from "./autopilot-safety-gates";
+import {
+  getGitStatusShort,
+  packageHasScript,
+  readAutopilotState,
+  readHumanReviewDecision,
+  readOwnerUploadApproval,
+  readPackageJson,
+  reviewConsoleExists
+} from "./read-autopilot-state";
+
+export type AutopilotDecision = {
+  phase: AutopilotPhase;
+  nextAction: string | null;
+  shouldStop: boolean;
+  privateUploadAttempted: boolean;
+  videosInsertAllowed: boolean;
+  blockedReasons: string[];
+  safetyStopReason?: string | null;
+  reviewCommand?: string | null;
+  reviewCommandAvailable?: boolean;
+};
+
+export type DecideNextActionInput = {
+  cwd?: string;
+  state?: AutopilotState;
+  gitStatusShort?: string;
+  reviewDecision?: HumanReviewDecision | null;
+  uploadApproval?: OwnerUploadApproval | null;
+  packageJson?: Record<string, unknown>;
+  requestedVisibility?: Visibility;
+};
+
+export async function decideNextAutopilotAction(input: DecideNextActionInput = {}): Promise<AutopilotDecision> {
+  const cwd = input.cwd ?? process.cwd();
+  const state = input.state ?? await readAutopilotState(cwd);
+  const gitStatusShort = input.gitStatusShort ?? await getGitStatusShort(cwd);
+  const requestedVisibility = input.requestedVisibility ?? "private";
+  const safety = evaluateAutopilotSafety({ gitStatusShort, requestedVisibility });
+
+  if (!safety.safe) {
+    return {
+      phase: "BLOCKED_SAFETY",
+      nextAction: "FIX_STAGED_PROTECTED_FILES",
+      shouldStop: true,
+      privateUploadAttempted: false,
+      videosInsertAllowed: false,
+      blockedReasons: safety.blockedReasons,
+      safetyStopReason: safety.blockedReasons[0] ?? "BLOCKED_SAFETY"
+    };
+  }
+
+  const reviewDecision = input.reviewDecision ?? await readHumanReviewDecision({
+    cwd,
+    candidateId: state.current_candidate_id,
+    version: state.current_review_version
+  });
+  const hasReviewConsole = await reviewConsoleExists({
+    cwd,
+    candidateId: state.current_candidate_id,
+    version: state.current_review_version
+  });
+  const status = normalizeReviewStatus(reviewDecision?.human_review_status ?? state.latest_human_review_status);
+
+  if (status === "PENDING_HUMAN_REVIEW" || (hasReviewConsole && status !== "PASS_LOCAL_HUMAN_REVIEW" && status !== "FAIL_LOCAL_HUMAN_REVIEW")) {
+    return {
+      phase: "WAITING_HUMAN_REVIEW",
+      nextAction: "WAIT_FOR_OWNER_REVIEW",
+      shouldStop: true,
+      privateUploadAttempted: false,
+      videosInsertAllowed: false,
+      blockedReasons: []
+    };
+  }
+
+  const failReasons = reviewDecision?.fail_reasons?.length ? reviewDecision.fail_reasons : state.latest_fail_reasons;
+  if (status === "FAIL_LOCAL_HUMAN_REVIEW") {
+    const nextAction = state.current_review_version === "v019"
+      ? resolveV019FailureNextAction(failReasons)
+      : "BUILD_NEXT_REVIEW_PACKET";
+    const packageJson = input.packageJson ?? await readPackageJson(cwd);
+    const reviewCommand = getReviewCommandForAction(nextAction);
+    return {
+      phase: "HUMAN_REVIEW_FAILED",
+      nextAction,
+      shouldStop: false,
+      privateUploadAttempted: false,
+      videosInsertAllowed: false,
+      blockedReasons: [],
+      reviewCommand,
+      reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
+    };
+  }
+
+  if (status === "PASS_LOCAL_HUMAN_REVIEW") {
+    const uploadApproval = input.uploadApproval ?? await readOwnerUploadApproval(cwd);
+    const uploadGate = evaluatePrivateUploadGate({
+      state,
+      reviewDecision,
+      uploadApproval,
+      requestedVisibility
+    });
+    if (!uploadGate.allowed) {
+      return {
+        phase: "READY_FOR_PRIVATE_UPLOAD",
+        nextAction: "WAIT_FOR_FRESH_PRIVATE_UPLOAD_APPROVAL",
+        shouldStop: true,
+        privateUploadAttempted: false,
+        videosInsertAllowed: false,
+        blockedReasons: uploadGate.blockedReasons,
+        safetyStopReason: uploadGate.blockedReasons[0] ?? "FRESH_UPLOAD_APPROVAL_REQUIRED"
+      };
+    }
+    return {
+      phase: "READY_FOR_PRIVATE_UPLOAD",
+      nextAction: "PRIVATE_UPLOAD_PREFLIGHT_READY",
+      shouldStop: false,
+      privateUploadAttempted: false,
+      videosInsertAllowed: true,
+      blockedReasons: []
+    };
+  }
+
+  if (state.next_recommended_action) {
+    return {
+      phase: state.current_phase,
+      nextAction: state.next_recommended_action,
+      shouldStop: false,
+      privateUploadAttempted: false,
+      videosInsertAllowed: false,
+      blockedReasons: [],
+      reviewCommand: getReviewCommandForAction(state.next_recommended_action)
+    };
+  }
+
+  return {
+    phase: "STOP",
+    nextAction: "NO_SAFE_AUTOPILOT_ACTION",
+    shouldStop: true,
+    privateUploadAttempted: false,
+    videosInsertAllowed: false,
+    blockedReasons: ["NO_SAFE_AUTOPILOT_ACTION"],
+    safetyStopReason: "NO_SAFE_AUTOPILOT_ACTION"
+  };
+}
+
+export function resolveV019FailureNextAction(failReasons: string[]): string {
+  return shouldBuildV020FromFailReasons(failReasons)
+    ? "BUILD_V020_REAL_MOTION_REVIEW"
+    : "REVIEW_FAIL_REASONS_MANUALLY";
+}
+
+export function getReviewCommandForAction(action: string | null): string | null {
+  if (action === "BUILD_V020_REAL_MOTION_REVIEW") {
+    return "review:v020";
+  }
+  return null;
+}
+
+export function applyDecisionToState(input: {
+  state?: AutopilotState;
+  decision: AutopilotDecision;
+  now?: Date;
+}): AutopilotState {
+  const base = createDefaultAutopilotState(input.state ?? {});
+  return {
+    ...base,
+    last_run_at: (input.now ?? new Date()).toISOString(),
+    current_phase: input.decision.phase,
+    next_recommended_action: input.decision.nextAction,
+    safety_stop_reason: input.decision.safetyStopReason ?? null,
+    fresh_upload_approval_present: input.decision.videosInsertAllowed
+  };
+}
+
+function normalizeReviewStatus(status: unknown): AutopilotState["latest_human_review_status"] {
+  if (
+    status === "PENDING_HUMAN_REVIEW" ||
+    status === "PASS_LOCAL_HUMAN_REVIEW" ||
+    status === "FAIL_LOCAL_HUMAN_REVIEW" ||
+    status === "VOICE_PROVIDER_BLOCKED"
+  ) {
+    return status;
+  }
+  return "UNKNOWN";
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  decideNextAutopilotAction()
+    .then((decision) => {
+      console.log(JSON.stringify(decision, null, 2));
+      if (decision.phase === "BLOCKED_SAFETY") {
+        process.exitCode = 2;
+      }
+    })
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    });
+}
