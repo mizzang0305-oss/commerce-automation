@@ -23,6 +23,8 @@
     "review:v021": "node scripts/uploads/generate-v021-review-packet.mjs",
     "assets:generate-v022-real-scene": "tsx scripts/uploads/generate-v022-auto-real-scene-assets.ts",
     "review:v022": "tsx scripts/uploads/generate-v022-auto-real-scene-review-packet.ts",
+    "assets:fetch-v023-free-stock": "tsx scripts/uploads/fetch-v023-free-stock-scene-assets.ts",
+    "review:v023": "tsx scripts/uploads/generate-v023-free-stock-scene-review-packet.ts",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
