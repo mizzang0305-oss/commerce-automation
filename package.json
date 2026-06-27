@@ -20,6 +20,7 @@
     "review:v018": "node scripts/uploads/generate-v018-review-packet.mjs",
     "review:v019": "node scripts/uploads/generate-v019-review-packet.mjs",
     "review:v020": "node scripts/uploads/generate-v020-review-packet.mjs",
+    "review:v021": "node scripts/uploads/generate-v021-review-packet.mjs",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
