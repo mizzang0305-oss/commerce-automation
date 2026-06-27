@@ -142,6 +142,26 @@ describe("v019 MeloTTS local_command review packet", () => {
     expect(probe.transcript_similarity_score).toBeGreaterThanOrEqual(0.45);
   });
 
+  test("writes a voiceover script with standalone Korean core anchors for ASR", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "commerce-v019-core-anchor-script-"));
+
+    const result = await generateV019ReviewPacket({
+      cwd,
+      env: {
+        KOREAN_VOICE_PROVIDER: "local_command",
+        KOREAN_VOICE_PROVIDER_APPROVED: "true",
+        KOREAN_VOICE_LANGUAGE: "ko",
+        KOREAN_VOICE_REJECT_WINDOWS_SAPI: "true"
+      }
+    });
+
+    const script = await readFile(path.join(path.dirname(result.human_review_decision_path), "voiceover-script.txt"), "utf8");
+    expect(script).toContain("빨래");
+    expect(script).toMatch(/(^|[^\p{L}\p{N}])건조대([^\p{L}\p{N}]|$)/u);
+    expect(script).toContain("공간");
+    expect(script).toContain("구성과 가격");
+  });
+
   test("does not leak local command, model, or raw paths into summary artifacts", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "commerce-v019-safe-summary-"));
     const outsideCommand = path.join(os.tmpdir(), "private-melotts-wrapper.cmd");
