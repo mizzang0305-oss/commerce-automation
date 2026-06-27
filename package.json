@@ -19,6 +19,7 @@
     "voice:provider-check": "node scripts/uploads/check-korean-voice-provider.mjs",
     "review:v018": "node scripts/uploads/generate-v018-review-packet.mjs",
     "review:v019": "node scripts/uploads/generate-v019-review-packet.mjs",
+    "review:v020": "node scripts/uploads/generate-v020-review-packet.mjs",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
     "lint": "eslint .",
     "test": "vitest run",
