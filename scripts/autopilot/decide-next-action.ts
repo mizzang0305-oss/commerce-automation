@@ -27,6 +27,11 @@ import {
   V022_AUTO_PROVIDER_BLOCKER,
   isAutoRealSceneAssetProviderConfigured
 } from "../uploads/generate-v022-auto-real-scene-assets";
+import {
+  V023_BLOCKED_FREE_STOCK_PROVIDER_ACTION,
+  V023_FREE_STOCK_PROVIDER_NOT_CONFIGURED,
+  isFreeStockSceneProviderConfigured
+} from "../uploads/fetch-v023-free-stock-scene-assets";
 
 export type AutopilotDecision = {
   phase: AutopilotPhase;
@@ -93,6 +98,33 @@ export async function decideNextAutopilotAction(input: DecideNextActionInput = {
   }
 
   const failReasons = reviewDecision?.fail_reasons?.length ? reviewDecision.fail_reasons : state.latest_fail_reasons;
+  if (isV022AutoRealSceneProviderBlocked(state, reviewDecision)) {
+    const packageJson = input.packageJson ?? await readPackageJson(cwd);
+    const freeStockProviderReady = await isFreeStockSceneProviderConfigured(cwd);
+    if (!freeStockProviderReady) {
+      return {
+        phase: "BLOCKED_PROVIDER",
+        nextAction: V023_BLOCKED_FREE_STOCK_PROVIDER_ACTION,
+        shouldStop: true,
+        privateUploadAttempted: false,
+        videosInsertAllowed: false,
+        blockedReasons: [V023_FREE_STOCK_PROVIDER_NOT_CONFIGURED],
+        safetyStopReason: V023_FREE_STOCK_PROVIDER_NOT_CONFIGURED
+      };
+    }
+    const reviewCommand = getReviewCommandForAction("FETCH_FREE_STOCK_SCENE_ASSETS");
+    return {
+      phase: "GENERATE_REVIEW_PACKET",
+      nextAction: "FETCH_FREE_STOCK_SCENE_ASSETS",
+      shouldStop: false,
+      privateUploadAttempted: false,
+      videosInsertAllowed: false,
+      blockedReasons: [],
+      reviewCommand,
+      reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
+    };
+  }
+
   if (status === "FAIL_LOCAL_HUMAN_REVIEW") {
     const packageJson = input.packageJson ?? await readPackageJson(cwd);
     if (state.current_review_version === "v020" && shouldCheckRealSceneAssetProviderFromFailReasons(failReasons)) {
@@ -213,6 +245,12 @@ export function getReviewCommandForAction(action: string | null): string | null 
   if (action === "BUILD_V022_AUTO_REAL_SCENE_REVIEW") {
     return "review:v022";
   }
+  if (action === "FETCH_FREE_STOCK_SCENE_ASSETS") {
+    return "assets:fetch-v023-free-stock";
+  }
+  if (action === "BUILD_V023_FREE_STOCK_SCENE_REVIEW") {
+    return "review:v023";
+  }
   return null;
 }
 
@@ -249,6 +287,18 @@ async function autoRealSceneAssetProviderReady(cwd: string): Promise<boolean> {
     return true;
   }
   return realSceneAssetProviderReady(cwd);
+}
+
+function isV022AutoRealSceneProviderBlocked(
+  state: AutopilotState,
+  reviewDecision: HumanReviewDecision | null
+): boolean {
+  return state.current_review_version === "v022" && (
+    String(reviewDecision?.human_review_status ?? "") === V022_AUTO_PROVIDER_BLOCKER ||
+    String(state.latest_human_review_status ?? "") === V022_AUTO_PROVIDER_BLOCKER ||
+    state.next_recommended_action === V022_AUTO_PROVIDER_BLOCKER ||
+    state.safety_stop_reason === V022_AUTO_PROVIDER_BLOCKER
+  );
 }
 
 async function realSceneAssetProviderReady(cwd: string): Promise<boolean> {
