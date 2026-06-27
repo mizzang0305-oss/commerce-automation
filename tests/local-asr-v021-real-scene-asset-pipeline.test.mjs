@@ -280,14 +280,14 @@ describe("v021 real scene asset pipeline", () => {
   });
 });
 
-describe("autopilot v020 failure to v021 real scene asset provider", () => {
-  test("maps v020 geometric placeholder failures to real scene asset provider check", () => {
-    expect(resolveV020FailureNextAction(["GEOMETRIC_PLACEHOLDER_VIDEO"])).toBe("CHECK_REAL_SCENE_ASSET_PROVIDER");
-    expect(resolveV020FailureNextAction(["FAKE_REAL_MOTION_FROM_PRIMITIVE_SHAPES"])).toBe("CHECK_REAL_SCENE_ASSET_PROVIDER");
-    expect(resolveV020FailureNextAction(["NO_REAL_SCENE_ASSETS"])).toBe("CHECK_REAL_SCENE_ASSET_PROVIDER");
+describe("autopilot v020 failure to v022 auto real scene asset provider", () => {
+  test("maps v020 geometric placeholder failures to automatic real scene asset generation", () => {
+    expect(resolveV020FailureNextAction(["GEOMETRIC_PLACEHOLDER_VIDEO"])).toBe("GENERATE_AUTO_REAL_SCENE_ASSETS");
+    expect(resolveV020FailureNextAction(["FAKE_REAL_MOTION_FROM_PRIMITIVE_SHAPES"])).toBe("GENERATE_AUTO_REAL_SCENE_ASSETS");
+    expect(resolveV020FailureNextAction(["NO_REAL_SCENE_ASSETS"])).toBe("GENERATE_AUTO_REAL_SCENE_ASSETS");
   });
 
-  test("blocks autopilot before v021 generation when real scene assets are not configured", async () => {
+  test("blocks autopilot before v022 generation when an automatic real scene provider is not configured", async () => {
     const cwd = await makeCwd("commerce-v021-autopilot-blocked-");
 
     const decision = await decideNextAutopilotAction({
@@ -313,15 +313,15 @@ describe("autopilot v020 failure to v021 real scene asset provider", () => {
 
     expect(decision).toMatchObject({
       phase: "BLOCKED_PROVIDER",
-      nextAction: "CHECK_REAL_SCENE_ASSET_PROVIDER",
+      nextAction: "BLOCKED_AUTO_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED",
       shouldStop: true,
       privateUploadAttempted: false,
       videosInsertAllowed: false,
-      safetyStopReason: "BLOCKED_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"
+      safetyStopReason: "BLOCKED_AUTO_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"
     });
   });
 
-  test("allows v021 review packet generation when the local real scene library is complete", async () => {
+  test("allows automatic v022 scene asset generation when the local real scene library is complete", async () => {
     const cwd = await makeCwd("commerce-v021-autopilot-ready-");
     await writeAllRequiredAssets(cwd);
 
@@ -341,18 +341,19 @@ describe("autopilot v020 failure to v021 real scene asset provider", () => {
       },
       packageJson: {
         scripts: {
-          "review:v021": "node scripts/uploads/generate-v021-review-packet.mjs"
+          "assets:generate-v022-real-scene": "tsx scripts/uploads/generate-v022-auto-real-scene-assets.ts",
+          "review:v022": "tsx scripts/uploads/generate-v022-auto-real-scene-review-packet.ts"
         }
       }
     });
 
     expect(decision).toMatchObject({
       phase: "GENERATE_REVIEW_PACKET",
-      nextAction: "BUILD_V021_REAL_SCENE_REVIEW",
+      nextAction: "GENERATE_AUTO_REAL_SCENE_ASSETS",
       shouldStop: false,
       privateUploadAttempted: false,
       videosInsertAllowed: false,
-      reviewCommand: "review:v021",
+      reviewCommand: "assets:generate-v022-real-scene",
       reviewCommandAvailable: true
     });
   });
