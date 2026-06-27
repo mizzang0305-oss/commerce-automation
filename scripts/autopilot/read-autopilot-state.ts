@@ -167,7 +167,7 @@ function nextActionForFailedReview(version: string, failReasons: string[]): stri
   if (version === "v020" && failReasons.some((reason) =>
     (V020_REAL_SCENE_FAIL_REASONS as readonly string[]).includes(reason)
   )) {
-    return "CHECK_REAL_SCENE_ASSET_PROVIDER";
+    return "GENERATE_AUTO_REAL_SCENE_ASSETS";
   }
   return "BUILD_NEXT_REVIEW_PACKET";
 }

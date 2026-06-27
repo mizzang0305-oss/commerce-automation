@@ -23,6 +23,10 @@ import {
   readPackageJson,
   reviewConsoleExists
 } from "./read-autopilot-state";
+import {
+  V022_AUTO_PROVIDER_BLOCKER,
+  isAutoRealSceneAssetProviderConfigured
+} from "../uploads/generate-v022-auto-real-scene-assets";
 
 export type AutopilotDecision = {
   phase: AutopilotPhase;
@@ -92,22 +96,22 @@ export async function decideNextAutopilotAction(input: DecideNextActionInput = {
   if (status === "FAIL_LOCAL_HUMAN_REVIEW") {
     const packageJson = input.packageJson ?? await readPackageJson(cwd);
     if (state.current_review_version === "v020" && shouldCheckRealSceneAssetProviderFromFailReasons(failReasons)) {
-      const providerReady = await realSceneAssetProviderReady(cwd);
+      const providerReady = await autoRealSceneAssetProviderReady(cwd);
       if (!providerReady) {
         return {
           phase: "BLOCKED_PROVIDER",
-          nextAction: "CHECK_REAL_SCENE_ASSET_PROVIDER",
+          nextAction: V022_AUTO_PROVIDER_BLOCKER,
           shouldStop: true,
           privateUploadAttempted: false,
           videosInsertAllowed: false,
-          blockedReasons: ["BLOCKED_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"],
-          safetyStopReason: "BLOCKED_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"
+          blockedReasons: [V022_AUTO_PROVIDER_BLOCKER],
+          safetyStopReason: V022_AUTO_PROVIDER_BLOCKER
         };
       }
-      const reviewCommand = getReviewCommandForAction("BUILD_V021_REAL_SCENE_REVIEW");
+      const reviewCommand = getReviewCommandForAction("GENERATE_AUTO_REAL_SCENE_ASSETS");
       return {
         phase: "GENERATE_REVIEW_PACKET",
-        nextAction: "BUILD_V021_REAL_SCENE_REVIEW",
+        nextAction: "GENERATE_AUTO_REAL_SCENE_ASSETS",
         shouldStop: false,
         privateUploadAttempted: false,
         videosInsertAllowed: false,
@@ -192,7 +196,7 @@ export function resolveV019FailureNextAction(failReasons: string[]): string {
 
 export function resolveV020FailureNextAction(failReasons: string[]): string {
   return shouldCheckRealSceneAssetProviderFromFailReasons(failReasons)
-    ? "CHECK_REAL_SCENE_ASSET_PROVIDER"
+    ? "GENERATE_AUTO_REAL_SCENE_ASSETS"
     : "BUILD_NEXT_REVIEW_PACKET";
 }
 
@@ -202,6 +206,12 @@ export function getReviewCommandForAction(action: string | null): string | null 
   }
   if (action === "BUILD_V021_REAL_SCENE_REVIEW") {
     return "review:v021";
+  }
+  if (action === "GENERATE_AUTO_REAL_SCENE_ASSETS") {
+    return "assets:generate-v022-real-scene";
+  }
+  if (action === "BUILD_V022_AUTO_REAL_SCENE_REVIEW") {
+    return "review:v022";
   }
   return null;
 }
@@ -232,6 +242,13 @@ function normalizeReviewStatus(status: unknown): AutopilotState["latest_human_re
     return status;
   }
   return "UNKNOWN";
+}
+
+async function autoRealSceneAssetProviderReady(cwd: string): Promise<boolean> {
+  if (await isAutoRealSceneAssetProviderConfigured(cwd)) {
+    return true;
+  }
+  return realSceneAssetProviderReady(cwd);
 }
 
 async function realSceneAssetProviderReady(cwd: string): Promise<boolean> {
