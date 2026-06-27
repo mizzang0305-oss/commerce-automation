@@ -26,6 +26,8 @@ describe("v018 Korean voice provider setup wizard", () => {
     expect(guide).toContain("KOREAN_VOICE_PROVIDER=owner_recorded");
     expect(guide).toContain("KOREAN_VOICE_PROVIDER=local_command");
     expect(guide).toContain("BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED");
+    expect(guide).toContain("MeloTTS");
+    expect(guide).toContain("repo outside");
     expect(guide).not.toContain("C:/private");
   });
 

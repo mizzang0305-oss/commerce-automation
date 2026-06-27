@@ -46,7 +46,7 @@ export async function checkKoreanVoiceProviderSetup(input = {}) {
 export function buildKoreanVoiceSetupGuide(setup = {}) {
   const blocker = setup.voice_provider_blocker ?? "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED";
   return [
-    "# v018 Korean Voice Provider Setup Guide",
+    "# v019 Korean Voice Provider Setup Guide",
     "",
     `current_blocker: ${blocker}`,
     "raw_values_masked: true",
@@ -72,6 +72,13 @@ export function buildKoreanVoiceSetupGuide(setup = {}) {
     "## local_command",
     "",
     "Use this when a local non-SAPI Korean TTS command is already installed.",
+    "For v019, the preferred free local provider is MeloTTS through a repo outside wrapper command.",
+    "",
+    "MeloTTS wrapper contract:",
+    "",
+    "```text",
+    "<repo outside wrapper> --script <voiceover-script.txt> --output <voiceover.wav> --language ko --format wav",
+    "```",
     "",
     "Required .env.local keys:",
     "",
@@ -85,6 +92,7 @@ export function buildKoreanVoiceSetupGuide(setup = {}) {
     "```",
     "",
     "- Windows SAPI/local_sapi is rejected.",
+    "- Keep the MeloTTS venv, cloned repo, downloaded models, and wrapper command repo outside.",
     "- Full command strings and model paths are never printed by the wizard.",
     "",
     "## approved_cloud",
