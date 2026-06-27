@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,7 @@ import {
   createDefaultAutopilotState,
   evaluateAutopilotSafety,
   evaluatePrivateUploadGate,
+  shouldCheckRealSceneAssetProviderFromFailReasons,
   shouldBuildV020FromFailReasons
 } from "./autopilot-safety-gates";
 import {
@@ -88,10 +90,35 @@ export async function decideNextAutopilotAction(input: DecideNextActionInput = {
 
   const failReasons = reviewDecision?.fail_reasons?.length ? reviewDecision.fail_reasons : state.latest_fail_reasons;
   if (status === "FAIL_LOCAL_HUMAN_REVIEW") {
+    const packageJson = input.packageJson ?? await readPackageJson(cwd);
+    if (state.current_review_version === "v020" && shouldCheckRealSceneAssetProviderFromFailReasons(failReasons)) {
+      const providerReady = await realSceneAssetProviderReady(cwd);
+      if (!providerReady) {
+        return {
+          phase: "BLOCKED_PROVIDER",
+          nextAction: "CHECK_REAL_SCENE_ASSET_PROVIDER",
+          shouldStop: true,
+          privateUploadAttempted: false,
+          videosInsertAllowed: false,
+          blockedReasons: ["BLOCKED_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"],
+          safetyStopReason: "BLOCKED_REAL_SCENE_ASSET_PROVIDER_NOT_CONFIGURED"
+        };
+      }
+      const reviewCommand = getReviewCommandForAction("BUILD_V021_REAL_SCENE_REVIEW");
+      return {
+        phase: "GENERATE_REVIEW_PACKET",
+        nextAction: "BUILD_V021_REAL_SCENE_REVIEW",
+        shouldStop: false,
+        privateUploadAttempted: false,
+        videosInsertAllowed: false,
+        blockedReasons: [],
+        reviewCommand,
+        reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
+      };
+    }
     const nextAction = state.current_review_version === "v019"
       ? resolveV019FailureNextAction(failReasons)
       : "BUILD_NEXT_REVIEW_PACKET";
-    const packageJson = input.packageJson ?? await readPackageJson(cwd);
     const reviewCommand = getReviewCommandForAction(nextAction);
     return {
       phase: "HUMAN_REVIEW_FAILED",
@@ -163,9 +190,18 @@ export function resolveV019FailureNextAction(failReasons: string[]): string {
     : "REVIEW_FAIL_REASONS_MANUALLY";
 }
 
+export function resolveV020FailureNextAction(failReasons: string[]): string {
+  return shouldCheckRealSceneAssetProviderFromFailReasons(failReasons)
+    ? "CHECK_REAL_SCENE_ASSET_PROVIDER"
+    : "BUILD_NEXT_REVIEW_PACKET";
+}
+
 export function getReviewCommandForAction(action: string | null): string | null {
   if (action === "BUILD_V020_REAL_MOTION_REVIEW") {
     return "review:v020";
+  }
+  if (action === "BUILD_V021_REAL_SCENE_REVIEW") {
+    return "review:v021";
   }
   return null;
 }
@@ -196,6 +232,44 @@ function normalizeReviewStatus(status: unknown): AutopilotState["latest_human_re
     return status;
   }
   return "UNKNOWN";
+}
+
+async function realSceneAssetProviderReady(cwd: string): Promise<boolean> {
+  const requiredAssets = [
+    "rain-window",
+    "wet-laundry-problem",
+    "small-room-laundry-mess",
+    "drying-rack-reveal",
+    "laundry-items-use-case",
+    "before-after-room-laundry",
+    "buying-checklist-background",
+    "cta-background"
+  ];
+  const roots = [
+    "commerce-assets/source-library/laundry",
+    "commerce-assets/source-library/rainy-season",
+    "commerce-assets/source-library/small-room",
+    "commerce-assets/source-library/drying-rack"
+  ].map((root) => path.join(cwd, root));
+  for (const assetId of requiredAssets) {
+    let found = false;
+    for (const root of roots) {
+      for (const extension of [".mp4", ".jpg", ".jpeg", ".png"]) {
+        try {
+          const stat = await fs.stat(path.join(root, `${assetId}${extension}`));
+          if (stat.isFile()) {
+            found = true;
+            break;
+          }
+        } catch {
+          // Missing local scene assets are expected until owner supplies them.
+        }
+      }
+      if (found) break;
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

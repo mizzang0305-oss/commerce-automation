@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import {
   LOCK_TIMEOUT_MINUTES,
   NEXT_REVIEW_VERSION,
+  REAL_SCENE_REVIEW_VERSION,
   type AutopilotState
 } from "./autopilot-safety-gates";
 import {
@@ -135,21 +136,17 @@ export async function runHourlyAutopilot(input: {
     let reviewCommandExecuted = false;
     let generatedReviewVersion: string | null = null;
 
-    if (
-      decision.nextAction === "BUILD_V020_REAL_MOTION_REVIEW" &&
-      decision.reviewCommand &&
-      decision.reviewCommandAvailable === true &&
-      decision.shouldStop === false
-    ) {
+    const runnableReviewVersion = getRunnableReviewVersion(decision);
+    if (runnableReviewVersion && decision.reviewCommand && decision.reviewCommandAvailable === true && decision.shouldStop === false) {
       const runner = input.commandRunner ?? runNpmScript;
       const commandResult = await runner({ cwd, scriptName: decision.reviewCommand });
       reviewCommandExecuted = commandResult.ok === true;
       if (commandResult.ok === true) {
-        generatedReviewVersion = NEXT_REVIEW_VERSION;
+        generatedReviewVersion = runnableReviewVersion;
         state = {
           ...state,
           current_phase: "WAITING_HUMAN_REVIEW",
-          current_review_version: NEXT_REVIEW_VERSION,
+          current_review_version: runnableReviewVersion,
           latest_human_review_status: "PENDING_HUMAN_REVIEW",
           latest_fail_reasons: [],
           next_recommended_action: "WAIT_FOR_OWNER_REVIEW",
@@ -180,11 +177,7 @@ export async function runHourlyAutopilot(input: {
       }
     }
 
-    if (
-      decision.nextAction === "BUILD_V020_REAL_MOTION_REVIEW" &&
-      decision.reviewCommand &&
-      decision.reviewCommandAvailable !== true
-    ) {
+    if (getRunnableReviewVersion(decision) && decision.reviewCommand && decision.reviewCommandAvailable !== true) {
       state = {
         ...state,
         current_phase: "BLOCKED_PROVIDER",
@@ -231,6 +224,16 @@ export async function runHourlyAutopilot(input: {
   } finally {
     await releaseHourlyLock(cwd);
   }
+}
+
+function getRunnableReviewVersion(decision: AutopilotDecision): string | null {
+  if (decision.nextAction === "BUILD_V020_REAL_MOTION_REVIEW") {
+    return NEXT_REVIEW_VERSION;
+  }
+  if (decision.nextAction === "BUILD_V021_REAL_SCENE_REVIEW") {
+    return REAL_SCENE_REVIEW_VERSION;
+  }
+  return null;
 }
 
 async function runNpmScript(input: { cwd: string; scriptName: string }): Promise<{ ok: boolean; exitCode?: number; blocker?: string }> {

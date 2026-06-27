@@ -1,6 +1,7 @@
 export const DEFAULT_CANDIDATE_ID = "candidate-3c4f2ee364ba5b07";
 export const DEFAULT_REVIEW_VERSION = "v019";
 export const NEXT_REVIEW_VERSION = "v020";
+export const REAL_SCENE_REVIEW_VERSION = "v021";
 export const PRIVATE_UPLOAD_APPROVAL_PHRASE = "APPROVE_AUTOPILOT_PRIVATE_UPLOAD_ON_OWNER_PASS";
 export const LOCK_TIMEOUT_MINUTES = 90;
 
@@ -10,6 +11,18 @@ export const DEFAULT_V019_FAIL_REASONS = [
   "SLIDESHOW_CARD_FEELING",
   "STATIC_STORYBOARD_DESPITE_CONTACT_SHEET_PASS",
   "VOICE_ACCEPTABLE_BUT_SPEED_SLIGHTLY_SLOW"
+] as const;
+
+export const V020_REAL_SCENE_FAIL_REASONS = [
+  "GEOMETRIC_PLACEHOLDER_VIDEO",
+  "FAKE_REAL_MOTION_FROM_PRIMITIVE_SHAPES",
+  "NO_REAL_SCENE_ASSETS",
+  "NOT_AD_LIKE",
+  "MOTION_PROOF_FALSE_POSITIVE",
+  "VIDEO_LOOKS_LIKE_ANIMATED_PPT",
+  "NO_REAL_LAUNDRY_USE_CASE_FOOTAGE",
+  "NO_REAL_PROBLEM_SCENE_ASSET",
+  "NO_REAL_BEFORE_AFTER_ASSET"
 ] as const;
 
 export const AUTOPILOT_PHASES = [
@@ -106,6 +119,10 @@ export function shouldBuildV020FromFailReasons(failReasons: string[]): boolean {
     "NO_REAL_IN_SCENE_MOTION",
     "SLIDESHOW_CARD_FEELING"
   ].includes(reason));
+}
+
+export function shouldCheckRealSceneAssetProviderFromFailReasons(failReasons: string[]): boolean {
+  return failReasons.some((reason) => (V020_REAL_SCENE_FAIL_REASONS as readonly string[]).includes(reason));
 }
 
 export type AutopilotSafetyResult = {

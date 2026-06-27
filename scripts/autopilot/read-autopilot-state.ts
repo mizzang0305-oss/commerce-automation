@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 import {
   DEFAULT_CANDIDATE_ID,
+  V020_REAL_SCENE_FAIL_REASONS,
   type AutopilotState,
   type HumanReviewDecision,
   type OwnerUploadApproval,
@@ -141,24 +142,34 @@ async function bootstrapStateFromReviewArtifacts(cwd: string): Promise<Autopilot
       continue;
     }
     const status = normalizeHumanReviewStatus(decision.human_review_status);
+    const failReasons = Array.isArray(decision.fail_reasons) ? decision.fail_reasons : [];
     const nextAction = status === "PENDING_HUMAN_REVIEW"
       ? "WAIT_FOR_OWNER_REVIEW"
       : status === "PASS_LOCAL_HUMAN_REVIEW"
         ? "WAIT_FOR_FRESH_PRIVATE_UPLOAD_APPROVAL"
         : status === "FAIL_LOCAL_HUMAN_REVIEW"
-          ? "BUILD_NEXT_REVIEW_PACKET"
+          ? nextActionForFailedReview(decision.version ?? version, failReasons)
           : null;
     return createDefaultAutopilotState({
       current_phase: status === "PENDING_HUMAN_REVIEW" ? "WAITING_HUMAN_REVIEW" : "INIT",
       current_candidate_id: decision.candidate_id ?? DEFAULT_CANDIDATE_ID,
       current_review_version: decision.version ?? version,
       latest_human_review_status: status,
-      latest_fail_reasons: Array.isArray(decision.fail_reasons) ? decision.fail_reasons : [],
+      latest_fail_reasons: failReasons,
       next_recommended_action: nextAction,
       private_upload_allowed: decision.private_upload_allowed === true
     });
   }
   return createDefaultAutopilotState();
+}
+
+function nextActionForFailedReview(version: string, failReasons: string[]): string {
+  if (version === "v020" && failReasons.some((reason) =>
+    (V020_REAL_SCENE_FAIL_REASONS as readonly string[]).includes(reason)
+  )) {
+    return "CHECK_REAL_SCENE_ASSET_PROVIDER";
+  }
+  return "BUILD_NEXT_REVIEW_PACKET";
 }
 
 async function readReviewVersions(candidateRoot: string): Promise<string[]> {
