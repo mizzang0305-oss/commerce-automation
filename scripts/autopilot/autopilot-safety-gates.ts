@@ -34,6 +34,17 @@ export const V023_STOCK_SCENE_FAIL_REASONS = [
   "STORY_FLOW_NOT_CLEAR"
 ] as const;
 
+export const V025_PRODUCT_FIRST_FALSE_POSITIVE_FAIL_REASONS = [
+  "PRODUCT_PHOTO_CARD_SLIDE",
+  "STILL_LOOKS_LIKE_PPT",
+  "PRODUCT_VISIBLE_BUT_NOT_VIDEO_LIKE",
+  "NO_REAL_USAGE_SCENE",
+  "NO_AD_LIKE_MOTION",
+  "SCRIPT_VISUAL_GATE_FALSE_POSITIVE",
+  "PRODUCT_FIRST_GATE_FALSE_POSITIVE",
+  "NOT_CONVINCING_SHORTS_AD"
+] as const;
+
 export const AUTOPILOT_PHASES = [
   "INIT",
   "CHECK_ENV",
@@ -139,6 +150,19 @@ export function shouldBuildScriptDrivenProductVideoFromFailReasons(failReasons: 
     "STOCK_SCENE_IRRELEVANT_TO_PRODUCT",
     "PRODUCT_NOT_USED_AS_MAIN_VISUAL",
     "SCRIPT_NOT_DRIVING_VIDEO"
+  ].includes(reason));
+}
+
+export function shouldBuildV026RealAdVideoReviewFromFailReasons(failReasons: string[]): boolean {
+  return failReasons.some((reason) => [
+    "PRODUCT_PHOTO_CARD_SLIDE",
+    "STILL_LOOKS_LIKE_PPT",
+    "PRODUCT_VISIBLE_BUT_NOT_VIDEO_LIKE",
+    "NO_REAL_USAGE_SCENE",
+    "NO_AD_LIKE_MOTION",
+    "SCRIPT_VISUAL_GATE_FALSE_POSITIVE",
+    "PRODUCT_FIRST_GATE_FALSE_POSITIVE",
+    "NOT_CONVINCING_SHORTS_AD"
   ].includes(reason));
 }
 
