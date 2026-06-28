@@ -29,6 +29,7 @@
     "review:v029": "node scripts/uploads/generate-v029-real-image-skill-scene-video-review-packet.mjs",
     "review:v030": "node scripts/uploads/generate-v030-smooth-motion-review-packet.mjs",
     "review:v031": "node scripts/uploads/generate-v031-stable-commerce-motion-review-packet.mjs",
+    "review:v032": "node scripts/uploads/generate-v032-hook-micro-stabilized-review-packet.mjs",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
