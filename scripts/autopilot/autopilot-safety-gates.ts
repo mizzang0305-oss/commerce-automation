@@ -34,6 +34,15 @@ export const V023_STOCK_SCENE_FAIL_REASONS = [
   "STORY_FLOW_NOT_CLEAR"
 ] as const;
 
+export const V024_PRODUCT_AD_VISUAL_FAIL_REASONS = [
+  "TEXT_CARD_RENDERER_REGRESSION",
+  "ABSTRACT_SHAPE_VISUALS",
+  "PRODUCT_IMAGE_NOT_VISIBLE_AS_SOLUTION_EARLY_ENOUGH",
+  "SCRIPT_DRIVEN_METRICS_FALSE_POSITIVE",
+  "VIDEO_STILL_LOOKS_LIKE_READING_CARD",
+  "NOT_AD_LIKE"
+] as const;
+
 export const AUTOPILOT_PHASES = [
   "INIT",
   "CHECK_ENV",
@@ -140,6 +149,10 @@ export function shouldBuildScriptDrivenProductVideoFromFailReasons(failReasons: 
     "PRODUCT_NOT_USED_AS_MAIN_VISUAL",
     "SCRIPT_NOT_DRIVING_VIDEO"
   ].includes(reason));
+}
+
+export function shouldBuildV025ProductAdVisualReviewFromFailReasons(failReasons: string[]): boolean {
+  return failReasons.some((reason) => (V024_PRODUCT_AD_VISUAL_FAIL_REASONS as readonly string[]).includes(reason));
 }
 
 export type AutopilotSafetyResult = {
