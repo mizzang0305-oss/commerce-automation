@@ -25,6 +25,15 @@ export const V020_REAL_SCENE_FAIL_REASONS = [
   "NO_REAL_BEFORE_AFTER_ASSET"
 ] as const;
 
+export const V023_STOCK_SCENE_FAIL_REASONS = [
+  "STOCK_SCENE_IRRELEVANT_TO_PRODUCT",
+  "STOCK_ASSET_SEMANTIC_MISMATCH",
+  "PRODUCT_NOT_USED_AS_MAIN_VISUAL",
+  "SCRIPT_NOT_DRIVING_VIDEO",
+  "DRYING_RACK_NOT_VISUALLY_CENTRAL",
+  "STORY_FLOW_NOT_CLEAR"
+] as const;
+
 export const AUTOPILOT_PHASES = [
   "INIT",
   "CHECK_ENV",
@@ -123,6 +132,14 @@ export function shouldBuildV020FromFailReasons(failReasons: string[]): boolean {
 
 export function shouldCheckRealSceneAssetProviderFromFailReasons(failReasons: string[]): boolean {
   return failReasons.some((reason) => (V020_REAL_SCENE_FAIL_REASONS as readonly string[]).includes(reason));
+}
+
+export function shouldBuildScriptDrivenProductVideoFromFailReasons(failReasons: string[]): boolean {
+  return failReasons.some((reason) => [
+    "STOCK_SCENE_IRRELEVANT_TO_PRODUCT",
+    "PRODUCT_NOT_USED_AS_MAIN_VISUAL",
+    "SCRIPT_NOT_DRIVING_VIDEO"
+  ].includes(reason));
 }
 
 export type AutopilotSafetyResult = {
