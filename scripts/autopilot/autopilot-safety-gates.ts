@@ -34,6 +34,17 @@ export const V023_STOCK_SCENE_FAIL_REASONS = [
   "STORY_FLOW_NOT_CLEAR"
 ] as const;
 
+export const V026_CLEAN_COMMERCE_FAIL_REASONS = [
+  "DARK_HORROR_LIKE_VISUAL",
+  "SYNTHETIC_COMPOSITE_LOOKS_WRONG",
+  "ABSTRACT_OVERLAY_ARTIFACTS",
+  "COLOR_TINT_MAKES_PRODUCT_UNTRUSTWORTHY",
+  "REAL_AD_VISUAL_GATE_FALSE_POSITIVE",
+  "MOTION_VARIETY_GATE_FALSE_POSITIVE",
+  "NOT_CLEAN_COMMERCE_AD",
+  "NOT_CONVINCING_SHORTS_AD"
+] as const;
+
 export const AUTOPILOT_PHASES = [
   "INIT",
   "CHECK_ENV",
@@ -140,6 +151,10 @@ export function shouldBuildScriptDrivenProductVideoFromFailReasons(failReasons: 
     "PRODUCT_NOT_USED_AS_MAIN_VISUAL",
     "SCRIPT_NOT_DRIVING_VIDEO"
   ].includes(reason));
+}
+
+export function shouldBuildV027CleanCommerceTemplateFromFailReasons(failReasons: string[]): boolean {
+  return failReasons.some((reason) => (V026_CLEAN_COMMERCE_FAIL_REASONS as readonly string[]).includes(reason));
 }
 
 export type AutopilotSafetyResult = {
