@@ -27,6 +27,7 @@
     "review:v023": "tsx scripts/uploads/generate-v023-free-stock-scene-review-packet.ts",
     "review:v024": "node scripts/uploads/generate-v024-script-driven-product-video-review-packet.mjs",
     "review:v029": "node scripts/uploads/generate-v029-real-image-skill-scene-video-review-packet.mjs",
+    "review:v030": "node scripts/uploads/generate-v030-smooth-motion-review-packet.mjs",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
