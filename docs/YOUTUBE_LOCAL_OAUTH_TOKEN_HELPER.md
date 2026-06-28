@@ -12,6 +12,7 @@ Configure values only in the local operator shell. Do not commit them.
 - `YOUTUBE_CLIENT_SECRET`
 - `YOUTUBE_REDIRECT_URI`
 - `YOUTUBE_UPLOAD_SCOPE`
+- `YOUTUBE_LOCAL_TOKEN_FILE_PATH`
 - `YOUTUBE_TOKEN_FILE`
 
 Recommended token file path:
@@ -22,7 +23,7 @@ C:\Users\LOVE\.commerce-automation\youtube-token.json
 
 The token file must be outside this repository. Paths inside `C:\Users\LOVE\MyProjects\commerce-automation` are blocked.
 
-The WebApp token readiness provider accepts the helper's `YOUTUBE_TOKEN_FILE` as a fallback. If both names are present, `YOUTUBE_LOCAL_TOKEN_FILE_PATH` takes priority:
+The WebApp token readiness provider and this helper accept `YOUTUBE_TOKEN_FILE` as a fallback. If both names are present, `YOUTUBE_LOCAL_TOKEN_FILE_PATH` takes priority:
 
 ```text
 YOUTUBE_LOCAL_TOKEN_FILE_PATH=C:\Users\LOVE\.commerce-automation\youtube-token.json
@@ -58,6 +59,25 @@ node scripts/youtube-local-oauth-helper.mjs print-auth-url
 ```
 
 This does not call Google APIs and does not write files.
+
+Run browser-based loopback reauth with a local callback listener:
+
+```powershell
+node scripts/youtube-local-oauth-helper.mjs reauth-local --confirm APPROVE_FIX_YOUTUBE_LOOPBACK_CALLBACK_REAUTH_NO_UPLOAD
+```
+
+The loopback reauth command:
+
+- requires the exact repair confirmation phrase above,
+- starts a listener that must match `YOUTUBE_REDIRECT_URI`,
+- opens the browser for Google consent without printing the raw authorization URL,
+- accepts the callback locally without printing the auth code,
+- exchanges the auth code for a local token file,
+- backs up an existing token file before writing the repaired token,
+- runs a refresh-token readiness check,
+- does not call YouTube upload APIs, R2 APIs, Supabase, queues, workers, or `videos.insert`.
+
+Use `--timeout-ms <milliseconds>` to shorten or extend the callback wait. The timeout is clamped between 5 seconds and 10 minutes.
 
 Exchange an auth code for a local token file:
 
