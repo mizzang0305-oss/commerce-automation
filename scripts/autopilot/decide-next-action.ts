@@ -13,6 +13,7 @@ import {
   evaluatePrivateUploadGate,
   shouldBuildScriptDrivenProductVideoFromFailReasons,
   shouldCheckRealSceneAssetProviderFromFailReasons,
+  shouldBuildV027CleanCommerceTemplateFromFailReasons,
   shouldBuildV020FromFailReasons
 } from "./autopilot-safety-gates";
 import {
@@ -167,6 +168,20 @@ export async function decideNextAutopilotAction(input: DecideNextActionInput = {
         reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
       };
     }
+    if (state.current_review_version === "v026" && shouldBuildV027CleanCommerceTemplateFromFailReasons(failReasons)) {
+      const nextAction = "BUILD_V027_CLEAN_COMMERCE_TEMPLATE_REVIEW";
+      const reviewCommand = getReviewCommandForAction(nextAction);
+      return {
+        phase: "HUMAN_REVIEW_FAILED",
+        nextAction,
+        shouldStop: false,
+        privateUploadAttempted: false,
+        videosInsertAllowed: false,
+        blockedReasons: [],
+        reviewCommand,
+        reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
+      };
+    }
     const nextAction = state.current_review_version === "v019"
       ? resolveV019FailureNextAction(failReasons)
       : "BUILD_NEXT_REVIEW_PACKET";
@@ -268,6 +283,9 @@ export function getReviewCommandForAction(action: string | null): string | null 
   }
   if (action === "BUILD_SCRIPT_DRIVEN_PRODUCT_VIDEO") {
     return "review:v024";
+  }
+  if (action === "BUILD_V027_CLEAN_COMMERCE_TEMPLATE_REVIEW") {
+    return "review:v027";
   }
   return null;
 }
