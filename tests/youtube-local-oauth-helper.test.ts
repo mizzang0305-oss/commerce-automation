@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
@@ -12,6 +13,26 @@ import { redactYouTubeTokenPayload } from "@/lib/uploads/youtube/redactYoutubeTo
 import { YOUTUBE_UPLOAD_SCOPE } from "@/lib/uploads/youtube/youtubeOAuthScopes";
 
 const secretNeedles = /refresh-secret-value|access-secret-value|client-secret-value|Authorization: Bearer/i;
+const helperPath = path.join(process.cwd(), "scripts", "youtube-local-oauth-helper.mjs");
+const loopbackReauthApproval = "APPROVE_FIX_YOUTUBE_LOOPBACK_CALLBACK_REAUTH_NO_UPLOAD";
+
+function runLocalOAuthCli(args: string[], env: NodeJS.ProcessEnv = {}) {
+  const safeEnv: NodeJS.ProcessEnv = {
+    COMSPEC: process.env.COMSPEC,
+    PATH: process.env.PATH ?? process.env.Path,
+    Path: process.env.Path ?? process.env.PATH,
+    SystemRoot: process.env.SystemRoot,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    ...env
+  };
+  return spawnSync(process.execPath, [helperPath, ...args], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: safeEnv,
+    windowsHide: true
+  });
+}
 
 describe("YouTube local OAuth token helper", () => {
   test("builds an offline authorization URL with the YouTube upload scope", () => {
@@ -42,6 +63,61 @@ describe("YouTube local OAuth token helper", () => {
       required_confirmation: APPROVE_YOUTUBE_LOCAL_OAUTH_TOKEN_GENERATION
     });
     expect(JSON.stringify(result)).not.toMatch(secretNeedles);
+  });
+
+  test("lists the loopback reauth command without printing secret material", () => {
+    const result = runLocalOAuthCli(["--help"], {
+      YOUTUBE_CLIENT_SECRET: "client-secret-value"
+    });
+
+    expect(result.status).toBe(0);
+    const payload = JSON.parse(result.stdout);
+    expect(payload.commands).toContain("reauth-local");
+    expect(result.stdout + result.stderr).not.toMatch(secretNeedles);
+  });
+
+  test("blocks loopback reauth without the exact repair approval before reading OAuth config", () => {
+    const result = runLocalOAuthCli(["reauth-local"], {
+      YOUTUBE_CLIENT_SECRET: "client-secret-value",
+      YOUTUBE_TOKEN_FILE: path.join(process.cwd(), "blocked-youtube-token.json")
+    });
+
+    expect(result.status).toBe(1);
+    const payload = JSON.parse(result.stdout);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_LOOPBACK_REAUTH_APPROVAL_REQUIRED",
+      listener_started: false,
+      token_exchange_executed: false,
+      token_file_written: false,
+      raw_url_printed: false,
+      auth_code_printed: false,
+      raw_token_printed: false
+    });
+    expect(result.stdout + result.stderr).not.toMatch(secretNeedles);
+    expect(result.stdout + result.stderr).not.toMatch(/accounts\.google\.com|oauth2\/v2\/auth/i);
+  });
+
+  test("blocks approved loopback reauth when the token file is inside the repository", () => {
+    const result = runLocalOAuthCli(["reauth-local", "--confirm", loopbackReauthApproval], {
+      YOUTUBE_CLIENT_SECRET: "client-secret-value",
+      YOUTUBE_TOKEN_FILE: path.join(process.cwd(), "blocked-youtube-token.json")
+    });
+
+    expect(result.status).toBe(1);
+    const payload = JSON.parse(result.stdout);
+    expect(payload).toMatchObject({
+      ok: false,
+      error_code: "YOUTUBE_TOKEN_FILE_PATH_BLOCKED",
+      listener_started: false,
+      token_exchange_executed: false,
+      token_file_written: false,
+      raw_url_printed: false,
+      auth_code_printed: false,
+      raw_token_printed: false
+    });
+    expect(JSON.stringify(payload)).not.toContain(path.join(process.cwd(), "blocked-youtube-token.json"));
+    expect(result.stdout + result.stderr).not.toMatch(secretNeedles);
   });
 
   test("does not treat boolean-like approval as exact local OAuth approval", () => {
