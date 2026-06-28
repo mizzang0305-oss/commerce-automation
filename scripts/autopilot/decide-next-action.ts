@@ -11,6 +11,7 @@ import {
   createDefaultAutopilotState,
   evaluateAutopilotSafety,
   evaluatePrivateUploadGate,
+  shouldBuildScriptDrivenProductVideoFromFailReasons,
   shouldCheckRealSceneAssetProviderFromFailReasons,
   shouldBuildV020FromFailReasons
 } from "./autopilot-safety-gates";
@@ -152,6 +153,20 @@ export async function decideNextAutopilotAction(input: DecideNextActionInput = {
         reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
       };
     }
+    if (state.current_review_version === "v023" && shouldBuildScriptDrivenProductVideoFromFailReasons(failReasons)) {
+      const nextAction = "BUILD_SCRIPT_DRIVEN_PRODUCT_VIDEO";
+      const reviewCommand = getReviewCommandForAction(nextAction);
+      return {
+        phase: "HUMAN_REVIEW_FAILED",
+        nextAction,
+        shouldStop: false,
+        privateUploadAttempted: false,
+        videosInsertAllowed: false,
+        blockedReasons: [],
+        reviewCommand,
+        reviewCommandAvailable: reviewCommand ? packageHasScript(packageJson, reviewCommand) : false
+      };
+    }
     const nextAction = state.current_review_version === "v019"
       ? resolveV019FailureNextAction(failReasons)
       : "BUILD_NEXT_REVIEW_PACKET";
@@ -250,6 +265,9 @@ export function getReviewCommandForAction(action: string | null): string | null 
   }
   if (action === "BUILD_V023_FREE_STOCK_SCENE_REVIEW") {
     return "review:v023";
+  }
+  if (action === "BUILD_SCRIPT_DRIVEN_PRODUCT_VIDEO") {
+    return "review:v024";
   }
   return null;
 }
