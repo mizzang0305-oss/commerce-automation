@@ -87,6 +87,8 @@ describe("rainy drying rack scene-card renderer", () => {
       "scene_07_buying_checklist",
       "scene_08_description_cta"
     ]);
+    expect(story.cta_text).toBe("\uC0C1\uD488 \uB9C1\uD06C\uB294 \uC124\uBA85\uB780 / \uACE0\uC815\uB313\uAE00 \uD655\uC778");
+    expect(story.scenes.at(-1)?.caption).toBe(story.cta_text);
     expect(story.scenes.map((scene) => scene.layout_template)).toEqual([
       "layout_hook_full_title",
       "layout_problem_card",

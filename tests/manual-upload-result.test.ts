@@ -154,6 +154,7 @@ async function prepareManualReadyPackage() {
   );
   expect(response.status).toBe(200);
   const packages = await repository.getChannelUploadPackages(item.id);
+  expect(packages[0].description.split(/\r?\n/)[0]).toBe("https://link.coupang.com/a/manual-upload-tracking");
   return { packageId: packages[0].id };
 }
 

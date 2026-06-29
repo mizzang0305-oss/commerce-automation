@@ -10,6 +10,7 @@ export * from "@/lib/uploads/youtube/localOAuthTokenHelper";
 export * from "@/lib/uploads/youtube/redactYoutubeToken";
 export * from "@/lib/uploads/youtube/youtubeOAuthScopes";
 export * from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
+export * from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 export * from "@/lib/uploads/youtube/youtubePrivateSmokeContract";
 export * from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 export * from "@/lib/uploads/youtube/youtubeUploadAdapter";

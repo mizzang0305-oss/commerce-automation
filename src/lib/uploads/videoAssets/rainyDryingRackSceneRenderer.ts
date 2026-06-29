@@ -10,6 +10,7 @@ import {
   type RenderRealityCheckInput
 } from "@/lib/uploads/videoAssets/renderOutputRealityCheck";
 import type { GeneratedProductVideoAsset } from "@/lib/uploads/youtube/oneProductVideoAssetEntryPoint";
+import { YOUTUBE_ON_SCREEN_CTA_TEXT } from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 import type { ProductCandidate } from "@/types/automation";
 
 const execFileAsync = promisify(execFile);
@@ -50,8 +51,7 @@ const STORY_PRODUCT_BENEFIT =
   "\uC0AC\uC6A9\uD560 \uB54C \uD3BC\uCE58\uACE0 \uC548 \uC4F8 \uB54C \uC811\uC5B4\uB450\uB294 \uAD6C\uC131\uC73C\uB85C \uC881\uC740 \uACF5\uAC04\uC5D0\uB3C4 \uD65C\uC6A9\uD558\uAE30 \uC88B\uC2B5\uB2C8\uB2E4.";
 const STORY_CAUTION =
   "\uAD6C\uB9E4 \uC804 \uD06C\uAE30, \uD558\uC911, \uC124\uCE58 \uACF5\uAC04, \uBC14\uB2E5 \uACE0\uC815\uAC10\uC744 \uD655\uC778\uD558\uC138\uC694.";
-const STORY_CTA_TEXT =
-  "\uAC00\uACA9\uACFC \uAD6C\uC131\uC740 \uC124\uBA85\uB780\uC5D0\uC11C \uD655\uC778\uD574\uBCF4\uC138\uC694.";
+const STORY_CTA_TEXT = YOUTUBE_ON_SCREEN_CTA_TEXT;
 
 const STORY_VOICEOVER_SCRIPT = [
   "\uC7A5\uB9C8\uCCA0\uC5D0 \uBE68\uB798\uB97C \uBBF8\uB8E8\uBA74 \uB0C4\uC0C8\uC640 \uC2B5\uAE30\uAC00 \uB0A8\uC2B5\uB2C8\uB2E4.",
@@ -162,7 +162,7 @@ export function buildRainyDryingRackStoryPackage(candidate: ProductCandidate): R
     scene("scene_05_foldable_solution", 3, "layout_use_case_graphic", "\uD3BC\uCE60 \uB54C\uB9CC \uD3BC\uCE58\uACE0\n\uC811\uC5B4\uC11C \uBCF4\uAD00", "laundry_items_reveal", "foldable drying rack solution and storage motion", "scene_05_foldable_solution.png"),
     scene("scene_06_before_after_space_compare", 3, "layout_why_buy_cards", "\uC804\u00B7\uD6C4 \uACF5\uAC04\n\uD55C\uB208\uC5D0 \uBE44\uAD50", "benefit_pan_right", "before-after room space comparison", "scene_06_before_after_space_compare.png"),
     scene("scene_07_buying_checklist", 3, "layout_checklist_fullscreen", "\uD06C\uAE30\u00B7\uD558\uC911\n\uAD6C\uB9E4 \uC804 \uD655\uC778", "checklist_pop", "large buying checklist: size, load, floor fit", "scene_07_buying_checklist.png"),
-    scene("scene_08_description_cta", 3, "layout_cta_card", "\uAD6C\uC131\u00B7\uAC00\uACA9\n\uC124\uBA85\uB780 \uD655\uC778", "cta_zoom", "final description CTA, not shown before problem and product value", "scene_08_description_cta.png")
+    scene("scene_08_description_cta", 3, "layout_cta_card", YOUTUBE_ON_SCREEN_CTA_TEXT, "cta_zoom", "final description and pinned comment CTA, not shown before problem and product value", "scene_08_description_cta.png")
   ];
 
   return {

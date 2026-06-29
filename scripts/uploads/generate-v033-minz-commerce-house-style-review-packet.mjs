@@ -61,7 +61,7 @@ const V033_SCENE_CAPTIONS = [
   "수건·양말·셔츠,\n한 번에 널 수 있는지 확인",
   "집안 습기 줄이려면\n바닥 안정감도 체크",
   "구매 전 3가지,\n하중·크기·접었을 때 보관성",
-  "구성·가격은\n상품 설명에서 먼저 확인해 보세요"
+  "상품 링크는 설명란 / 고정댓글 확인"
 ];
 
 export function buildV032OwnerReviewDecision() {

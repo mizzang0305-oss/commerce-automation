@@ -200,6 +200,9 @@ describe("YouTube product video private upload package", () => {
     expect(result.package.description).toContain("쿠팡파트너스");
     expect(result.package.description).toContain("수수료");
     expect(result.package.description).toContain(validProductPackageInput.selected_affiliate_url);
+    expect(result.package.description.split(/\r?\n/)[0]).toBe(validProductPackageInput.selected_affiliate_url);
+    expect(result.package.pinned_comment_template).toContain(validProductPackageInput.selected_affiliate_url);
+    expect(result.package.on_screen_cta_text).toContain("\uACE0\uC815\uB313\uAE00");
     expect(result.package.visibility).not.toBe("public");
   });
 

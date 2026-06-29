@@ -6,6 +6,7 @@ import type {
   ProductQueueItem
 } from "@/types/automation";
 import { mergeChannelHashtags } from "@/lib/channels/channelRouting";
+import { buildYouTubeLinkCtaMetadata } from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 
 export type UploadPackageBuildResult =
   | { ok: true; package: ChannelUploadPackage; checklist: ManualUploadChecklistItem[] }
@@ -104,11 +105,16 @@ export function buildChannelUploadPackage(input: {
   const hashtags = mergeChannelHashtags([content?.hashtags ?? "", channel.hashtag_template ?? ""].join(" "), channel);
   const disclosure = content?.disclosure_text.trim() ?? "";
   const baseDescription = content?.youtube_description?.trim() || `${item.product_name} 수동 업로드용 설명입니다.`;
+  const linkCtaMetadata = buildYouTubeLinkCtaMetadata({
+    selected_affiliate_url: item.selected_affiliate_url,
+    description: baseDescription,
+    disclosure_text: disclosure
+  });
   const templateContext = {
     product_name: item.product_name,
     channel_name: channel.channel_name,
     video_title: baseTitle,
-    description: baseDescription,
+    description: linkCtaMetadata.description,
     affiliate_url: item.selected_affiliate_url,
     disclosure_text: disclosure,
     hashtags,
@@ -116,13 +122,11 @@ export function buildChannelUploadPackage(input: {
     category_path: item.category_path
   };
   const title = applyChannelTemplate(channel.title_template, templateContext) || baseTitle;
-  const description = applyChannelTemplate(channel.description_template, templateContext) || [
-    baseDescription,
-    "",
-    item.selected_affiliate_url ? `제휴 링크: ${item.selected_affiliate_url}` : "",
-    disclosure,
-    hashtags
-  ].filter((line) => line.length > 0).join("\n");
+  const description = buildYouTubeLinkCtaMetadata({
+    selected_affiliate_url: item.selected_affiliate_url,
+    description: applyChannelTemplate(channel.description_template, templateContext) || linkCtaMetadata.description,
+    disclosure_text: disclosure
+  }).description;
 
   return {
     ok: true,

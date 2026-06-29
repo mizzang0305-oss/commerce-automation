@@ -238,6 +238,9 @@ describe("YouTube upload adapter readiness and gates", () => {
     });
     expect(result.request.description).toContain(validRequestBody.disclosure_text);
     expect(result.request.description).toContain(validRequestBody.selected_affiliate_url);
+    expect(result.request.description.split(/\r?\n/)[0]).toBe(validRequestBody.selected_affiliate_url);
+    expect(result.request.pinned_comment_template).toContain(validRequestBody.selected_affiliate_url);
+    expect(result.request.on_screen_cta_text).toContain("\uACE0\uC815\uB313\uAE00");
     expect(result.request.visibility).not.toBe("public");
   });
 
