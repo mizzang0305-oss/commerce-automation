@@ -12,6 +12,10 @@ import {
   evaluateShortsContentQuality,
   type ShortsContentQualityResult
 } from "@/lib/uploads/youtube/shortsContentQuality";
+import {
+  buildYouTubeLinkCtaMetadata,
+  YOUTUBE_ON_SCREEN_CTA_TEXT
+} from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 
 export type YouTubeProductVideoSource = "coupang" | "manual" | "mock";
 
@@ -74,6 +78,8 @@ export type YouTubeProductVideoUploadPackage = {
   title: string;
   description: string;
   disclosure_text: string;
+  pinned_comment_template: string;
+  on_screen_cta_text: typeof YOUTUBE_ON_SCREEN_CTA_TEXT;
   tags: string[];
   made_for_kids: boolean;
   shorts_content_quality: unknown;
@@ -196,6 +202,12 @@ export function buildYouTubeProductVideoUploadPackage(input: YouTubeProductVideo
       title,
       description,
       disclosure_text: disclosureText,
+      pinned_comment_template: buildPinnedCommentTemplate({
+        selected_affiliate_url: selectedAffiliateUrl,
+        description,
+        disclosure_text: disclosureText
+      }),
+      on_screen_cta_text: YOUTUBE_ON_SCREEN_CTA_TEXT,
       tags: normalizeTags(input.tags),
       made_for_kids: input.made_for_kids === true,
       shorts_content_quality: input.shorts_content_quality,
@@ -218,18 +230,22 @@ export function buildProductVideoDescription(input: {
 }) {
   const base = input.description?.trim() || [
     input.product_name ? `Product: ${input.product_name}` : "Product selected for private review.",
-    "Affiliate link is present in the source package.",
+    "Review the product composition, size, and options before buying.",
     input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT
   ].join("\n");
-  const parts = [base];
-  const disclosure = input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT;
-  if (!base.includes(disclosure)) {
-    parts.push(disclosure);
-  }
-  if (input.selected_affiliate_url && !base.includes(input.selected_affiliate_url)) {
-    parts.push(`Affiliate link: ${input.selected_affiliate_url}`);
-  }
-  return parts.filter(Boolean).join("\n\n");
+  return buildYouTubeLinkCtaMetadata({
+    selected_affiliate_url: input.selected_affiliate_url,
+    description: base,
+    disclosure_text: input.disclosure_text || DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT
+  }).description;
+}
+
+function buildPinnedCommentTemplate(input: {
+  selected_affiliate_url: string;
+  description: string;
+  disclosure_text: string;
+}) {
+  return buildYouTubeLinkCtaMetadata(input).pinned_comment_template;
 }
 
 export function buildDefaultProductVideoTitle(productName: string) {

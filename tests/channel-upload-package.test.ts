@@ -261,6 +261,8 @@ describe("channel upload package api", () => {
       upload_package_url: "https://storage.example/upload-packages/item.txt"
     });
     expect(packages[0].description).toContain("https://link.coupang.com/a/manual-package");
+    expect(packages[0].description.split(/\r?\n/)[0]).toBe("https://link.coupang.com/a/manual-package");
+    expect(packages[0].description).toContain("\uC0C1\uD488 \uB9C1\uD06C\uB294 \uC124\uBA85\uB780 \uCCAB \uC904 \uB610\uB294 \uACE0\uC815\uB313\uAE00\uC5D0\uC11C \uD655\uC778\uD558\uC138\uC694.");
     expect(packages[0].description).toContain("disclosure");
     expect(packages[0].hashtags).toContain("#");
     expect(finalJobs).toHaveLength(initialJobCount);

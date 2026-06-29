@@ -6,6 +6,7 @@ import type {
 import { buildPreparedVideoAssetReadiness } from "@/lib/uploads/youtube/uploadAssetContract";
 import { evaluateShortsContentQuality } from "@/lib/uploads/youtube/shortsContentQuality";
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
+import { buildYouTubeLinkCtaMetadata } from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 
 export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   | { ok: true; request: YouTubeUploadRequest }
@@ -69,7 +70,11 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   }
   const safeVisibility: YouTubeUploadVisibility = visibility || "private";
 
-  const description = appendRequiredPolicyText(descriptionInput || captionInput, disclosureText, selectedAffiliateUrl);
+  const linkCtaMetadata = buildYouTubeLinkCtaMetadata({
+    selected_affiliate_url: selectedAffiliateUrl,
+    description: descriptionInput || captionInput,
+    disclosure_text: disclosureText
+  });
 
   return {
     ok: true,
@@ -79,30 +84,21 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
       prepared_video_asset: assetReadiness.asset_ref!,
       video_path_or_url: videoPathOrUrl,
       title,
-      description,
+      description: linkCtaMetadata.description,
       tags: normalizeTags(input.tags),
       category_id: safeTrim(input.category_id) || undefined,
       visibility: safeVisibility,
       execution_intent: executionIntent,
       disclosure_text: disclosureText,
       selected_affiliate_url: selectedAffiliateUrl,
+      pinned_comment_template: linkCtaMetadata.pinned_comment_template,
+      on_screen_cta_text: linkCtaMetadata.on_screen_cta_text,
       shorts_content_quality: input.shorts_content_quality,
       smoke_approval: smokeApproval || undefined,
       made_for_kids: false,
       self_declared_made_for_kids: false
     }
   };
-}
-
-function appendRequiredPolicyText(description: string, disclosureText: string, selectedAffiliateUrl: string) {
-  const parts = [description.trim()];
-  if (!description.includes(disclosureText)) {
-    parts.push(disclosureText);
-  }
-  if (!description.includes(selectedAffiliateUrl)) {
-    parts.push(`Affiliate link: ${selectedAffiliateUrl}`);
-  }
-  return parts.filter(Boolean).join("\n\n");
 }
 
 function normalizeVisibility(input: unknown): YouTubeUploadVisibility | "" {
