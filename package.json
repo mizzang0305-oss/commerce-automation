@@ -32,6 +32,7 @@
     "review:v032": "node scripts/uploads/generate-v032-hook-micro-stabilized-review-packet.mjs",
     "review:v033": "node scripts/uploads/generate-v033-minz-commerce-house-style-review-packet.mjs",
     "review:v034": "tsx scripts/uploads/generate-v034-youtube-metadata-korean-hardening-review-packet.ts",
+    "review:v035": "tsx scripts/uploads/generate-v035-image-skill-scene-shorts-review-packet.ts",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
