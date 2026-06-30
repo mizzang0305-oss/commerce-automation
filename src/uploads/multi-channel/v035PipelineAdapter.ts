@@ -28,7 +28,8 @@ type V035GeneratorOptions = NonNullable<Parameters<typeof generateV035ImageSkill
 
 export type V035PipelineRunnerOptions = {
   cwd?: string;
-  reviewVersion?: "v045" | "v046";
+  reviewVersion?: "v045" | "v046" | "v047";
+  env?: V035GeneratorOptions["env"];
   selectedAffiliateUrl?: string;
   sourceSceneDir?: string;
   voiceRunner?: V035GeneratorOptions["voiceRunner"];
@@ -54,6 +55,7 @@ export async function runV035SuccessPipelineForChannel(plan: V035ChannelPlan, op
 
   const result = await generateV035ImageSkillSceneShortsReviewPacket({
     cwd: runtimeCwd,
+    env: options.env,
     selectedAffiliateUrl: options.selectedAffiliateUrl,
     voiceRunner: options.voiceRunner,
     mediaRunner: options.mediaRunner,
@@ -139,7 +141,7 @@ async function copyV035ArtifactsToV045(input: {
   outputRoot: string;
   plan: V035ChannelPlan;
   result: Awaited<ReturnType<typeof generateV035ImageSkillSceneShortsReviewPacket>>;
-  reviewVersion: "v045" | "v046";
+  reviewVersion: "v045" | "v046" | "v047";
 }) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   const copies = [
@@ -201,7 +203,7 @@ async function writeBlockedChannelArtifacts(input: {
   outputRoot: string;
   plan: V035ChannelPlan;
   blocker: string;
-  reviewVersion: "v045" | "v046";
+  reviewVersion: "v045" | "v046" | "v047";
 }) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   await writeJson(path.join(input.outputRoot, "human-review-decision.json"), {
