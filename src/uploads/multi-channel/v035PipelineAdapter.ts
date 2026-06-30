@@ -28,6 +28,7 @@ type V035GeneratorOptions = NonNullable<Parameters<typeof generateV035ImageSkill
 
 export type V035PipelineRunnerOptions = {
   cwd?: string;
+  reviewVersion?: "v045" | "v046";
   selectedAffiliateUrl?: string;
   sourceSceneDir?: string;
   voiceRunner?: V035GeneratorOptions["voiceRunner"];
@@ -38,15 +39,16 @@ export type V035PipelineRunnerOptions = {
 
 export async function runV035SuccessPipelineForChannel(plan: V035ChannelPlan, options: V035PipelineRunnerOptions = {}) {
   const cwd = options.cwd ?? process.cwd();
-  const runtimeCwd = path.join(cwd, "commerce-assets", "review", "v045", "_v035-runtime", plan.channel_key);
-  const outputRoot = path.join(cwd, "commerce-assets", "review", "v045", plan.channel_key);
+  const reviewVersion = options.reviewVersion ?? "v045";
+  const runtimeCwd = path.join(cwd, "commerce-assets", "review", reviewVersion, "_v035-runtime", plan.channel_key);
+  const outputRoot = path.join(cwd, "commerce-assets", "review", reviewVersion, plan.channel_key);
   const sourceSceneDir = options.sourceSceneDir ?? path.join(outputRoot, "generated-scenes");
   const runtimeSceneDir = path.join(runtimeCwd, "commerce-assets", "review", CANDIDATE_ID, "v035", "image-skill-scenes");
   await fs.mkdir(outputRoot, { recursive: true });
 
   const prepared = await prepareRuntimeSceneAssets({ sourceSceneDir, runtimeSceneDir });
   if (!prepared.ready) {
-    await writeBlockedChannelArtifacts({ outputRoot, plan, blocker: prepared.blocker });
+    await writeBlockedChannelArtifacts({ outputRoot, plan, blocker: prepared.blocker, reviewVersion });
     return buildBlockedChannelResult({ plan, outputRoot, blocker: prepared.blocker });
   }
 
@@ -63,7 +65,7 @@ export async function runV035SuccessPipelineForChannel(plan: V035ChannelPlan, op
   if (result.FINAL_STATUS !== "SUCCESS_V035_IMAGE_SKILL_SCENE_SHORTS_REVIEW_READY") {
     const blocker = resultBlocker(result);
     await copyIfExists(path.join(runtimeRoot, "review-summary.json"), path.join(outputRoot, "review-summary.json"));
-    await writeBlockedChannelArtifacts({ outputRoot, plan, blocker });
+    await writeBlockedChannelArtifacts({ outputRoot, plan, blocker, reviewVersion });
     return buildBlockedChannelResult({
       plan,
       outputRoot,
@@ -72,7 +74,7 @@ export async function runV035SuccessPipelineForChannel(plan: V035ChannelPlan, op
     });
   }
 
-  await copyV035ArtifactsToV045({ runtimeRoot, outputRoot, plan, result });
+  await copyV035ArtifactsToV045({ runtimeRoot, outputRoot, plan, result, reviewVersion });
   return {
     channel_key: plan.channel_key,
     FINAL_STATUS: "SUCCESS_V045_CHANNEL_V035_PIPELINE_READY" as const,
@@ -137,6 +139,7 @@ async function copyV035ArtifactsToV045(input: {
   outputRoot: string;
   plan: V035ChannelPlan;
   result: Awaited<ReturnType<typeof generateV035ImageSkillSceneShortsReviewPacket>>;
+  reviewVersion: "v045" | "v046";
 }) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   const copies = [
@@ -154,7 +157,7 @@ async function copyV035ArtifactsToV045(input: {
   await copyDirectoryIfExists(path.join(input.runtimeRoot, "image-skill-scenes"), path.join(input.outputRoot, "generated-scenes"));
   await copyIfExists(path.join(input.runtimeRoot, "actual-frame-contact-sheet.jpg"), path.join(input.outputRoot, "generated-image-contact-sheet.jpg"));
   await writeJson(path.join(input.outputRoot, "hook-script-preview.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     product_name: input.plan.product_name,
     hook: input.plan.hook,
@@ -163,7 +166,7 @@ async function copyV035ArtifactsToV045(input: {
     v035_pipeline_reused: true
   });
   await writeJson(path.join(input.outputRoot, "comment-preview.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     comment_first_line: input.plan.comment_first_line,
     affiliate_disclosure_present: true,
@@ -171,14 +174,14 @@ async function copyV035ArtifactsToV045(input: {
     raw_affiliate_url_printed: false
   });
   await writeJson(path.join(input.outputRoot, "asset-to-frame-proof-report.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     pass: true,
     source: "v035-proven-renderer",
     local_review_video: path.join(input.outputRoot, "local-review-video.mp4")
   });
   await writeJson(path.join(input.outputRoot, "human-review-decision.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     human_review_status: "PENDING_HUMAN_REVIEW",
     metadata_review_status: "PENDING_METADATA_REVIEW",
@@ -187,17 +190,22 @@ async function copyV035ArtifactsToV045(input: {
   });
   await writeJson(path.join(input.outputRoot, "review-summary.json"), {
     ...input.result,
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     v035_pipeline_reused: true,
     SAFE_TO_UPLOAD: false
   });
 }
 
-async function writeBlockedChannelArtifacts(input: { outputRoot: string; plan: V035ChannelPlan; blocker: string }) {
+async function writeBlockedChannelArtifacts(input: {
+  outputRoot: string;
+  plan: V035ChannelPlan;
+  blocker: string;
+  reviewVersion: "v045" | "v046";
+}) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   await writeJson(path.join(input.outputRoot, "human-review-decision.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     human_review_status: "PENDING_HUMAN_REVIEW",
     metadata_review_status: "PENDING_METADATA_REVIEW",
@@ -206,7 +214,7 @@ async function writeBlockedChannelArtifacts(input: { outputRoot: string; plan: V
     blocker: input.blocker
   });
   await writeJson(path.join(input.outputRoot, "review-summary.json"), {
-    version: "v045",
+    version: input.reviewVersion,
     channel_key: input.plan.channel_key,
     FINAL_STATUS: input.blocker,
     SAFE_TO_UPLOAD: false,
@@ -258,6 +266,12 @@ function resultBlocker(value: unknown) {
   if (value && typeof value === "object") {
     const blocker = (value as Record<string, unknown>).blocker;
     if (typeof blocker === "string" && blocker) return blocker;
+    const audioBlocker = (value as Record<string, unknown>).audio_blocker;
+    if (typeof audioBlocker === "string" && audioBlocker) return audioBlocker;
+    const humanReviewStatus = (value as Record<string, unknown>).human_review_status;
+    if (typeof humanReviewStatus === "string" && humanReviewStatus.startsWith("BLOCKED_")) {
+      return humanReviewStatus;
+    }
   }
   return "BLOCKED_V035_SUCCESS_PIPELINE_NOT_REUSABLE";
 }
