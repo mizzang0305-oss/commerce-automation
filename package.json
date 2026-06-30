@@ -35,6 +35,7 @@
     "review:v035": "tsx scripts/uploads/generate-v035-image-skill-scene-shorts-review-packet.ts",
     "review:v045": "tsx scripts/uploads/generate-v045-three-channel-v035-review-packets.ts",
     "review:v046": "tsx scripts/uploads/generate-v046-agent-image-skill-three-channel-review.ts",
+    "review:v047": "tsx scripts/uploads/generate-v047-three-channel-korean-voice-review.ts",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
     "review:v040": "tsx scripts/uploads/generate-v040-real-image-semantic-review-packets.ts",
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",
