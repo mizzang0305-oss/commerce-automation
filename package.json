@@ -34,6 +34,7 @@
     "review:v034": "tsx scripts/uploads/generate-v034-youtube-metadata-korean-hardening-review-packet.ts",
     "review:v035": "tsx scripts/uploads/generate-v035-image-skill-scene-shorts-review-packet.ts",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
+    "review:v039": "tsx scripts/uploads/generate-v039-asset-to-frame-proof-review-packets.ts",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
