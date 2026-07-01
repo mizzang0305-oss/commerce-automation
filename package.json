@@ -42,6 +42,7 @@
     "upload:v050:check-adapters": "tsx scripts/uploads/check-v050-youtube-adapter-injection.ts",
     "upload:v051:preflight": "tsx scripts/uploads/generate-v051-approval-alias-preflight.ts",
     "upload:v051:execute": "tsx scripts/uploads/execute-v051-three-channel-public-upload.ts",
+    "upload:v054:check-runtime-adapters": "tsx scripts/uploads/check-v054-runtime-youtube-adapters.ts",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
     "review:v040": "tsx scripts/uploads/generate-v040-real-image-semantic-review-packets.ts",
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",
