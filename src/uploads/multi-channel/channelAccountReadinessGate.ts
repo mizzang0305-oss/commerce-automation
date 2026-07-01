@@ -72,7 +72,11 @@ export function buildV050ChannelAccountReadiness(
 ): V050ChannelAccountReadiness {
   const normalizedRoutes = routes.map((route) => buildRoute(route));
   const routeByChannel = Object.fromEntries(normalizedRoutes.map((route) => [route.channel_key, route])) as Record<ChannelKey, V050ChannelAccountRoute>;
-  const singleOAuthSafetyPass = new Set(normalizedRoutes.map((route) => route.youtube_account_alias)).size === normalizedRoutes.length;
+  const configuredAliases = normalizedRoutes.map((route) => route.youtube_account_alias);
+  const resolvedAliases = normalizedRoutes.map((route) => route.resolved_upload_account_alias);
+  const singleOAuthSafetyPass =
+    new Set(configuredAliases).size === normalizedRoutes.length &&
+    new Set(resolvedAliases).size === normalizedRoutes.length;
   const blocker = firstBlocker([
     normalizedRoutes.every((route) => route.target_channel_configured && route.resolved_channel_id_or_handle_present)
       ? null

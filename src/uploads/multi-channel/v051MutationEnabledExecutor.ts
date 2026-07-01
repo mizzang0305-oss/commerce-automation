@@ -33,6 +33,8 @@ export type V051MutationUploadAdapter = {
     videoId: string;
     visibility?: "public" | "private" | "unlisted";
     ambiguous?: boolean;
+    blockedReason?: V051MutationBlocker;
+    videosInsertCalled?: boolean;
   }>;
 };
 
@@ -44,6 +46,8 @@ export type V051MutationCommentAdapter = {
   }): Promise<{
     commentId: string;
     ambiguous?: boolean;
+    blockedReason?: V051MutationBlocker;
+    commentMutationCalled?: boolean;
   }>;
 };
 
@@ -72,6 +76,7 @@ export type V051MutationExecutionReport = {
   version: "v053";
   FINAL_STATUS:
     | "SUCCESS_V053_MUTATION_ENABLED_V051_EXECUTOR_READY_NO_UPLOAD"
+    | "SUCCESS_V051_THREE_CHANNEL_PUBLIC_UPLOADS_DONE"
     | "BLOCKED_V053_MUTATION_ENABLED_V051_EXECUTOR"
     | "BLOCKED_CHANNEL_ACCOUNT_ROUTING_NOT_READY";
   V051_MUTATION_EXECUTOR_READY: boolean;
@@ -110,11 +115,11 @@ export type V051MutationExecutionReport = {
   videos_insert_total_count: number;
   comment_create_total_count: number;
   retry_loop_after_external_call: false;
-  youtube_execute_called: false;
-  videos_insert_called: false;
+  youtube_execute_called: boolean;
+  videos_insert_called: boolean;
   upload_execution_attempted: boolean;
   new_upload_attempted: boolean;
-  comment_create_update_delete_called: false;
+  comment_create_update_delete_called: boolean;
   visibility_changed: false;
   visibility_changed_existing_video: false;
   R2_upload: false;
@@ -203,8 +208,19 @@ export async function executeV051MutationEnabledUploads(input: {
       containsPaidPromotion: true,
       visibility: "public"
     });
-    mutableReport.videos_insert_total_count += 1;
+    const explicitVideosInsertCall = uploadResult.videosInsertCalled === true;
+    if (explicitVideosInsertCall || (uploadResult.videosInsertCalled === undefined && Boolean(uploadResult.videoId.trim() || uploadResult.ambiguous))) {
+      mutableReport.videos_insert_total_count += 1;
+    }
+    if (explicitVideosInsertCall) {
+      mutableReport.youtube_execute_called = true;
+      mutableReport.videos_insert_called = true;
+    }
 
+    if (uploadResult.blockedReason) {
+      setChannelBlocker(mutableReport, channelKey, uploadResult.blockedReason);
+      return await blocked(cwd, mutableReport, uploadResult.blockedReason);
+    }
     if (uploadResult.ambiguous) {
       setChannelBlocker(mutableReport, channelKey, "AMBIGUOUS_UPLOAD_RESULT_AFTER_EXTERNAL_CALL");
       return await blocked(cwd, mutableReport, "AMBIGUOUS_UPLOAD_RESULT_AFTER_EXTERNAL_CALL");
@@ -227,9 +243,19 @@ export async function executeV051MutationEnabledUploads(input: {
         affiliateUrl: input.affiliateUrls?.[channelKey] ?? ""
       })
     });
-    mutableReport.comment_create_total_count += 1;
+    const explicitCommentMutation = commentResult.commentMutationCalled === true;
+    if (explicitCommentMutation || (commentResult.commentMutationCalled === undefined && Boolean(commentResult.commentId.trim() || commentResult.ambiguous))) {
+      mutableReport.comment_create_total_count += 1;
+    }
+    if (explicitCommentMutation) {
+      mutableReport.comment_create_update_delete_called = true;
+    }
     mutableReport.comment_adapter_callable_after_upload_success = true;
 
+    if (commentResult.blockedReason) {
+      setChannelBlocker(mutableReport, channelKey, commentResult.blockedReason);
+      return await blocked(cwd, mutableReport, commentResult.blockedReason);
+    }
     if (commentResult.ambiguous) {
       setChannelBlocker(mutableReport, channelKey, "AMBIGUOUS_COMMENT_RESULT_AFTER_EXTERNAL_CALL");
       return await blocked(cwd, mutableReport, "AMBIGUOUS_COMMENT_RESULT_AFTER_EXTERNAL_CALL");
@@ -238,8 +264,14 @@ export async function executeV051MutationEnabledUploads(input: {
     setCommentCreated(mutableReport, channelKey, commentResult.commentId);
   }
 
-  await writeV053Artifacts(cwd, mutableReport);
-  return mutableReport;
+  const completedReport: V051MutationExecutionReport = {
+    ...mutableReport,
+    FINAL_STATUS: mutableReport.videos_insert_called || mutableReport.comment_create_update_delete_called
+      ? "SUCCESS_V051_THREE_CHANNEL_PUBLIC_UPLOADS_DONE"
+      : mutableReport.FINAL_STATUS
+  };
+  await writeV053Artifacts(cwd, completedReport);
+  return completedReport;
 }
 
 function buildBaseReport(input: {
@@ -434,8 +466,8 @@ function buildHtmlReport(report: V051MutationExecutionReport) {
   <p>SAFE_TO_UPLOAD=false</p>
   <p>execution_mode=${escapeHtml(report.execution_mode)}</p>
   <p>mutation_blocker=${escapeHtml(report.mutation_blocker ?? "")}</p>
-  <p>videos_insert_called=false</p>
-  <p>comment_create_update_delete_called=false</p>
+  <p>videos_insert_called=${report.videos_insert_called}</p>
+  <p>comment_create_update_delete_called=${report.comment_create_update_delete_called}</p>
 </body>
 </html>
 `;
