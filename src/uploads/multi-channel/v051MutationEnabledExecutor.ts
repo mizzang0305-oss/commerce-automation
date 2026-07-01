@@ -43,6 +43,7 @@ export type V051MutationCommentAdapter = {
     channelKey: ChannelKey;
     videoId: string;
     commentTextWithAffiliateUrl: string;
+    affiliateUrl: string;
   }): Promise<{
     commentId: string;
     ambiguous?: boolean;
@@ -238,6 +239,7 @@ export async function executeV051MutationEnabledUploads(input: {
     const commentResult = await commentAdapter.createTopLevelComment({
       channelKey,
       videoId: uploadResult.videoId.trim(),
+      affiliateUrl: input.affiliateUrls?.[channelKey] ?? "",
       commentTextWithAffiliateUrl: buildV049ExecutionCommentText({
         channelKey,
         affiliateUrl: input.affiliateUrls?.[channelKey] ?? ""
