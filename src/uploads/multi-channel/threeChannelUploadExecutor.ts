@@ -25,7 +25,12 @@ export type V049UploadExecutionResult = {
   lets_buy_video_id: string | null;
   lets_buy_comment_created: boolean;
   retry_loop_after_external_call: boolean;
-  blocker: "FRESH_UPLOAD_APPROVAL_MISSING" | "MANUAL_PAID_PROMOTION_CHECK_REQUIRED" | "PREFLIGHT_BLOCKED" | "YOUTUBE_UPLOAD_ADAPTER_NOT_INJECTED";
+  blocker:
+    | "FRESH_UPLOAD_APPROVAL_MISSING"
+    | "MANUAL_PAID_PROMOTION_CHECK_REQUIRED"
+    | "PREFLIGHT_BLOCKED"
+    | "YOUTUBE_UPLOAD_ADAPTER_NOT_INJECTED"
+    | "CHECK_ONLY_NO_UPLOAD";
 };
 
 export type V049UploadExecutorDependencies = {
@@ -49,6 +54,7 @@ export async function executeV049ThreeChannelPublicUploads(input: {
   cwd?: string;
   affiliateUrls?: V049AffiliateUrls;
   approvalText?: string;
+  executionMode?: "check_only" | "execute";
   deps?: V049UploadExecutorDependencies;
 } = {}): Promise<V049UploadExecutionResult> {
   const approvalText = input.approvalText ?? "";
@@ -68,6 +74,9 @@ export async function executeV049ThreeChannelPublicUploads(input: {
   if (!input.deps?.uploadVideo || !input.deps?.createTopLevelComment) {
     return blocked("YOUTUBE_UPLOAD_ADAPTER_NOT_INJECTED");
   }
+  if (input.executionMode === "check_only") {
+    return blocked("CHECK_ONLY_NO_UPLOAD");
+  }
 
   // The real adapter is intentionally injectable so the script cannot upload
   // unless a future task wires an explicit, reviewed YouTube dependency.
@@ -75,7 +84,7 @@ export async function executeV049ThreeChannelPublicUploads(input: {
 
   function blocked(blocker: V049UploadExecutionResult["blocker"]): V049UploadExecutionResult {
     return {
-      FINAL_STATUS: blocker === "FRESH_UPLOAD_APPROVAL_MISSING"
+      FINAL_STATUS: blocker === "FRESH_UPLOAD_APPROVAL_MISSING" || blocker === "CHECK_ONLY_NO_UPLOAD"
         ? "V049_UPLOAD_PREFLIGHT_READY_NO_UPLOAD"
         : "BLOCKED_V049_THREE_CHANNEL_UPLOAD_EXECUTION",
       upload_execution_attempted: false,
