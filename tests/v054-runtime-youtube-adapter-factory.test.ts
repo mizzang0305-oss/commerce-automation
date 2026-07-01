@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
+import type { ChannelKey } from "../src/uploads/multi-channel/channelProfiles";
 import {
   V051_PAID_PROMOTION_CONFIRMATION_PHRASE,
   V051_UPLOAD_APPROVAL_PHRASE
@@ -21,6 +22,11 @@ const AFFILIATE_URLS = {
   father_jobs: "TEST_AFFILIATE_FATHER",
   neoman_moleulgeol: "TEST_AFFILIATE_NEOMAN",
   lets_buy: "TEST_AFFILIATE_LETS_BUY"
+} as const;
+const TARGET_CHANNEL_IDS = {
+  father_jobs: "UC-father-target",
+  neoman_moleulgeol: "UC-neoman-target",
+  lets_buy: "UC-letsbuy-target"
 } as const;
 const SECRET_NEEDLES = /TEST_AFFILIATE_|access_token|refresh_token|client_secret|Authorization|Bearer/i;
 
@@ -120,10 +126,38 @@ describe("v054 runtime YouTube adapter factory", () => {
         token_refresh_succeeded: false,
         token_file_updated: false
       }));
+      const authenticatedChannelProbeProvider = vi.fn(async (input: {
+        channelKey: ChannelKey;
+        uploadAccountAlias: string;
+        accessToken: string;
+        fetchImpl: typeof fetch;
+      }) => ({
+        ok: true as const,
+        channel_key: input.channelKey,
+        upload_account_alias: input.uploadAccountAlias,
+        authenticated_channel_id: TARGET_CHANNEL_IDS[input.channelKey],
+        probe_performed: true as const,
+        raw_token_printed: false as const,
+        secrets_printed: false as const,
+        blocker: null
+      }));
+      const commentVisibilityVerifier = vi.fn(async () => ({
+        ok: true as const,
+        blocker: null,
+        comment_id_exists: true,
+        affiliate_link_visible: true,
+        coupang_disclosure_visible: true,
+        comment_visible: true,
+        raw_urls_printed: false as const,
+        secrets_printed: false as const
+      }));
       const factory = await createV054RuntimeYouTubeAdapters({
         cwd,
         fetchImpl: fetchMock,
-        accessTokenProvider: tokenProvider
+        accessTokenProvider: tokenProvider,
+        authenticatedChannelProbeProvider,
+        commentVisibilityVerifier,
+        targetChannelIds: TARGET_CHANNEL_IDS
       });
 
       const result = await executeV051MutationEnabledUploads({
@@ -154,6 +188,8 @@ describe("v054 runtime YouTube adapter factory", () => {
         fake_success: false
       });
       expect(tokenProvider).toHaveBeenCalledTimes(6);
+      expect(authenticatedChannelProbeProvider).toHaveBeenCalledTimes(3);
+      expect(commentVisibilityVerifier).toHaveBeenCalledTimes(3);
       expect(fetchMock).toHaveBeenCalledTimes(9);
       expect(JSON.stringify(result)).not.toMatch(SECRET_NEEDLES);
     } finally {
@@ -190,6 +226,63 @@ describe("v054 runtime YouTube adapter factory", () => {
       expect(result.mutation_blocker).toBe("RUNTIME_TOKEN_PROVIDER_NOT_READY");
       expect(result.videos_insert_total_count).toBe(0);
       expect(result.comment_create_total_count).toBe(0);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(JSON.stringify(result)).not.toMatch(SECRET_NEEDLES);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("runtime authenticated channel hard gate blocks before videos.insert when targets are missing", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeV048Videos(cwd);
+      const fetchMock = mockYouTubeFetch();
+      const tokenProvider = vi.fn(async () => ({
+        ok: true as const,
+        accessToken: "mock-access-token",
+        token_refresh_attempted: false,
+        token_refresh_succeeded: false,
+        token_file_updated: false
+      }));
+      const authenticatedChannelProbeProvider = vi.fn(async (input: {
+        channelKey: ChannelKey;
+        uploadAccountAlias: string;
+        accessToken: string;
+        fetchImpl: typeof fetch;
+      }) => ({
+        ok: true as const,
+        channel_key: input.channelKey,
+        upload_account_alias: input.uploadAccountAlias,
+        authenticated_channel_id: TARGET_CHANNEL_IDS[input.channelKey],
+        probe_performed: true as const,
+        raw_token_printed: false as const,
+        secrets_printed: false as const,
+        blocker: null
+      }));
+      const factory = await createV054RuntimeYouTubeAdapters({
+        cwd,
+        env: {} as NodeJS.ProcessEnv,
+        fetchImpl: fetchMock,
+        accessTokenProvider: tokenProvider,
+        authenticatedChannelProbeProvider
+      });
+
+      const result = await executeV051MutationEnabledUploads({
+        cwd,
+        executionMode: "mutation_enabled",
+        approvalText: APPROVAL_TEXT,
+        affiliateUrls: AFFILIATE_URLS,
+        adapters: factory.adapters,
+        safetyOverrides: factory.safetyOverrides
+      });
+
+      expect(result.FINAL_STATUS).toBe("BLOCKED_V053_MUTATION_ENABLED_V051_EXECUTOR");
+      expect(result.mutation_blocker).toBe("BLOCKED_RUNTIME_CHANNEL_ACCOUNT_MISMATCH");
+      expect(result.videos_insert_total_count).toBe(0);
+      expect(result.comment_create_total_count).toBe(0);
+      expect(tokenProvider).toHaveBeenCalledTimes(3);
+      expect(authenticatedChannelProbeProvider).toHaveBeenCalledTimes(3);
       expect(fetchMock).not.toHaveBeenCalled();
       expect(JSON.stringify(result)).not.toMatch(SECRET_NEEDLES);
     } finally {

@@ -14,6 +14,22 @@ import {
   type V050DuplicateUploadGuard
 } from "./threeChannelYouTubeAdapterInjection";
 import {
+  buildV055YouTubeVideoInsertBody,
+  ensureCoupangDisclosure
+} from "../youtube/youtubeDisclosurePayload";
+import {
+  verifyInsertedCommentVisibility,
+  type V055CommentVisibilityVerification
+} from "../youtube/youtubeCommentVisibilityVerifier";
+import {
+  evaluateV055ChannelRoutingHardGate,
+  type V055ChannelRoutingHardGateBlocker
+} from "./channelRoutingHardGate";
+import {
+  buildAuthenticatedChannelProbe,
+  type AuthenticatedChannelProbeResult
+} from "./runtimeAuthenticatedChannelProbe";
+import {
   buildV049ExecutionCommentText
 } from "./threeChannelUploadExecutor";
 import {
@@ -35,6 +51,11 @@ const YOUTUBE_COMMENT_THREADS_INSERT_URL =
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const TOKEN_FILE_ENV = "YOUTUBE_LOCAL_TOKEN_FILE_PATH";
 const FALLBACK_TOKEN_FILE_ENV = "YOUTUBE_TOKEN_FILE";
+const TARGET_CHANNEL_ID_ENVS: Record<ChannelKey, string> = {
+  father_jobs: "YOUTUBE_FATHER_JOBS_CHANNEL_ID",
+  neoman_moleulgeol: "YOUTUBE_NEOMAN_MOLEULGEOL_CHANNEL_ID",
+  lets_buy: "YOUTUBE_LETS_BUY_CHANNEL_ID"
+};
 
 const CHANNEL_TARGETS: Record<ChannelKey, {
   youtube_account_alias: string;
@@ -140,9 +161,44 @@ export type V054RuntimeFactoryOptions = {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   accessTokenProvider?: (channelKey: ChannelKey) => Promise<YouTubeUploadAccessTokenResult>;
+  authenticatedChannelProbeProvider?: (input: {
+    channelKey: ChannelKey;
+    uploadAccountAlias: string;
+    accessToken: string;
+    fetchImpl: typeof fetch;
+  }) => Promise<AuthenticatedChannelProbeResult>;
+  commentVisibilityVerifier?: (input: {
+    videoId: string;
+    commentId: string;
+    expectedAffiliateUrl: string;
+    accessToken: string;
+    fetchImpl: typeof fetch;
+  }) => Promise<V055CommentVisibilityVerification>;
+  targetChannelIds?: Partial<Record<ChannelKey, string>>;
   routes?: V050ChannelAccountRoute[];
   affiliateUrls?: V049AffiliateUrls;
 };
+
+type V054RuntimeSharedOptions = {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  fetchImpl: typeof fetch;
+  routes: V050ChannelAccountRoute[];
+  accessTokenProvider?: (channelKey: ChannelKey) => Promise<YouTubeUploadAccessTokenResult>;
+  authenticatedChannelProbeProvider?: V054RuntimeFactoryOptions["authenticatedChannelProbeProvider"];
+  commentVisibilityVerifier?: V054RuntimeFactoryOptions["commentVisibilityVerifier"];
+  targetChannelIds: Partial<Record<ChannelKey, string>>;
+};
+
+type V054RuntimeRoutingProbeResolution =
+  | {
+    ok: true;
+    accessTokens: Partial<Record<ChannelKey, string>>;
+  }
+  | {
+    ok: false;
+    blocker: V051MutationBlocker;
+  };
 
 export async function createV054RuntimeYouTubeAdapters(
   options: V054RuntimeFactoryOptions = {}
@@ -153,7 +209,13 @@ export async function createV054RuntimeYouTubeAdapters(
     env: options.env ?? process.env,
     fetchImpl: options.fetchImpl ?? fetch,
     routes: readiness.routes,
-    accessTokenProvider: options.accessTokenProvider
+    accessTokenProvider: options.accessTokenProvider,
+    authenticatedChannelProbeProvider: options.authenticatedChannelProbeProvider,
+    commentVisibilityVerifier: options.commentVisibilityVerifier,
+    targetChannelIds: {
+      ...resolveV054RuntimeTargetChannelIds(options.env ?? process.env),
+      ...(options.targetChannelIds ?? {})
+    }
   };
 
   return {
@@ -264,13 +326,67 @@ export function resolveV054RuntimeChannelAccountRoutes(
   });
 }
 
-function createV054RuntimeUploadAdapter(options: {
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  fetchImpl: typeof fetch;
-  routes: V050ChannelAccountRoute[];
-  accessTokenProvider?: (channelKey: ChannelKey) => Promise<YouTubeUploadAccessTokenResult>;
-}): V051MutationUploadAdapter {
+export function resolveV054RuntimeTargetChannelIds(
+  env: NodeJS.ProcessEnv = process.env
+): Partial<Record<ChannelKey, string>> {
+  return Object.fromEntries(CHANNEL_ORDER.map((channelKey) => [
+    channelKey,
+    env[TARGET_CHANNEL_ID_ENVS[channelKey]]?.trim() ?? ""
+  ]).filter(([, value]) => Boolean(value))) as Partial<Record<ChannelKey, string>>;
+}
+
+async function resolveV054RuntimeRoutingProbe(
+  options: V054RuntimeSharedOptions
+): Promise<V054RuntimeRoutingProbeResolution> {
+  const accessTokens: Partial<Record<ChannelKey, string>> = {};
+  const probes: Partial<Record<ChannelKey, AuthenticatedChannelProbeResult>> = {};
+
+  for (const channelKey of CHANNEL_ORDER) {
+    const route = routeFor(options.routes, channelKey);
+    if (!route || route.blocker || !route.upload_account_matches_target) {
+      return { ok: false, blocker: "RUNTIME_CHANNEL_ROUTE_NOT_READY" };
+    }
+    const token = await resolveAccessToken(channelKey, options);
+    if (!token.ok) {
+      return { ok: false, blocker: "RUNTIME_TOKEN_PROVIDER_NOT_READY" };
+    }
+    accessTokens[channelKey] = token.accessToken;
+    probes[channelKey] = await (options.authenticatedChannelProbeProvider ?? buildAuthenticatedChannelProbe)({
+      channelKey,
+      uploadAccountAlias: route.resolved_upload_account_alias,
+      accessToken: token.accessToken,
+      fetchImpl: options.fetchImpl
+    });
+  }
+
+  const hardGate = evaluateV055ChannelRoutingHardGate({
+    routes: options.routes,
+    targetChannelIds: options.targetChannelIds,
+    probes
+  });
+  if (!hardGate.routing_ready) {
+    return {
+      ok: false,
+      blocker: mapV055RoutingBlocker(hardGate.blocker)
+    };
+  }
+
+  return { ok: true, accessTokens };
+}
+
+function mapV055RoutingBlocker(
+  blocker: V055ChannelRoutingHardGateBlocker | null
+): V051MutationBlocker {
+  return blocker ?? "BLOCKED_AUTHENTICATED_CHANNEL_PROBE_MISSING";
+}
+
+function createV054RuntimeUploadAdapter(options: V054RuntimeSharedOptions): V051MutationUploadAdapter {
+  let routingProbePromise: Promise<V054RuntimeRoutingProbeResolution> | null = null;
+  const resolveRoutingProbe = () => {
+    routingProbePromise ??= resolveV054RuntimeRoutingProbe(options);
+    return routingProbePromise;
+  };
+
   return {
     async uploadPublicShorts(input) {
       const route = routeFor(options.routes, input.channelKey);
@@ -280,21 +396,26 @@ function createV054RuntimeUploadAdapter(options: {
       if (input.visibility !== "public") {
         return blockedUpload("NON_PUBLIC_UPLOAD_RESULT_REJECTED");
       }
+      const routingProbe = await resolveRoutingProbe();
+      if (!routingProbe.ok) {
+        return blockedUpload(routingProbe.blocker);
+      }
+      const accessToken = routingProbe.accessTokens[input.channelKey]?.trim();
+      if (!accessToken) {
+        return blockedUpload("RUNTIME_TOKEN_PROVIDER_NOT_READY");
+      }
       const videoAsset = await readLocalVideoAsset(input.videoPath);
       if (!videoAsset.ok) {
         return blockedUpload("RUNTIME_VIDEO_ASSET_NOT_READY");
       }
-      const token = await resolveAccessToken(input.channelKey, options);
-      if (!token.ok) {
-        return blockedUpload("RUNTIME_TOKEN_PROVIDER_NOT_READY");
-      }
 
       const session = await startPublicUploadSession({
         fetchImpl: options.fetchImpl,
-        accessToken: token.accessToken,
+        accessToken,
         title: input.title,
         description: input.description,
         size: videoAsset.bytes.byteLength,
+        containsSyntheticMedia: true,
         containsPaidPromotion: input.containsPaidPromotion,
         madeForKids: input.madeForKids
       });
@@ -305,7 +426,7 @@ function createV054RuntimeUploadAdapter(options: {
       const upload = await uploadVideoBytes({
         fetchImpl: options.fetchImpl,
         uploadUrl: session.uploadUrl,
-        accessToken: token.accessToken,
+        accessToken,
         bytes: videoAsset.bytes
       });
       if (!upload.ok) {
@@ -321,12 +442,7 @@ function createV054RuntimeUploadAdapter(options: {
   };
 }
 
-function createV054RuntimeCommentAdapter(options: {
-  env: NodeJS.ProcessEnv;
-  fetchImpl: typeof fetch;
-  routes: V050ChannelAccountRoute[];
-  accessTokenProvider?: (channelKey: ChannelKey) => Promise<YouTubeUploadAccessTokenResult>;
-}): V051MutationCommentAdapter {
+function createV054RuntimeCommentAdapter(options: V054RuntimeSharedOptions): V051MutationCommentAdapter {
   return {
     async createTopLevelComment(input) {
       const route = routeFor(options.routes, input.channelKey);
@@ -349,7 +465,7 @@ function createV054RuntimeCommentAdapter(options: {
             videoId: input.videoId,
             topLevelComment: {
               snippet: {
-                textOriginal: input.commentTextWithAffiliateUrl
+                textOriginal: ensureCoupangDisclosure(input.commentTextWithAffiliateUrl)
               }
             }
           }
@@ -359,6 +475,16 @@ function createV054RuntimeCommentAdapter(options: {
       const commentId = typeof payload.id === "string" ? payload.id.trim() : "";
       if (!response.ok || !commentId) {
         return blockedComment("RUNTIME_COMMENT_FAILED", true);
+      }
+      const verification = await (options.commentVisibilityVerifier ?? verifyInsertedCommentVisibility)({
+        videoId: input.videoId,
+        commentId,
+        expectedAffiliateUrl: input.affiliateUrl,
+        accessToken: token.accessToken,
+        fetchImpl: options.fetchImpl
+      });
+      if (!verification.ok) {
+        return blockedComment(verification.blocker ?? "COMMENT_INSERT_REPORTED_BUT_NOT_VISIBLE", true);
       }
 
       return {
@@ -595,6 +721,7 @@ async function startPublicUploadSession(input: {
   title: string;
   description: string;
   size: number;
+  containsSyntheticMedia: true;
   containsPaidPromotion: true;
   madeForKids: false;
 }) {
@@ -606,20 +733,14 @@ async function startPublicUploadSession(input: {
       "X-Upload-Content-Type": "video/mp4",
       "X-Upload-Content-Length": String(input.size)
     }),
-    body: JSON.stringify({
-      snippet: {
-        title: input.title,
-        description: input.description,
-        categoryId: "26"
-      },
-      status: {
-        privacyStatus: "public",
-        selfDeclaredMadeForKids: input.madeForKids
-      },
-      paidProductPlacementDetails: {
-        hasPaidProductPlacement: input.containsPaidPromotion
-      }
-    })
+    body: JSON.stringify(buildV055YouTubeVideoInsertBody({
+      title: input.title,
+      description: input.description,
+      madeForKids: input.madeForKids,
+      visibility: "public",
+      containsSyntheticMedia: input.containsSyntheticMedia,
+      containsPaidPromotion: input.containsPaidPromotion
+    }))
   });
   const uploadUrl = response.headers.get("Location")?.trim() ?? "";
   if (!response.ok || !uploadUrl) {
