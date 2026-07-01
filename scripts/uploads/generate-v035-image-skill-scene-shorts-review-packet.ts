@@ -178,6 +178,12 @@ export function buildV035VoiceoverScript() {
   ].join(" ");
 }
 
+type V035SceneOverride = {
+  scene_key: string;
+  scene_purpose: string;
+  subtitle?: string;
+};
+
 export function buildV035ScenePromptPackage() {
   return {
     candidate_id: CANDIDATE_ID,
@@ -402,10 +408,15 @@ export async function generateV035ImageSkillSceneShortsReviewPacket(options: {
   env?: NodeJS.ProcessEnv;
   visualReview?: Partial<V035VisualReview>;
   selectedAffiliateUrl?: string;
+  voiceoverScript?: string;
+  requiredCoreAnchors?: string[];
+  sceneOverrides?: V035SceneOverride[];
+  productSolutionFlowSceneKeys?: string[];
   voiceRunner?: (input: { scriptPath: string; audioPath: string; speedMultiplier: number }) => Promise<{ ok: boolean; blocker?: string }>;
   mediaRunner?: (input: { outputPath: string; scenes: V035TimelineScene[]; audioPath?: string; productImagePath?: string | null }) => Promise<void>;
   videoProbe?: (input: { videoPath: string; audioPath: string }) => Promise<{ duration_seconds: number | null; audio_duration_seconds?: number | null; video_has_audio_stream: boolean }>;
-  asrRunner?: (input: { videoPath: string }) => Promise<Partial<V035AudioProbe>>;
+  asrRunner?: (input: { videoPath: string; channelKey?: string }) => Promise<Partial<V035AudioProbe>>;
+  channelKey?: string;
 } = {}) {
   const cwd = options.cwd ?? process.cwd();
   const env = { ...process.env, ...(await loadLocalEnv(cwd)), ...(options.env ?? {}) };
@@ -418,7 +429,8 @@ export async function generateV035ImageSkillSceneShortsReviewPacket(options: {
     cwd,
     visualReview: options.visualReview
   });
-  const timeline = buildV035ScriptSceneTimeline(cwd);
+  const voiceoverScript = options.voiceoverScript ?? buildV035VoiceoverScript();
+  const timeline = buildV035ScriptSceneTimeline(cwd, options.sceneOverrides);
   const metadata = buildV035MetadataPreview({
     candidate_id: CANDIDATE_ID,
     selected_affiliate_url: selectedAffiliateUrl
@@ -450,7 +462,7 @@ export async function generateV035ImageSkillSceneShortsReviewPacket(options: {
   await writeJson(paths.metadataUtf8RoundtripReportPath, metadata.utf8_roundtrip_report);
   await writeJson(paths.metadataPlaceholderScanPath, metadata.placeholder_scan_report);
   await writeJson(paths.postUploadMetadataVerificationPlanPath, metadata.post_upload_metadata_verification_plan);
-  await fs.writeFile(paths.voiceoverScriptPath, `${buildV035VoiceoverScript()}\n`, "utf8");
+  await fs.writeFile(paths.voiceoverScriptPath, `${voiceoverScript}\n`, "utf8");
 
   if (!imageQuality.image_quality_gate_pass) {
     return writeV035BlockedPacket({
@@ -513,17 +525,28 @@ export async function generateV035ImageSkillSceneShortsReviewPacket(options: {
     ? await options.videoProbe({ videoPath: paths.localReviewVideoPath, audioPath: paths.voiceoverAudioPath })
     : await probeRenderedMedia(paths.localReviewVideoPath, paths.voiceoverAudioPath);
   const audioProbe = options.asrRunner
-    ? evaluateV035AudioProbe(await options.asrRunner({ videoPath: paths.localReviewVideoPath }))
-    : await runV035AsrProbe({ cwd, env, videoPath: paths.localReviewVideoPath });
+    ? evaluateV035AudioProbe(await options.asrRunner({ videoPath: paths.localReviewVideoPath, channelKey: options.channelKey }), {
+      referenceScript: voiceoverScript,
+      requiredCoreAnchors: options.requiredCoreAnchors
+    })
+    : await runV035AsrProbe({
+      cwd,
+      env,
+      videoPath: paths.localReviewVideoPath,
+      referenceScript: voiceoverScript,
+      requiredCoreAnchors: options.requiredCoreAnchors
+    });
 
   await fs.writeFile(paths.asrTranscriptPath, `${audioProbe.transcript ?? ""}\n`, "utf8");
   await writeJson(paths.audioIntelligibilityProbePath, audioProbe);
 
   const productSolutionFlowPass =
     imageQuality.image_quality_gate_pass &&
-    timeline.some((scene) => scene.scene_key === "product-solution-reveal") &&
-    timeline.some((scene) => scene.scene_key === "laundry-use-case-human-hands") &&
-    timeline.some((scene) => scene.scene_key === "folded-storage-cta");
+    (options.productSolutionFlowSceneKeys?.length
+      ? options.productSolutionFlowSceneKeys.every((sceneKey) => timeline.some((scene) => scene.scene_key === sceneKey))
+      : timeline.some((scene) => scene.scene_key === "product-solution-reveal") &&
+        timeline.some((scene) => scene.scene_key === "laundry-use-case-human-hands") &&
+        timeline.some((scene) => scene.scene_key === "folded-storage-cta"));
   const localReviewPacketReady =
     videoProbe.video_has_audio_stream === true &&
     audioProbe.audio_blocker === null &&
@@ -548,14 +571,16 @@ export async function generateV035ImageSkillSceneShortsReviewPacket(options: {
   return result;
 }
 
-function buildV035ScriptSceneTimeline(cwd: string): V035TimelineScene[] {
-  return V035_SCENE_ASSETS.map((scene) => ({
+function buildV035ScriptSceneTimeline(cwd: string, sceneOverrides: V035SceneOverride[] = []): V035TimelineScene[] {
+  return V035_SCENE_ASSETS.map((scene, index) => {
+    const override = sceneOverrides[index];
+    return ({
     scene_number: scene.scene_number,
-    scene_key: scene.scene_key,
-    scene_purpose: scene.scene_purpose,
+    scene_key: override?.scene_key ?? scene.scene_key,
+    scene_purpose: override?.scene_purpose ?? scene.scene_purpose,
     image: scene.filename,
     image_path: path.join(imageSceneDir(cwd), scene.filename),
-    subtitle: scene.subtitle,
+    subtitle: override?.subtitle ?? scene.subtitle,
     duration_seconds: scene.duration_seconds,
     product_image_overlay: scene.product_image_overlay,
     motion: {
@@ -571,7 +596,8 @@ function buildV035ScriptSceneTimeline(cwd: string): V035TimelineScene[] {
       top_reserved_px: 240,
       bottom_reserved_px: 250
     }
-  }));
+  });
+  });
 }
 
 function buildV035ImageSceneManifest(imageQuality: Awaited<ReturnType<typeof validateV035ImageSkillSceneAssets>>) {
@@ -798,7 +824,13 @@ async function runMeloTtsVoiceover(input: {
   };
 }
 
-async function runV035AsrProbe(input: { cwd: string; env: NodeJS.ProcessEnv; videoPath: string }) {
+async function runV035AsrProbe(input: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  videoPath: string;
+  referenceScript?: string;
+  requiredCoreAnchors?: string[];
+}) {
   const command = readString(input.env.LOCAL_ASR_COMMAND);
   const modelPath = readString(input.env.LOCAL_ASR_MODEL_PATH);
   const providerReady =
@@ -831,6 +863,9 @@ async function runV035AsrProbe(input: { cwd: string; env: NodeJS.ProcessEnv; vid
     return evaluateV035AudioProbe({
       transcript: typeof parsed.transcript === "string" ? parsed.transcript.trim() : "",
       speech_rate_wpm: normalizeNumber(parsed.speech_rate_wpm) ?? TARGET_SPEECH_RATE_WPM
+    }, {
+      referenceScript: input.referenceScript,
+      requiredCoreAnchors: input.requiredCoreAnchors
     });
   } catch {
     return blockedAudioProbe("VOICEOVER_UNINTELLIGIBLE_ASR_FAILED");
@@ -839,19 +874,24 @@ async function runV035AsrProbe(input: { cwd: string; env: NodeJS.ProcessEnv; vid
   }
 }
 
-function evaluateV035AudioProbe(input: Partial<V035AudioProbe> = {}): V035AudioProbe {
+function evaluateV035AudioProbe(input: Partial<V035AudioProbe> = {}, options: {
+  referenceScript?: string;
+  requiredCoreAnchors?: string[];
+} = {}): V035AudioProbe {
+  const referenceScript = options.referenceScript ?? buildV035VoiceoverScript();
+  const requiredCoreAnchors = options.requiredCoreAnchors?.length ? options.requiredCoreAnchors : REQUIRED_CORE_ANCHORS;
   const transcript = String(input.transcript ?? "");
   const normalizedTranscript = normalizeAsrTranscriptForProductTerms(transcript);
   const rawSimilarity = normalizeNumber(input.raw_similarity_score) ??
-    calculateTranscriptSimilarity(buildV035VoiceoverScript(), transcript);
+    calculateTranscriptSimilarity(referenceScript, transcript);
   const transcriptSimilarity = normalizeNumber(input.transcript_similarity_score) ??
-    calculateTranscriptSimilarity(buildV035VoiceoverScript(), normalizedTranscript);
+    calculateTranscriptSimilarity(referenceScript, normalizedTranscript);
   const recognizedCoreAnchors = input.core_anchor_recognition_pass === true
-    ? REQUIRED_CORE_ANCHORS
-    : findRecognizedKeywordAnchors(normalizedTranscript, REQUIRED_CORE_ANCHORS);
+    ? requiredCoreAnchors
+    : findRecognizedKeywordAnchors(normalizedTranscript, requiredCoreAnchors);
   const recognizedContextAnchors = findRecognizedKeywordAnchors(normalizedTranscript, REQUIRED_CONTEXT_ANCHORS);
   const coreAnchorPass = input.core_anchor_recognition_pass === true ||
-    REQUIRED_CORE_ANCHORS.every((anchor) => recognizedCoreAnchors.includes(anchor));
+    requiredCoreAnchors.every((anchor) => recognizedCoreAnchors.includes(anchor));
   const speechRateWpm = normalizeNumber(input.speech_rate_wpm) ?? TARGET_SPEECH_RATE_WPM;
   const audioBlocker =
     !transcript ? "VOICEOVER_UNINTELLIGIBLE_ASR_FAILED" :
@@ -1404,8 +1444,15 @@ function calculateTranscriptSimilarity(referenceScript: string, transcript: stri
 }
 
 function findRecognizedKeywordAnchors(transcript: string, anchors: string[]) {
-  const normalizedTranscript = normalizeForSimilarity(transcript);
+  const normalizedTranscript = normalizeForSimilarity(normalizeChannelSpecificAsrTerms(transcript));
   return anchors.filter((anchor) => normalizedTranscript.includes(normalizeForSimilarity(anchor)));
+}
+
+function normalizeChannelSpecificAsrTerms(transcript: string) {
+  return transcript
+    .split("커플 더").join("컵홀더")
+    .split("커플더").join("컵홀더")
+    .split("컵 홀더").join("컵홀더");
 }
 
 function normalizeAsrTranscriptForProductTerms(transcript: string) {

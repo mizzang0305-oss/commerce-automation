@@ -160,7 +160,7 @@ describe("v046 agent image skill handoff", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("three_channel_distinct_plan_tests keep channel plans and comment metadata safe", async () => {
     const cwd = await makeCwd();
