@@ -15,10 +15,12 @@ export type V035ChannelPlan = {
   product_name: string;
   hook: string;
   script: string;
+  core_anchors?: string[];
   scene_prompt_plan: Array<{
     scene_key: string;
     prompt: string;
     purpose: string;
+    subtitle?: string;
   }>;
   metadata_title: string;
   comment_first_line: string;
@@ -28,7 +30,7 @@ type V035GeneratorOptions = NonNullable<Parameters<typeof generateV035ImageSkill
 
 export type V035PipelineRunnerOptions = {
   cwd?: string;
-  reviewVersion?: "v045" | "v046" | "v047";
+  reviewVersion?: "v045" | "v046" | "v047" | "v048";
   env?: V035GeneratorOptions["env"];
   selectedAffiliateUrl?: string;
   sourceSceneDir?: string;
@@ -57,6 +59,17 @@ export async function runV035SuccessPipelineForChannel(plan: V035ChannelPlan, op
     cwd: runtimeCwd,
     env: options.env,
     selectedAffiliateUrl: options.selectedAffiliateUrl,
+    voiceoverScript: plan.core_anchors?.length ? plan.script : undefined,
+    requiredCoreAnchors: plan.core_anchors,
+    sceneOverrides: plan.core_anchors?.length ? plan.scene_prompt_plan.map((scene) => ({
+      scene_key: scene.scene_key,
+      scene_purpose: scene.purpose,
+      subtitle: scene.subtitle
+    })) : undefined,
+    productSolutionFlowSceneKeys: plan.core_anchors?.length
+      ? plan.scene_prompt_plan.map((scene) => scene.scene_key)
+      : undefined,
+    channelKey: plan.channel_key,
     voiceRunner: options.voiceRunner,
     mediaRunner: options.mediaRunner,
     videoProbe: options.videoProbe,
@@ -141,11 +154,14 @@ async function copyV035ArtifactsToV045(input: {
   outputRoot: string;
   plan: V035ChannelPlan;
   result: Awaited<ReturnType<typeof generateV035ImageSkillSceneShortsReviewPacket>>;
-  reviewVersion: "v045" | "v046" | "v047";
+  reviewVersion: "v045" | "v046" | "v047" | "v048";
 }) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   const copies = [
     ["local-review-video.mp4", "local-review-video.mp4"],
+    ["voiceover.wav", "voiceover.wav"],
+    ["asr-transcript.txt", "asr-transcript.txt"],
+    ["audio-intelligibility-probe.json", "audio-intelligibility-probe.json"],
     ["review-console.html", "review-console.html"],
     ["image-scene-manifest.json", "scene-manifest.json"],
     ["image-skill-quality-report.json", "real-image-semantic-report.json"],
@@ -203,7 +219,7 @@ async function writeBlockedChannelArtifacts(input: {
   outputRoot: string;
   plan: V035ChannelPlan;
   blocker: string;
-  reviewVersion: "v045" | "v046" | "v047";
+  reviewVersion: "v045" | "v046" | "v047" | "v048";
 }) {
   await fs.mkdir(input.outputRoot, { recursive: true });
   await writeJson(path.join(input.outputRoot, "human-review-decision.json"), {

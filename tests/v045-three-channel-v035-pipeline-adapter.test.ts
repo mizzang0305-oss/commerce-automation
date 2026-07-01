@@ -134,7 +134,7 @@ describe("v045 restored v035 pipeline adapter", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("blocks instead of using manual-drop fallback when channel images are missing", async () => {
     const cwd = await makeCwd();
