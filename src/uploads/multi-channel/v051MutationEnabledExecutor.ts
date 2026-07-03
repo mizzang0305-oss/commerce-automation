@@ -19,6 +19,11 @@ import {
   evaluateV051MutationSafetyGate,
   type V051MutationBlocker
 } from "./v051MutationSafetyGate";
+import {
+  V057_REUPLOAD_ASSET_PROFILE,
+  resolveV057ReuploadAssetBindings,
+  type V057ReuploadAssetBindingReport
+} from "./v057ReuploadAssetBinding";
 
 export type V051MutationUploadAdapter = {
   uploadPublicShorts(input: {
@@ -134,6 +139,22 @@ export type V051MutationExecutionReport = {
   secrets_printed: false;
   fake_success: false;
   channels: V051MutationChannelResult[];
+  upload_asset_profile_added: true;
+  selected_profile: typeof V057_REUPLOAD_ASSET_PROFILE | null;
+  father_jobs_v057_mp4_exists: boolean;
+  father_jobs_v057_mp4_bound: boolean;
+  father_jobs_video_path: string | null;
+  neoman_moleulgeol_v057_mp4_exists: boolean;
+  neoman_moleulgeol_v057_mp4_bound: boolean;
+  neoman_moleulgeol_video_path: string | null;
+  lets_buy_v057_mp4_exists: boolean;
+  lets_buy_v057_mp4_bound: boolean;
+  lets_buy_video_path: string | null;
+  father_jobs_first_frame_v057_exists: boolean;
+  neoman_moleulgeol_first_frame_v057_exists: boolean;
+  lets_buy_first_frame_v057_exists: boolean;
+  no_v048_fallback: boolean;
+  asset_binding_blocker: V051MutationBlocker | null;
 };
 
 const CHANNEL_ORDER: ChannelKey[] = ["father_jobs", "neoman_moleulgeol", "lets_buy"];
@@ -143,15 +164,41 @@ export async function executeV051MutationEnabledUploads(input: {
   affiliateUrls?: V049AffiliateUrls;
   approvalText?: string;
   executionMode?: V051ExecutionMode | string | null;
+  uploadAssetProfile?: string | null;
   adapters?: V051MutationExecutorAdapters;
   safetyOverrides?: V051MutationSafetyOverrides;
 } = {}): Promise<V051MutationExecutionReport> {
   const cwd = input.cwd ?? process.cwd();
   const executionMode = resolveV051ExecutionMode(input.executionMode ?? process.env.V051_EXECUTION_MODE);
+  const uploadAssetProfileSpecified =
+    input.uploadAssetProfile !== undefined ||
+    process.env.V051_UPLOAD_ASSET_PROFILE !== undefined;
+  const requestedAssetProfile = input.uploadAssetProfile ?? process.env.V051_UPLOAD_ASSET_PROFILE ?? null;
+  const assetBinding = uploadAssetProfileSpecified
+    ? await resolveV057ReuploadAssetBindings({ cwd, uploadAssetProfile: requestedAssetProfile })
+    : null;
+  if (assetBinding?.asset_binding_blocker) {
+    const preflight = await buildV051UploadPreflight({
+      cwd,
+      affiliateUrls: input.affiliateUrls,
+      approvalText: input.approvalText
+    });
+    const blockedReport = buildBaseReport({
+      executionMode,
+      preflight,
+      mutationBlocker: assetBinding.asset_binding_blocker,
+      uploadAdapterCallable: false,
+      commentAdapterCallable: false,
+      assetBinding
+    });
+    await writeV053Artifacts(cwd, blockedReport);
+    return blockedReport;
+  }
   const preflight = await buildV051UploadPreflight({
     cwd,
     affiliateUrls: input.affiliateUrls,
-    approvalText: input.approvalText
+    approvalText: input.approvalText,
+    uploadVideoPaths: assetBinding ? assetBindingToVideoPaths(assetBinding) : undefined
   });
   const gate = evaluateV051MutationSafetyGate({
     executionMode,
@@ -167,7 +214,8 @@ export async function executeV051MutationEnabledUploads(input: {
     preflight,
     mutationBlocker: gate.mutation_blocker,
     uploadAdapterCallable: executionMode === "mutation_enabled" && Boolean(input.adapters?.uploadAdapter),
-    commentAdapterCallable: false
+    commentAdapterCallable: false,
+    assetBinding
   });
 
   if (!gate.mutation_mode_allowed) {
@@ -282,6 +330,7 @@ function buildBaseReport(input: {
   mutationBlocker: V051MutationBlocker | null;
   uploadAdapterCallable: boolean;
   commentAdapterCallable: boolean;
+  assetBinding: V057ReuploadAssetBindingReport | null;
 }): V051MutationExecutionReport {
   const channels = CHANNEL_ORDER.map((channelKey) => ({
     channel_key: channelKey,
@@ -357,8 +406,31 @@ function buildBaseReport(input: {
     raw_urls_printed: false,
     secrets_printed: false,
     fake_success: false,
-    channels
+    channels,
+    upload_asset_profile_added: true,
+    selected_profile: input.assetBinding?.selected_profile ?? null,
+    father_jobs_v057_mp4_exists: input.assetBinding?.father_jobs_v057_mp4_exists ?? false,
+    father_jobs_v057_mp4_bound: input.assetBinding?.father_jobs_v057_mp4_bound ?? false,
+    father_jobs_video_path: input.assetBinding?.father_jobs_video_path ?? null,
+    neoman_moleulgeol_v057_mp4_exists: input.assetBinding?.neoman_moleulgeol_v057_mp4_exists ?? false,
+    neoman_moleulgeol_v057_mp4_bound: input.assetBinding?.neoman_moleulgeol_v057_mp4_bound ?? false,
+    neoman_moleulgeol_video_path: input.assetBinding?.neoman_moleulgeol_video_path ?? null,
+    lets_buy_v057_mp4_exists: input.assetBinding?.lets_buy_v057_mp4_exists ?? false,
+    lets_buy_v057_mp4_bound: input.assetBinding?.lets_buy_v057_mp4_bound ?? false,
+    lets_buy_video_path: input.assetBinding?.lets_buy_video_path ?? null,
+    father_jobs_first_frame_v057_exists: input.assetBinding?.father_jobs_first_frame_v057_exists ?? false,
+    neoman_moleulgeol_first_frame_v057_exists: input.assetBinding?.neoman_moleulgeol_first_frame_v057_exists ?? false,
+    lets_buy_first_frame_v057_exists: input.assetBinding?.lets_buy_first_frame_v057_exists ?? false,
+    no_v048_fallback: input.assetBinding?.no_v048_fallback ?? false,
+    asset_binding_blocker: input.assetBinding?.asset_binding_blocker ?? null
   };
+}
+
+function assetBindingToVideoPaths(assetBinding: V057ReuploadAssetBindingReport) {
+  return Object.fromEntries(CHANNEL_ORDER.map((channelKey) => [
+    channelKey,
+    assetBinding.bindings[channelKey].video_path
+  ])) as Partial<Record<ChannelKey, string>>;
 }
 
 async function blocked(

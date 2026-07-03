@@ -10,6 +10,7 @@ import {
   type V049AffiliateUrls,
   type V049PreflightReport
 } from "./threeChannelUploadPreflight";
+import type { ChannelKey } from "./channelProfiles";
 import {
   executeV049ThreeChannelPublicUploads,
   type V049UploadExecutionResult
@@ -148,6 +149,7 @@ export async function buildV051UploadPreflight(input: {
   cwd?: string;
   affiliateUrls?: V049AffiliateUrls;
   approvalText?: string;
+  uploadVideoPaths?: Partial<Record<ChannelKey, string>>;
 } = {}): Promise<V051UploadPreflightReport> {
   const cwd = input.cwd ?? process.cwd();
   const alias = buildV051ApprovalAliasStatus({ approvalText: input.approvalText });
@@ -160,7 +162,8 @@ export async function buildV051UploadPreflight(input: {
   const preflight = await buildV049ThreeChannelUploadPreflight({
     cwd,
     affiliateUrls: input.affiliateUrls,
-    approvalText: buildMappedV049ApprovalText()
+    approvalText: buildMappedV049ApprovalText(),
+    uploadVideoPaths: input.uploadVideoPaths
   });
   const adapterReadiness = await checkV050ThreeChannelAdapterInjection({
     cwd,

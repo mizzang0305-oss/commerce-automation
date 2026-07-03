@@ -3,6 +3,9 @@ import { createV054RuntimeYouTubeAdapters } from "../../src/uploads/multi-channe
 
 async function main() {
   const executionMode = process.env.V051_EXECUTION_MODE;
+  const uploadAssetProfile = executionMode === "mutation_enabled"
+    ? process.env.V051_UPLOAD_ASSET_PROFILE ?? null
+    : process.env.V051_UPLOAD_ASSET_PROFILE;
   const runtimeFactory = executionMode === "mutation_enabled"
     ? await createV054RuntimeYouTubeAdapters({ cwd: process.cwd() })
     : null;
@@ -10,6 +13,7 @@ async function main() {
     cwd: process.cwd(),
     approvalText: process.env.V051_APPROVAL_TEXT,
     executionMode,
+    uploadAssetProfile,
     adapters: runtimeFactory?.adapters,
     safetyOverrides: runtimeFactory?.safetyOverrides
   });
