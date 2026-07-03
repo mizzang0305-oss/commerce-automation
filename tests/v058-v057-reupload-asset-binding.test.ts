@@ -7,7 +7,8 @@ import { CHANNEL_KEYS, type ChannelKey } from "../src/uploads/multi-channel/chan
 import {
   buildV051UploadPreflight,
   V051_PAID_PROMOTION_CONFIRMATION_PHRASE,
-  V051_UPLOAD_APPROVAL_PHRASE
+  V051_UPLOAD_APPROVAL_PHRASE,
+  V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE
 } from "../src/uploads/multi-channel/v051ApprovalAliasWrapper";
 import {
   executeV051MutationEnabledUploads,
@@ -20,6 +21,8 @@ import {
 } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 
 const APPROVAL_TEXT = `${V051_UPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CONFIRMATION_PHRASE}`;
+const V057_REUPLOAD_APPROVAL_TEXT =
+  `${V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CONFIRMATION_PHRASE}`;
 const AFFILIATE_URLS: Record<ChannelKey, string> = {
   father_jobs: "MASKED_AFFILIATE_FATHER",
   neoman_moleulgeol: "MASKED_AFFILIATE_NEOMAN",
@@ -206,7 +209,7 @@ describe("v058 v057 reupload asset binding", () => {
         cwd,
         executionMode: "mutation_enabled",
         uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
-        approvalText: APPROVAL_TEXT,
+        approvalText: V057_REUPLOAD_APPROVAL_TEXT,
         affiliateUrls: AFFILIATE_URLS,
         adapters: { uploadAdapter: upload.adapter, commentAdapter: comment.adapter }
       });
@@ -278,8 +281,9 @@ describe("v058 v057 reupload asset binding", () => {
 
       const preflight = await buildV051UploadPreflight({
         cwd,
-        approvalText: APPROVAL_TEXT,
+        approvalText: V057_REUPLOAD_APPROVAL_TEXT,
         affiliateUrls: AFFILIATE_URLS,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
         uploadVideoPaths: {
           father_jobs: binding.bindings.father_jobs.video_path,
           neoman_moleulgeol: binding.bindings.neoman_moleulgeol.video_path,

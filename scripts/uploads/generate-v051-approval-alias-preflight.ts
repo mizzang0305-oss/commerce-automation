@@ -3,7 +3,8 @@ import { buildV051UploadPreflight } from "../../src/uploads/multi-channel/v051Ap
 async function main() {
   const result = await buildV051UploadPreflight({
     cwd: process.cwd(),
-    approvalText: process.env.V051_APPROVAL_TEXT
+    approvalText: process.env.V051_APPROVAL_TEXT,
+    uploadAssetProfile: process.env.V051_UPLOAD_ASSET_PROFILE
   });
 
   console.log(JSON.stringify(result, null, 2));
