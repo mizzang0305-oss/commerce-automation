@@ -37,6 +37,7 @@
     "review:v046": "tsx scripts/uploads/generate-v046-agent-image-skill-three-channel-review.ts",
     "review:v047": "tsx scripts/uploads/generate-v047-three-channel-korean-voice-review.ts",
     "review:v048": "tsx scripts/uploads/generate-v048-channel-specific-review.ts",
+    "review:v057": "tsx scripts/uploads/generate-v057-hook-first-frame-preview.ts",
     "upload:v049:preflight": "tsx scripts/uploads/generate-v049-three-channel-upload-preflight.ts",
     "upload:v049:execute": "tsx scripts/uploads/execute-v049-three-channel-public-upload.ts",
     "upload:v050:check-adapters": "tsx scripts/uploads/check-v050-youtube-adapter-injection.ts",
