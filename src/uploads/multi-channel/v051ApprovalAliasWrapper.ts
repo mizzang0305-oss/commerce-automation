@@ -137,6 +137,7 @@ export function buildV051ApprovalAliasStatus(input: {
     v057GateActive && !v057ApprovalPresent ? "V057_CORRECTED_REUPLOAD_APPROVAL_MISSING" : null,
     v057ApprovalPresent && !profileSpecified ? "BLOCKED_V057_REUPLOAD_ASSET_PROFILE_MISSING" : null,
     v057ApprovalPresent && profileSpecified && !v057ProfilePresent ? "BLOCKED_V057_APPROVAL_PROFILE_MISMATCH" : null,
+    v057ApprovalPresent && v057ProfilePresent && !v051PaidPromotionPresent ? "V051_PAID_PROMOTION_CONFIRMATION_MISSING" : null,
     !v057GateActive && !v051ApprovalPresent ? "V051_UPLOAD_APPROVAL_MISSING" : null,
     !v057GateActive && !v051PaidPromotionPresent ? "V051_PAID_PROMOTION_CONFIRMATION_MISSING" : null
   ]);
