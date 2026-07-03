@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 
 import { CHANNEL_KEYS, type ChannelKey } from "../src/uploads/multi-channel/channelProfiles";
 import {
+  buildV051UploadPreflight,
   V051_PAID_PROMOTION_CONFIRMATION_PHRASE,
   V051_UPLOAD_APPROVAL_PHRASE
 } from "../src/uploads/multi-channel/v051ApprovalAliasWrapper";
@@ -233,7 +234,9 @@ describe("v058 v057 reupload asset binding", () => {
 
   test("explicit missing upload asset profile blocks mutation mode before adapter calls", async () => {
     const cwd = await makeCwd();
+    const previousProfile = process.env.V051_UPLOAD_ASSET_PROFILE;
     try {
+      process.env.V051_UPLOAD_ASSET_PROFILE = V057_REUPLOAD_ASSET_PROFILE;
       await writeV057Assets(cwd);
       const upload = mockUploadAdapter();
       const comment = mockCommentAdapter();
@@ -253,6 +256,54 @@ describe("v058 v057 reupload asset binding", () => {
       expect(result.new_upload_attempted).toBe(false);
       expect(upload.calls).toHaveLength(0);
       expect(comment.calls).toHaveLength(0);
+    } finally {
+      if (previousProfile === undefined) {
+        delete process.env.V051_UPLOAD_ASSET_PROFILE;
+      } else {
+        process.env.V051_UPLOAD_ASSET_PROFILE = previousProfile;
+      }
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("v057 uploadVideoPaths override propagates into adapter readiness duplicate guard reports", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeV057Assets(cwd);
+      await writeV048FallbackAssets(cwd);
+      const binding = await resolveV057ReuploadAssetBindings({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      const preflight = await buildV051UploadPreflight({
+        cwd,
+        approvalText: APPROVAL_TEXT,
+        affiliateUrls: AFFILIATE_URLS,
+        uploadVideoPaths: {
+          father_jobs: binding.bindings.father_jobs.video_path,
+          neoman_moleulgeol: binding.bindings.neoman_moleulgeol.video_path,
+          lets_buy: binding.bindings.lets_buy.video_path
+        }
+      });
+
+      const checkedPaths = preflight.adapter_readiness?.duplicate_upload_guard.checked_video_paths ?? [];
+      expect(preflight.preflight?.channels.map((channel) => channel.video_path)).toEqual([
+        expectedV057VideoPath(cwd, "father_jobs"),
+        expectedV057VideoPath(cwd, "neoman_moleulgeol"),
+        expectedV057VideoPath(cwd, "lets_buy")
+      ]);
+      expect(checkedPaths).toEqual([
+        expectedV057VideoPath(cwd, "father_jobs"),
+        expectedV057VideoPath(cwd, "neoman_moleulgeol"),
+        expectedV057VideoPath(cwd, "lets_buy")
+      ]);
+      expect(JSON.stringify(preflight.adapter_readiness)).not.toContain(path.join("review", "v048"));
+      expect(preflight.adapter_readiness?.videos_insert_called).toBe(false);
+      expect(preflight.adapter_readiness?.comment_create_update_delete_called).toBe(false);
+      expect(preflight.R2_upload).toBe(false);
+      expect(preflight.DB_write).toBe(false);
+      expect(preflight.product_assets_write).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

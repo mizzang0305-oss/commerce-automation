@@ -173,7 +173,9 @@ export async function executeV051MutationEnabledUploads(input: {
   const uploadAssetProfileSpecified =
     input.uploadAssetProfile !== undefined ||
     process.env.V051_UPLOAD_ASSET_PROFILE !== undefined;
-  const requestedAssetProfile = input.uploadAssetProfile ?? process.env.V051_UPLOAD_ASSET_PROFILE ?? null;
+  const requestedAssetProfile = input.uploadAssetProfile !== undefined
+    ? input.uploadAssetProfile
+    : process.env.V051_UPLOAD_ASSET_PROFILE ?? null;
   const assetBinding = uploadAssetProfileSpecified
     ? await resolveV057ReuploadAssetBindings({ cwd, uploadAssetProfile: requestedAssetProfile })
     : null;

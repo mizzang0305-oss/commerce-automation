@@ -167,7 +167,8 @@ export async function buildV051UploadPreflight(input: {
   });
   const adapterReadiness = await checkV050ThreeChannelAdapterInjection({
     cwd,
-    affiliateUrls: input.affiliateUrls
+    affiliateUrls: input.affiliateUrls,
+    uploadVideoPaths: input.uploadVideoPaths
   });
   const finalStatus = determinePreflightFinalStatus(alias, preflight, adapterReadiness);
   const report: V051UploadPreflightReport = {
