@@ -21,11 +21,14 @@ import {
   createV050NoopUploadAdapter,
   type V050AdapterInjectionReport
 } from "./v050ThreeChannelUploadExecutorWiring";
+import { V057_REUPLOAD_ASSET_PROFILE } from "./v057ReuploadAssetBinding";
 
 export const V051_UPLOAD_APPROVAL_PHRASE =
   "APPROVE_V051_EXECUTE_THREE_CHANNEL_ONE_SHOT_PUBLIC_UPLOADS_WITH_COMMENTS";
 export const V051_PAID_PROMOTION_CONFIRMATION_PHRASE =
   "CONFIRM_V051_PAID_PROMOTION_SETTINGS_CHECKED_FOR_ALL_CHANNELS";
+export const V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE =
+  "APPROVE_V057_CORRECTED_3_CHANNEL_PUBLIC_REUPLOAD_ONCE";
 
 type V051AliasFinalStatus =
   | "SUCCESS_V052_V051_APPROVAL_ALIAS_READY_NO_UPLOAD"
@@ -41,7 +44,10 @@ type V051ReportFinalStatus =
 type V051ApprovalBlocker =
   | "V049_APPROVAL_PHRASE_NOT_ALLOWED_IN_V051"
   | "V051_UPLOAD_APPROVAL_MISSING"
-  | "V051_PAID_PROMOTION_CONFIRMATION_MISSING";
+  | "V051_PAID_PROMOTION_CONFIRMATION_MISSING"
+  | "V057_CORRECTED_REUPLOAD_APPROVAL_MISSING"
+  | "BLOCKED_V057_REUPLOAD_ASSET_PROFILE_MISSING"
+  | "BLOCKED_V057_APPROVAL_PROFILE_MISMATCH";
 
 export type V051ApprovalAliasStatus = {
   version: "v052";
@@ -50,6 +56,9 @@ export type V051ApprovalAliasStatus = {
   SAFE_TO_UPLOAD: false;
   paid_promotion_confirmation_present: boolean;
   v051_upload_approval_present: boolean;
+  v057_corrected_reupload_approval_present: boolean;
+  v057_reupload_asset_profile_present: boolean;
+  v057_approval_profile_match: boolean;
   v049_approval_phrase_present: boolean;
   v049_paid_promotion_phrase_present: boolean;
   v049_approval_phrases_rejected: true;
@@ -110,16 +119,26 @@ export type V051UploadExecutionReport = V051UploadPreflightReport & {
 
 export function buildV051ApprovalAliasStatus(input: {
   approvalText?: string;
+  uploadAssetProfile?: string | null;
 } = {}): V051ApprovalAliasStatus {
   const approvalText = String(input.approvalText ?? "");
   const v049ApprovalPresent = approvalText.includes(V049_UPLOAD_APPROVAL_PHRASE);
   const v049PaidPromotionPresent = approvalText.includes(V049_PAID_PROMOTION_CONFIRMATION_PHRASE);
   const v051ApprovalPresent = approvalText.includes(V051_UPLOAD_APPROVAL_PHRASE);
   const v051PaidPromotionPresent = approvalText.includes(V051_PAID_PROMOTION_CONFIRMATION_PHRASE);
+  const v057ApprovalPresent = approvalText.includes(V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE);
+  const profileSpecified = input.uploadAssetProfile !== undefined &&
+    input.uploadAssetProfile !== null &&
+    input.uploadAssetProfile !== "";
+  const v057ProfilePresent = input.uploadAssetProfile === V057_REUPLOAD_ASSET_PROFILE;
+  const v057GateActive = v057ApprovalPresent || profileSpecified;
   const blocker = firstBlocker<V051ApprovalBlocker>([
     v049ApprovalPresent || v049PaidPromotionPresent ? "V049_APPROVAL_PHRASE_NOT_ALLOWED_IN_V051" : null,
-    v051ApprovalPresent ? null : "V051_UPLOAD_APPROVAL_MISSING",
-    v051PaidPromotionPresent ? null : "V051_PAID_PROMOTION_CONFIRMATION_MISSING"
+    v057GateActive && !v057ApprovalPresent ? "V057_CORRECTED_REUPLOAD_APPROVAL_MISSING" : null,
+    v057ApprovalPresent && !profileSpecified ? "BLOCKED_V057_REUPLOAD_ASSET_PROFILE_MISSING" : null,
+    v057ApprovalPresent && profileSpecified && !v057ProfilePresent ? "BLOCKED_V057_APPROVAL_PROFILE_MISMATCH" : null,
+    !v057GateActive && !v051ApprovalPresent ? "V051_UPLOAD_APPROVAL_MISSING" : null,
+    !v057GateActive && !v051PaidPromotionPresent ? "V051_PAID_PROMOTION_CONFIRMATION_MISSING" : null
   ]);
   const finalStatus: V051AliasFinalStatus = blocker === null
     ? "SUCCESS_V052_V051_APPROVAL_ALIAS_READY_NO_UPLOAD"
@@ -134,6 +153,9 @@ export function buildV051ApprovalAliasStatus(input: {
     SAFE_TO_UPLOAD: false,
     paid_promotion_confirmation_present: v051PaidPromotionPresent,
     v051_upload_approval_present: v051ApprovalPresent,
+    v057_corrected_reupload_approval_present: v057ApprovalPresent,
+    v057_reupload_asset_profile_present: v057ProfilePresent,
+    v057_approval_profile_match: v057ApprovalPresent && v057ProfilePresent,
     v049_approval_phrase_present: v049ApprovalPresent,
     v049_paid_promotion_phrase_present: v049PaidPromotionPresent,
     v049_approval_phrases_rejected: true,
@@ -150,9 +172,13 @@ export async function buildV051UploadPreflight(input: {
   affiliateUrls?: V049AffiliateUrls;
   approvalText?: string;
   uploadVideoPaths?: Partial<Record<ChannelKey, string>>;
+  uploadAssetProfile?: string | null;
 } = {}): Promise<V051UploadPreflightReport> {
   const cwd = input.cwd ?? process.cwd();
-  const alias = buildV051ApprovalAliasStatus({ approvalText: input.approvalText });
+  const alias = buildV051ApprovalAliasStatus({
+    approvalText: input.approvalText,
+    uploadAssetProfile: input.uploadAssetProfile
+  });
   if (!alias.V051_ALIAS_READY) {
     const report = buildBlockedPreflightReport(alias);
     await writeV051Artifacts(path.join(cwd, "commerce-assets", "review", "v052"), "v051-approval-alias-preflight", report);

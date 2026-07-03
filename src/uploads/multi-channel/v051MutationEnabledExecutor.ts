@@ -183,7 +183,8 @@ export async function executeV051MutationEnabledUploads(input: {
     const preflight = await buildV051UploadPreflight({
       cwd,
       affiliateUrls: input.affiliateUrls,
-      approvalText: input.approvalText
+      approvalText: input.approvalText,
+      uploadAssetProfile: requestedAssetProfile
     });
     const blockedReport = buildBaseReport({
       executionMode,
@@ -200,6 +201,7 @@ export async function executeV051MutationEnabledUploads(input: {
     cwd,
     affiliateUrls: input.affiliateUrls,
     approvalText: input.approvalText,
+    uploadAssetProfile: requestedAssetProfile,
     uploadVideoPaths: assetBinding ? assetBindingToVideoPaths(assetBinding) : undefined
   });
   const gate = evaluateV051MutationSafetyGate({
