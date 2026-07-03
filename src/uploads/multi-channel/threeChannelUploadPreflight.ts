@@ -133,13 +133,15 @@ export async function buildV049ThreeChannelUploadPreflight(input: {
   affiliateUrls?: V049AffiliateUrls;
   approvalText?: string;
   mainHead?: string | null;
+  uploadVideoPaths?: Partial<Record<ChannelKey, string>>;
 } = {}): Promise<V049PreflightReport> {
   const cwd = input.cwd ?? process.cwd();
   const outputRoot = path.join(cwd, "commerce-assets", "review", "v049");
   const routes = resolveV049ChannelYouTubeAccountRoutes();
   const paidPromotionGate = evaluateV049PaidPromotionGate({ approvalText: input.approvalText });
   const channels = await Promise.all(V049_CHANNEL_UPLOAD_TARGETS.map(async (target) => {
-    const videoPath = path.join(cwd, "commerce-assets", "review", "v048", target.channel_key, "local-review-video.mp4");
+    const videoPath = input.uploadVideoPaths?.[target.channel_key] ??
+      path.join(cwd, "commerce-assets", "review", "v048", target.channel_key, "local-review-video.mp4");
     const localVideoExists = await fileExists(videoPath);
     const suppliedAffiliateUrl = safeTrim(input.affiliateUrls?.[target.channel_key]);
     const affiliateUrlPresent = Boolean(suppliedAffiliateUrl) ||

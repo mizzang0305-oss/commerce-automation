@@ -22,6 +22,7 @@ export type V050DuplicateUploadGuard = {
   same_asset_previously_uploaded: boolean;
   blocker: "DUPLICATE_VIDEO_ASSET_REUSE" | null;
   checked_channel_count: number;
+  checked_video_paths: string[];
   raw_urls_printed: false;
 };
 
@@ -52,6 +53,7 @@ export function buildV050DuplicateUploadGuard(candidates: V050DuplicateUploadCan
     same_asset_previously_uploaded: false,
     blocker: duplicateUploadRisk ? "DUPLICATE_VIDEO_ASSET_REUSE" : null,
     checked_channel_count: candidates.length,
+    checked_video_paths: candidates.map((candidate) => candidate.video_path),
     raw_urls_printed: false
   };
 }

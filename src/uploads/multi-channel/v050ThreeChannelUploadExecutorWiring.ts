@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import type { ChannelKey } from "./channelProfiles";
 import type { V049AffiliateUrls } from "./threeChannelUploadPreflight";
 import { V049_CHANNEL_UPLOAD_TARGETS, buildV049ThreeChannelUploadPreflight } from "./threeChannelUploadPreflight";
 import {
@@ -129,11 +130,13 @@ export function buildV050AdapterInjectionReadiness(input: {
 export async function checkV050ThreeChannelAdapterInjection(input: {
   cwd?: string;
   affiliateUrls?: V049AffiliateUrls;
+  uploadVideoPaths?: Partial<Record<ChannelKey, string>>;
 } = {}): Promise<V050AdapterInjectionReport> {
   const cwd = input.cwd ?? process.cwd();
   const preflight = await buildV049ThreeChannelUploadPreflight({
     cwd,
-    affiliateUrls: input.affiliateUrls
+    affiliateUrls: input.affiliateUrls,
+    uploadVideoPaths: input.uploadVideoPaths
   });
   const adapterReadiness = buildV050AdapterInjectionReadiness({
     duplicateGuard: buildV050DuplicateUploadGuard(preflight.channels.map((channel) => ({
