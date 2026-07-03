@@ -23,11 +23,11 @@ const V057_APPROVAL_TEXT = V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE;
 const V057_APPROVAL_WITH_PAID_PROMOTION_TEXT =
   `${V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CONFIRMATION_PHRASE}`;
 const AFFILIATE_URLS: Record<ChannelKey, string> = {
-  father_jobs: "MASKED_AFFILIATE_FATHER",
-  neoman_moleulgeol: "MASKED_AFFILIATE_NEOMAN",
-  lets_buy: "MASKED_AFFILIATE_LETS_BUY"
+  father_jobs: "https://link.coupang.com/a/v059-father",
+  neoman_moleulgeol: "https://link.coupang.com/a/v059-neoman",
+  lets_buy: "https://link.coupang.com/a/v059-lets-buy"
 };
-const FORBIDDEN_REPORT_PATTERN = /MASKED_AFFILIATE_|https?:\/\/|Authorization|Bearer|client_secret|refresh_token/i;
+const FORBIDDEN_REPORT_PATTERN = /v059-father|v059-neoman|v059-lets-buy|https?:\/\/|Authorization|Bearer|client_secret|refresh_token/i;
 const REPO_ROOT = path.resolve(__dirname, "..");
 const TSX_CLI = path.join(REPO_ROOT, "node_modules", "tsx", "dist", "cli.cjs");
 const PREFLIGHT_CLI = path.join(REPO_ROOT, "scripts", "uploads", "generate-v051-approval-alias-preflight.ts");

@@ -20,6 +20,10 @@ import {
   type V051MutationBlocker
 } from "./v051MutationSafetyGate";
 import {
+  validateV057AffiliateUrlsForExecution,
+  type V057AffiliateUrlGateReport
+} from "./v057AffiliateUrlInjectionGate";
+import {
   V057_REUPLOAD_ASSET_PROFILE,
   resolveV057ReuploadAssetBindings,
   type V057ReuploadAssetBindingReport
@@ -100,6 +104,10 @@ export type V051MutationExecutionReport = {
   duplicate_upload_guard_required: true;
   metadata_gate_required: true;
   paid_promotion_confirmation_required: true;
+  affiliate_url_gate_required: true;
+  affiliate_url_gate_ready: boolean;
+  affiliate_url_blocker: V051MutationBlocker | null;
+  affiliate_url_sanitized_evidence: V057AffiliateUrlGateReport;
   mutation_blocker: V051MutationBlocker | null;
   mutation_wiring_blocker: V051MutationBlocker | null;
   preflight: V051UploadPreflightReport;
@@ -179,6 +187,10 @@ export async function executeV051MutationEnabledUploads(input: {
   const assetBinding = uploadAssetProfileSpecified
     ? await resolveV057ReuploadAssetBindings({ cwd, uploadAssetProfile: requestedAssetProfile })
     : null;
+  const affiliateUrlGate = validateV057AffiliateUrlsForExecution({
+    affiliateUrls: input.affiliateUrls,
+    strictCoupangHost: requestedAssetProfile === V057_REUPLOAD_ASSET_PROFILE
+  });
   if (assetBinding?.asset_binding_blocker) {
     const preflight = await buildV051UploadPreflight({
       cwd,
@@ -192,7 +204,8 @@ export async function executeV051MutationEnabledUploads(input: {
       mutationBlocker: assetBinding.asset_binding_blocker,
       uploadAdapterCallable: false,
       commentAdapterCallable: false,
-      assetBinding
+      assetBinding,
+      affiliateUrlGate
     });
     await writeV053Artifacts(cwd, blockedReport);
     return blockedReport;
@@ -219,8 +232,23 @@ export async function executeV051MutationEnabledUploads(input: {
     mutationBlocker: gate.mutation_blocker,
     uploadAdapterCallable: executionMode === "mutation_enabled" && Boolean(input.adapters?.uploadAdapter),
     commentAdapterCallable: false,
-    assetBinding
+    assetBinding,
+    affiliateUrlGate
   });
+
+  if (executionMode === "mutation_enabled" && !affiliateUrlGate.affiliate_url_gate_ready) {
+    const blockedForAffiliateUrls = {
+      ...initialReport,
+      FINAL_STATUS: "BLOCKED_V053_MUTATION_ENABLED_V051_EXECUTOR" as const,
+      V051_MUTATION_EXECUTOR_READY: false,
+      mutation_blocker: affiliateUrlGate.affiliate_url_blocker,
+      mutation_wiring_blocker: affiliateUrlGate.affiliate_url_blocker,
+      affiliate_url_gate_ready: false,
+      affiliate_url_blocker: affiliateUrlGate.affiliate_url_blocker
+    };
+    await writeV053Artifacts(cwd, blockedForAffiliateUrls);
+    return blockedForAffiliateUrls;
+  }
 
   if (!gate.mutation_mode_allowed) {
     await writeV053Artifacts(cwd, initialReport);
@@ -288,13 +316,18 @@ export async function executeV051MutationEnabledUploads(input: {
     }
 
     setUploaded(mutableReport, channelKey, uploadResult.videoId.trim());
+    const affiliateUrl = input.affiliateUrls?.[channelKey]?.trim();
+    if (!affiliateUrl) {
+      setChannelBlocker(mutableReport, channelKey, "BLOCKED_V057_AFFILIATE_URLS_MISSING");
+      return await blocked(cwd, mutableReport, "BLOCKED_V057_AFFILIATE_URLS_MISSING");
+    }
     const commentResult = await commentAdapter.createTopLevelComment({
       channelKey,
       videoId: uploadResult.videoId.trim(),
-      affiliateUrl: input.affiliateUrls?.[channelKey] ?? "",
+      affiliateUrl,
       commentTextWithAffiliateUrl: buildV049ExecutionCommentText({
         channelKey,
-        affiliateUrl: input.affiliateUrls?.[channelKey] ?? ""
+        affiliateUrl
       })
     });
     const explicitCommentMutation = commentResult.commentMutationCalled === true;
@@ -335,6 +368,7 @@ function buildBaseReport(input: {
   uploadAdapterCallable: boolean;
   commentAdapterCallable: boolean;
   assetBinding: V057ReuploadAssetBindingReport | null;
+  affiliateUrlGate: V057AffiliateUrlGateReport;
 }): V051MutationExecutionReport {
   const channels = CHANNEL_ORDER.map((channelKey) => ({
     channel_key: channelKey,
@@ -372,6 +406,10 @@ function buildBaseReport(input: {
     duplicate_upload_guard_required: true,
     metadata_gate_required: true,
     paid_promotion_confirmation_required: true,
+    affiliate_url_gate_required: true,
+    affiliate_url_gate_ready: input.affiliateUrlGate.affiliate_url_gate_ready,
+    affiliate_url_blocker: input.affiliateUrlGate.affiliate_url_blocker,
+    affiliate_url_sanitized_evidence: input.affiliateUrlGate,
     mutation_blocker: input.mutationBlocker,
     mutation_wiring_blocker: input.mutationBlocker,
     preflight: input.preflight,
