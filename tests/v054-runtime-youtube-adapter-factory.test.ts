@@ -19,16 +19,16 @@ import {
 
 const APPROVAL_TEXT = `${V051_UPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CONFIRMATION_PHRASE}`;
 const AFFILIATE_URLS = {
-  father_jobs: "TEST_AFFILIATE_FATHER",
-  neoman_moleulgeol: "TEST_AFFILIATE_NEOMAN",
-  lets_buy: "TEST_AFFILIATE_LETS_BUY"
+  father_jobs: "https://link.coupang.com/a/v054-father",
+  neoman_moleulgeol: "https://link.coupang.com/a/v054-neoman",
+  lets_buy: "https://link.coupang.com/a/v054-lets-buy"
 } as const;
 const TARGET_CHANNEL_IDS = {
   father_jobs: "UC-father-target",
   neoman_moleulgeol: "UC-neoman-target",
   lets_buy: "UC-letsbuy-target"
 } as const;
-const SECRET_NEEDLES = /TEST_AFFILIATE_|access_token|refresh_token|client_secret|Authorization|Bearer/i;
+const SECRET_NEEDLES = /v054-father|v054-neoman|v054-lets-buy|access_token|refresh_token|client_secret|Authorization|Bearer/i;
 
 async function makeCwd() {
   return mkdtemp(path.join(os.tmpdir(), "commerce-v054-"));

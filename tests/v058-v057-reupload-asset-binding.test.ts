@@ -24,12 +24,14 @@ const APPROVAL_TEXT = `${V051_UPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CON
 const V057_REUPLOAD_APPROVAL_TEXT =
   `${V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE}\n${V051_PAID_PROMOTION_CONFIRMATION_PHRASE}`;
 const AFFILIATE_URLS: Record<ChannelKey, string> = {
-  father_jobs: "MASKED_AFFILIATE_FATHER",
-  neoman_moleulgeol: "MASKED_AFFILIATE_NEOMAN",
-  lets_buy: "MASKED_AFFILIATE_LETS_BUY"
+  father_jobs: "https://link.coupang.com/a/v058-father",
+  neoman_moleulgeol: "https://link.coupang.com/a/v058-neoman",
+  lets_buy: "https://link.coupang.com/a/v058-lets-buy"
 };
 const SANITIZED_REPORT_FORBIDDEN_PATTERN = new RegExp([
-  "MASKED_AFFILIATE_",
+  "v058-father",
+  "v058-neoman",
+  "v058-lets-buy",
   "https?:\\/\\/",
   "Authorization",
   "Bearer",
