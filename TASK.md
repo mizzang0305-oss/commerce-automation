@@ -42,7 +42,7 @@ Product discovery
 - PR #184: V073 upload package generator, `MERGED`
 - PR #184 merge commit: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `IN_PROGRESS_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD`
+- Current blocker: `PR_OPEN_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -118,7 +118,7 @@ Requirements:
 
 ### T004 - V074 Public Upload Executor Scaffold
 
-Status: `IN_PROGRESS`
+Status: `PR_OPEN`
 
 Goal: Implement public upload executor behind a hard disabled gate.
 
@@ -261,12 +261,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #184 P1/P2 review fix pushed at `4a71420`. Added duplicate target-channel blocking and queue/generated product-source validation hardening. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #184 squash merged. Main synced at `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`. T003 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T004 started on `codex/v074-public-upload-executor-scaffold` from main `23fc8551990f9c8ff32e63937de7709496be6ef2`. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T004 V074 scaffold committed at `dc71f407019de6bdeadd22025ff93f1a99ec515c` and opened as PR #185: https://github.com/mizzang0305-oss/commerce-automation/pull/185. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `IN_PROGRESS_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD`
+- `PR_OPEN_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD_REVIEW`
 - Public upload remains blocked. T004 may only scaffold a disabled public upload executor; real upload remains blocked until later readiness gates and fresh approval.
 
 ## Next Exact Action
 
-- Start T004 V074 Public Upload Executor Scaffold.
+- Review and merge PR #185. After merge, proceed to T005 V075 Comment Writer scaffold only. `SAFE_TO_UPLOAD=false`.
