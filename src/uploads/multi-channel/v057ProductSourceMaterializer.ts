@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { getStoragePaths } from "../../lib/repositories/storagePaths";
 import { CHANNEL_KEYS, type ChannelKey } from "./channelProfiles";
 import {
   hashV057ProductSourceEvidence,
@@ -198,13 +199,14 @@ async function resolveChannelCandidate(input: {
 }
 
 async function readCandidateSources(cwd: string, channelKey: ChannelKey): Promise<CandidateSource[]> {
+  const storagePaths = getStoragePaths(path.join(cwd, "data"));
   const dataSources: Array<{
     kind: V057CorrectedReuploadProductSourceKind;
     filePath: string;
   }> = [
-    { kind: "product_queue_item", filePath: path.join(cwd, "data", "queue.json") },
-    { kind: "generated_content", filePath: path.join(cwd, "data", "generated_contents.json") },
-    { kind: "previous_import_candidate", filePath: path.join(cwd, "data", "product_candidates.json") }
+    { kind: "product_queue_item", filePath: storagePaths.queue },
+    { kind: "generated_content", filePath: storagePaths.contents },
+    { kind: "previous_import_candidate", filePath: storagePaths.productCandidates }
   ];
   const channelRoot = path.join(cwd, "commerce-assets", "review", "v057", channelKey);
   const channelSources: Array<{
@@ -381,6 +383,7 @@ async function readJsonIfExists(filePath: string) {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as unknown;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof SyntaxError) return null;
     throw error;
   }
 }

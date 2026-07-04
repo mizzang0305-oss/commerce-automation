@@ -67,6 +67,11 @@ async function writeQueue(cwd: string, rows: Array<Record<string, unknown>>) {
 
 async function writeGeneratedContents(cwd: string, rows: Array<Record<string, unknown>>) {
   await mkdir(path.join(cwd, "data"), { recursive: true });
+  await writeFile(path.join(cwd, "data", "contents.json"), `${JSON.stringify(rows, null, 2)}\n`, "utf8");
+}
+
+async function writeLegacyGeneratedContents(cwd: string, rows: Array<Record<string, unknown>>) {
+  await mkdir(path.join(cwd, "data"), { recursive: true });
   await writeFile(path.join(cwd, "data", "generated_contents.json"), `${JSON.stringify(rows, null, 2)}\n`, "utf8");
 }
 
@@ -182,6 +187,96 @@ describe("v070 v057 product source materializer", () => {
       expect(report.FINAL_STATUS).toBe("SUCCESS_V070_V057_PRODUCT_SOURCE_MATERIALIZED_NO_UPLOAD");
       expect(report.channels.every((channel) => channel.source_kind === "product_queue_item")).toBe(true);
       expect(JSON.stringify(report)).not.toMatch(/generated-father|generated-neoman|generated-lets/i);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("materializes generated content from the actual local contents storage path", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeGeneratedContents(cwd, CHANNEL_KEYS.map((channelKey) => ({
+        id: `content-v070-${channelKey}`,
+        product_queue_id: `queue-v070-${channelKey}`,
+        product_name: PRODUCT_LABELS[channelKey],
+        raw_coupang_url: RAW_COUPANG_URLS[channelKey],
+        selected_affiliate_url: AFFILIATE_URLS[channelKey],
+        updated_at: "2026-07-04T00:00:00.000Z"
+      })));
+
+      const report = await materializeV057ProductSourceMetadata({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        now: "2026-07-04T00:00:00.000Z"
+      });
+
+      expect(report.FINAL_STATUS).toBe("SUCCESS_V070_V057_PRODUCT_SOURCE_MATERIALIZED_NO_UPLOAD");
+      expect(report.channels.every((channel) => channel.source_kind === "generated_content")).toBe(true);
+      expect(report.channels.every((channel) => channel.source_path_basename === "contents.json")).toBe(true);
+      expect(report.channels.every((channel) => channel.materialized)).toBe(true);
+      expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+
+      for (const channelKey of CHANNEL_KEYS) {
+        const payload = JSON.parse(await readFile(
+          path.join(cwd, "commerce-assets", "review", "v057", channelKey, "product-source-v057.json"),
+          "utf8"
+        )) as Record<string, unknown>;
+        expect(payload).toMatchObject({
+          channelKey,
+          assetProfile: V057_REUPLOAD_ASSET_PROFILE,
+          productSourceKind: "generated_content",
+          runtimeSourceApproved: true
+        });
+      }
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("does not accept legacy data/generated_contents.json as a default runtime source", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeLegacyGeneratedContents(cwd, CHANNEL_KEYS.map((channelKey) => ({
+        id: `legacy-content-v070-${channelKey}`,
+        product_queue_id: `legacy-queue-v070-${channelKey}`,
+        product_name: PRODUCT_LABELS[channelKey],
+        raw_coupang_url: RAW_COUPANG_URLS[channelKey],
+        selected_affiliate_url: AFFILIATE_URLS[channelKey],
+        updated_at: "2026-07-04T00:00:00.000Z"
+      })));
+
+      const report = await materializeV057ProductSourceMetadata({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        now: "2026-07-04T00:00:00.000Z"
+      });
+
+      expect(report.FINAL_STATUS).toBe("BLOCKED_V070_AUTHORITATIVE_PRODUCT_SOURCE_NOT_FOUND");
+      expect(report.product_source_materialized).toBe(false);
+      expect(report.channels.every((channel) => channel.materialized === false)).toBe(true);
+      expect(report.channels.some((channel) => channel.source_path_basename === "generated_contents.json")).toBe(false);
+      expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("malformed contents storage fails closed without leaking raw generated source values", async () => {
+    const cwd = await makeCwd();
+    try {
+      await mkdir(path.join(cwd, "data"), { recursive: true });
+      await writeFile(path.join(cwd, "data", "contents.json"), "{ malformed contents json", "utf8");
+
+      const report = await materializeV057ProductSourceMetadata({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        now: "2026-07-04T00:00:00.000Z"
+      });
+
+      expect(report.FINAL_STATUS).toBe("BLOCKED_V070_AUTHORITATIVE_PRODUCT_SOURCE_NOT_FOUND");
+      expect(report.product_source_materialized).toBe(false);
+      expect(report.raw_urls_printed).toBe(false);
+      expect(report.secrets_printed).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
