@@ -31,18 +31,22 @@ Required contract fields:
 - `rawCoupangUrl`
 - `productName` or `sourceProductLabel`
 - `sourceEvidenceHash`
+- `runtimeSourceApproved`
+- `rawUrlsRedactedInReport`
 - `updatedAt` or `boundAt`
 
 The `assetProfile` value must be `v057_corrected_reupload`.
+For `v057_review_package_metadata`, `runtimeSourceApproved` must be the strict
+boolean value `true`; string values are rejected.
 
 ## Source Priority
 
 The loader checks these source kinds in priority order:
 
-1. `product_queue_item`
-2. `generated_content`
-3. `previous_import_candidate`
-4. `v057_review_package_metadata`
+1. `v057_review_package_metadata`
+2. `product_queue_item`
+3. `generated_content`
+4. `previous_import_candidate`
 5. `generated_upload_metadata`
 6. `n8n_callback_payload`
 7. `asset_profile_binding_metadata`

@@ -10,10 +10,10 @@ export const V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS: Record<ChannelKey, strin
 };
 
 export const V057_RUNTIME_PRODUCT_SOURCE_KIND_PRIORITY = [
+  "v057_review_package_metadata",
   "product_queue_item",
   "generated_content",
   "previous_import_candidate",
-  "v057_review_package_metadata",
   "generated_upload_metadata",
   "n8n_callback_payload",
   "asset_profile_binding_metadata",
@@ -30,10 +30,16 @@ export type V057CorrectedReuploadProductSource = {
   rawCoupangUrl: string;
   productName?: string;
   sourceProductLabel?: string;
+  packageId?: string;
+  sourceQueueItemId?: string;
+  sourceGeneratedContentId?: string;
+  selectedAffiliateUrl?: string;
   sourceEvidenceHash: string;
+  createdAt?: string;
   updatedAt?: string;
   boundAt?: string;
   runtimeSourceApproved?: boolean;
+  rawUrlsRedactedInReport?: boolean;
 };
 
 export type V057ProductSourceValidationBlocker =
@@ -77,10 +83,16 @@ export function normalizeV057ProductSourceCandidate(
     rawCoupangUrl: safeTrim(nested.rawCoupangUrl) || safeTrim(nested.raw_coupang_url),
     productName: safeTrim(nested.productName) || safeTrim(nested.product_name),
     sourceProductLabel: safeTrim(nested.sourceProductLabel) || safeTrim(nested.source_product_label),
+    packageId: safeTrim(nested.packageId) || safeTrim(nested.package_id),
+    sourceQueueItemId: safeTrim(nested.sourceQueueItemId) || safeTrim(nested.source_queue_item_id),
+    sourceGeneratedContentId: safeTrim(nested.sourceGeneratedContentId) || safeTrim(nested.source_generated_content_id),
+    selectedAffiliateUrl: safeTrim(nested.selectedAffiliateUrl) || safeTrim(nested.selected_affiliate_url),
     sourceEvidenceHash: safeTrim(nested.sourceEvidenceHash) || safeTrim(nested.source_evidence_hash),
+    createdAt: safeTrim(nested.createdAt) || safeTrim(nested.created_at),
     updatedAt: safeTrim(nested.updatedAt) || safeTrim(nested.updated_at),
     boundAt: safeTrim(nested.boundAt) || safeTrim(nested.bound_at),
-    runtimeSourceApproved: nested.runtimeSourceApproved === true || nested.runtime_source_approved === true
+    runtimeSourceApproved: nested.runtimeSourceApproved === true || nested.runtime_source_approved === true,
+    rawUrlsRedactedInReport: nested.rawUrlsRedactedInReport === true || nested.raw_urls_redacted_in_report === true
   };
 }
 
@@ -101,9 +113,11 @@ export function validateV057ProductSourceCandidate(input: {
   const productLabelMatchesChannel = matchesExpectedProductLabel(input.channelKey, productLabel);
   const sourceEvidenceHash = safeTrim(input.candidate.sourceEvidenceHash);
   const runtimeSourceApproved = input.candidate.runtimeSourceApproved === true;
-  const runtimeApprovalMissing = sourceKind === "code_fixture_promoted" && !runtimeSourceApproved;
+  const runtimeApprovalRequired = sourceKind === "code_fixture_promoted" ||
+    sourceKind === "v057_review_package_metadata";
+  const runtimeApprovalMissing = runtimeApprovalRequired && !runtimeSourceApproved;
   const authoritative = sourceKind !== null &&
-    (sourceKind !== "code_fixture_promoted" || runtimeSourceApproved);
+    (!runtimeApprovalRequired || runtimeSourceApproved);
   const ok = input.candidate.channelKey === input.channelKey &&
     input.candidate.assetProfile === V057_REUPLOAD_ASSET_PROFILE &&
     authoritative &&

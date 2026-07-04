@@ -20,8 +20,8 @@ overrides or test fixtures only.
 
 The default path is:
 
-1. Product queue or generated system data
-2. v057 runtime product source metadata
+1. v057 review package product source metadata
+2. Product queue or generated system data
 3. Coupang Deeplink API
 4. v063 affiliate URL gate
 5. v069 upload package readiness
@@ -44,17 +44,18 @@ npm run upload:v070:materialize-product-sources
 The materializer uses the same authoritative priority family as the v068 source
 loader:
 
-1. `product_queue_item` from the local JSON repository queue path
-2. `generated_content` from the local JSON repository contents path
-3. `previous_import_candidate` from the local JSON repository candidates path
-4. `v057_review_package_metadata`
+1. `v057_review_package_metadata`
+2. `product_queue_item` from the local JSON repository queue path
+3. `generated_content` from the local JSON repository contents path
+4. `previous_import_candidate` from the local JSON repository candidates path
 5. `generated_upload_metadata`
 6. `n8n_callback_payload`
 7. `asset_profile_binding_metadata`
 8. `code_fixture_promoted`
 
-`code_fixture_promoted` is accepted only when `runtimeSourceApproved` is the
-boolean value `true`. The string `"true"` is rejected.
+`v057_review_package_metadata` and `code_fixture_promoted` are accepted only
+when `runtimeSourceApproved` is the boolean value `true`. The string `"true"`
+is rejected.
 
 The default generated content storage path is the same path used by the local
 JSON repository: `data/contents.json` through `getStoragePaths().contents`.

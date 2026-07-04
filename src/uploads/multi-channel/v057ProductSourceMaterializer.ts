@@ -209,17 +209,20 @@ async function readCandidateSources(cwd: string, channelKey: ChannelKey): Promis
     { kind: "previous_import_candidate", filePath: storagePaths.productCandidates }
   ];
   const channelRoot = path.join(cwd, "commerce-assets", "review", "v057", channelKey);
+  const reviewPackageSource = {
+    kind: "v057_review_package_metadata" as const,
+    filePath: path.join(channelRoot, "product-source-v057.json")
+  };
   const channelSources: Array<{
     kind: V057CorrectedReuploadProductSourceKind;
     filePath: string;
   }> = [
-    { kind: "v057_review_package_metadata", filePath: path.join(channelRoot, "product-source-v057.json") },
     { kind: "generated_upload_metadata", filePath: path.join(channelRoot, "generated-upload-metadata-v057.json") },
     { kind: "n8n_callback_payload", filePath: path.join(channelRoot, "n8n-callback-payload-v057.json") },
     { kind: "asset_profile_binding_metadata", filePath: path.join(channelRoot, "asset-profile-binding-metadata-v057.json") },
     { kind: "code_fixture_promoted", filePath: path.join(channelRoot, "code-fixture-product-source-v057.json") }
   ];
-  const orderedSources = [...dataSources, ...channelSources];
+  const orderedSources = [reviewPackageSource, ...dataSources, ...channelSources];
   const sources = await Promise.all(orderedSources.map(async (source) => ({
     kind: source.kind,
     basename: path.basename(source.filePath),
@@ -266,9 +269,15 @@ function buildCandidate(input: {
     rawCoupangUrl,
     productName: productLabel,
     sourceEvidenceHash: normalized.sourceEvidenceHash || hashV057ProductSourceEvidence(`${input.channelKey}:${rawCoupangUrl}`),
-    boundAt: normalized.boundAt || normalized.updatedAt || input.now,
+    packageId: normalized.packageId,
+    sourceQueueItemId: normalized.sourceQueueItemId,
+    sourceGeneratedContentId: normalized.sourceGeneratedContentId,
+    selectedAffiliateUrl: normalized.selectedAffiliateUrl,
+    createdAt: normalized.createdAt,
+    boundAt: normalized.boundAt || normalized.updatedAt || normalized.createdAt || input.now,
     updatedAt: normalized.updatedAt,
-    runtimeSourceApproved
+    runtimeSourceApproved,
+    rawUrlsRedactedInReport: normalized.rawUrlsRedactedInReport
   };
 }
 
