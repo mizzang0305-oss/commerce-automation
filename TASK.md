@@ -44,7 +44,7 @@ Product discovery
 - PR #185: V074 public upload executor scaffold, `MERGED`
 - PR #185 merge commit: `4fe422851e8dd006f9147064636fe4f31e271207`
 - PR #186: V075 comment writer scaffold, `OPEN`
-- PR #186 branch head: `c57f62f50e3c9ba4459618d211035cfe2a0a9957`
+- PR #186 implementation commit: `c57f62f50e3c9ba4459618d211035cfe2a0a9957`
 - Existing v057 corrected package: orphan / fail-closed
 - Current blocker: `PR_OPEN_T005_V075_COMMENT_WRITER_SCAFFOLD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
