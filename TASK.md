@@ -50,7 +50,7 @@ Product discovery
 - PR #188: V077 autopilot scheduler scaffold, `MERGED`
 - PR #188 merge commit: `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_T008_V078_DASHBOARD_CONTROL_SCAFFOLD`
+- Current blocker: `IN_PROGRESS_T008_V078_DASHBOARD_CONTROL_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -205,7 +205,7 @@ Requirements:
 
 ### T008 - V078 Dashboard Control
 
-Status: `PENDING`
+Status: `IN_PROGRESS`
 
 Goal: Dashboard controls for autopilot.
 
@@ -282,10 +282,11 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T007 started on `codex/v077-autopilot-scheduler-scaffold` from main `7bdcfa2`. Scheduler work is scaffold/readiness/plan-only; no upload/comment/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T007 V077 autopilot scheduler scaffold committed at `efe7055` and opened as PR #188: https://github.com/mizzang0305-oss/commerce-automation/pull/188. Validation passed. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: PR #188 squash merged. Main synced at `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`. T007 is complete. Upload execution, real comment mutation, readiness/materializer execution, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: T008 started on `codex/v078-dashboard-control-scaffold` from main `fe8eae7`. Dashboard work is scaffold/readiness/control-only; no upload/comment/scheduler auto-execution/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_T008_V078_DASHBOARD_CONTROL_SCAFFOLD`
+- `IN_PROGRESS_T008_V078_DASHBOARD_CONTROL_SCAFFOLD`
 - Public upload, real comment mutation, and scheduler auto-execution remain blocked. T008 must add only dashboard control scaffold/readiness UI contracts and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
