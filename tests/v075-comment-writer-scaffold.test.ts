@@ -270,6 +270,39 @@ describe("v075 comment writer scaffold", () => {
     expect(result.report.commentCreateCalled).toBe(false);
   });
 
+  test("preflight blocks upload result evidence that belongs to a different package or channel", async () => {
+    const packageMismatch = await executeV075CommentWriterPreflight({
+      uploadPackage: makeUploadPackage(),
+      uploadResult: makeUploadResult({
+        uploadPackageId: "pkg-v075-different",
+        channelKey: "father_jobs"
+      }),
+      safetyOverrides: {
+        commentFeatureEnabled: true,
+        freshCommentApprovalPresent: true
+      }
+    });
+    const channelMismatch = await executeV075CommentWriterPreflight({
+      uploadPackage: makeUploadPackage(),
+      uploadResult: makeUploadResult({
+        uploadPackageId: "pkg-v075-father-jobs",
+        channelKey: "lets_buy"
+      }),
+      safetyOverrides: {
+        commentFeatureEnabled: true,
+        freshCommentApprovalPresent: true
+      }
+    });
+
+    for (const result of [packageMismatch, channelMismatch]) {
+      expect(result.report.blocker).toBe("BLOCKED_V075_UPLOAD_RESULT_MISSING");
+      expect(result.report.videoIdPresent).toBe(false);
+      expect(result.report.uploadResultStatus).toBe("missing");
+      expect(result.report.commentCreateCalled).toBe(false);
+      expect(result.request.videoId).toBeNull();
+    }
+  });
+
   test("TASK.md records T005 scaffold work and keeps SAFE_TO_UPLOAD=false", async () => {
     const task = await readFile("TASK.md", "utf8");
 

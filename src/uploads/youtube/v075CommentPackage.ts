@@ -67,27 +67,30 @@ export function buildV075CommentPackage(input: {
   uploadPackage: V073UploadPackage;
   uploadResult: V075UploadResultEvidence | null;
 }): V075CommentPackage {
+  const uploadResult = uploadResultBelongsToPackage(input.uploadPackage, input.uploadResult)
+    ? input.uploadResult
+    : null;
   const affiliateUrl = input.uploadPackage.deeplink.selectedAffiliateUrl?.trim() || null;
   const commentText = buildCommentText(input.uploadPackage.commentPackage.commentText, affiliateUrl);
-  const youtubeVideoId = input.uploadResult?.youtubeVideoId?.trim() || null;
+  const youtubeVideoId = uploadResult?.youtubeVideoId?.trim() || null;
 
   return {
     uploadPackageId: input.uploadPackage.packageId,
     channelKey: input.uploadPackage.channelKey,
     youtubeVideoId,
-    youtubeVideoIdHash: youtubeVideoId ? hashEvidence(youtubeVideoId) : input.uploadResult?.youtubeVideoIdHash ?? null,
+    youtubeVideoIdHash: youtubeVideoId ? hashEvidence(youtubeVideoId) : uploadResult?.youtubeVideoIdHash ?? null,
     affiliateUrl,
     affiliateUrlHash: affiliateUrl ? hashEvidence(affiliateUrl) : null,
     commentText,
     coupangDisclosurePresent: input.uploadPackage.commentPackage.coupangPartnersDisclosurePresent &&
       hasCoupangPartnersDisclosure(commentText),
     affiliateUrlPresent: Boolean(affiliateUrl),
-    uploadResultStatus: input.uploadResult?.uploadResultStatus ?? "missing",
-    uploadVisibility: input.uploadResult?.uploadVisibility ?? null,
-    targetChannelVerified: Boolean(input.uploadResult?.targetChannelVerified),
+    uploadResultStatus: uploadResult?.uploadResultStatus ?? "missing",
+    uploadVisibility: uploadResult?.uploadVisibility ?? null,
+    targetChannelVerified: Boolean(uploadResult?.targetChannelVerified),
     duplicateGuardSignature: input.uploadPackage.duplicateGuard.signature,
-    duplicateGuardPassed: Boolean(input.uploadResult?.duplicateGuardPassed),
-    publicUploadPackageReady: Boolean(input.uploadResult?.publicUploadPackageReady),
+    duplicateGuardPassed: Boolean(uploadResult?.duplicateGuardPassed),
+    publicUploadPackageReady: Boolean(uploadResult?.publicUploadPackageReady),
     approvalRequired: true,
     commentWriteAllowed: false
   };
@@ -135,6 +138,17 @@ function buildCommentText(baseText: string, affiliateUrl: string | null) {
     lines.push(affiliateUrl);
   }
   return lines.join("\n");
+}
+
+function uploadResultBelongsToPackage(
+  uploadPackage: V073UploadPackage,
+  uploadResult: V075UploadResultEvidence | null
+) {
+  return Boolean(
+    uploadResult &&
+    uploadResult.uploadPackageId === uploadPackage.packageId &&
+    uploadResult.channelKey === uploadPackage.channelKey
+  );
 }
 
 function hasCoupangPartnersDisclosure(value: string) {
