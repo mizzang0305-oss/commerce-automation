@@ -307,7 +307,7 @@ describe("v075 comment writer scaffold", () => {
     const task = await readFile("TASK.md", "utf8");
 
     expect(task).toContain("### T005 - V075 Comment Writer");
-    expect(task).toMatch(/### T005 - V075 Comment Writer[\s\S]*Status: `(IN_PROGRESS|PR_OPEN)`/);
+    expect(task).toMatch(/### T005 - V075 Comment Writer[\s\S]*Status: `(IN_PROGRESS|PR_OPEN|DONE)`/);
     expect(task).toContain("`SAFE_TO_UPLOAD=false`");
   });
 

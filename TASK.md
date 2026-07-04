@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #185 and T004 closeout: `3c71525969e2f24f9692586d5cf3fa2a4de52cba`
+- main HEAD after PR #186 merge: `a55ff6eebc8755361bb628e32cd291def162d27d`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -43,10 +43,10 @@ Product discovery
 - PR #184 merge commit: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
 - PR #185: V074 public upload executor scaffold, `MERGED`
 - PR #185 merge commit: `4fe422851e8dd006f9147064636fe4f31e271207`
-- PR #186: V075 comment writer scaffold, `OPEN`
-- PR #186 implementation commit: `c57f62f50e3c9ba4459618d211035cfe2a0a9957`
+- PR #186: V075 comment writer scaffold, `MERGED`
+- PR #186 merge commit: `a55ff6eebc8755361bb628e32cd291def162d27d`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T005_V075_COMMENT_WRITER_SCAFFOLD_REVIEW`
+- Current blocker: `PENDING_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -145,7 +145,7 @@ Requirements:
 
 ### T005 - V075 Comment Writer
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add top-level comment writer after upload success.
 
@@ -162,25 +162,23 @@ Requirements:
 
 Status: `PENDING`
 
-Goal: Store sanitized upload result.
+Goal: Scaffold a sanitized internal upload result store contract.
 
 Store:
 
-- upload_package_id
-- youtube_video_id
-- youtube_video_url or sanitized URL evidence
-- channel_key
-- channel_id_hash
+- uploadResultId
+- queueItemId
+- platform
 - visibility
-- comment_status
-- comment_id
-- affiliate_url_hash
-- raw_coupang_url_hash
-- duplicate_guard_signature
-- uploaded_at
-- final_status
+- uploadedAt
+- youtubeVideoIdHashPrefix
+- channelIdHashPrefix
+- evidencePresent booleans
+- sanitizedStatus
+- createdAt
+- updatedAt
 
-No secrets and no raw URLs.
+No raw YouTube video IDs, full channel IDs, raw URLs, secrets, tokens, or fake success.
 
 ### T007 - V077 Autopilot Scheduler
 
@@ -270,12 +268,14 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #185 squash merged. Main synced at `4fe422851e8dd006f9147064636fe4f31e271207`. T004 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T005 started on `codex/v075-comment-writer-scaffold` from main `3c71525969e2f24f9692586d5cf3fa2a4de52cba`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T005 V075 comment writer scaffold committed at `c57f62f50e3c9ba4459618d211035cfe2a0a9957` and opened as PR #186: https://github.com/mizzang0305-oss/commerce-automation/pull/186. Validation passed. Upload/readiness/materializer execution was not run. Real comment mutation was not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #186 review fix pushed at `bef5fd3f7ec6c87f456e2f33437bc688dbffacdf`. V075 now fails closed when upload result evidence is not bound to the selected package/channel. Focused validation passed. Upload execution, real comment mutation, and readiness/materializer execution were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #186 squash merged. Main synced at `a55ff6eebc8755361bb628e32cd291def162d27d`. T005 is complete. Upload execution, real comment mutation, and readiness/materializer execution were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T005_V075_COMMENT_WRITER_SCAFFOLD_REVIEW`
-- Public upload remains blocked. T005 only scaffolds a disabled comment writer; real comment mutation remains blocked until later readiness gates and fresh approval.
+- `PENDING_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD`
+- Public upload and real comment mutation remain blocked. T006 must add only a sanitized upload result store scaffold and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Review and merge PR #186. After merge, proceed to T006 V076 Upload Result Store scaffold only. `SAFE_TO_UPLOAD=false`.
+- Start T006 V076 Upload Result Store scaffold only. `SAFE_TO_UPLOAD=false`.
