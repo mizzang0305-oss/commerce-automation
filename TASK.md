@@ -48,7 +48,7 @@ Product discovery
 - PR #187: V076 upload result store scaffold, `MERGED`
 - PR #187 merge commit: `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD`
+- Current blocker: `PR_OPEN_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -184,7 +184,7 @@ No raw YouTube video IDs, full channel IDs, raw URLs, secrets, tokens, or fake s
 
 ### T007 - V077 Autopilot Scheduler
 
-Status: `PENDING`
+Status: `PR_OPEN`
 
 Goal: Add autopilot scheduler policy.
 
@@ -198,6 +198,8 @@ Requirements:
 - hold/manual review
 - feature flag default off
 - public upload default disabled until explicit enablement
+- scheduler scaffold default disabled
+- plan/report only; no upload/comment execution
 
 ### T008 - V078 Dashboard Control
 
@@ -275,12 +277,14 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T006 started on `codex/v076-upload-result-store-scaffold` from main `1de6d4c`. Upload result store work is scaffold-only; no upload/comment/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T006 V076 upload result store scaffold committed at `5604421` and opened as PR #187: https://github.com/mizzang0305-oss/commerce-automation/pull/187. Validation passed. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #187 squash merged. Main synced at `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`. T006 is complete. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T007 started on `codex/v077-autopilot-scheduler-scaffold` from main `7bdcfa2`. Scheduler work is scaffold/readiness/plan-only; no upload/comment/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T007 V077 autopilot scheduler scaffold committed at `efe7055` and opened as PR #188: https://github.com/mizzang0305-oss/commerce-automation/pull/188. Validation passed. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD`
+- `PR_OPEN_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD_REVIEW`
 - Public upload and real comment mutation remain blocked. T007 must add only a scaffold/readiness/plan-only scheduler and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Start T007 V077 Autopilot Scheduler scaffold only. `SAFE_TO_UPLOAD=false`.
+- Review and merge PR #188. After merge, proceed to T008 V078 Dashboard Control scaffold only. `SAFE_TO_UPLOAD=false`.
