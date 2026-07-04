@@ -30,11 +30,11 @@ Product discovery
 - No duplicate guard, no upload.
 - No fresh approval, no real public upload.
 - No raw URL, secret, token, Authorization/HMAC signature, or full channel ID in logs or reports.
-- `SAFE_TO_UPLOAD=false` until T010 receives fresh approval in the current session.
+- `SAFE_TO_UPLOAD=false`; T010 is now V080 Manual MVP Operation Pack / Release Gate, not public upload execution.
 
 ## Current Source Of Truth
 
-- main HEAD after PR #189 merge: `46cbbd07479f538b8ecaefd553557e1650c13af7`
+- main HEAD after PR #190 merge: `57683be19023695f0545c3c5817b1f8057c1d2e0`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -51,8 +51,10 @@ Product discovery
 - PR #188 merge commit: `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`
 - PR #189: V078 dashboard control scaffold, `MERGED`
 - PR #189 merge commit: `46cbbd07479f538b8ecaefd553557e1650c13af7`
+- PR #190: V079 end-to-end no-upload dry run, `MERGED`
+- PR #190 merge commit: `57683be19023695f0545c3c5817b1f8057c1d2e0`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN_REVIEW`
+- Current blocker: `PENDING_T010_V080_MANUAL_MVP_OPERATION_PACK`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -242,22 +244,20 @@ Expected:
 - approval missing only
 - `SAFE_TO_UPLOAD=false`
 
-### T010 - V080 One-Time Guarded Public Upload
+### T010 - V080 Manual MVP Operation Pack / Release Gate
 
 Status: `PENDING`
 
-Goal: Only after explicit fresh approval, execute one guarded public upload package.
+Goal: Build the manual MVP operation pack and release gate without public upload/comment/scheduler execution.
 
-Required fresh approval:
+Requirements:
 
-```text
-APPROVE_COUPANG_AUTOPILOT_PUBLIC_UPLOAD_ONCE
-CONFIRM_COUPANG_PARTNERS_DISCLOSURE_READY
-CONFIRM_YOUTUBE_PUBLIC_UPLOAD_SETTINGS_READY
-CONFIRM_TARGET_CHANNELS_VERIFIED
-```
-
-Do not execute this task unless fresh approval appears in the current user message/session.
+- manual operator checklist
+- no-upload release gate
+- public upload approval explicitly blocked
+- manual operation allowed, automation execution disabled
+- upload/comment/scheduler mutation blocked
+- `SAFE_TO_UPLOAD=false`
 
 ## Latest Evidence
 
@@ -289,12 +289,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-05 KST: PR #189 squash merged. Main synced at `46cbbd07479f538b8ecaefd553557e1650c13af7`. T008 is complete. Upload execution, real comment mutation, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T009 started on `codex/v079-end-to-end-no-upload-dry-run` from main `b55d478`. Dry-run work is local fixture / pure function / sanitized report only; no upload/comment/scheduler/webhook/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T009 V079 end-to-end no-upload dry-run committed at `4bfa792` and opened as PR #190: https://github.com/mizzang0305-oss/commerce-automation/pull/190. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: PR #190 squash merged. Main synced at `57683be19023695f0545c3c5817b1f8057c1d2e0`. T009 is complete. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN_REVIEW`
-- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. PR #190 must be reviewed and merged before any later task. `SAFE_TO_UPLOAD=false`.
+- `PENDING_T010_V080_MANUAL_MVP_OPERATION_PACK`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. T010 must add only a manual MVP operation pack / release gate and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Review and merge PR #190. After merge, T010 remains blocked until fresh public upload approval appears in the current session. `SAFE_TO_UPLOAD=false`.
+- Start T010 V080 Manual MVP Operation Pack / Release Gate only. `SAFE_TO_UPLOAD=false`.
