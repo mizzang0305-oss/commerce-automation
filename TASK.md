@@ -30,11 +30,11 @@ Product discovery
 - No duplicate guard, no upload.
 - No fresh approval, no real public upload.
 - No raw URL, secret, token, Authorization/HMAC signature, or full channel ID in logs or reports.
-- `SAFE_TO_UPLOAD=false`; T010 is now V080 Manual MVP Operation Pack / Release Gate, not public upload execution.
+- `SAFE_TO_UPLOAD=false`; project status is `NO_UPLOAD_MANUAL_MVP_READY`, not public upload execution.
 
 ## Current Source Of Truth
 
-- main HEAD after PR #190 merge: `57683be19023695f0545c3c5817b1f8057c1d2e0`
+- main HEAD after PR #191 merge: `cae0dca3be958b9cd9cb47d71ab93dba86b00260`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -53,9 +53,14 @@ Product discovery
 - PR #189 merge commit: `46cbbd07479f538b8ecaefd553557e1650c13af7`
 - PR #190: V079 end-to-end no-upload dry run, `MERGED`
 - PR #190 merge commit: `57683be19023695f0545c3c5817b1f8057c1d2e0`
+- PR #191: V080 manual MVP operation pack / release gate, `MERGED`
+- PR #191 merge commit: `cae0dca3be958b9cd9cb47d71ab93dba86b00260`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T010_V080_MANUAL_MVP_OPERATION_PACK_REVIEW`
+- Current status: `NO_UPLOAD_MANUAL_MVP_READY`
 - `SAFE_TO_UPLOAD=false`
+- Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 
 ## Status Legend
 
@@ -246,7 +251,7 @@ Expected:
 
 ### T010 - V080 Manual MVP Operation Pack / Release Gate
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Build the manual MVP operation pack and release gate without public upload/comment/scheduler execution.
 
@@ -292,12 +297,20 @@ Requirements:
 - 2026-07-05 KST: PR #190 squash merged. Main synced at `57683be19023695f0545c3c5817b1f8057c1d2e0`. T009 is complete. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T010 started on `codex/v080-manual-mvp-operation-pack` from main `e4323ad`. Work is manual MVP operation pack / release gate only; no upload/comment/scheduler/webhook/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T010 V080 manual MVP operation pack committed at `ca6f19e` and opened as PR #191: https://github.com/mizzang0305-oss/commerce-automation/pull/191. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: PR #191 squash merged. Main synced at `cae0dca3be958b9cd9cb47d71ab93dba86b00260`. T010 is complete and project status is `NO_UPLOAD_MANUAL_MVP_READY`. This is manual MVP operation readiness only: an operator can review and manually upload outside automation after direct confirmation, while the system remains limited to generation, validation, and monitoring. Public upload approval, comment automation approval, and scheduler execution approval remain `BLOCKED_FRESH_APPROVAL_REQUIRED`. `SAFE_TO_UPLOAD=false`.
 
-## Current Blocker
+## Current Status
 
-- `PR_OPEN_T010_V080_MANUAL_MVP_OPERATION_PACK_REVIEW`
-- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. PR #191 must be reviewed before any next task. `SAFE_TO_UPLOAD=false`.
+- `NO_UPLOAD_MANUAL_MVP_READY`
+- No-upload manual MVP operation ready.
+- Operators may review generated packages and perform any upload manually outside automation after direct confirmation.
+- The system is responsible only for generation, validation, and monitoring.
+- Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Review and merge PR #191 V080 Manual MVP Operation Pack / Release Gate only. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`.
+- `OWNER_MANUAL_MVP_PILOT_NO_UPLOAD`
+- Owner manually reviews the no-upload manual MVP operation pack and decides whether to run a manual pilot outside automation. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`.
