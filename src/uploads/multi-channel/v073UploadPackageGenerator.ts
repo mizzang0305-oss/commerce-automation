@@ -52,9 +52,22 @@ type SourceResolution =
     sourceEvidenceHash: string;
   }
   | {
-    status: "missing" | "raw_missing" | "invalid";
+    status: "missing" | "raw_missing" | "raw_invalid" | "invalid";
     channelKey: ChannelKey;
     sourceKind: V073UploadPackageProductSourceKind | "missing" | "invalid";
+  };
+
+type CandidateRowValidation =
+  | {
+    status: "ready";
+    row: CandidateRow;
+    rawCoupangUrl: string;
+    productName: string;
+    selectedAffiliateUrl: string | null;
+    sourceEvidenceHash: string;
+  }
+  | {
+    status: "raw_missing" | "raw_invalid";
   };
 
 type CandidateRow = {
@@ -91,6 +104,7 @@ export async function generateV073UploadPackages(input: {
     uploadAssetProfile: input.uploadAssetProfile
   });
   const targetChannelIds = resolveV054RuntimeTargetChannelIds(env);
+  const targetSummary = summarizeTargetChannels(targetChannelIds);
   const duplicateGuard = buildV050DuplicateUploadGuard(CHANNEL_KEYS.map((channelKey) => ({
     channel_key: channelKey,
     video_path: assetReport.bindings[channelKey].video_path
@@ -118,6 +132,7 @@ export async function generateV073UploadPackages(input: {
     sources.some((source) => source.status === "invalid") ? "BLOCKED_V073_UPLOAD_PACKAGE_INVALID_MANIFEST" : null,
     sources.some((source) => source.status === "missing") ? "BLOCKED_V073_UPLOAD_PACKAGE_PRODUCT_SOURCE_MISSING" : null,
     sources.some((source) => source.status === "raw_missing") ? "BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_MISSING" : null,
+    sources.some((source) => source.status === "raw_invalid") ? "BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_INVALID" : null,
     assetReport.asset_binding_blocker === "BLOCKED_V057_ASSET_MISSING" ||
       assetReport.asset_binding_blocker === "BLOCKED_V057_ASSET_PATH_MISMATCH" ||
       CHANNEL_KEYS.some((channelKey) => !assetReport.bindings[channelKey].v057_mp4_exists)
@@ -128,9 +143,10 @@ export async function generateV073UploadPackages(input: {
       ? "BLOCKED_V073_UPLOAD_PACKAGE_FIRST_FRAME_MISSING"
       : null,
     Object.values(disclosure).every((item) => item.ready) ? null : "BLOCKED_V073_UPLOAD_PACKAGE_DISCLOSURE_MISSING",
-    packages.length > 0 && packages.every((item) => item.targetChannel.formatValid)
-      ? null
-      : "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_MISSING",
+    targetSummary.blocker === "duplicate" ? "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_DUPLICATE" : null,
+    targetSummary.blocker === "missing" || targetSummary.blocker === "invalid"
+      ? "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_MISSING"
+      : null,
     packages.length > 0 && packages.every((item) => item.deeplink.status === "ready")
       ? null
       : "BLOCKED_V073_UPLOAD_PACKAGE_DEEPLINK_PENDING",
@@ -143,6 +159,7 @@ export async function generateV073UploadPackages(input: {
     sources,
     assetReport,
     targetChannelIds,
+    targetSummary,
     disclosureReady: Object.values(disclosure).every((item) => item.ready),
     duplicateGuardReady: !duplicateGuard.duplicate_upload_risk
   });
@@ -226,8 +243,15 @@ function buildPairSource(
   generated: CandidateRow | null
 ): SourceResolution | null {
   if (!queue || !generated) return null;
-  const rawCoupangUrl = queue.rawCoupangUrl || generated.rawCoupangUrl;
-  if (!rawCoupangUrl) {
+  const queueValidation = validateCandidateRowSource(channelKey, queue, "product_queue_item");
+  const generatedValidation = validateCandidateRowSource(channelKey, generated, "generated_content");
+  const validations = [queueValidation, generatedValidation];
+  if (validations.some((item) => item.status === "raw_invalid")) {
+    return { status: "raw_invalid", channelKey, sourceKind: "invalid" };
+  }
+  const ready = validations.find((item): item is Extract<CandidateRowValidation, { status: "ready" }> =>
+    item.status === "ready");
+  if (!ready) {
     return { status: "raw_missing", channelKey, sourceKind: "product_queue_item_generated_content_pair" };
   }
   return {
@@ -236,10 +260,10 @@ function buildPairSource(
     sourceKind: "product_queue_item_generated_content_pair",
     queueItemId: queue.id,
     generatedContentId: generated.id,
-    rawCoupangUrl,
-    productName: queue.productName || generated.productName,
-    selectedAffiliateUrl: generated.selectedAffiliateUrl || queue.selectedAffiliateUrl || null,
-    sourceEvidenceHash: queue.sourceEvidenceHash || generated.sourceEvidenceHash || hashEvidence(`${channelKey}:${rawCoupangUrl}`)
+    rawCoupangUrl: ready.rawCoupangUrl,
+    productName: queue.productName || generated.productName || ready.productName,
+    selectedAffiliateUrl: generated.selectedAffiliateUrl || queue.selectedAffiliateUrl || ready.selectedAffiliateUrl,
+    sourceEvidenceHash: queue.sourceEvidenceHash || generated.sourceEvidenceHash || ready.sourceEvidenceHash
   };
 }
 
@@ -249,17 +273,56 @@ function buildSingleRowSource(
   sourceKind: Extract<V073UploadPackageProductSourceKind, "generated_content" | "product_queue_item">
 ): SourceResolution | null {
   if (!row) return null;
-  if (!row.rawCoupangUrl) return { status: "raw_missing", channelKey, sourceKind };
+  const validation = validateCandidateRowSource(channelKey, row, sourceKind);
+  if (validation.status !== "ready") return { status: validation.status, channelKey, sourceKind: validation.status === "raw_invalid" ? "invalid" : sourceKind };
   return {
     status: "ready",
     channelKey,
     sourceKind,
     queueItemId: sourceKind === "product_queue_item" ? row.id : null,
     generatedContentId: sourceKind === "generated_content" ? row.id : null,
-    rawCoupangUrl: row.rawCoupangUrl,
-    productName: row.productName,
-    selectedAffiliateUrl: row.selectedAffiliateUrl || null,
-    sourceEvidenceHash: row.sourceEvidenceHash || hashEvidence(`${channelKey}:${row.rawCoupangUrl}`)
+    rawCoupangUrl: validation.rawCoupangUrl,
+    productName: validation.productName,
+    selectedAffiliateUrl: validation.selectedAffiliateUrl,
+    sourceEvidenceHash: validation.sourceEvidenceHash
+  };
+}
+
+function validateCandidateRowSource(
+  channelKey: ChannelKey,
+  row: CandidateRow,
+  sourceKind: Extract<V073UploadPackageProductSourceKind, "generated_content" | "product_queue_item">
+): CandidateRowValidation {
+  const normalized = normalizeV057ProductSourceCandidate(row.raw, sourceKind);
+  const rawCoupangUrl = row.rawCoupangUrl || normalized.rawCoupangUrl || "";
+  const productName = row.productName || normalized.productName || normalized.sourceProductLabel || "";
+  const selectedAffiliateUrl = row.selectedAffiliateUrl || normalized.selectedAffiliateUrl || null;
+  const sourceEvidenceHash = row.sourceEvidenceHash || normalized.sourceEvidenceHash ||
+    hashEvidence(`${channelKey}:${productName}:${rawCoupangUrl}`);
+  const validation = validateV057ProductSourceCandidate({
+    channelKey,
+    candidate: {
+      ...normalized,
+      channelKey: row.channelKey ?? normalized.channelKey,
+      productSourceKind: sourceKind,
+      rawCoupangUrl,
+      productName,
+      sourceProductLabel: productName,
+      selectedAffiliateUrl: selectedAffiliateUrl ?? undefined,
+      sourceEvidenceHash,
+      updatedAt: row.updatedAt || normalized.updatedAt,
+      boundAt: normalized.boundAt
+    }
+  });
+  if (!validation.evidence.raw_coupang_url_present) return { status: "raw_missing" };
+  if (!validation.ok) return { status: "raw_invalid" };
+  return {
+    status: "ready",
+    row,
+    rawCoupangUrl: validation.rawCoupangUrl,
+    productName,
+    selectedAffiliateUrl,
+    sourceEvidenceHash
   };
 }
 
@@ -415,6 +478,7 @@ function buildReport(input: {
   sources: SourceResolution[];
   assetReport: Awaited<ReturnType<typeof resolveV057ReuploadAssetBindings>>;
   targetChannelIds: Partial<Record<ChannelKey, string>>;
+  targetSummary: ReturnType<typeof summarizeTargetChannels>;
   disclosureReady: boolean;
   duplicateGuardReady: boolean;
 }): V073UploadPackageReport {
@@ -430,7 +494,10 @@ function buildReport(input: {
       videoPresent: input.assetReport.bindings[channelKey].v057_mp4_exists,
       firstFramePresent: input.assetReport.bindings[channelKey].first_frame_v057_exists,
       disclosureReady: input.disclosureReady,
-      targetReady: targetValidation.present && targetValidation.format_valid,
+      targetReady: input.targetSummary.ready,
+      targetPresent: targetValidation.present,
+      targetFormatValid: targetValidation.format_valid,
+      targetDuplicateDetected: input.targetSummary.duplicate_detected,
       targetHashPrefix: targetValidation.hash_prefix,
       duplicateGuardReady: input.duplicateGuardReady
     });
@@ -476,6 +543,9 @@ function buildReportItem(input: {
   firstFramePresent: boolean;
   disclosureReady: boolean;
   targetReady: boolean;
+  targetPresent: boolean;
+  targetFormatValid: boolean;
+  targetDuplicateDetected: boolean;
   targetHashPrefix: string | null;
   duplicateGuardReady: boolean;
 }): V073UploadPackageReportItem {
@@ -498,11 +568,37 @@ function buildReportItem(input: {
     firstFramePresent: input.firstFramePresent,
     disclosureReady: input.disclosureReady,
     targetChannelReady: input.targetReady,
+    targetChannelPresent: input.targetPresent,
+    targetChannelFormatValid: input.targetFormatValid,
+    targetChannelDuplicateDetected: input.targetDuplicateDetected,
     targetChannelHashPrefix: input.targetHashPrefix,
     duplicateGuardReady: input.duplicateGuardReady,
     approvalRequired: true,
     uploadExecutionCalled: false,
     safeToUpload: false
+  };
+}
+
+function summarizeTargetChannels(targetChannelIds: Partial<Record<ChannelKey, string>>) {
+  const normalizedIds = CHANNEL_KEYS.map((channelKey) => targetChannelIds[channelKey]?.trim() ?? "");
+  const validations = normalizedIds.map((value) => validateYouTubeChannelId(value));
+  const allPresent = validations.every((validation) => validation.present);
+  const allFormatValid = validations.every((validation) => validation.format_valid);
+  const presentIds = normalizedIds.filter(Boolean);
+  const duplicateDetected = new Set(presentIds).size !== presentIds.length;
+  const blocker = !allPresent
+    ? "missing"
+    : !allFormatValid
+      ? "invalid"
+      : duplicateDetected
+        ? "duplicate"
+        : null;
+  return {
+    all_present: allPresent,
+    all_format_valid: allFormatValid,
+    duplicate_detected: duplicateDetected,
+    ready: blocker === null,
+    blocker
   };
 }
 

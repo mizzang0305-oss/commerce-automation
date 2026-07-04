@@ -112,6 +112,9 @@ export type V073UploadPackageReportItem = {
   firstFramePresent: boolean;
   disclosureReady: boolean;
   targetChannelReady: boolean;
+  targetChannelPresent: boolean;
+  targetChannelFormatValid: boolean;
+  targetChannelDuplicateDetected: boolean;
   targetChannelHashPrefix: string | null;
   duplicateGuardReady: boolean;
   approvalRequired: true;
@@ -123,10 +126,12 @@ export type V073UploadPackageBlocker =
   | "BLOCKED_REUPLOAD_ASSET_PROFILE_NOT_SELECTED"
   | "BLOCKED_V073_UPLOAD_PACKAGE_PRODUCT_SOURCE_MISSING"
   | "BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_MISSING"
+  | "BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_INVALID"
   | "BLOCKED_V073_UPLOAD_PACKAGE_VIDEO_ASSET_MISSING"
   | "BLOCKED_V073_UPLOAD_PACKAGE_FIRST_FRAME_MISSING"
   | "BLOCKED_V073_UPLOAD_PACKAGE_DISCLOSURE_MISSING"
   | "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_MISSING"
+  | "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_DUPLICATE"
   | "BLOCKED_V073_UPLOAD_PACKAGE_DEEPLINK_PENDING"
   | "BLOCKED_V073_UPLOAD_PACKAGE_INVALID_MANIFEST"
   | "BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY";

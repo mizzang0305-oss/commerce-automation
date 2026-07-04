@@ -245,6 +245,139 @@ describe("v073 upload package generator", () => {
     }
   });
 
+  test("blocks duplicate target channel IDs without printing full channel IDs", async () => {
+    const cwd = await makeCwd();
+    const allDuplicateCwd = await makeCwd();
+    try {
+      await writeReadyQueueAndContentInputs(cwd);
+      await writeReadyQueueAndContentInputs(allDuplicateCwd);
+      const duplicateTargetEnv = {
+        ...TARGET_CHANNEL_ENV,
+        YOUTUBE_LETS_BUY_CHANNEL_ID: TARGET_CHANNEL_IDS.father_jobs
+      };
+
+      const result = await generateV073UploadPackages({
+        cwd,
+        env: duplicateTargetEnv,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+      const reportText = JSON.stringify(result.report);
+
+      expect(result.report.FINAL_STATUS).toBe("BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY");
+      expect(result.report.blocker).toBe("BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_DUPLICATE");
+      expect(result.report.upload_package_generator_ready).toBe(false);
+      expect(result.report.packages.every((item) => item.targetChannelReady === false)).toBe(true);
+      expect(result.report.raw_channel_ids_printed).toBe(false);
+      expect(reportText).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+
+      const allDuplicateResult = await generateV073UploadPackages({
+        cwd: allDuplicateCwd,
+        env: {
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: TARGET_CHANNEL_IDS.father_jobs,
+          YOUTUBE_NEOMAN_MOLEULGEOL_CHANNEL_ID: TARGET_CHANNEL_IDS.father_jobs,
+          YOUTUBE_LETS_BUY_CHANNEL_ID: TARGET_CHANNEL_IDS.father_jobs
+        },
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+      const allDuplicateReportText = JSON.stringify(allDuplicateResult.report);
+
+      expect(allDuplicateResult.report.blocker).toBe("BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_DUPLICATE");
+      expect(allDuplicateResult.report.packages.every((item) => item.targetChannelDuplicateDetected === true)).toBe(true);
+      expect(allDuplicateReportText).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(allDuplicateCwd, { recursive: true, force: true });
+    }
+  });
+
+  test("validates queue and generated raw product URLs before package success", async () => {
+    const invalidCases: Array<{
+      name: string;
+      queueOverride: Record<string, unknown>;
+      generatedOverride?: Record<string, unknown>;
+      forbiddenReportFragment: string;
+    }> = [
+      {
+        name: "http URL",
+        queueOverride: { raw_coupang_url: "http://www.coupang.com/vp/products/873000099" },
+        generatedOverride: { raw_coupang_url: "http://www.coupang.com/vp/products/873000099" },
+        forbiddenReportFragment: "873000099"
+      },
+      {
+        name: "non-Coupang host",
+        queueOverride: { raw_coupang_url: "https://not-coupang.invalid/vp/products/873000098" },
+        generatedOverride: { raw_coupang_url: "https://not-coupang.invalid/vp/products/873000098" },
+        forbiddenReportFragment: "not-coupang"
+      },
+      {
+        name: "placeholder URL",
+        queueOverride: { raw_coupang_url: "https://example.com/vp/products/873000097" },
+        generatedOverride: { raw_coupang_url: "https://example.com/vp/products/873000097" },
+        forbiddenReportFragment: "example.com"
+      },
+      {
+        name: "asset profile mismatch",
+        queueOverride: { assetProfile: "v048_channel_specific_assets" },
+        generatedOverride: { assetProfile: "v048_channel_specific_assets" },
+        forbiddenReportFragment: "v048_channel_specific_assets"
+      }
+    ];
+
+    for (const testCase of invalidCases) {
+      const cwd = await makeCwd();
+      try {
+        await writeV057Assets(cwd);
+        await writeQueue(cwd, queueRows({
+          father_jobs: testCase.queueOverride
+        }));
+        await writeGeneratedContents(cwd, generatedContentRows({
+          father_jobs: testCase.generatedOverride ?? testCase.queueOverride
+        }));
+
+        const result = await generateV073UploadPackages({
+          cwd,
+          env: TARGET_CHANNEL_ENV,
+          uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+        });
+        const reportText = JSON.stringify(result.report);
+
+        expect(result.report.FINAL_STATUS, testCase.name).toBe("BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY");
+        expect(result.report.blocker, testCase.name).toBe("BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_INVALID");
+        expect(result.report.upload_package_generator_ready, testCase.name).toBe(false);
+        expect(result.report.raw_urls_printed, testCase.name).toBe(false);
+        expect(reportText, testCase.name).not.toContain(testCase.forbiddenReportFragment);
+      } finally {
+        await rm(cwd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test("blocks queue and generated product rows with mismatched channel keys", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeV057Assets(cwd);
+      await writeQueue(cwd, queueRows({
+        father_jobs: { channelKey: "lets_buy" }
+      }));
+      await writeGeneratedContents(cwd, generatedContentRows({
+        father_jobs: { channelKey: "lets_buy" }
+      }));
+
+      const result = await generateV073UploadPackages({
+        cwd,
+        env: TARGET_CHANNEL_ENV,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      expect(result.report.FINAL_STATUS).toBe("BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY");
+      expect(result.report.blocker).toBe("BLOCKED_V073_UPLOAD_PACKAGE_PRODUCT_SOURCE_MISSING");
+      expect(result.report.upload_package_generator_ready).toBe(false);
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("blocks missing video asset, first frame, disclosure, and target channel", async () => {
     const missingVideo = await makeCwd();
     const missingFrame = await makeCwd();

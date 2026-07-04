@@ -67,10 +67,12 @@ Reports redact raw URLs and full channel IDs. Internal package objects may hold 
 
 - `BLOCKED_V073_UPLOAD_PACKAGE_PRODUCT_SOURCE_MISSING`
 - `BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_MISSING`
+- `BLOCKED_V073_UPLOAD_PACKAGE_RAW_COUPANG_URL_INVALID`
 - `BLOCKED_V073_UPLOAD_PACKAGE_VIDEO_ASSET_MISSING`
 - `BLOCKED_V073_UPLOAD_PACKAGE_FIRST_FRAME_MISSING`
 - `BLOCKED_V073_UPLOAD_PACKAGE_DISCLOSURE_MISSING`
 - `BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_MISSING`
+- `BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_DUPLICATE`
 - `BLOCKED_V073_UPLOAD_PACKAGE_DEEPLINK_PENDING`
 - `BLOCKED_V073_UPLOAD_PACKAGE_INVALID_MANIFEST`
 - `BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY`
@@ -89,6 +91,7 @@ Reports include:
 - video/first-frame presence
 - disclosure readiness
 - target channel hash prefix
+- target channel presence, format-valid state, and duplicate-detected state
 - duplicate guard readiness
 - approval required
 - upload execution called false
