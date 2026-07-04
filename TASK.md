@@ -52,7 +52,7 @@ Product discovery
 - PR #189: V078 dashboard control scaffold, `MERGED`
 - PR #189 merge commit: `46cbbd07479f538b8ecaefd553557e1650c13af7`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN`
+- Current blocker: `PR_OPEN_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -225,7 +225,7 @@ UI:
 
 ### T009 - V079 End-to-End No-Upload Dry Run
 
-Status: `PENDING`
+Status: `PR_OPEN`
 
 Goal: Run full no-upload dry run from product source to package readiness.
 
@@ -287,12 +287,14 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-05 KST: T008 started on `codex/v078-dashboard-control-scaffold` from main `fe8eae7`. Dashboard work is scaffold/readiness/control-only; no upload/comment/scheduler auto-execution/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T008 V078 dashboard control scaffold committed at `0cda3c1` and opened as PR #189: https://github.com/mizzang0305-oss/commerce-automation/pull/189. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: PR #189 squash merged. Main synced at `46cbbd07479f538b8ecaefd553557e1650c13af7`. T008 is complete. Upload execution, real comment mutation, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: T009 started on `codex/v079-end-to-end-no-upload-dry-run` from main `b55d478`. Dry-run work is local fixture / pure function / sanitized report only; no upload/comment/scheduler/webhook/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: T009 V079 end-to-end no-upload dry-run committed at `4bfa792` and opened as PR #190: https://github.com/mizzang0305-oss/commerce-automation/pull/190. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN`
-- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. T009 must add only local fixture / pure function / sanitized report dry-run harness and keep `SAFE_TO_UPLOAD=false`.
+- `PR_OPEN_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN_REVIEW`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. PR #190 must be reviewed and merged before any later task. `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Start T009 V079 End-to-End No-Upload Dry Run only. `SAFE_TO_UPLOAD=false`.
+- Review and merge PR #190. After merge, T010 remains blocked until fresh public upload approval appears in the current session. `SAFE_TO_UPLOAD=false`.
