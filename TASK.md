@@ -73,7 +73,7 @@ Acceptance:
 
 ### T002 - V072 Public Autopilot Target Spec
 
-Status: `IN_PROGRESS`
+Status: `PR_OPEN`
 
 Goal: Document and test the final target architecture.
 
@@ -250,6 +250,7 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #182 squash merged. Main synced at `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`. T001 is complete. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T002 spec and regression test drafted on `codex/v072-public-autopilot-target-spec`. Targeted test passed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T002 PR opened as PR #183 from `codex/v072-public-autopilot-target-spec`. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
@@ -258,4 +259,4 @@ Do not execute this task unless fresh approval appears in the current user messa
 
 ## Next Exact Action
 
-- Continue T002 on `codex/v072-public-autopilot-target-spec`.
+- Merge PR #183 only after checks are clean, then continue T003 V073 Upload Package Generator.

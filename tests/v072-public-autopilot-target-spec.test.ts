@@ -52,7 +52,7 @@ describe("v072 public autopilot target spec", () => {
     const task = await readFile(TASK_PATH, "utf8");
 
     expect(task).toContain("### T002 - V072 Public Autopilot Target Spec");
-    expect(task).toContain("Status: `IN_PROGRESS`");
+    expect(task).toContain("Status: `PR_OPEN`");
     expect(task).toContain("`SAFE_TO_UPLOAD=false`");
     expect(task).toContain("No fresh approval, no real public upload.");
   });
