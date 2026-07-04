@@ -262,6 +262,7 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #184 squash merged. Main synced at `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`. T003 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T004 started on `codex/v074-public-upload-executor-scaffold` from main `23fc8551990f9c8ff32e63937de7709496be6ef2`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T004 V074 scaffold committed at `dc71f407019de6bdeadd22025ff93f1a99ec515c` and opened as PR #185: https://github.com/mizzang0305-oss/commerce-automation/pull/185. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #185 review fix pushed at `c781aed7c9f6ccb06f0d09266867ff3f60a1b610`. V074 now preserves sanitized V073 package readiness/blocker evidence and cannot override an upstream package blocker into ready state. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
