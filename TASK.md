@@ -34,13 +34,15 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #183 and T002 closeout: `e1409c00e19bd9d7a1f27c73f2da15d71d39e7af`
+- main HEAD after PR #184 and T003 closeout: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
 - PR #183 merge commit: `f66749e5d4e787ba0c225596a8341c5487f23327`
+- PR #184: V073 upload package generator, `MERGED`
+- PR #184 merge commit: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR_AFTER_REVIEW_FIX`
+- Current blocker: `PENDING_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -99,7 +101,7 @@ Spec must define:
 
 ### T003 - V073 Upload Package Generator
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Generate upload packages from queue, generated content, and review package data automatically.
 
@@ -257,12 +259,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T003 started on `codex/v073-upload-package-generator` from main `e1409c00e19bd9d7a1f27c73f2da15d71d39e7af`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T003 implementation committed at `b64a305` and opened as PR #184: https://github.com/mizzang0305-oss/commerce-automation/pull/184. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #184 P1/P2 review fix pushed at `4a71420`. Added duplicate target-channel blocking and queue/generated product-source validation hardening. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #184 squash merged. Main synced at `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`. T003 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR_AFTER_REVIEW_FIX`
-- Public upload remains blocked until PR #184 is reviewed/merged and later readiness gates pass with fresh approval.
+- `PENDING_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD`
+- Public upload remains blocked. T004 may only scaffold a disabled public upload executor; real upload remains blocked until later readiness gates and fresh approval.
 
 ## Next Exact Action
 
-- Review/merge PR #184 for T003 V073 Upload Package Generator.
+- Start T004 V074 Public Upload Executor Scaffold.

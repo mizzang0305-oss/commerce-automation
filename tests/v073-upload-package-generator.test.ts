@@ -459,7 +459,7 @@ describe("v073 upload package generator", () => {
     }
   });
 
-  test("writes sanitized artifacts and keeps TASK.md aligned with T003 PR state", async () => {
+  test("writes sanitized artifacts and keeps TASK.md aligned with T003 completion state", async () => {
     const cwd = await makeCwd();
     try {
       await writeReadyQueueAndContentInputs(cwd);
@@ -479,7 +479,7 @@ describe("v073 upload package generator", () => {
 
       const task = await readFile(path.join(process.cwd(), "TASK.md"), "utf8");
       expect(task).toContain("### T003 - V073 Upload Package Generator");
-      expect(task).toContain("Status: `PR_OPEN`");
+      expect(task).toContain("Status: `DONE`");
       expect(task).toContain("`SAFE_TO_UPLOAD=false`");
     } finally {
       await rm(cwd, { recursive: true, force: true });
