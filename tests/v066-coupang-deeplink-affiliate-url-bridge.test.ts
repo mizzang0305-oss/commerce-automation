@@ -107,8 +107,10 @@ describe("v066 Coupang Deeplink affiliate URL bridge", () => {
     expect(result.affiliateUrls).toEqual(VALID_AFFILIATE_URLS);
     expect(result.report.affiliate_url_bridge_ready).toBe(true);
     expect(result.report.resolution_order).toEqual([
-      "explicit_v051_affiliate_url_env",
-      "coupang_deeplink_from_raw_coupang_url"
+      "runtime_bound_v057_raw_coupang_url_source",
+      "coupang_deeplink_from_raw_coupang_url",
+      "explicit_v051_affiliate_url_env_emergency_override",
+      "explicit_v051_raw_coupang_url_env_emergency_override"
     ]);
     expect(result.report.deeplink_api_called).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();

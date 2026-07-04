@@ -31,6 +31,7 @@ export async function buildV051ExecutionInputFromEnv(input: {
   const affiliateUrlBridge = await resolveV066CoupangDeeplinkAffiliateBridge({
     cwd,
     env,
+    uploadAssetProfile,
     fetchImpl: input.fetchImpl
   });
   const affiliateUrlGate = {
