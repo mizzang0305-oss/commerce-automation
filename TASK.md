@@ -34,15 +34,17 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #184 and T003 closeout: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
+- main HEAD after PR #185 and T004 closeout: `4fe422851e8dd006f9147064636fe4f31e271207`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
 - PR #183 merge commit: `f66749e5d4e787ba0c225596a8341c5487f23327`
 - PR #184: V073 upload package generator, `MERGED`
 - PR #184 merge commit: `a83c9315c55a9e5a279ed8923a2f57c9bdb08a3d`
+- PR #185: V074 public upload executor scaffold, `MERGED`
+- PR #185 merge commit: `4fe422851e8dd006f9147064636fe4f31e271207`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD_REVIEW`
+- Current blocker: `PENDING_T005_V075_COMMENT_WRITER_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -118,7 +120,7 @@ Requirements:
 
 ### T004 - V074 Public Upload Executor Scaffold
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Implement public upload executor behind a hard disabled gate.
 
@@ -263,12 +265,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T004 started on `codex/v074-public-upload-executor-scaffold` from main `23fc8551990f9c8ff32e63937de7709496be6ef2`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T004 V074 scaffold committed at `dc71f407019de6bdeadd22025ff93f1a99ec515c` and opened as PR #185: https://github.com/mizzang0305-oss/commerce-automation/pull/185. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #185 review fix pushed at `c781aed7c9f6ccb06f0d09266867ff3f60a1b610`. V074 now preserves sanitized V073 package readiness/blocker evidence and cannot override an upstream package blocker into ready state. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #185 squash merged. Main synced at `4fe422851e8dd006f9147064636fe4f31e271207`. T004 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T004_V074_PUBLIC_UPLOAD_EXECUTOR_SCAFFOLD_REVIEW`
-- Public upload remains blocked. T004 may only scaffold a disabled public upload executor; real upload remains blocked until later readiness gates and fresh approval.
+- `PENDING_T005_V075_COMMENT_WRITER_SCAFFOLD`
+- Public upload remains blocked. T005 may only scaffold a disabled comment writer; real comment mutation remains blocked until later readiness gates and fresh approval.
 
 ## Next Exact Action
 
-- Review and merge PR #185. After merge, proceed to T005 V075 Comment Writer scaffold only. `SAFE_TO_UPLOAD=false`.
+- Start T005 V075 Comment Writer Scaffold. `SAFE_TO_UPLOAD=false`.

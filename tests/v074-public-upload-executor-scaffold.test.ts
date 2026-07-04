@@ -346,7 +346,7 @@ describe("v074 public upload executor scaffold", () => {
     const task = await readFile("TASK.md", "utf8");
 
     expect(task).toContain("### T004 - V074 Public Upload Executor Scaffold");
-    expect(task).toMatch(/### T004 - V074 Public Upload Executor Scaffold[\s\S]*Status: `(IN_PROGRESS|PR_OPEN)`/);
+    expect(task).toMatch(/### T004 - V074 Public Upload Executor Scaffold[\s\S]*Status: `(IN_PROGRESS|PR_OPEN|DONE)`/);
     expect(task).toContain("`SAFE_TO_UPLOAD=false`");
   });
 });
