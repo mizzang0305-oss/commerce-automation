@@ -54,7 +54,7 @@ Product discovery
 - PR #190: V079 end-to-end no-upload dry run, `MERGED`
 - PR #190 merge commit: `57683be19023695f0545c3c5817b1f8057c1d2e0`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `IN_PROGRESS_T010_V080_MANUAL_MVP_OPERATION_PACK`
+- Current blocker: `PR_OPEN_T010_V080_MANUAL_MVP_OPERATION_PACK_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -227,7 +227,7 @@ UI:
 
 ### T009 - V079 End-to-End No-Upload Dry Run
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Run full no-upload dry run from product source to package readiness.
 
@@ -246,7 +246,7 @@ Expected:
 
 ### T010 - V080 Manual MVP Operation Pack / Release Gate
 
-Status: `IN_PROGRESS`
+Status: `PR_OPEN`
 
 Goal: Build the manual MVP operation pack and release gate without public upload/comment/scheduler execution.
 
@@ -291,12 +291,13 @@ Requirements:
 - 2026-07-05 KST: T009 V079 end-to-end no-upload dry-run committed at `4bfa792` and opened as PR #190: https://github.com/mizzang0305-oss/commerce-automation/pull/190. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: PR #190 squash merged. Main synced at `57683be19023695f0545c3c5817b1f8057c1d2e0`. T009 is complete. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T010 started on `codex/v080-manual-mvp-operation-pack` from main `e4323ad`. Work is manual MVP operation pack / release gate only; no upload/comment/scheduler/webhook/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: T010 V080 manual MVP operation pack committed at `ca6f19e` and opened as PR #191: https://github.com/mizzang0305-oss/commerce-automation/pull/191. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `IN_PROGRESS_T010_V080_MANUAL_MVP_OPERATION_PACK`
-- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. T010 must add only a manual MVP operation pack / release gate and keep `SAFE_TO_UPLOAD=false`.
+- `PR_OPEN_T010_V080_MANUAL_MVP_OPERATION_PACK_REVIEW`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. PR #191 must be reviewed before any next task. `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Start T010 V080 Manual MVP Operation Pack / Release Gate only. `SAFE_TO_UPLOAD=false`.
+- Review and merge PR #191 V080 Manual MVP Operation Pack / Release Gate only. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`.
