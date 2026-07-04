@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #186 merge: `a55ff6eebc8755361bb628e32cd291def162d27d`
+- main HEAD after PR #187 merge: `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -45,8 +45,10 @@ Product discovery
 - PR #185 merge commit: `4fe422851e8dd006f9147064636fe4f31e271207`
 - PR #186: V075 comment writer scaffold, `MERGED`
 - PR #186 merge commit: `a55ff6eebc8755361bb628e32cd291def162d27d`
+- PR #187: V076 upload result store scaffold, `MERGED`
+- PR #187 merge commit: `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD_REVIEW`
+- Current blocker: `PENDING_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -160,7 +162,7 @@ Requirements:
 
 ### T006 - V076 Upload Result Store
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Scaffold a sanitized internal upload result store contract.
 
@@ -272,12 +274,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #186 squash merged. Main synced at `a55ff6eebc8755361bb628e32cd291def162d27d`. T005 is complete. Upload execution, real comment mutation, and readiness/materializer execution were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T006 started on `codex/v076-upload-result-store-scaffold` from main `1de6d4c`. Upload result store work is scaffold-only; no upload/comment/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T006 V076 upload result store scaffold committed at `5604421` and opened as PR #187: https://github.com/mizzang0305-oss/commerce-automation/pull/187. Validation passed. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #187 squash merged. Main synced at `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`. T006 is complete. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD_REVIEW`
-- Public upload and real comment mutation remain blocked. T006 must add only a sanitized upload result store scaffold and keep `SAFE_TO_UPLOAD=false`.
+- `PENDING_T007_V077_AUTOPILOT_SCHEDULER_SCAFFOLD`
+- Public upload and real comment mutation remain blocked. T007 must add only a scaffold/readiness/plan-only scheduler and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Review and merge PR #187. After merge, proceed to T007 V077 Autopilot Scheduler scaffold only. `SAFE_TO_UPLOAD=false`.
+- Start T007 V077 Autopilot Scheduler scaffold only. `SAFE_TO_UPLOAD=false`.
