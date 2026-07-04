@@ -5,6 +5,7 @@ import { CHANNEL_KEYS, type ChannelKey } from "./channelProfiles";
 import {
   buildEmptyV057RawCoupangUrls,
   emptyV057ProductSourceEvidence,
+  invalidV057ProductSourceMetadataEvidence,
   normalizeV057ProductSourceCandidate,
   validateV057ProductSourceCandidate,
   V057_RUNTIME_PRODUCT_SOURCE_KIND_PRIORITY,
@@ -69,6 +70,7 @@ export async function resolveV057CorrectedReuploadProductSources(input: {
     : null;
   const rawCoupangUrls = buildEmptyV057RawCoupangUrls();
   const channels: V057ProductSourceSanitizedEvidence[] = [];
+  const blockers: V057ProductSourceValidationBlocker[] = [];
 
   for (const channelKey of CHANNEL_KEYS) {
     if (selectedProfile === null) {
@@ -79,12 +81,16 @@ export async function resolveV057CorrectedReuploadProductSources(input: {
     const resolved = await resolveChannelSource(cwd, channelKey);
     channels.push(resolved.evidence);
     rawCoupangUrls[channelKey] = resolved.rawCoupangUrl;
+    if (resolved.blocker) blockers.push(resolved.blocker);
   }
 
-  const blocker = selectedProfile === null ||
-    channels.some((channel) => !channel.raw_coupang_url_present || !rawCoupangUrls[channel.channel_key])
+  const blocker: V057ProductSourceValidationBlocker | null = selectedProfile === null
     ? "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING"
-    : null;
+    : blockers[0] ?? (
+      channels.some((channel) => !channel.raw_coupang_url_present || !rawCoupangUrls[channel.channel_key])
+        ? "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING"
+        : null
+    );
 
   return {
     rawCoupangUrls,
@@ -119,33 +125,46 @@ async function resolveChannelSource(cwd: string, channelKey: ChannelKey) {
     const filePath = path.join(cwd, "commerce-assets", "review", "v057", channelKey, ...candidatePath.relativePath);
     const payload = await readJsonIfExists(filePath);
     if (payload === null) continue;
+    if (payload === INVALID_JSON) {
+      return {
+        rawCoupangUrl: "",
+        evidence: invalidV057ProductSourceMetadataEvidence(channelKey),
+        blocker: "BLOCKED_V068_PRODUCT_SOURCE_METADATA_INVALID" as const
+      };
+    }
 
     const candidate = normalizeV057ProductSourceCandidate(payload, candidatePath.kind);
     const validation = validateV057ProductSourceCandidate({ channelKey, candidate });
     if (validation.ok) {
       return {
         rawCoupangUrl: validation.rawCoupangUrl,
-        evidence: validation.evidence
+        evidence: validation.evidence,
+        blocker: null
       };
     }
 
     return {
       rawCoupangUrl: "",
-      evidence: validation.evidence
+      evidence: validation.evidence,
+      blocker: validation.blocker
     };
   }
 
   return {
     rawCoupangUrl: "",
-    evidence: emptyV057ProductSourceEvidence(channelKey)
+    evidence: emptyV057ProductSourceEvidence(channelKey),
+    blocker: "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING" as const
   };
 }
+
+const INVALID_JSON = Symbol("invalid-v057-product-source-json");
 
 async function readJsonIfExists(filePath: string) {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8")) as unknown;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof SyntaxError) return INVALID_JSON;
     throw error;
   }
 }

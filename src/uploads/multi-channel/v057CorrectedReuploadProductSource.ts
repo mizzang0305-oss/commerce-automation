@@ -38,7 +38,9 @@ export type V057CorrectedReuploadProductSource = {
 
 export type V057ProductSourceValidationBlocker =
   | "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING"
-  | "BLOCKED_V068_RAW_COUPANG_URL_SOURCE_INVALID";
+  | "BLOCKED_V068_RAW_COUPANG_URL_SOURCE_INVALID"
+  | "BLOCKED_V068_PRODUCT_SOURCE_METADATA_INVALID"
+  | "BLOCKED_V068_RUNTIME_SOURCE_NOT_APPROVED";
 
 export type V057ProductSourceSanitizedEvidence = {
   channel_key: ChannelKey;
@@ -47,6 +49,7 @@ export type V057ProductSourceSanitizedEvidence = {
   asset_profile: V057ReuploadAssetProfile | null;
   product_label_present: boolean;
   product_label_matches_channel: boolean;
+  parse_valid: boolean;
   raw_coupang_url_present: boolean;
   https_url: boolean;
   host_allowed: boolean;
@@ -77,7 +80,7 @@ export function normalizeV057ProductSourceCandidate(
     sourceEvidenceHash: safeTrim(nested.sourceEvidenceHash) || safeTrim(nested.source_evidence_hash),
     updatedAt: safeTrim(nested.updatedAt) || safeTrim(nested.updated_at),
     boundAt: safeTrim(nested.boundAt) || safeTrim(nested.bound_at),
-    runtimeSourceApproved: Boolean(nested.runtimeSourceApproved ?? nested.runtime_source_approved)
+    runtimeSourceApproved: nested.runtimeSourceApproved === true || nested.runtime_source_approved === true
   };
 }
 
@@ -97,8 +100,10 @@ export function validateV057ProductSourceCandidate(input: {
   const productLabel = safeTrim(input.candidate.productName) || safeTrim(input.candidate.sourceProductLabel);
   const productLabelMatchesChannel = matchesExpectedProductLabel(input.channelKey, productLabel);
   const sourceEvidenceHash = safeTrim(input.candidate.sourceEvidenceHash);
+  const runtimeSourceApproved = input.candidate.runtimeSourceApproved === true;
+  const runtimeApprovalMissing = sourceKind === "code_fixture_promoted" && !runtimeSourceApproved;
   const authoritative = sourceKind !== null &&
-    (sourceKind !== "code_fixture_promoted" || input.candidate.runtimeSourceApproved === true);
+    (sourceKind !== "code_fixture_promoted" || runtimeSourceApproved);
   const ok = input.candidate.channelKey === input.channelKey &&
     input.candidate.assetProfile === V057_REUPLOAD_ASSET_PROFILE &&
     authoritative &&
@@ -113,7 +118,11 @@ export function validateV057ProductSourceCandidate(input: {
   return {
     ok,
     rawCoupangUrl: ok ? rawCoupangUrl : "",
-    blocker: ok ? null : "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING",
+    blocker: ok
+      ? null
+      : runtimeApprovalMissing
+        ? "BLOCKED_V068_RUNTIME_SOURCE_NOT_APPROVED"
+        : "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING",
     evidence: {
       channel_key: input.channelKey,
       source_present: Boolean(input.candidate.rawCoupangUrl || input.candidate.channelKey || input.candidate.productSourceKind),
@@ -121,6 +130,7 @@ export function validateV057ProductSourceCandidate(input: {
       asset_profile: input.candidate.assetProfile === V057_REUPLOAD_ASSET_PROFILE ? V057_REUPLOAD_ASSET_PROFILE : null,
       product_label_present: Boolean(productLabel),
       product_label_matches_channel: productLabelMatchesChannel,
+      parse_valid: true,
       raw_coupang_url_present: Boolean(rawCoupangUrl),
       https_url: Boolean(parsed),
       host_allowed: hostAllowed,
@@ -140,10 +150,11 @@ export function emptyV057ProductSourceEvidence(channelKey: ChannelKey): V057Prod
     channel_key: channelKey,
     source_present: false,
     source_kind: "missing",
-    asset_profile: null,
-    product_label_present: false,
-    product_label_matches_channel: false,
-    raw_coupang_url_present: false,
+      asset_profile: null,
+      product_label_present: false,
+      product_label_matches_channel: false,
+      parse_valid: true,
+      raw_coupang_url_present: false,
     https_url: false,
     host_allowed: false,
     host_label: "<URL_MISSING>",
@@ -153,6 +164,17 @@ export function emptyV057ProductSourceEvidence(channelKey: ChannelKey): V057Prod
     bound_at_present: false,
     updated_at_present: false,
     raw_urls_printed: false
+  };
+}
+
+export function invalidV057ProductSourceMetadataEvidence(
+  channelKey: ChannelKey
+): V057ProductSourceSanitizedEvidence {
+  return {
+    ...emptyV057ProductSourceEvidence(channelKey),
+    source_present: true,
+    source_kind: "not_authoritative",
+    parse_valid: false
   };
 }
 

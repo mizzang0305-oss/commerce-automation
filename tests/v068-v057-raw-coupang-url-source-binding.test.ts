@@ -66,6 +66,12 @@ async function writeProductSources(cwd: string, overrides: Partial<Record<Channe
   }
 }
 
+async function writeMalformedProductSource(cwd: string, channelKey: ChannelKey) {
+  const channelDir = path.join(cwd, "commerce-assets", "review", "v057", channelKey);
+  await mkdir(channelDir, { recursive: true });
+  await writeFile(path.join(channelDir, "product-source-v057.json"), "{ malformed product source json", "utf8");
+}
+
 function mockDeeplinkFetch(status = 200) {
   return vi.fn(async () => ({
     ok: status >= 200 && status < 300,
@@ -190,6 +196,137 @@ describe("v068 v057 raw Coupang URL source binding", () => {
     try {
       await writeProductSources(cwd, {
         father_jobs: { productSourceKind: "test_fixture" }
+      });
+
+      const result = await resolveV057CorrectedReuploadProductSources({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      expect(result.report.product_source_ready).toBe(false);
+      expect(result.report.product_source_blocker).toBe("BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING");
+      expect(result.rawCoupangUrls.father_jobs).toBe("");
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("malformed product-source JSON returns sanitized blocker instead of throwing", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeProductSources(cwd);
+      await writeMalformedProductSource(cwd, "father_jobs");
+
+      const result = await resolveV057CorrectedReuploadProductSources({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      const fatherJobs = result.report.channels.find((channel) => channel.channel_key === "father_jobs");
+      expect(result.report.product_source_ready).toBe(false);
+      expect(result.report.product_source_blocker).toBe("BLOCKED_V068_PRODUCT_SOURCE_METADATA_INVALID");
+      expect(result.rawCoupangUrls.father_jobs).toBe("");
+      expect(fatherJobs).toMatchObject({
+        source_present: true,
+        parse_valid: false,
+        raw_urls_printed: false
+      });
+      expect(result.report.raw_urls_printed).toBe(false);
+      expect(result.report.secrets_printed).toBe(false);
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["string false", "false"],
+    ["string true", "true"],
+    ["number one", 1],
+    ["string yes", "yes"],
+    ["empty string", ""]
+  ])("code_fixture_promoted rejects runtimeSourceApproved %s", async (_label, runtimeSourceApproved) => {
+    const cwd = await makeCwd();
+    try {
+      await writeProductSources(cwd, {
+        father_jobs: {
+          productSourceKind: "code_fixture_promoted",
+          runtimeSourceApproved
+        }
+      });
+
+      const result = await resolveV057CorrectedReuploadProductSources({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      expect(result.report.product_source_ready).toBe(false);
+      expect(result.report.product_source_blocker).toBe("BLOCKED_V068_RUNTIME_SOURCE_NOT_APPROVED");
+      expect(result.rawCoupangUrls.father_jobs).toBe("");
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("code_fixture_promoted accepts only strict boolean runtimeSourceApproved true", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeProductSources(cwd, {
+        father_jobs: {
+          productSourceKind: "code_fixture_promoted",
+          runtimeSourceApproved: true
+        }
+      });
+
+      const result = await resolveV057CorrectedReuploadProductSources({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      expect(result.report.product_source_ready).toBe(true);
+      expect(result.report.product_source_blocker).toBeNull();
+      expect(result.rawCoupangUrls.father_jobs).toBe(RAW_COUPANG_URLS.father_jobs);
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("code_fixture_promoted accepts strict boolean runtime_source_approved true alias", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeProductSources(cwd, {
+        father_jobs: {
+          productSourceKind: "code_fixture_promoted",
+          runtimeSourceApproved: undefined,
+          runtime_source_approved: true
+        }
+      });
+
+      const result = await resolveV057CorrectedReuploadProductSources({
+        cwd,
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE
+      });
+
+      expect(result.report.product_source_ready).toBe(true);
+      expect(result.report.product_source_blocker).toBeNull();
+      expect(result.rawCoupangUrls.father_jobs).toBe(RAW_COUPANG_URLS.father_jobs);
+      expect(JSON.stringify(result.report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("test fixture source remains rejected even with boolean runtime approval", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeProductSources(cwd, {
+        father_jobs: {
+          productSourceKind: "test_fixture",
+          runtimeSourceApproved: true
+        }
       });
 
       const result = await resolveV057CorrectedReuploadProductSources({
