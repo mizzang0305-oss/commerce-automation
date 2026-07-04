@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #188 merge: `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`
+- main HEAD after PR #189 merge: `46cbbd07479f538b8ecaefd553557e1650c13af7`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -49,8 +49,10 @@ Product discovery
 - PR #187 merge commit: `8937884522c68ed73f4fae13e1cd3fc5eccc65b5`
 - PR #188: V077 autopilot scheduler scaffold, `MERGED`
 - PR #188 merge commit: `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`
+- PR #189: V078 dashboard control scaffold, `MERGED`
+- PR #189 merge commit: `46cbbd07479f538b8ecaefd553557e1650c13af7`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T008_V078_DASHBOARD_CONTROL_SCAFFOLD_REVIEW`
+- Current blocker: `PENDING_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -205,7 +207,7 @@ Requirements:
 
 ### T008 - V078 Dashboard Control
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Dashboard controls for autopilot.
 
@@ -284,12 +286,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-05 KST: PR #188 squash merged. Main synced at `8682ed344aad565d590d1a8a55fbbcb873d9a7ca`. T007 is complete. Upload execution, real comment mutation, readiness/materializer execution, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T008 started on `codex/v078-dashboard-control-scaffold` from main `fe8eae7`. Dashboard work is scaffold/readiness/control-only; no upload/comment/scheduler auto-execution/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T008 V078 dashboard control scaffold committed at `0cda3c1` and opened as PR #189: https://github.com/mizzang0305-oss/commerce-automation/pull/189. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: PR #189 squash merged. Main synced at `46cbbd07479f538b8ecaefd553557e1650c13af7`. T008 is complete. Upload execution, real comment mutation, scheduler auto-execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T008_V078_DASHBOARD_CONTROL_SCAFFOLD_REVIEW`
-- Public upload, real comment mutation, and scheduler auto-execution remain blocked. PR #189 must be reviewed and merged before T009. `SAFE_TO_UPLOAD=false`.
+- `PENDING_T009_V079_END_TO_END_NO_UPLOAD_DRY_RUN`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. T009 must add only local fixture / pure function / sanitized report dry-run harness and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Review and merge PR #189. After merge, proceed to T009 V079 End-to-End No-Upload Dry Run only. `SAFE_TO_UPLOAD=false`.
+- Start T009 V079 End-to-End No-Upload Dry Run only. `SAFE_TO_UPLOAD=false`.
