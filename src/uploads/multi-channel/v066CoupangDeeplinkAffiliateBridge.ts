@@ -14,6 +14,11 @@ import {
   validateV057AffiliateUrlsForExecution,
   type V057AffiliateUrlGateReport
 } from "./v057AffiliateUrlInjectionGate";
+import {
+  resolveV057CorrectedReuploadProductSources,
+  type V057ProductSourceLoaderReport
+} from "./v057CorrectedReuploadProductSourceLoader";
+import { V057_REUPLOAD_ASSET_PROFILE } from "./v057ReuploadAssetBinding";
 
 export const V066_RAW_COUPANG_URL_ENV_KEYS: Record<ChannelKey, string> = {
   father_jobs: "V051_FATHER_JOBS_RAW_COUPANG_URL",
@@ -25,6 +30,10 @@ export type V066AffiliateBridgeBlocker =
   | "BLOCKED_V066_RAW_COUPANG_URLS_MISSING"
   | "BLOCKED_V066_COUPANG_API_CREDENTIALS_MISSING"
   | "BLOCKED_V066_COUPANG_DEEPLINK_FAILED"
+  | "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING"
+  | "BLOCKED_V068_RAW_COUPANG_URL_SOURCE_INVALID"
+  | "BLOCKED_V068_PRODUCT_SOURCE_METADATA_INVALID"
+  | "BLOCKED_V068_RUNTIME_SOURCE_NOT_APPROVED"
   | "BLOCKED_V057_AFFILIATE_URLS_MISSING"
   | "BLOCKED_V057_AFFILIATE_URLS_INVALID";
 
@@ -38,9 +47,9 @@ export type V066AffiliateBridgeChannelEvidence = {
   affiliate_host: "link.coupang.com" | "<HOST_NOT_ALLOWED>" | "<URL_MISSING>" | "<URL_INVALID>";
   affiliate_hash_prefix: string | null;
   affiliate_length_bucket: "missing" | "1-99" | "100-199" | "200+";
-  raw_coupang_url_source: "process_env" | ".env.local" | "missing" | "not_required";
+  raw_coupang_url_source: "runtime_bound_v057_product_source" | "process_env" | ".env.local" | "missing" | "not_required";
   raw_coupang_url_present: boolean;
-  raw_coupang_host: "www.coupang.com" | "link.coupang.com" | "<HOST_NOT_ALLOWED>" | "<URL_MISSING>" | "<URL_INVALID>";
+  raw_coupang_host: "www.coupang.com" | "link.coupang.com" | "coupang.com_family" | "<HOST_NOT_ALLOWED>" | "<URL_MISSING>" | "<URL_INVALID>";
   raw_coupang_hash_prefix: string | null;
   raw_coupang_length_bucket: "missing" | "1-99" | "100-199" | "200+";
 };
@@ -49,10 +58,11 @@ export type V066AffiliateBridgeReport = {
   version: "v066";
   affiliate_url_bridge_ready: boolean;
   bridge_blocker: V066AffiliateBridgeBlocker | null;
-  resolution_order: readonly ["explicit_v051_affiliate_url_env", "coupang_deeplink_from_raw_coupang_url"];
+  resolution_order: readonly string[];
   explicit_affiliate_env_keys: Record<ChannelKey, string>;
   raw_coupang_url_env_keys: Record<ChannelKey, string>;
-  raw_coupang_url_source: "server_env" | "missing" | "mixed";
+  raw_coupang_url_source: "runtime_bound_v057_product_source" | "server_env" | "missing" | "mixed";
+  v068_product_source: V057ProductSourceLoaderReport | null;
   deeplink_api_called: boolean;
   deeplink_api_call_allowed: boolean;
   credentials: CoupangDeeplinkCredentialsReadiness;
@@ -76,17 +86,36 @@ export type V066AffiliateBridgeResult = {
   report: V066AffiliateBridgeReport;
 };
 
+type ChannelValueSource = "runtime_bound_v057_product_source" | "process_env" | ".env.local" | "missing";
+
+type ChannelValue = {
+  key: string;
+  value: string;
+  source: ChannelValueSource;
+};
+
 export async function resolveV066CoupangDeeplinkAffiliateBridge(input: {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
+  uploadAssetProfile?: string | null;
 } = {}): Promise<V066AffiliateBridgeResult> {
   const cwd = input.cwd ?? process.cwd();
   const env = input.env ?? process.env;
   const fileEnv = await readDotEnvLocal(cwd);
   const credentials = resolveCoupangDeeplinkEnv({ ...fileEnv, ...env }).readiness;
   const explicitAffiliateUrls = readChannelValues(V057_AFFILIATE_URL_ENV_KEYS, env, fileEnv);
-  const rawCoupangUrls = readChannelValues(V066_RAW_COUPANG_URL_ENV_KEYS, env, fileEnv);
+  const envRawCoupangUrls = readChannelValues(V066_RAW_COUPANG_URL_ENV_KEYS, env, fileEnv);
+  const v068ProductSource = input.uploadAssetProfile === V057_REUPLOAD_ASSET_PROFILE
+    ? await resolveV057CorrectedReuploadProductSources({
+      cwd,
+      uploadAssetProfile: input.uploadAssetProfile
+    })
+    : null;
+  const rawCoupangUrls = mergeRuntimeAndEnvRawSources({
+    envRawCoupangUrls,
+    runtimeRawCoupangUrls: v068ProductSource?.rawCoupangUrls
+  });
   const generatedAffiliateUrls: Partial<Record<ChannelKey, string>> = {};
   const missingAffiliateChannels = CHANNEL_KEYS.filter((channelKey) => !explicitAffiliateUrls[channelKey].value);
   let bridgeBlocker: V066AffiliateBridgeBlocker | null = null;
@@ -94,7 +123,9 @@ export async function resolveV066CoupangDeeplinkAffiliateBridge(input: {
 
   if (missingAffiliateChannels.length > 0) {
     const rawMissing = missingAffiliateChannels.some((channelKey) => !rawCoupangUrls[channelKey].value);
-    if (rawMissing) {
+    if (rawMissing && v068ProductSource?.report.product_source_blocker) {
+      bridgeBlocker = v068ProductSource.report.product_source_blocker;
+    } else if (rawMissing) {
       bridgeBlocker = "BLOCKED_V066_RAW_COUPANG_URLS_MISSING";
     } else if (!credentials.access_key_present || !credentials.secret_key_present) {
       bridgeBlocker = "BLOCKED_V066_COUPANG_API_CREDENTIALS_MISSING";
@@ -125,12 +156,19 @@ export async function resolveV066CoupangDeeplinkAffiliateBridge(input: {
     version: "v066",
     affiliate_url_bridge_ready: finalBlocker === null,
     bridge_blocker: finalBlocker,
-    resolution_order: ["explicit_v051_affiliate_url_env", "coupang_deeplink_from_raw_coupang_url"],
+    resolution_order: [
+      "runtime_bound_v057_raw_coupang_url_source",
+      "coupang_deeplink_from_raw_coupang_url",
+      "explicit_v051_affiliate_url_env_emergency_override",
+      "explicit_v051_raw_coupang_url_env_emergency_override"
+    ],
     explicit_affiliate_env_keys: V057_AFFILIATE_URL_ENV_KEYS,
     raw_coupang_url_env_keys: V066_RAW_COUPANG_URL_ENV_KEYS,
     raw_coupang_url_source: summarizeRawSource(rawCoupangUrls),
+    v068_product_source: v068ProductSource?.report ?? null,
     deeplink_api_called: deeplinkApiCalled,
     deeplink_api_call_allowed: missingAffiliateChannels.length > 0
+      && bridgeBlocker !== "BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING"
       && bridgeBlocker !== "BLOCKED_V066_RAW_COUPANG_URLS_MISSING"
       && bridgeBlocker !== "BLOCKED_V066_COUPANG_API_CREDENTIALS_MISSING",
     credentials,
@@ -196,17 +234,30 @@ function readChannelValues(
       value: processValue || fileValue,
       source: processValue ? "process_env" : fileValue ? ".env.local" : "missing"
     }];
-  })) as Record<ChannelKey, {
-    key: string;
-    value: string;
-    source: "process_env" | ".env.local" | "missing";
-  }>;
+  })) as Record<ChannelKey, ChannelValue>;
+}
+
+function mergeRuntimeAndEnvRawSources(input: {
+  envRawCoupangUrls: Record<ChannelKey, ChannelValue>;
+  runtimeRawCoupangUrls?: Record<ChannelKey, string>;
+}) {
+  return Object.fromEntries(CHANNEL_KEYS.map((channelKey) => {
+    const runtimeValue = safeTrim(input.runtimeRawCoupangUrls?.[channelKey]);
+    if (runtimeValue) {
+      return [channelKey, {
+        key: input.envRawCoupangUrls[channelKey].key,
+        value: runtimeValue,
+        source: "runtime_bound_v057_product_source"
+      }];
+    }
+    return [channelKey, input.envRawCoupangUrls[channelKey]];
+  })) as Record<ChannelKey, ChannelValue>;
 }
 
 function buildChannelEvidence(input: {
   channelKey: ChannelKey;
-  explicitValue: { key: string; value: string; source: "process_env" | ".env.local" | "missing" };
-  rawValue: { key: string; value: string; source: "process_env" | ".env.local" | "missing" };
+  explicitValue: ChannelValue;
+  rawValue: ChannelValue;
   affiliateUrl: string;
   generatedByDeeplink: boolean;
 }): V066AffiliateBridgeChannelEvidence {
@@ -235,8 +286,11 @@ function buildChannelEvidence(input: {
   };
 }
 
-function summarizeRawSource(values: Record<ChannelKey, { source: "process_env" | ".env.local" | "missing" }>) {
+function summarizeRawSource(values: Record<ChannelKey, ChannelValue>) {
   const sources = CHANNEL_KEYS.map((channelKey) => values[channelKey].source);
+  if (sources.every((source) => source === "runtime_bound_v057_product_source")) {
+    return "runtime_bound_v057_product_source";
+  }
   if (sources.every((source) => source === "missing")) return "missing";
   if (sources.every((source) => source !== "missing")) return "server_env";
   return "mixed";
@@ -262,6 +316,7 @@ function sanitizedRawHost(value: string, parsed: URL | null): V066AffiliateBridg
   if (!value) return "<URL_MISSING>";
   if (!parsed) return "<URL_INVALID>";
   if (parsed.hostname === "www.coupang.com" || parsed.hostname === "link.coupang.com") return parsed.hostname;
+  if (parsed.hostname === "coupang.com" || parsed.hostname.endsWith(".coupang.com")) return "coupang.com_family";
   return "<HOST_NOT_ALLOWED>";
 }
 

@@ -8,9 +8,11 @@ the v051 mutation executor receives input.
 
 ## Resolution Order
 
-1. Use explicit channel affiliate URL env values when all required values are present.
-2. For missing channel affiliate URLs, read channel raw Coupang URL env values and call the Coupang Deeplink API.
-3. Validate the final three affiliate URLs with the v063 hard gate before any upload adapter can run.
+1. For `v057_corrected_reupload`, use runtime-bound v057 product source metadata as the default raw Coupang URL source.
+2. Call the Coupang Deeplink API for channels that still need generated affiliate URLs.
+3. Keep explicit channel affiliate URL env values as emergency or test overrides only.
+4. Keep explicit channel raw Coupang URL env values as emergency or test overrides only.
+5. Validate the final three affiliate URLs with the v063 hard gate before any upload adapter can run.
 
 ## Required Env Keys
 
@@ -45,6 +47,7 @@ Coupang Deeplink credential keys:
 - `BLOCKED_V066_RAW_COUPANG_URLS_MISSING`
 - `BLOCKED_V066_COUPANG_API_CREDENTIALS_MISSING`
 - `BLOCKED_V066_COUPANG_DEEPLINK_FAILED`
+- `BLOCKED_V068_AUTHORITATIVE_RAW_COUPANG_URL_SOURCE_MISSING`
 - `BLOCKED_V057_AFFILIATE_URLS_MISSING`
 - `BLOCKED_V057_AFFILIATE_URLS_INVALID`
 
