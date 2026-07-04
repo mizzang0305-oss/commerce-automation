@@ -8,6 +8,7 @@ This version is scaffold-only:
 
 - It builds a sanitized YouTube public upload request from a V073 UploadPackage.
 - It evaluates a fail-closed public upload safety gate.
+- It preserves V073 upload package readiness and blockers before any V074 gate can become ready.
 - It exposes blocked and mock adapters for tests.
 - It does not call real YouTube APIs.
 - It does not call `videos.insert`.
@@ -39,6 +40,8 @@ The request builder carries only execution-safe fields into the V074 request:
 - duplicate guard signature
 - quota guard status
 - approval status
+- upstream V073 package readiness
+- upstream V073 blocker, sanitized
 
 Raw Coupang URLs, raw affiliate URLs, OAuth tokens, secrets, and full channel IDs are not included in reports.
 
@@ -46,6 +49,8 @@ Raw Coupang URLs, raw affiliate URLs, OAuth tokens, secrets, and full channel ID
 
 Execution is allowed only if every gate is true:
 
+- V073 package report is ready
+- V073 package report blocker is null
 - upload package ready
 - product source ready
 - Deeplink ready
@@ -63,6 +68,8 @@ Execution is allowed only if every gate is true:
 - fresh approval present
 
 In V074, the default preflight intentionally sets public upload disabled and OAuth not ready. The scaffold therefore remains blocked.
+
+Even with test overrides for V074 readiness fields, a V073 upstream blocker keeps the V074 gate blocked with `BLOCKED_V074_UPLOAD_PACKAGE_NOT_READY`.
 
 ## Blockers
 

@@ -4,7 +4,10 @@ import {
   buildV073UploadPackageGeneratorCliInput,
   generateV073UploadPackages
 } from "../../src/uploads/multi-channel/v073UploadPackageGenerator";
-import { executeV074PublicUploadPreflight } from "../../src/uploads/youtube/v074PublicUploadExecutor";
+import {
+  buildV074UpstreamPackageReadinessFromV073Report,
+  executeV074PublicUploadPreflight
+} from "../../src/uploads/youtube/v074PublicUploadExecutor";
 
 async function main() {
   const packageResult = await generateV073UploadPackages(buildV073UploadPackageGeneratorCliInput({
@@ -35,7 +38,11 @@ async function main() {
   }
 
   const preflight = await executeV074PublicUploadPreflight({
-    uploadPackage: firstPackage
+    uploadPackage: firstPackage,
+    upstreamPackageReadiness: buildV074UpstreamPackageReadinessFromV073Report({
+      uploadPackage: firstPackage,
+      report: packageResult.report
+    })
   });
 
   console.log(JSON.stringify({
@@ -48,6 +55,8 @@ async function main() {
     disclosureReady: preflight.report.disclosureReady,
     targetChannelHashPrefix: preflight.report.targetChannelHashPrefix,
     advancedSettingsReady: preflight.report.advancedSettingsReady,
+    upstreamPackageReady: preflight.report.upstreamPackageReady,
+    upstreamPackageBlocker: preflight.report.upstreamPackageBlocker,
     safetyGateReady: preflight.report.safetyGateReady,
     adapterMode: preflight.report.adapterMode,
     SAFE_TO_UPLOAD: preflight.report.SAFE_TO_UPLOAD,

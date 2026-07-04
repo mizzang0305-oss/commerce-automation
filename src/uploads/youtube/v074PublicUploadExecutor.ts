@@ -1,4 +1,9 @@
-import type { V073UploadPackage } from "../multi-channel/v073UploadPackage";
+import type {
+  V073UploadPackage,
+  V073UploadPackageBlocker,
+  V073UploadPackageReport,
+  V073UploadPackageReportItem
+} from "../multi-channel/v073UploadPackage";
 import {
   buildV074PublicUploadSafetyGate,
   type V074PublicUploadBlocker,
@@ -34,6 +39,8 @@ export type V074PublicUploadPreflightReport = {
   disclosureReady: boolean;
   targetChannelHashPrefix: string | null;
   advancedSettingsReady: boolean;
+  upstreamPackageReady: boolean;
+  upstreamPackageBlocker: V074UpstreamPackageBlocker;
   safetyGateReady: boolean;
   blocker: V074PublicUploadBlocker;
   blockers: V074PublicUploadBlocker[];
@@ -53,6 +60,24 @@ export type V074PublicUploadPreflightReport = {
   fake_success: false;
 };
 
+export type V074UpstreamPackageBlocker =
+  | V073UploadPackageBlocker
+  | "BLOCKED_V073_UPLOAD_PACKAGE_READINESS_MISSING"
+  | null;
+
+export type V074UpstreamPackageReadiness = {
+  sourceVersion: "v073";
+  packageReportPresent: boolean;
+  uploadPackageReady: boolean;
+  blocker: V074UpstreamPackageBlocker;
+  productSourceReady: boolean;
+  videoAssetReady: boolean;
+  firstFrameReady: boolean;
+  disclosureReady: boolean;
+  targetChannelReady: boolean;
+  duplicateUploadRisk: boolean;
+};
+
 export type V074PublicUploadPreflightResult = {
   version: "v074";
   request: V074YouTubeUploadRequest;
@@ -62,17 +87,22 @@ export type V074PublicUploadPreflightResult = {
 
 export async function executeV074PublicUploadPreflight(input: {
   uploadPackage: V073UploadPackage;
+  upstreamPackageReadiness?: V074UpstreamPackageReadiness;
   adapter?: V074YouTubeUploadAdapter;
   safetyOverrides?: Partial<V074PublicUploadSafetyGateInput>;
 }): Promise<V074PublicUploadPreflightResult> {
   const request = buildV074YouTubeUploadRequest(input.uploadPackage);
   const adapter = input.adapter ?? createDefaultV074YouTubeUploadAdapter();
+  const upstreamPackageReadiness = input.upstreamPackageReadiness ?? buildMissingUpstreamPackageReadiness();
   const safetyGate = buildV074PublicUploadSafetyGate({
-    ...buildSafetyGateInputFromRequest(request),
-    ...input.safetyOverrides
+    ...enforceUpstreamPackageReadiness({
+      ...buildSafetyGateInputFromRequest(request, upstreamPackageReadiness),
+      ...input.safetyOverrides
+    }, upstreamPackageReadiness)
   });
   const report = buildV074PublicUploadPreflightReport({
     request,
+    upstreamPackageReadiness,
     safetyGate,
     adapter
   });
@@ -87,6 +117,7 @@ export async function executeV074PublicUploadPreflight(input: {
 
 export function buildV074PublicUploadPreflightReport(input: {
   request: V074YouTubeUploadRequest;
+  upstreamPackageReadiness: V074UpstreamPackageReadiness;
   safetyGate: V074PublicUploadSafetyGate;
   adapter: V074YouTubeUploadAdapter;
 }): V074PublicUploadPreflightReport {
@@ -107,6 +138,8 @@ export function buildV074PublicUploadPreflightReport(input: {
     disclosureReady: requestReport.disclosureReady,
     targetChannelHashPrefix: requestReport.targetChannelHashPrefix,
     advancedSettingsReady: requestReport.advancedSettingsReady,
+    upstreamPackageReady: input.upstreamPackageReadiness.uploadPackageReady,
+    upstreamPackageBlocker: input.upstreamPackageReadiness.blocker,
     safetyGateReady: input.safetyGate.ready,
     blocker,
     blockers: input.safetyGate.ready ? [blocker] : input.safetyGate.blockers,
@@ -128,20 +161,21 @@ export function buildV074PublicUploadPreflightReport(input: {
 }
 
 export function buildSafetyGateInputFromRequest(
-  request: V074YouTubeUploadRequest
+  request: V074YouTubeUploadRequest,
+  upstreamPackageReadiness: V074UpstreamPackageReadiness = buildMissingUpstreamPackageReadiness()
 ): V074PublicUploadSafetyGateInput {
   return {
-    uploadPackageReady: true,
-    productSourceReady: request.productSourceReady,
+    uploadPackageReady: upstreamPackageReadiness.uploadPackageReady,
+    productSourceReady: request.productSourceReady && upstreamPackageReadiness.productSourceReady,
     deeplinkReady: request.deeplinkReady,
     affiliateUrlReady: request.affiliateUrlReady,
-    videoAssetReady: isV074RequestVideoAssetReady(request),
-    firstFrameReady: isV074RequestFirstFrameReady(request),
+    videoAssetReady: isV074RequestVideoAssetReady(request) && upstreamPackageReadiness.videoAssetReady,
+    firstFrameReady: isV074RequestFirstFrameReady(request) && upstreamPackageReadiness.firstFrameReady,
     metadataReady: request.metadataReady,
-    descriptionDisclosureReady: request.descriptionDisclosurePresent,
-    commentDisclosureReady: request.commentDisclosurePresent,
-    targetChannelVerified: request.targetChannelVerified,
-    duplicateUploadRisk: request.duplicateUploadRisk,
+    descriptionDisclosureReady: request.descriptionDisclosurePresent && upstreamPackageReadiness.disclosureReady,
+    commentDisclosureReady: request.commentDisclosurePresent && upstreamPackageReadiness.disclosureReady,
+    targetChannelVerified: request.targetChannelVerified && upstreamPackageReadiness.targetChannelReady,
+    duplicateUploadRisk: request.duplicateUploadRisk || upstreamPackageReadiness.duplicateUploadRisk,
     quotaReady: request.quotaGuardReady,
     oauthReady: false,
     publicUploadFeatureEnabled: false,
@@ -153,4 +187,105 @@ export function buildSafetyGateInputFromRequest(
 
 export function isV074RequestAdvancedSettingsReady(request: V074YouTubeUploadRequest) {
   return isAdvancedSettingsReady(request.advancedSettings);
+}
+
+export function buildV074UpstreamPackageReadinessFromV073Report(input: {
+  uploadPackage: V073UploadPackage;
+  report: V073UploadPackageReport;
+}): V074UpstreamPackageReadiness {
+  const item = findPackageReportItem(input.report, input.uploadPackage);
+  if (!item) return buildMissingUpstreamPackageReadiness();
+
+  const productSourceReady = Boolean(
+    item.productSourcePresent &&
+    item.rawCoupangUrlPresent &&
+    input.uploadPackage.productSource.runtimeSourceApproved
+  );
+  const videoAssetReady = Boolean(item.videoAssetPresent && input.uploadPackage.videoAsset.path);
+  const firstFrameReady = Boolean(item.firstFramePresent && input.uploadPackage.videoAsset.firstFramePath);
+  const disclosureReady = Boolean(item.disclosureReady);
+  const targetChannelReady = Boolean(
+    item.targetChannelReady &&
+    item.targetChannelPresent &&
+    item.targetChannelFormatValid &&
+    !item.targetChannelDuplicateDetected
+  );
+  const duplicateUploadRisk = Boolean(
+    !item.duplicateGuardReady ||
+    input.uploadPackage.duplicateGuard.duplicateUploadRisk
+  );
+  const blocker = input.report.blocker ??
+    (productSourceReady &&
+      videoAssetReady &&
+      firstFrameReady &&
+      disclosureReady &&
+      targetChannelReady &&
+      !duplicateUploadRisk
+      ? null
+      : "BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY");
+  const uploadPackageReady = Boolean(
+    input.report.upload_package_generator_ready &&
+    blocker === null &&
+    productSourceReady &&
+    videoAssetReady &&
+    firstFrameReady &&
+    disclosureReady &&
+    targetChannelReady &&
+    !duplicateUploadRisk
+  );
+
+  return {
+    sourceVersion: "v073",
+    packageReportPresent: true,
+    uploadPackageReady,
+    blocker,
+    productSourceReady,
+    videoAssetReady,
+    firstFrameReady,
+    disclosureReady,
+    targetChannelReady,
+    duplicateUploadRisk
+  };
+}
+
+function buildMissingUpstreamPackageReadiness(): V074UpstreamPackageReadiness {
+  return {
+    sourceVersion: "v073",
+    packageReportPresent: false,
+    uploadPackageReady: false,
+    blocker: "BLOCKED_V073_UPLOAD_PACKAGE_READINESS_MISSING",
+    productSourceReady: false,
+    videoAssetReady: false,
+    firstFrameReady: false,
+    disclosureReady: false,
+    targetChannelReady: false,
+    duplicateUploadRisk: false
+  };
+}
+
+function enforceUpstreamPackageReadiness(
+  input: V074PublicUploadSafetyGateInput,
+  upstreamPackageReadiness: V074UpstreamPackageReadiness
+): V074PublicUploadSafetyGateInput {
+  if (upstreamPackageReadiness.uploadPackageReady) return input;
+  return {
+    ...input,
+    uploadPackageReady: false,
+    productSourceReady: false,
+    videoAssetReady: false,
+    firstFrameReady: false,
+    descriptionDisclosureReady: false,
+    commentDisclosureReady: false,
+    targetChannelVerified: false,
+    duplicateUploadRisk: input.duplicateUploadRisk || upstreamPackageReadiness.duplicateUploadRisk
+  };
+}
+
+function findPackageReportItem(
+  report: V073UploadPackageReport,
+  uploadPackage: V073UploadPackage
+): V073UploadPackageReportItem | null {
+  return report.packages.find((item) => item.packageId === uploadPackage.packageId) ??
+    report.packages.find((item) => item.channelKey === uploadPackage.channelKey) ??
+    null;
 }

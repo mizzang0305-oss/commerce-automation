@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
 
 import type { ChannelKey } from "../src/uploads/multi-channel/channelProfiles";
-import type { V073UploadPackage } from "../src/uploads/multi-channel/v073UploadPackage";
+import type {
+  V073UploadPackage,
+  V073UploadPackageBlocker,
+  V073UploadPackageReport,
+  V073UploadPackageReportItem
+} from "../src/uploads/multi-channel/v073UploadPackage";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 import {
   BlockedV074YouTubeUploadAdapter,
@@ -19,6 +24,7 @@ import {
   type V074PublicUploadSafetyGateInput
 } from "../src/uploads/youtube/v074PublicUploadSafetyGate";
 import {
+  buildV074UpstreamPackageReadinessFromV073Report,
   executeV074PublicUploadPreflight
 } from "../src/uploads/youtube/v074PublicUploadExecutor";
 
@@ -237,6 +243,105 @@ describe("v074 public upload executor scaffold", () => {
     expect(reportText).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
+  test("preserves V073 package blockers even when V074 readiness overrides are all ready", async () => {
+    const uploadPackage = makeUploadPackage();
+    const upstreamReadiness = buildV074UpstreamPackageReadinessFromV073Report({
+      uploadPackage,
+      report: makeV073Report(uploadPackage, {
+        blocker: "BLOCKED_V073_UPLOAD_PACKAGE_VIDEO_ASSET_MISSING",
+        item: {
+          videoAssetPresent: false
+        }
+      })
+    });
+
+    const result = await executeV074PublicUploadPreflight({
+      uploadPackage,
+      upstreamPackageReadiness: upstreamReadiness,
+      safetyOverrides: readySafetyGateInput()
+    });
+    const reportText = JSON.stringify(result.report);
+
+    expect(result.safetyGate.ready).toBe(false);
+    expect(result.safetyGate.blocker).toBe("BLOCKED_V074_UPLOAD_PACKAGE_NOT_READY");
+    expect(result.report.blocker).toBe("BLOCKED_V074_UPLOAD_PACKAGE_NOT_READY");
+    expect(result.report.upstreamPackageReady).toBe(false);
+    expect(result.report.upstreamPackageBlocker).toBe("BLOCKED_V073_UPLOAD_PACKAGE_VIDEO_ASSET_MISSING");
+    expect(result.report.safetyGateReady).toBe(false);
+    expect(result.report.videos_insert_called).toBe(false);
+    expect(reportText).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("requires explicit V073 report readiness before uploadPackageReady can be true", async () => {
+    const result = await executeV074PublicUploadPreflight({
+      uploadPackage: makeUploadPackage(),
+      safetyOverrides: readySafetyGateInput()
+    });
+
+    expect(result.report.blocker).toBe("BLOCKED_V074_UPLOAD_PACKAGE_NOT_READY");
+    expect(result.report.upstreamPackageReady).toBe(false);
+    expect(result.report.upstreamPackageBlocker).toBe("BLOCKED_V073_UPLOAD_PACKAGE_READINESS_MISSING");
+    expect(result.report.safeToUpload).toBe(false);
+  });
+
+  test("derives V074 package readiness only when V073 report and package item are fully ready", () => {
+    const uploadPackage = makeUploadPackage();
+    const ready = buildV074UpstreamPackageReadinessFromV073Report({
+      uploadPackage,
+      report: makeV073Report(uploadPackage)
+    });
+    const blockedCases: Array<{
+      name: string;
+      blocker: V073UploadPackageBlocker | null;
+      item: Partial<V073UploadPackageReportItem>;
+    }> = [
+      {
+        name: "product source missing",
+        blocker: "BLOCKED_V073_UPLOAD_PACKAGE_PRODUCT_SOURCE_MISSING",
+        item: { productSourcePresent: false }
+      },
+      {
+        name: "first frame missing",
+        blocker: "BLOCKED_V073_UPLOAD_PACKAGE_FIRST_FRAME_MISSING",
+        item: { firstFramePresent: false }
+      },
+      {
+        name: "target channel missing",
+        blocker: "BLOCKED_V073_UPLOAD_PACKAGE_TARGET_CHANNEL_MISSING",
+        item: { targetChannelReady: false }
+      },
+      {
+        name: "duplicate guard not ready",
+        blocker: "BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY",
+        item: { duplicateGuardReady: false }
+      }
+    ];
+
+    expect(ready).toMatchObject({
+      uploadPackageReady: true,
+      blocker: null,
+      productSourceReady: true,
+      videoAssetReady: true,
+      firstFrameReady: true,
+      disclosureReady: true,
+      targetChannelReady: true,
+      duplicateUploadRisk: false
+    });
+
+    for (const testCase of blockedCases) {
+      expect(buildV074UpstreamPackageReadinessFromV073Report({
+        uploadPackage,
+        report: makeV073Report(uploadPackage, {
+          blocker: testCase.blocker,
+          item: testCase.item
+        })
+      }), testCase.name).toMatchObject({
+        uploadPackageReady: false,
+        blocker: testCase.blocker ?? "BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY"
+      });
+    }
+  });
+
   test("TASK.md records T004 scaffold work and keeps SAFE_TO_UPLOAD=false", async () => {
     const task = await readFile("TASK.md", "utf8");
 
@@ -356,6 +461,72 @@ function makeUploadPackage(overrides: Partial<V073UploadPackage> = {}): V073Uplo
   return {
     ...base,
     ...overrides
+  };
+}
+
+function makeV073Report(
+  uploadPackage: V073UploadPackage,
+  overrides: {
+    blocker?: V073UploadPackageBlocker | null;
+    item?: Partial<V073UploadPackageReportItem>;
+  } = {}
+): V073UploadPackageReport {
+  const blocker = overrides.blocker ?? null;
+  const item: V073UploadPackageReportItem = {
+    packageId: uploadPackage.packageId,
+    channelKey: uploadPackage.channelKey,
+    assetProfile: uploadPackage.assetProfile,
+    productSourcePresent: true,
+    productSourceKind: uploadPackage.productSource.sourceKind,
+    productSourceHashPrefix: "sourcehash",
+    rawCoupangUrlPresent: true,
+    rawCoupangUrlPrinted: false,
+    affiliateUrlPresent: true,
+    affiliateUrlPrinted: false,
+    videoAssetPresent: true,
+    videoAssetHashPrefix: uploadPackage.videoAsset.hashEvidence,
+    firstFramePresent: true,
+    disclosureReady: true,
+    targetChannelReady: true,
+    targetChannelPresent: true,
+    targetChannelFormatValid: true,
+    targetChannelDuplicateDetected: false,
+    targetChannelHashPrefix: uploadPackage.targetChannel.channelIdHashPrefix,
+    duplicateGuardReady: true,
+    approvalRequired: true,
+    uploadExecutionCalled: false,
+    safeToUpload: false,
+    ...overrides.item
+  };
+
+  return {
+    version: "v073",
+    FINAL_STATUS: blocker === null
+      ? "SUCCESS_V073_UPLOAD_PACKAGES_GENERATED_NO_UPLOAD"
+      : "BLOCKED_V073_UPLOAD_PACKAGE_NOT_READY",
+    SAFE_TO_UPLOAD: false,
+    safeToUpload: false,
+    selected_profile: uploadPackage.assetProfile,
+    upload_package_generator_ready: blocker === null,
+    upload_package_count: 1,
+    blocker,
+    manualAffiliateUrlInputRequired: false,
+    manualRawCoupangUrlInputRequired: false,
+    productionDefaultAffiliatePath: "coupang_deeplink",
+    packages: [item],
+    uploadExecutionCalled: false,
+    youtube_execute_called: false,
+    videos_insert_called: false,
+    videos_insert_total_count: 0,
+    comment_create_update_delete_called: false,
+    visibility_changed: false,
+    R2_upload: false,
+    DB_write: false,
+    product_assets_write: false,
+    raw_urls_printed: false,
+    raw_channel_ids_printed: false,
+    secrets_printed: false,
+    fake_success: false
   };
 }
 
