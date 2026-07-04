@@ -1,0 +1,261 @@
+# TASK.md - Coupang Autopilot Full Orchestra
+
+## Mission
+
+Build `COUPANG_AUTOPILOT_PUBLIC_UPLOAD_COMPLETE`.
+
+Final target:
+
+```text
+Product discovery
+-> raw_coupang_url retained by system
+-> Coupang Deeplink API creates selected_affiliate_url
+-> video/shorts package generated
+-> metadata/description/comment/disclosure generated
+-> target YouTube channel verified
+-> public upload executed
+-> top-level comment written
+-> result stored
+-> duplicate guard / retry / quota / dashboard managed
+```
+
+## Non-Negotiable Rules
+
+- No manual affiliate URL as the default path.
+- No manual raw Coupang URL as the default path.
+- No video-only upload package.
+- No product source, no upload.
+- No disclosure, no upload.
+- No verified target channel, no upload.
+- No duplicate guard, no upload.
+- No fresh approval, no real public upload.
+- No raw URL, secret, token, Authorization/HMAC signature, or full channel ID in logs or reports.
+- `SAFE_TO_UPLOAD=false` until T010 receives fresh approval in the current session.
+
+## Current Source Of Truth
+
+- main HEAD after PR #182: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
+- PR #182: V071 upstream product source binding, `MERGED`
+- PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
+- Existing v057 corrected package: orphan / fail-closed
+- Current blocker: `BLOCKED_V071_V057_ORPHAN_PACKAGE_SOURCE_UNRECOVERABLE`
+- `SAFE_TO_UPLOAD=false`
+
+## Status Legend
+
+- `PENDING`
+- `IN_PROGRESS`
+- `BLOCKED`
+- `PR_OPEN`
+- `PR_MERGED`
+- `DONE`
+
+## Backlog
+
+### T001 - Merge PR #182 V071 Upstream Product Source Binding
+
+Status: `DONE`
+
+Goal: Merge V071 if checks remain clean.
+
+Safety: no upload, no readiness execution, no materializer execution in merge-only step.
+
+Acceptance:
+
+- PR #182 head matches expected commit.
+- mergeable CLEAN.
+- checks PASS.
+- no CHANGES_REQUESTED.
+- no unresolved P1/P2 review.
+- squash merged.
+- main synced.
+- `SAFE_TO_UPLOAD=false`.
+
+### T002 - V072 Public Autopilot Target Spec
+
+Status: `IN_PROGRESS`
+
+Goal: Document and test the final target architecture.
+
+Deliverables:
+
+- `docs/commerce/v072_public_autopilot_target_spec.md`
+- `tests/v072-public-autopilot-target-spec.test.ts`
+
+Spec must define:
+
+- UploadPackage as the core unit.
+- Product source provenance required.
+- Deeplink generation default.
+- YouTube public upload gate.
+- Comment writer gate.
+- Advanced settings gate.
+- Scheduler gate.
+- Dashboard control gate.
+- Manual URL input only as emergency override.
+- `SAFE_TO_UPLOAD=false` during buildout.
+
+### T003 - V073 Upload Package Generator
+
+Status: `PENDING`
+
+Goal: Generate upload packages from queue, generated content, and review package data automatically.
+
+Requirements:
+
+- ProductQueueItem / GeneratedContent source carried forward.
+- raw_coupang_url retained internally.
+- product-source manifest created with package.
+- no video-only package allowed.
+- package_id generated.
+- per-channel package supported.
+- raw URL redacted from reports.
+- tests for missing product source block.
+
+### T004 - V074 Public Upload Executor Scaffold
+
+Status: `PENDING`
+
+Goal: Implement public upload executor behind a hard disabled gate.
+
+Requirements:
+
+- videos.insert adapter interface.
+- mock adapter tests.
+- real adapter never called unless explicit execution approval.
+- advanced settings object built:
+  - privacyStatus=public
+  - selfDeclaredMadeForKids=false
+  - containsSyntheticMedia=true
+  - paidProductPlacementDetails.hasPaidProductPlacement=true
+  - license=youtube
+  - embeddable=true
+  - publicStatsViewable=true
+  - defaultLanguage=ko
+  - defaultAudioLanguage=ko
+- no upload in this task.
+
+### T005 - V075 Comment Writer
+
+Status: `PENDING`
+
+Goal: Add top-level comment writer after upload success.
+
+Requirements:
+
+- commentThreads.insert adapter interface.
+- comment contains affiliate link and Coupang Partners disclosure.
+- no comment if affiliate URL missing.
+- no comment if upload failed.
+- no raw affiliate URL in logs.
+- mock tests only.
+
+### T006 - V076 Upload Result Store
+
+Status: `PENDING`
+
+Goal: Store sanitized upload result.
+
+Store:
+
+- upload_package_id
+- youtube_video_id
+- youtube_video_url or sanitized URL evidence
+- channel_key
+- channel_id_hash
+- visibility
+- comment_status
+- comment_id
+- affiliate_url_hash
+- raw_coupang_url_hash
+- duplicate_guard_signature
+- uploaded_at
+- final_status
+
+No secrets and no raw URLs.
+
+### T007 - V077 Autopilot Scheduler
+
+Status: `PENDING`
+
+Goal: Add autopilot scheduler policy.
+
+Requirements:
+
+- daily upload limit
+- channel slots
+- quota guard
+- duplicate guard
+- retry queue
+- hold/manual review
+- feature flag default off
+- public upload default disabled until explicit enablement
+
+### T008 - V078 Dashboard Control
+
+Status: `PENDING`
+
+Goal: Dashboard controls for autopilot.
+
+UI:
+
+- package readiness
+- today's queue
+- upload slots
+- blockers
+- result history
+- enable/disable autopilot
+- daily limit
+- public upload switch protected by confirmation
+- no secrets exposed
+
+### T009 - V079 End-to-End No-Upload Dry Run
+
+Status: `PENDING`
+
+Goal: Run full no-upload dry run from product source to package readiness.
+
+Expected:
+
+- product source present
+- Deeplink ready
+- affiliate URL gate ready
+- video ready
+- metadata ready
+- target channel ready
+- duplicate risk false
+- disclosure ready
+- approval missing only
+- `SAFE_TO_UPLOAD=false`
+
+### T010 - V080 One-Time Guarded Public Upload
+
+Status: `PENDING`
+
+Goal: Only after explicit fresh approval, execute one guarded public upload package.
+
+Required fresh approval:
+
+```text
+APPROVE_COUPANG_AUTOPILOT_PUBLIC_UPLOAD_ONCE
+CONFIRM_COUPANG_PARTNERS_DISCLOSURE_READY
+CONFIRM_YOUTUBE_PUBLIC_UPLOAD_SETTINGS_READY
+CONFIRM_TARGET_CHANNELS_VERIFIED
+```
+
+Do not execute this task unless fresh approval appears in the current user message/session.
+
+## Latest Evidence
+
+- 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #182 squash merged. Main synced at `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`. T001 is complete. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T002 spec and regression test drafted on `codex/v072-public-autopilot-target-spec`. Targeted test passed. `SAFE_TO_UPLOAD=false`.
+
+## Current Blocker
+
+- `BLOCKED_V071_V057_ORPHAN_PACKAGE_SOURCE_UNRECOVERABLE`
+- Current v057 corrected package has media assets but no authoritative product-source provenance.
+
+## Next Exact Action
+
+- Continue T002 on `codex/v072-public-autopilot-target-spec`.
