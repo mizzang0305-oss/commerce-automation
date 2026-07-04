@@ -46,6 +46,7 @@
     "upload:v054:check-runtime-adapters": "tsx scripts/uploads/check-v054-runtime-youtube-adapters.ts",
     "upload:v070:materialize-product-sources": "tsx scripts/uploads/materialize-v070-v057-product-source-metadata.ts",
     "upload:v069:readiness": "tsx scripts/uploads/generate-v069-upload-package-readiness.ts",
+    "upload:v073:generate-packages": "tsx scripts/uploads/generate-v073-upload-packages.ts",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
     "review:v040": "tsx scripts/uploads/generate-v040-real-image-semantic-review-packets.ts",
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",

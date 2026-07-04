@@ -34,11 +34,13 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #182: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
+- main HEAD after PR #183 and T002 closeout: `e1409c00e19bd9d7a1f27c73f2da15d71d39e7af`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
+- PR #183: V072 public autopilot target spec, `MERGED`
+- PR #183 merge commit: `f66749e5d4e787ba0c225596a8341c5487f23327`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `BLOCKED_V071_V057_ORPHAN_PACKAGE_SOURCE_UNRECOVERABLE`
+- Current blocker: `PENDING_T003_V073_UPLOAD_PACKAGE_GENERATOR`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -97,7 +99,7 @@ Spec must define:
 
 ### T003 - V073 Upload Package Generator
 
-Status: `PENDING`
+Status: `IN_PROGRESS`
 
 Goal: Generate upload packages from queue, generated content, and review package data automatically.
 
@@ -252,6 +254,7 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T002 spec and regression test drafted on `codex/v072-public-autopilot-target-spec`. Targeted test passed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T002 PR opened as PR #183 from `codex/v072-public-autopilot-target-spec`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #183 squash merged. Main synced at `f66749e5d4e787ba0c225596a8341c5487f23327`. T002 is complete. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T003 started on `codex/v073-upload-package-generator` from main `e1409c00e19bd9d7a1f27c73f2da15d71d39e7af`. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
