@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #185 and T004 closeout: `4fe422851e8dd006f9147064636fe4f31e271207`
+- main HEAD after PR #185 and T004 closeout: `3c71525969e2f24f9692586d5cf3fa2a4de52cba`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -44,7 +44,7 @@ Product discovery
 - PR #185: V074 public upload executor scaffold, `MERGED`
 - PR #185 merge commit: `4fe422851e8dd006f9147064636fe4f31e271207`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_T005_V075_COMMENT_WRITER_SCAFFOLD`
+- Current blocker: `IN_PROGRESS_T005_V075_COMMENT_WRITER_SCAFFOLD`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -143,7 +143,7 @@ Requirements:
 
 ### T005 - V075 Comment Writer
 
-Status: `PENDING`
+Status: `IN_PROGRESS`
 
 Goal: Add top-level comment writer after upload success.
 
@@ -266,10 +266,11 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: T004 V074 scaffold committed at `dc71f407019de6bdeadd22025ff93f1a99ec515c` and opened as PR #185: https://github.com/mizzang0305-oss/commerce-automation/pull/185. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #185 review fix pushed at `c781aed7c9f6ccb06f0d09266867ff3f60a1b610`. V074 now preserves sanitized V073 package readiness/blocker evidence and cannot override an upstream package blocker into ready state. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #185 squash merged. Main synced at `4fe422851e8dd006f9147064636fe4f31e271207`. T004 is complete. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T005 started on `codex/v075-comment-writer-scaffold` from main `3c71525969e2f24f9692586d5cf3fa2a4de52cba`. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_T005_V075_COMMENT_WRITER_SCAFFOLD`
+- `IN_PROGRESS_T005_V075_COMMENT_WRITER_SCAFFOLD`
 - Public upload remains blocked. T005 may only scaffold a disabled comment writer; real comment mutation remains blocked until later readiness gates and fresh approval.
 
 ## Next Exact Action
