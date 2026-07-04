@@ -40,7 +40,7 @@ Product discovery
 - PR #183: V072 public autopilot target spec, `MERGED`
 - PR #183 merge commit: `f66749e5d4e787ba0c225596a8341c5487f23327`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR`
+- Current blocker: `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR_AFTER_REVIEW_FIX`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -256,10 +256,11 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #183 squash merged. Main synced at `f66749e5d4e787ba0c225596a8341c5487f23327`. T002 is complete. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T003 started on `codex/v073-upload-package-generator` from main `e1409c00e19bd9d7a1f27c73f2da15d71d39e7af`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T003 implementation committed at `b64a305` and opened as PR #184: https://github.com/mizzang0305-oss/commerce-automation/pull/184. Validation passed. Upload execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #184 P1/P2 review fix pushed at `4a71420`. Added duplicate target-channel blocking and queue/generated product-source validation hardening. Validation passed. Upload/readiness/materializer execution was not run. Raw URLs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR`
+- `PENDING_REVIEW_MERGE_PR184_V073_UPLOAD_PACKAGE_GENERATOR_AFTER_REVIEW_FIX`
 - Public upload remains blocked until PR #184 is reviewed/merged and later readiness gates pass with fresh approval.
 
 ## Next Exact Action
