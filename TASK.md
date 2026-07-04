@@ -73,7 +73,7 @@ Acceptance:
 
 ### T002 - V072 Public Autopilot Target Spec
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Document and test the final target architecture.
 
@@ -251,12 +251,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #182 squash merged. Main synced at `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`. T001 is complete. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T002 spec and regression test drafted on `codex/v072-public-autopilot-target-spec`. Targeted test passed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T002 PR opened as PR #183 from `codex/v072-public-autopilot-target-spec`. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: PR #183 squash merged. Main synced at `f66749e5d4e787ba0c225596a8341c5487f23327`. T002 is complete. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `BLOCKED_V071_V057_ORPHAN_PACKAGE_SOURCE_UNRECOVERABLE`
-- Current v057 corrected package has media assets but no authoritative product-source provenance.
+- `PENDING_T003_V073_UPLOAD_PACKAGE_GENERATOR`
+- Public upload remains blocked until upload packages are generated from authoritative product source data and later readiness gates pass with fresh approval.
 
 ## Next Exact Action
 
-- Merge PR #183 only after checks are clean, then continue T003 V073 Upload Package Generator.
+- Start T003 V073 Upload Package Generator on a new branch.
