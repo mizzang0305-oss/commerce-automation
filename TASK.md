@@ -46,7 +46,7 @@ Product discovery
 - PR #186: V075 comment writer scaffold, `MERGED`
 - PR #186 merge commit: `a55ff6eebc8755361bb628e32cd291def162d27d`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `IN_PROGRESS_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD`
+- Current blocker: `PR_OPEN_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 
 ## Status Legend
@@ -160,7 +160,7 @@ Requirements:
 
 ### T006 - V076 Upload Result Store
 
-Status: `IN_PROGRESS`
+Status: `PR_OPEN`
 
 Goal: Scaffold a sanitized internal upload result store contract.
 
@@ -271,12 +271,13 @@ Do not execute this task unless fresh approval appears in the current user messa
 - 2026-07-04 KST: PR #186 review fix pushed at `bef5fd3f7ec6c87f456e2f33437bc688dbffacdf`. V075 now fails closed when upload result evidence is not bound to the selected package/channel. Focused validation passed. Upload execution, real comment mutation, and readiness/materializer execution were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: PR #186 squash merged. Main synced at `a55ff6eebc8755361bb628e32cd291def162d27d`. T005 is complete. Upload execution, real comment mutation, and readiness/materializer execution were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-04 KST: T006 started on `codex/v076-upload-result-store-scaffold` from main `1de6d4c`. Upload result store work is scaffold-only; no upload/comment/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
+- 2026-07-04 KST: T006 V076 upload result store scaffold committed at `5604421` and opened as PR #187: https://github.com/mizzang0305-oss/commerce-automation/pull/187. Validation passed. Upload execution, real comment mutation, readiness/materializer execution, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 
 ## Current Blocker
 
-- `IN_PROGRESS_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD`
+- `PR_OPEN_T006_V076_UPLOAD_RESULT_STORE_SCAFFOLD_REVIEW`
 - Public upload and real comment mutation remain blocked. T006 must add only a sanitized upload result store scaffold and keep `SAFE_TO_UPLOAD=false`.
 
 ## Next Exact Action
 
-- Complete T006 V076 Upload Result Store scaffold and open PR. `SAFE_TO_UPLOAD=false`.
+- Review and merge PR #187. After merge, proceed to T007 V077 Autopilot Scheduler scaffold only. `SAFE_TO_UPLOAD=false`.
