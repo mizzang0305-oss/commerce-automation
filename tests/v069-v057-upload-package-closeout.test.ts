@@ -91,6 +91,8 @@ async function writeProductSources(cwd: string, overrides: Partial<Record<Channe
         productName: V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS[channelKey],
         sourceEvidenceHash: crypto.createHash("sha256").update(`${channelKey}:${rawCoupangUrl}`).digest("hex"),
         boundAt: "2026-07-04T00:00:00.000Z",
+        runtimeSourceApproved: true,
+        rawUrlsRedactedInReport: true,
         ...overrides[channelKey]
       }, null, 2),
       "utf8"
