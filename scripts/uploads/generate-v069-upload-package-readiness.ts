@@ -1,14 +1,15 @@
+import { pathToFileURL } from "node:url";
+
 import {
   buildV069UploadPackageReadiness,
   writeV069UploadPackageReadinessArtifacts
 } from "../../src/uploads/multi-channel/v069UploadPackageReadiness";
 
 async function main() {
-  const report = await buildV069UploadPackageReadiness({
+  const report = await buildV069UploadPackageReadiness(buildV069UploadPackageReadinessCliInput({
     cwd: process.cwd(),
-    env: process.env,
-    uploadAssetProfile: process.env.V051_UPLOAD_ASSET_PROFILE ?? null
-  });
+    env: process.env
+  }));
 
   await writeV069UploadPackageReadinessArtifacts({
     cwd: process.cwd(),
@@ -28,7 +29,21 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "v069 readiness failed");
-  process.exitCode = 1;
-});
+export function buildV069UploadPackageReadinessCliInput(input: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+}) {
+  return {
+    cwd: input.cwd,
+    env: input.env,
+    uploadAssetProfile: input.env.V051_UPLOAD_ASSET_PROFILE ?? null,
+    approvalText: input.env.V051_APPROVAL_TEXT
+  };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : "v069 readiness failed");
+    process.exitCode = 1;
+  });
+}

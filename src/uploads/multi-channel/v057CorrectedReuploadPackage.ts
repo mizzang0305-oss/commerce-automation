@@ -1,10 +1,10 @@
-import crypto from "node:crypto";
 import path from "node:path";
 
 import { CHANNEL_KEYS, type ChannelKey } from "./channelProfiles";
 import type { V066AffiliateBridgeChannelEvidence } from "./v066CoupangDeeplinkAffiliateBridge";
 import type { V057ProductSourceSanitizedEvidence } from "./v057CorrectedReuploadProductSource";
 import type { V057ReuploadAssetBindingReport } from "./v057ReuploadAssetBinding";
+import { validateYouTubeChannelId } from "./youtubeChannelIdValidator";
 
 export type V057CorrectedReuploadDisclosurePreview = {
   containsSyntheticMedia: boolean;
@@ -18,6 +18,7 @@ export type V057CorrectedReuploadTargetChannelEvidence = {
   expectedChannelIdFormatValid: boolean;
   expectedChannelIdDuplicate: boolean;
   channelIdHashPrefix: string | null;
+  raw_channel_ids_printed: false;
 };
 
 export type V057CorrectedReuploadPackage = {
@@ -175,10 +176,12 @@ export function buildSanitizedTargetChannelEvidence(input: {
   const allValues = CHANNEL_KEYS
     .map((channelKey) => input.targetChannelIds[channelKey]?.trim() ?? "")
     .filter(Boolean);
+  const validation = validateYouTubeChannelId(value);
   return {
-    expectedChannelIdPresent: Boolean(value),
-    expectedChannelIdFormatValid: /^UC[A-Za-z0-9_-]{3,}$/.test(value),
+    expectedChannelIdPresent: validation.present,
+    expectedChannelIdFormatValid: validation.format_valid,
     expectedChannelIdDuplicate: Boolean(value) && allValues.filter((item) => item === value).length > 1,
-    channelIdHashPrefix: value ? crypto.createHash("sha256").update(value).digest("hex").slice(0, 10) : null
+    channelIdHashPrefix: validation.hash_prefix,
+    raw_channel_ids_printed: false
   };
 }

@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
+import { buildV069UploadPackageReadinessCliInput } from "../scripts/uploads/generate-v069-upload-package-readiness";
 import { CHANNEL_KEYS, type ChannelKey } from "../src/uploads/multi-channel/channelProfiles";
+import {
+  V051_PAID_PROMOTION_CONFIRMATION_PHRASE,
+  V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE
+} from "../src/uploads/multi-channel/v051ApprovalAliasWrapper";
 import { V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS } from "../src/uploads/multi-channel/v057CorrectedReuploadProductSource";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 import { buildV069UploadPackageReadiness } from "../src/uploads/multi-channel/v069UploadPackageReadiness";
@@ -27,13 +32,32 @@ const COUPANG_ENV = {
 };
 
 const TARGET_CHANNEL_ENV = {
-  YOUTUBE_FATHER_JOBS_CHANNEL_ID: "UC_father_jobs_v069_ready_123",
-  YOUTUBE_NEOMAN_MOLEULGEOL_CHANNEL_ID: "UC_neoman_moleulgeol_v069_ready_456",
-  YOUTUBE_LETS_BUY_CHANNEL_ID: "UC_lets_buy_v069_ready_789"
+  YOUTUBE_FATHER_JOBS_CHANNEL_ID: `UC${"A".repeat(22)}`,
+  YOUTUBE_NEOMAN_MOLEULGEOL_CHANNEL_ID: `UC${"B".repeat(22)}`,
+  YOUTUBE_LETS_BUY_CHANNEL_ID: `UC${"C".repeat(22)}`
 };
 
-const FORBIDDEN_REPORT_PATTERN =
-  /869000001|869000002|869000003|v069-father|v069-neoman|v069-lets-buy|v069-access-key|v069-secret-key|UC_father_jobs_v069_ready_123|UC_neoman_moleulgeol_v069_ready_456|UC_lets_buy_v069_ready_789|Authorization|signature=|HmacSHA256/i;
+const FRESH_V057_APPROVAL_TEXT = [
+  V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE,
+  V051_PAID_PROMOTION_CONFIRMATION_PHRASE
+].join("\n");
+
+const FORBIDDEN_REPORT_PATTERN = new RegExp([
+  "869000001",
+  "869000002",
+  "869000003",
+  "v069-father",
+  "v069-neoman",
+  "v069-lets-buy",
+  "v069-access-key",
+  "v069-secret-key",
+  ...Object.values(TARGET_CHANNEL_ENV),
+  V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE,
+  V051_PAID_PROMOTION_CONFIRMATION_PHRASE,
+  "Authorization",
+  "signature=",
+  "HmacSHA256"
+].map(escapeRegExp).join("|"), "i");
 
 async function makeCwd() {
   return mkdtemp(path.join(os.tmpdir(), "commerce-v069-"));
@@ -126,6 +150,14 @@ describe("v069 v057 upload package closeout readiness", () => {
       expect(result.packages.map((item) => item.channelKey)).toEqual(CHANNEL_KEYS);
       expect(result.packages.every((item) => item.productSource.present && item.affiliateResolution.resolved)).toBe(true);
       expect(result.packages.every((item) => item.youtubeTarget.expectedChannelIdPresent)).toBe(true);
+      expect(result.packages.every((item) => item.youtubeTarget.expectedChannelIdFormatValid)).toBe(true);
+      expect(result.packages.every((item) => item.youtubeTarget.raw_channel_ids_printed === false)).toBe(true);
+      expect(result.target_channel_ids).toMatchObject({
+        all_present: true,
+        all_format_valid: true,
+        no_duplicates: true,
+        raw_channel_ids_printed: false
+      });
       expect(result.packages.every((item) => item.disclosure.containsSyntheticMedia)).toBe(true);
       expect(result.packages.every((item) => item.duplicateGuard.duplicate_upload_risk === false)).toBe(true);
       expect(result.videos_insert_called).toBe(false);
@@ -133,6 +165,90 @@ describe("v069 v057 upload package closeout readiness", () => {
       expect(result.raw_urls_printed).toBe(false);
       expect(result.secrets_printed).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts fresh v057 approval only with paid promotion confirmation and redacts approval text", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd);
+
+      const accepted = await buildV069UploadPackageReadiness({
+        cwd,
+        env: {
+          ...COUPANG_ENV,
+          ...TARGET_CHANNEL_ENV
+        },
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        approvalText: FRESH_V057_APPROVAL_TEXT,
+        fetchImpl: mockDeeplinkFetch()
+      });
+      expect(accepted.blocker).toBeNull();
+      expect(accepted.approval.V051_ALIAS_READY).toBe(true);
+      expect(accepted.approval.v057_corrected_reupload_approval_present).toBe(true);
+      expect(accepted.approval.paid_promotion_confirmation_present).toBe(true);
+      expect(accepted.approval.approval_hash_prefix).toMatch(/^[a-f0-9]{10}$/);
+      expect(JSON.stringify(accepted)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+
+      const missingPaidPromotion = await buildV069UploadPackageReadiness({
+        cwd,
+        env: {
+          ...COUPANG_ENV,
+          ...TARGET_CHANNEL_ENV
+        },
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        approvalText: V057_CORRECTED_REUPLOAD_APPROVAL_PHRASE,
+        fetchImpl: mockDeeplinkFetch()
+      });
+      expect(missingPaidPromotion.blocker).toBe("V051_PAID_PROMOTION_CONFIRMATION_MISSING");
+
+      const snakeCaseAccepted = await buildV069UploadPackageReadiness({
+        cwd,
+        env: {
+          ...COUPANG_ENV,
+          ...TARGET_CHANNEL_ENV
+        },
+        uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+        approval_text: FRESH_V057_APPROVAL_TEXT,
+        fetchImpl: mockDeeplinkFetch()
+      } as Parameters<typeof buildV069UploadPackageReadiness>[0] & { approval_text: string });
+      expect(snakeCaseAccepted.blocker).toBeNull();
+      expect(JSON.stringify(snakeCaseAccepted)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("upload:v069:readiness input forwards V051_APPROVAL_TEXT with redacted approval evidence", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd);
+
+      const cliInput = buildV069UploadPackageReadinessCliInput({
+        cwd,
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          V051_UPLOAD_ASSET_PROFILE: V057_REUPLOAD_ASSET_PROFILE,
+          V051_APPROVAL_TEXT: FRESH_V057_APPROVAL_TEXT,
+          V051_FATHER_JOBS_AFFILIATE_URL: AFFILIATE_URLS.father_jobs,
+          V051_NEOMAN_MOLEULGEOL_AFFILIATE_URL: AFFILIATE_URLS.neoman_moleulgeol,
+          V051_LETS_BUY_AFFILIATE_URL: AFFILIATE_URLS.lets_buy
+        }
+      });
+      expect(cliInput.approvalText).toBe(FRESH_V057_APPROVAL_TEXT);
+
+      const report = await buildV069UploadPackageReadiness({
+        ...cliInput,
+        fetchImpl: mockDeeplinkFetch()
+      });
+      const reportText = JSON.stringify(report);
+
+      expect(report.blocker).toBeNull();
+      expect(report.approval.V051_ALIAS_READY).toBe(true);
+      expect(report.approval.approval_hash_prefix).toMatch(/^[a-f0-9]{10}$/);
+      expect(reportText).not.toMatch(FORBIDDEN_REPORT_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -344,4 +460,86 @@ describe("v069 v057 upload package closeout readiness", () => {
       await rm(duplicateRisk, { recursive: true, force: true });
     }
   });
+
+  test("rejects truncated, malformed, and duplicate target channel IDs without printing full IDs", async () => {
+    const cases: Array<{
+      name: string;
+      env: typeof TARGET_CHANNEL_ENV;
+      blocker: string;
+    }> = [
+      {
+        name: "short alphabetic",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: "UCabc"
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_INVALID"
+      },
+      {
+        name: "short numeric",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: "UC123"
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_INVALID"
+      },
+      {
+        name: "too long",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: `UC${"D".repeat(23)}`
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_INVALID"
+      },
+      {
+        name: "invalid character",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: `UC${"E".repeat(21)}!`
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_INVALID"
+      },
+      {
+        name: "non UC prefix",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_FATHER_JOBS_CHANNEL_ID: `HC${"F".repeat(22)}`
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_INVALID"
+      },
+      {
+        name: "duplicate",
+        env: {
+          ...TARGET_CHANNEL_ENV,
+          YOUTUBE_LETS_BUY_CHANNEL_ID: TARGET_CHANNEL_ENV.YOUTUBE_FATHER_JOBS_CHANNEL_ID
+        },
+        blocker: "BLOCKED_V057_RUNTIME_TARGET_CHANNEL_IDS_DUPLICATE"
+      }
+    ];
+
+    for (const item of cases) {
+      const cwd = await makeCwd();
+      try {
+        await writeReadyInputs(cwd);
+        const result = await buildV069UploadPackageReadiness({
+          cwd,
+          env: {
+            ...COUPANG_ENV,
+            ...item.env
+          },
+          uploadAssetProfile: V057_REUPLOAD_ASSET_PROFILE,
+          fetchImpl: mockDeeplinkFetch()
+        });
+        expect(result.blocker, item.name).toBe(item.blocker);
+        expect(result.target_channel_ids.raw_channel_ids_printed).toBe(false);
+        expect(JSON.stringify(result)).not.toMatch(new RegExp(Object.values(item.env).map(escapeRegExp).join("|")));
+      } finally {
+        await rm(cwd, { recursive: true, force: true });
+      }
+    }
+  });
 });
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

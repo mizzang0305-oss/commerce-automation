@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -26,6 +27,7 @@ import {
   buildV050DuplicateUploadGuard,
   type V050DuplicateUploadGuard
 } from "./threeChannelYouTubeAdapterInjection";
+import { validateYouTubeChannelId } from "./youtubeChannelIdValidator";
 
 export type V069UploadPackageBlocker =
   | V057ReuploadAssetBindingBlocker
@@ -69,6 +71,7 @@ export type V069UploadPackageReadinessReport = {
     all_present: boolean;
     all_format_valid: boolean;
     no_duplicates: boolean;
+    raw_channel_ids_printed: false;
     channels: V057CorrectedReuploadPackageBuildResult["targetChannelEvidence"];
   };
   disclosure: {
@@ -88,6 +91,9 @@ export type V069UploadPackageReadinessReport = {
   };
   approval: V051ApprovalAliasStatus & {
     fresh_approval_required: true;
+    approval_present: boolean;
+    approval_alias_ready: boolean;
+    approval_hash_prefix: string | null;
   };
   packages: V057CorrectedReuploadPackageBuildResult["packages"];
   youtube_execute_called: false;
@@ -109,6 +115,7 @@ export async function buildV069UploadPackageReadiness(input: {
   fetchImpl?: typeof fetch;
   uploadAssetProfile?: string | null;
   approvalText?: string;
+  approval_text?: string;
   disclosureOverrides?: V057DisclosureOverride;
   duplicateUploadRiskOverride?: boolean;
 } = {}): Promise<V069UploadPackageReadinessReport> {
@@ -148,13 +155,19 @@ export async function buildV069UploadPackageReadiness(input: {
     duplicateUploadRisk,
     disclosureOverrides: input.disclosureOverrides
   });
+  const approvalText = input.approvalText ?? input.approval_text;
+  const approvalHashPrefix = hashPrefix(approvalText);
   const approval = {
     ...buildV051ApprovalAliasStatus({
-      approvalText: input.approvalText,
+      approvalText,
       uploadAssetProfile: input.uploadAssetProfile
     }),
-    fresh_approval_required: true as const
+    fresh_approval_required: true as const,
+    approval_present: Boolean(safeTrim(approvalText)),
+    approval_alias_ready: false,
+    approval_hash_prefix: approvalHashPrefix
   };
+  approval.approval_alias_ready = approval.V051_ALIAS_READY;
   const blocker = firstBlocker<V069UploadPackageBlocker>([
     assetReport.asset_binding_blocker,
     mapProductSourceBlocker(productSource.report.product_source_blocker),
@@ -189,6 +202,7 @@ export async function buildV069UploadPackageReadiness(input: {
       all_present: targetSummary.all_present,
       all_format_valid: targetSummary.all_format_valid,
       no_duplicates: targetSummary.no_duplicates,
+      raw_channel_ids_printed: false,
       channels: packageBuild.targetChannelEvidence
     },
     disclosure: {
@@ -241,8 +255,9 @@ export async function writeV069UploadPackageReadinessArtifacts(input: {
 
 function summarizeTargetChannels(targetChannelIds: Partial<Record<ChannelKey, string>>) {
   const values = CHANNEL_KEYS.map((channelKey) => targetChannelIds[channelKey]?.trim() ?? "");
-  const allPresent = values.every(Boolean);
-  const allFormatValid = values.every((value) => /^UC[A-Za-z0-9_-]{3,}$/.test(value));
+  const validations = values.map((value) => validateYouTubeChannelId(value));
+  const allPresent = validations.every((validation) => validation.present);
+  const allFormatValid = validations.every((validation) => validation.format_valid);
   const noDuplicates = new Set(values.filter(Boolean)).size === values.filter(Boolean).length;
   const blocker: Extract<
     V069UploadPackageBlocker,
@@ -308,4 +323,13 @@ function escapeHtml(value: unknown) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function hashPrefix(value: unknown) {
+  const text = safeTrim(value);
+  return text ? crypto.createHash("sha256").update(text).digest("hex").slice(0, 10) : null;
+}
+
+function safeTrim(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
