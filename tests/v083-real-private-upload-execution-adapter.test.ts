@@ -232,7 +232,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(task).toContain("### T013 - V083 Real Private Upload Execution Adapter");
     expect(task).toMatch(/### T013 - V083 Real Private Upload Execution Adapter[\s\S]*Status: `(PR_OPEN|DONE)`/);
     expect(task).toMatch(
-      /Current blocker: `(PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW|PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW)`/
+      /Current blocker: `(PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW|PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL)`/
     );
     expect(task).toMatch(
       /PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED(_AFTER_MERGE)?/

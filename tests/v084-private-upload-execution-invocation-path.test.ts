@@ -266,13 +266,13 @@ describe("v084 private upload execution invocation path", () => {
     );
   });
 
-  test("TASK.md records T014 PR_OPEN and keeps all upload surfaces blocked", async () => {
+  test("TASK.md records T014 DONE and keeps all upload surfaces blocked", async () => {
     const task = await readFile("TASK.md", "utf8");
 
     expect(task).toContain("### T014 - V084 Private Upload Execution Invocation Path");
-    expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `PR_OPEN`/);
-    expect(task).toContain("Current blocker: `PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW`");
-    expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE");
+    expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `DONE`/);
+    expect(task).toContain("Current blocker: `V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`");
+    expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");
     expect(task).toContain("SAFE_TO_PUBLIC_UPLOAD=false");
     expect(task).toContain("PUBLIC_UPLOAD=BLOCKED");
