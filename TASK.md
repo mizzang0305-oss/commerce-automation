@@ -56,8 +56,12 @@ Product discovery
 - PR #191: V080 manual MVP operation pack / release gate, `MERGED`
 - PR #191 merge commit: `cae0dca3be958b9cd9cb47d71ab93dba86b00260`
 - Existing v057 corrected package: orphan / fail-closed
-- Current status: `NO_UPLOAD_MANUAL_MVP_READY`
+- Current blocker: `IN_PROGRESS_T011_V081_CONTROLLED_PRIVATE_UPLOAD_PILOT`
 - `SAFE_TO_UPLOAD=false`
+- PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
 - Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
@@ -264,6 +268,31 @@ Requirements:
 - upload/comment/scheduler mutation blocked
 - `SAFE_TO_UPLOAD=false`
 
+### T011 - V081 Controlled YouTube Private Upload Pilot
+
+Status: `IN_PROGRESS`
+
+Goal: Add a controlled one-item YouTube private upload pilot executor behind an exact owner approval gate.
+
+Requirements:
+
+- public upload blocked
+- comment automation blocked
+- scheduler repeated execution blocked
+- daily batch upload blocked
+- exactly one private upload item allowed
+- exact approval phrase required: `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT`
+- default adapter blocked
+- mock adapter test-only
+- videos.insert allowed only after private pilot approval and readiness gates pass through an injected adapter
+- upload result stored/reported as sanitized evidence only
+- raw URL, full video ID, full channel ID, token, secret, Authorization, and HMAC output blocked
+- `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
+- `PUBLIC_UPLOAD=BLOCKED`
+- `COMMENT_AUTOMATION=BLOCKED`
+- `SCHEDULER_EXECUTION=BLOCKED`
+- `SAFE_TO_UPLOAD=false`
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -298,13 +327,20 @@ Requirements:
 - 2026-07-05 KST: T010 started on `codex/v080-manual-mvp-operation-pack` from main `e4323ad`. Work is manual MVP operation pack / release gate only; no upload/comment/scheduler/webhook/DB/R2/product asset mutation is allowed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T010 V080 manual MVP operation pack committed at `ca6f19e` and opened as PR #191: https://github.com/mizzang0305-oss/commerce-automation/pull/191. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: PR #191 squash merged. Main synced at `cae0dca3be958b9cd9cb47d71ab93dba86b00260`. T010 is complete and project status is `NO_UPLOAD_MANUAL_MVP_READY`. This is manual MVP operation readiness only: an operator can review and manually upload outside automation after direct confirmation, while the system remains limited to generation, validation, and monitoring. Public upload approval, comment automation approval, and scheduler execution approval remain `BLOCKED_FRESH_APPROVAL_REQUIRED`. `SAFE_TO_UPLOAD=false`.
+- 2026-07-05 KST: T011 started on `codex/v081-controlled-private-upload-pilot` from main `9b92a8b`. Work is a controlled one-item private upload pilot gate only; public upload, comment automation, scheduler execution, n8n webhook calls, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`.
 
-## Current Status
+## Current Blocker
 
-- `NO_UPLOAD_MANUAL_MVP_READY`
-- No-upload manual MVP operation ready.
-- Operators may review generated packages and perform any upload manually outside automation after direct confirmation.
-- The system is responsible only for generation, validation, and monitoring.
+- `IN_PROGRESS_T011_V081_CONTROLLED_PRIVATE_UPLOAD_PILOT`
+- Controlled private upload pilot executor is being implemented behind an exact owner approval gate.
+- Public upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- Daily batch upload remains blocked.
+- `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
+- `PUBLIC_UPLOAD=BLOCKED`
+- `COMMENT_AUTOMATION=BLOCKED`
+- `SCHEDULER_EXECUTION=BLOCKED`
 - Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
@@ -312,5 +348,4 @@ Requirements:
 
 ## Next Exact Action
 
-- `OWNER_MANUAL_MVP_PILOT_NO_UPLOAD`
-- Owner manually reviews the no-upload manual MVP operation pack and decides whether to run a manual pilot outside automation. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`.
+- Finish T011 V081 Controlled YouTube Private Upload Pilot code/tests/docs and open a PR. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`.
