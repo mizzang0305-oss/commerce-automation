@@ -303,32 +303,24 @@ export async function executeV081PrivateUploadPilot(
     generatedAt: request.generatedAt
   });
 
-  if (adapterResult.blocker || !adapterResult.videosInsertCalled) {
-    return buildBlockedResult({
-      request,
-      readiness: {
-        ...readiness,
-        blockers: dedupe([
-          ...readiness.blockers,
-          adapterResult.blocker ?? "BLOCKED_V081_REAL_ADAPTER_DISABLED"
-        ])
-      },
-      adapterMode: adapter.mode
-    });
-  }
+  const adapterUploadEvidenceComplete = hasCompleteAdapterUploadEvidence(adapterResult);
+  const adapterBlocker = adapterResult.blocker ??
+    (!adapterResult.videosInsertCalled
+      ? "BLOCKED_V081_REAL_ADAPTER_DISABLED"
+      : "BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE");
 
-  if (!hasCompleteAdapterUploadEvidence(adapterResult)) {
+  if (adapterResult.blocker || !adapterResult.videosInsertCalled || !adapterUploadEvidenceComplete) {
     return buildBlockedResult({
       request,
       readiness: {
         ...readiness,
         blockers: dedupe([
           ...readiness.blockers,
-          "BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE"
+          adapterBlocker
         ])
       },
       adapterMode: adapter.mode,
-      adapterResult
+      adapterResult: adapterResult.videosInsertCalled ? adapterResult : undefined
     });
   }
 
