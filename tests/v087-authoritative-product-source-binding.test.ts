@@ -259,8 +259,10 @@ describe("v087 authoritative v057 product source binding", () => {
     const task = await import("node:fs/promises").then((fs) => fs.readFile("TASK.md", "utf8"));
 
     expect(task).toContain("### T016 - V087 Authoritative V057 Product Source Binding");
-    expect(task).toMatch(/### T016 - V087 Authoritative V057 Product Source Binding[\s\S]*Status: `PR_OPEN`/);
-    expect(task).toContain("Current blocker: `PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW`");
+    expect(task).toMatch(/### T016 - V087 Authoritative V057 Product Source Binding[\s\S]*Status: `(PR_OPEN|DONE)`/);
+    expect(task).toMatch(
+      /Current blocker: `(PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD)`/
+    );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");
     expect(task).toContain("SAFE_TO_PUBLIC_UPLOAD=false");
