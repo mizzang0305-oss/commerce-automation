@@ -29,6 +29,7 @@ const FORBIDDEN_PATTERN = new RegExp([
   "HmacSHA256",
   "signature="
 ].map(escapeRegExp).join("|"), "i");
+const DISCLOSURE_TEXT = "\uC774 \uD3EC\uC2A4\uD305\uC740 \uCFE0\uD321 \uD30C\uD2B8\uB108\uC2A4 \uD65C\uB3D9\uC758 \uC77C\uD658\uC73C\uB85C, \uC774\uC5D0 \uB530\uB978 \uC77C\uC815\uC561\uC758 \uC218\uC218\uB8CC\uB97C \uC81C\uACF5\uBC1B\uC2B5\uB2C8\uB2E4.";
 
 describe("v087 authoritative v057 product source binding", () => {
   test("blocks when manifest path is missing", async () => {
@@ -104,7 +105,7 @@ describe("v087 authoritative v057 product source binding", () => {
     }
   });
 
-  test("blocks when first-frame file is missing", async () => {
+  test("blocks when canonical first-frame file is missing", async () => {
     const cwd = await makeCwd();
     try {
       const manifestPath = await writeManifest(cwd, {}, { skipFirstFrame: true });
@@ -115,8 +116,61 @@ describe("v087 authoritative v057 product source binding", () => {
       });
 
       expect(result.status).toBe("blocked");
-      expect(result.blockers).toContain("BLOCKED_V087_FIRST_FRAME_FILE_NOT_FOUND");
+      expect(result.blockers).toContain("BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_NOT_FOUND");
+      expect(result.blockers).toContain("BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE");
       expect(result.firstFrameEvidence.fileExists).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("blocks when firstFramePath points to a readable non-canonical file", async () => {
+    const cwd = await makeCwd();
+    try {
+      const externalFirstFrame = path.join(cwd, "alternate-first-frame.jpg");
+      await writeFile(externalFirstFrame, "readable-but-not-canonical", "utf8");
+      const manifestPath = await writeManifest(cwd, {
+        firstFramePath: externalFirstFrame
+      });
+
+      const result = await buildV087AuthoritativeProductSourceBinding({
+        cwd,
+        env: readyEnv(manifestPath)
+      });
+      const serialized = JSON.stringify(result);
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V087_CANONICAL_FIRST_FRAME_PATH_MISMATCH");
+      expect(result.blockers).toContain("BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE");
+      expect(result.firstFrameEvidence.canonicalPathMatches).toBe(false);
+      expect(result.firstFrameEvidence.fileExists).toBe(true);
+      expect(result.firstFrameEvidence.fileReadable).toBe(true);
+      expect(serialized).not.toContain(externalFirstFrame);
+      expect(serialized).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("blocks when canonical first-frame target is unreadable", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd, {}, { firstFrameAsDirectory: true });
+
+      const result = await buildV087AuthoritativeProductSourceBinding({
+        cwd,
+        env: readyEnv(manifestPath)
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_UNREADABLE");
+      expect(result.blockers).toContain("BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE");
+      expect(result.firstFrameEvidence.canonicalPathMatches).toBe(true);
+      expect(result.firstFrameEvidence.fileExists).toBe(true);
+      expect(result.firstFrameEvidence.fileReadable).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -220,14 +274,18 @@ async function makeCwd() {
 async function writeManifest(
   cwd: string,
   overrides: Record<string, unknown> = {},
-  options: { skipVideo?: boolean; skipFirstFrame?: boolean } = {}
+  options: { skipVideo?: boolean; skipFirstFrame?: boolean; firstFrameAsDirectory?: boolean } = {}
 ) {
   const reviewDir = path.join(cwd, "commerce-assets", "review", "v057", CHANNEL);
   await mkdir(reviewDir, { recursive: true });
   const videoPath = path.join(reviewDir, "corrected-preview-v057.mp4");
   const firstFramePath = path.join(reviewDir, "first-frame-v057.jpg");
   if (!options.skipVideo) await writeFile(videoPath, "fake-v087-mp4", "utf8");
-  if (!options.skipFirstFrame) await writeFile(firstFramePath, "fake-v087-jpg", "utf8");
+  if (options.firstFrameAsDirectory) {
+    await mkdir(firstFramePath, { recursive: true });
+  } else if (!options.skipFirstFrame) {
+    await writeFile(firstFramePath, "fake-v087-jpg", "utf8");
+  }
   const manifestPath = path.join(cwd, "local-v087-product-source-manifest.json");
   await writeFile(manifestPath, `${JSON.stringify({
     sourceVersion: "v087-test",
@@ -238,7 +296,7 @@ async function writeManifest(
     productName: V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS[CHANNEL],
     rawCoupangUrl: RAW_COUPANG_URL,
     selectedAffiliateUrl: AFFILIATE_URL,
-    coupangPartnersDisclosureText: "이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.",
+    coupangPartnersDisclosureText: DISCLOSURE_TEXT,
     videoAssetPath: videoPath,
     firstFramePath,
     duplicateGuardKey: `dup-v087-${CHANNEL}`,

@@ -7,7 +7,7 @@ This is a no-upload step.
 ## Scope
 
 - Reads `V087_PRODUCT_SOURCE_MANIFEST_PATH`.
-- Validates product source, queue item, upload package, channel, affiliate, disclosure, duplicate guard, target channel, MP4, and first-frame evidence.
+- Validates product source, queue item, upload package, channel, affiliate, disclosure, duplicate guard, target channel, MP4, and canonical first-frame evidence.
 - Writes a local `commerce-assets/review/v057/<channel>/product-source-v057.json` manifest for the existing V073/V085 path.
 - Calls V085 binder in no-upload mode only.
 - Strips any ambient private upload approval before the nested V084 plan.
@@ -15,6 +15,14 @@ This is a no-upload step.
 ## Local Manifest
 
 The actual manifest is local and must not be committed. It may contain raw Coupang URLs, affiliate URLs, and local file paths. Reports must only contain sanitized booleans and hash prefixes.
+
+`firstFramePath` must resolve to the canonical package path:
+
+```text
+commerce-assets/review/v057/<channelKey>/first-frame-v057.jpg
+```
+
+V087 does not accept an arbitrary readable first-frame file. The canonical first-frame file must exist and be readable before V085 can become `ready_for_fresh_approval`.
 
 Sanitized shape:
 
@@ -70,6 +78,10 @@ npm run upload:v087:bind-product-source --silent
 - `BLOCKED_V087_VIDEO_ASSET_FILE_NOT_FOUND`
 - `BLOCKED_V087_VIDEO_ASSET_FILE_UNREADABLE`
 - `BLOCKED_V087_FIRST_FRAME_FILE_NOT_FOUND`
+- `BLOCKED_V087_CANONICAL_FIRST_FRAME_PATH_MISMATCH`
+- `BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_NOT_FOUND`
+- `BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_UNREADABLE`
+- `BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE`
 - `BLOCKED_V087_DUPLICATE_GUARD_KEY_MISSING`
 - `BLOCKED_V087_TARGET_CHANNEL_KEY_MISSING`
 - `BLOCKED_V087_UNSAFE_REPORT_REQUESTED`

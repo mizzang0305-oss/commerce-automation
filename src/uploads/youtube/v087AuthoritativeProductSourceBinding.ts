@@ -25,6 +25,10 @@ export type V087AuthoritativeProductSourceBindingBlocker =
   | "BLOCKED_V087_VIDEO_ASSET_FILE_NOT_FOUND"
   | "BLOCKED_V087_VIDEO_ASSET_FILE_UNREADABLE"
   | "BLOCKED_V087_FIRST_FRAME_FILE_NOT_FOUND"
+  | "BLOCKED_V087_CANONICAL_FIRST_FRAME_PATH_MISMATCH"
+  | "BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_NOT_FOUND"
+  | "BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_UNREADABLE"
+  | "BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE"
   | "BLOCKED_V087_DUPLICATE_GUARD_KEY_MISSING"
   | "BLOCKED_V087_TARGET_CHANNEL_KEY_MISSING"
   | "BLOCKED_V087_UNSAFE_REPORT_REQUESTED";
@@ -49,6 +53,7 @@ export type V087FileEvidence = {
   present: boolean;
   fileExists: boolean;
   fileReadable: boolean;
+  canonicalPathMatches?: boolean;
   hashPrefix: string | null;
   rawPathPrinted: false;
 };
@@ -155,7 +160,11 @@ export async function buildV087AuthoritativeProductSourceBinding(input: {
   const normalized = normalizeManifest(manifest);
   const selectedChannelKey = isChannelKey(normalized.channelKey) ? normalized.channelKey : null;
   const videoAssetEvidence = await resolveFileEvidence(normalized.videoAssetPath);
-  const firstFrameEvidence = await resolveFileEvidence(normalized.firstFramePath);
+  const firstFrameEvidence = await resolveCanonicalFirstFrameEvidence({
+    cwd,
+    channelKey: selectedChannelKey,
+    firstFramePath: normalized.firstFramePath
+  });
   const affiliateEvidenceReady = isHttpsCoupangUrl(normalized.selectedAffiliateUrl);
   const disclosureEvidenceReady = hasCoupangDisclosure(normalized.coupangPartnersDisclosureText);
   const duplicateGuardReady = Boolean(normalized.duplicateGuardKey);
@@ -176,7 +185,18 @@ export async function buildV087AuthoritativeProductSourceBinding(input: {
   if (videoAssetEvidence.fileExists && !videoAssetEvidence.fileReadable) {
     blockers.push("BLOCKED_V087_VIDEO_ASSET_FILE_UNREADABLE");
   }
-  if (!firstFrameEvidence.fileExists) blockers.push("BLOCKED_V087_FIRST_FRAME_FILE_NOT_FOUND");
+  if (!firstFrameEvidence.fileExists) blockers.push("BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_NOT_FOUND");
+  if (firstFrameEvidence.fileExists && !firstFrameEvidence.fileReadable) {
+    blockers.push("BLOCKED_V087_CANONICAL_FIRST_FRAME_FILE_UNREADABLE");
+  }
+  if (firstFrameEvidence.canonicalPathMatches === false) {
+    blockers.push("BLOCKED_V087_CANONICAL_FIRST_FRAME_PATH_MISMATCH");
+  }
+  if (!firstFrameEvidence.fileExists ||
+    !firstFrameEvidence.fileReadable ||
+    firstFrameEvidence.canonicalPathMatches !== true) {
+    blockers.push("BLOCKED_V087_FIRST_FRAME_EVIDENCE_INCOMPLETE");
+  }
   if (!duplicateGuardReady) blockers.push("BLOCKED_V087_DUPLICATE_GUARD_KEY_MISSING");
   if (!targetChannelEvidenceReady) blockers.push("BLOCKED_V087_TARGET_CHANNEL_KEY_MISSING");
   if (input.unsafeReportRequested) blockers.push("BLOCKED_V087_UNSAFE_REPORT_REQUESTED");
@@ -284,6 +304,35 @@ async function resolveFileEvidence(filePath: string | null): Promise<V087FileEvi
       rawPathPrinted: false
     };
   }
+}
+
+async function resolveCanonicalFirstFrameEvidence(input: {
+  cwd: string;
+  channelKey: ChannelKey | null;
+  firstFramePath: string | null;
+}): Promise<V087FileEvidence> {
+  if (!input.channelKey || !input.firstFramePath) return emptyFileEvidence();
+
+  const canonicalPath = path.join(
+    input.cwd,
+    "commerce-assets",
+    "review",
+    "v057",
+    input.channelKey,
+    "first-frame-v057.jpg"
+  );
+  const manifestPath = path.resolve(input.firstFramePath);
+  const resolvedCanonicalPath = path.resolve(canonicalPath);
+  const canonicalPathMatches = manifestPath === resolvedCanonicalPath;
+  const canonicalEvidence = await resolveFileEvidence(resolvedCanonicalPath);
+
+  return {
+    ...canonicalEvidence,
+    present: Boolean(input.firstFramePath),
+    canonicalPathMatches,
+    hashPrefix: canonicalEvidence.hashPrefix ?? hashPrefix(resolvedCanonicalPath),
+    rawPathPrinted: false
+  };
 }
 
 async function writeLocalProductSourceManifest(input: {
