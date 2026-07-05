@@ -59,12 +59,14 @@ Product discovery
 - PR #192 merge commit: `98e08f6a697e5de76498ae5c04b79c050dad9a97`
 - PR #193: V082 real runtime private pilot adapter injection, `MERGED`
 - PR #193 merge commit: `09065c44207526bbb29a1547cbedbbbd5b3d35e1`
+- PR #194: V083 real private upload execution adapter, `MERGED`
+- PR #194 merge commit: `709c5dc719044cf27c1c3d6a20fd683a163cb928`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW`
+- Current blocker: `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
-- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
 - PUBLIC_UPLOAD=BLOCKED
 - COMMENT_AUTOMATION=BLOCKED
 - SCHEDULER_EXECUTION=BLOCKED
@@ -333,7 +335,7 @@ Requirements:
 
 ### T013 - V083 Real Private Upload Execution Adapter
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add the server-only real private upload execution adapter wiring without executing a real upload.
 
@@ -409,19 +411,20 @@ Requirements:
 - 2026-07-05 KST: T012 V082 real runtime private pilot adapter injection opened on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 adds a server-only readiness wrapper and real-candidate adapter injection for V081, but real execution remains blocked in this PR. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #193 P2 token readiness guard fix prepared on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 no longer derives `tokenReady` from token file env path configuration alone; sanitized token provider readiness/status is required, and missing/not-ready provider status, missing upload scope, or unsafe/unreadable token evidence fails closed. Upload execution was not run. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #193 squash merged. Main synced at `09065c44207526bbb29a1547cbedbbbd5b3d35e1`. T012 is complete. The V082 runtime adapter factory is merged, including the token provider-status guard, but private pilot execution remains blocked until a separate fresh owner approval and readiness gate. Public upload, unlisted upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: PR #194 squash merged. Main synced at `709c5dc719044cf27c1c3d6a20fd683a163cb928`. T013 is complete. The V083 server-only real private upload execution adapter wiring is merged, but this does not authorize upload execution. The next step is to check or build the explicit real execution invocation path in V084. Private pilot execution still requires separate fresh owner approval and readiness after that path is verified. Public upload, unlisted upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW`
+- `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
-- V083 real private upload execution adapter wiring is under review and does not execute upload in this PR.
-- Private pilot execution remains blocked until V083 is merged and a separate fresh owner approval plus readiness gate are present.
+- V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
+- Private pilot execution remains blocked until V084 verifies or builds the explicit invocation path and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
 - Daily batch upload remains blocked.
 - `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
-- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
 - `PUBLIC_UPLOAD=BLOCKED`
 - `COMMENT_AUTOMATION=BLOCKED`
 - `SCHEDULER_EXECUTION=BLOCKED`
@@ -432,4 +435,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review/merge V083 adapter, then require fresh approval for private 1-item execution. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present after merge. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`. First check whether main has an explicit real execution invocation path for the V083 adapter. If it is missing, build it as a no-upload V084 PR. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present after the invocation path is verified. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
