@@ -66,9 +66,9 @@ Product discovery
 - PR #196: V085 private pilot input binding preflight, `MERGED`
 - PR #196 merge commit: `e16cd0825eb6bcfdd135662857844b192e70991d`
 - PR #197: V087 authoritative v057 product source binding, `MERGED`
-- PR #197 merge commit: `7eca4ab5ed160e41425616cfa55b08af557c8586`
-- Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD`
+- PR #198 merge commit: `bdce087a7ddf24e13b3b27b8d9c1717459198005`
+- Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
+- Current blocker: `V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -475,6 +475,38 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T017 - V088 Coupang API Product Source Resolver
+
+Status: `DONE`
+
+Goal: Resolve and bind father_jobs v057 product source URL evidence through the existing Coupang Partners API path without manual URL entry, then keep V087 and V085 binders in no-upload ready-for-fresh-approval state.
+
+Requirements:
+
+- use existing Coupang Partners env names and signer/client contracts
+- report only boolean and hash-prefix evidence for Coupang API readiness and URL binding
+- validate `selectedChannelKey`, manifest `channelKey`, and manifest `targetChannelKey` before any API call or manifest write
+- fail closed when manifest channel evidence is missing or mismatched
+- write only local protected `commerce-assets/review/v057/father_jobs/product-source-v057.local.json` evidence
+- keep local manifest and `commerce-assets/` untracked
+- call V087 and V085 binders only as no-upload readiness checks
+- do not call V084 execute
+- no videos.insert call
+- no commentThreads.insert call
+- no public, unlisted, or private upload execution
+- no comment automation
+- no scheduler execution
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw affiliate URL, raw Coupang URL, raw manifest path, raw file path, full video ID, full channel ID, token, secret, client_secret, Authorization, or HMAC output
+- strip or ignore ambient private upload approval before nested V084 plan
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -522,15 +554,16 @@ Requirements:
 - 2026-07-05 KST: PR #196 squash merged. Main synced at `e16cd0825eb6bcfdd135662857844b192e70991d`. T015 is complete. V085 adds the no-upload private pilot input binder and review hardening for video file evidence, channel package binding, and ambient approval stripping. `videos.insert`, `commentThreads.insert`, V084 execute, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: T016 V087 authoritative v057 product source binding opened on `codex/v087-authoritative-v057-product-source-binding`. Existing upstream metadata remained absent, so V087 adds a no-upload local manifest binder that validates product source evidence, writes only local protected v057 product-source metadata, and calls V085 binder without forwarding upload approval. `videos.insert`, `commentThreads.insert`, V084 execute, public/unlisted/private upload execution, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #197 squash merged. Main synced at `7eca4ab5ed160e41425616cfa55b08af557c8586`. T016 is complete. V087 canonical first-frame evidence guard is merged and requires `commerce-assets/review/v057/<channelKey>/first-frame-v057.jpg` evidence before V085 can reach ready-for-fresh-approval. Upload execution, V084 execute, real comment mutation, scheduler execution, webhooks, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-06 KST: PR #198 squash merged. Main synced at `bdce087a7ddf24e13b3b27b8d9c1717459198005`. T017 is complete. V088 Coupang API product source resolver is merged with manifest channel/target-channel guard, sanitized URL evidence binding, and V085 CLI env loading. Post-merge no-upload binders reached `ready_for_fresh_approval`; upload execution remains blocked until separate fresh owner approval. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD`
+- `V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
 - V084 private pilot invocation path is merged and does not authorize upload by itself.
-- V087 product source binding PR #197 is merged, but V087 and V085 no-upload binder commands must be rerun on main before any private pilot readiness claim.
-- Private pilot execution remains blocked until V087/V085 binder readiness is verified on main and a separate fresh owner approval plus readiness gate are present.
+- V088 Coupang API product source resolver PR #198 is merged and no-upload binders are ready for fresh approval.
+- Private pilot execution remains blocked until a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -547,4 +580,4 @@ Requirements:
 
 ## Next Exact Action
 
-- V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD. Run the V087 product source binder and V085 input binder on main as no-upload readiness checks. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
