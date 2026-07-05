@@ -328,8 +328,12 @@ describe("v082 real runtime private pilot adapter injection", () => {
 
     expect(task).toContain("### T012 - V082 Real Runtime Private Pilot Adapter Injection");
     expect(task).toMatch(/### T012 - V082 Real Runtime Private Pilot Adapter Injection[\s\S]*Status: `DONE`/);
-    expect(task).toContain("Current blocker: `V083_PRIVATE_UPLOAD_PILOT_EXECUTION_WAITING_FOR_FRESH_OWNER_APPROVAL`");
-    expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
+    expect(task).toMatch(
+      /Current blocker: `(V083_PRIVATE_UPLOAD_PILOT_EXECUTION_WAITING_FOR_FRESH_OWNER_APPROVAL|PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW)`/
+    );
+    expect(task).toMatch(
+      /PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED(_AFTER_MERGE)?/
+    );
     expect(task).toContain("SAFE_TO_UPLOAD=false");
     expect(task).toContain("SAFE_TO_PUBLIC_UPLOAD=false");
     expect(task).toContain("PUBLIC_UPLOAD=BLOCKED");

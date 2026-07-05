@@ -60,11 +60,11 @@ Product discovery
 - PR #193: V082 real runtime private pilot adapter injection, `MERGED`
 - PR #193 merge commit: `09065c44207526bbb29a1547cbedbbbd5b3d35e1`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `V083_PRIVATE_UPLOAD_PILOT_EXECUTION_WAITING_FOR_FRESH_OWNER_APPROVAL`
+- Current blocker: `PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
-- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE
 - PUBLIC_UPLOAD=BLOCKED
 - COMMENT_AUTOMATION=BLOCKED
 - SCHEDULER_EXECUTION=BLOCKED
@@ -331,6 +331,44 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T013 - V083 Real Private Upload Execution Adapter
+
+Status: `PR_OPEN`
+
+Goal: Add the server-only real private upload execution adapter wiring without executing a real upload.
+
+Requirements:
+
+- exact no-upload build approval phrase required: `APPROVE_BUILD_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD`
+- V081 private pilot gate must be ready
+- V082 runtime adapter readiness must be ready
+- token provider and upload scope readiness must be ready
+- video asset, upload package, duplicate guard, disclosure guard, affiliate evidence, and target channel evidence must be ready
+- visibility must be private
+- maxItems must be exactly 1
+- public and unlisted uploads remain blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- executable candidate can be built, but this PR always blocks real execution with `BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR`
+- no videos.insert call in this PR
+- no commentThreads.insert call in this PR
+- no public upload
+- no unlisted upload
+- no comment automation
+- no scheduler execution
+- no batch/daily upload
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw URL, full video ID, full channel ID, token, secret, client_secret, Authorization, or HMAC output
+- complete upload evidence requires youtubeVideoId, channelId, and uploadedAt before V076 sanitized evidence can be accepted
+- merge does not authorize execution; a new fresh owner approval is required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -374,15 +412,16 @@ Requirements:
 
 ## Current Blocker
 
-- `V083_PRIVATE_UPLOAD_PILOT_EXECUTION_WAITING_FOR_FRESH_OWNER_APPROVAL`
+- `PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
-- Private pilot execution remains blocked until a separate fresh owner approval plus readiness gate are present.
+- V083 real private upload execution adapter wiring is under review and does not execute upload in this PR.
+- Private pilot execution remains blocked until V083 is merged and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
 - Daily batch upload remains blocked.
 - `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
-- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE`
 - `PUBLIC_UPLOAD=BLOCKED`
 - `COMMENT_AUTOMATION=BLOCKED`
 - `SCHEDULER_EXECUTION=BLOCKED`
@@ -393,4 +432,4 @@ Requirements:
 
 ## Next Exact Action
 
-- `V083_PRIVATE_UPLOAD_PILOT_EXECUTION_WAITING_FOR_FRESH_OWNER_APPROVAL`. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review/merge V083 adapter, then require fresh approval for private 1-item execution. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present after merge. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
