@@ -58,9 +58,11 @@ Product discovery
 - PR #192: V081 controlled private upload pilot, `MERGED`
 - PR #192 merge commit: `98e08f6a697e5de76498ae5c04b79c050dad9a97`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`
+- Current blocker: `PR_OPEN_T012_V082_REAL_RUNTIME_PRIVATE_PILOT_ADAPTER_INJECTION_REVIEW`
 - `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
 - PUBLIC_UPLOAD=BLOCKED
 - COMMENT_AUTOMATION=BLOCKED
 - SCHEDULER_EXECUTION=BLOCKED
@@ -295,6 +297,38 @@ Requirements:
 - `SCHEDULER_EXECUTION=BLOCKED`
 - `SAFE_TO_UPLOAD=false`
 
+### T012 - V082 Real Runtime Private Pilot Adapter Injection
+
+Status: `PR_OPEN`
+
+Goal: Add a server-only V081 private pilot runtime adapter factory and readiness wrapper without executing a real upload.
+
+Requirements:
+
+- default V081 adapter remains blocked
+- V082 can create a server-only `real_candidate` adapter only when runtime readiness is complete
+- token readiness must come from sanitized token provider readiness/status, not from token file path configuration alone
+- missing/not-ready token provider readiness, missing upload scope, or unsafe/unreadable token evidence must fail closed
+- real candidate still blocks execution in this PR
+- no videos.insert call in V082
+- no commentThreads.insert call in V082
+- no public upload
+- no unlisted upload
+- no comment automation
+- no scheduler execution
+- no batch/daily upload
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw URL, full video ID, full channel ID, token, secret, Authorization, or HMAC output
+- previous private pilot approval is not reused
+- new fresh owner approval required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -332,16 +366,20 @@ Requirements:
 - 2026-07-05 KST: T011 started on `codex/v081-controlled-private-upload-pilot` from main `9b92a8b`. Work is a controlled one-item private upload pilot gate only; public upload, comment automation, scheduler execution, n8n webhook calls, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T011 V081 controlled private upload pilot committed at `b8dd86f` and opened as PR #192: https://github.com/mizzang0305-oss/commerce-automation/pull/192. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #192 P2 evidence guard fix merged. Main synced at `98e08f6a697e5de76498ae5c04b79c050dad9a97`. T011 is complete. The private pilot remains waiting for separate fresh owner approval and readiness; public upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: T012 V082 real runtime private pilot adapter injection opened on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 adds a server-only readiness wrapper and real-candidate adapter injection for V081, but real execution remains blocked in this PR. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: PR #193 P2 token readiness guard fix prepared on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 no longer derives `tokenReady` from token file env path configuration alone; sanitized token provider readiness/status is required, and missing/not-ready provider status, missing upload scope, or unsafe/unreadable token evidence fails closed. Upload execution was not run. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`
-- Controlled private upload pilot executor PR #192 is merged, but execution is blocked until separate fresh owner approval and readiness gates are present.
+- `PR_OPEN_T012_V082_REAL_RUNTIME_PRIVATE_PILOT_ADAPTER_INJECTION_REVIEW`
+- Controlled private upload pilot executor PR #192 is merged, and V082 is now in review to add a server-only real-candidate runtime adapter injection path without executing upload.
+- Private pilot execution remains blocked until V082 is merged and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
 - Daily batch upload remains blocked.
 - `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
 - `PUBLIC_UPLOAD=BLOCKED`
 - `COMMENT_AUTOMATION=BLOCKED`
 - `SCHEDULER_EXECUTION=BLOCKED`
@@ -352,4 +390,4 @@ Requirements:
 
 ## Next Exact Action
 
-- `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval and readiness gate are present. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- `PR_OPEN_T012_V082_REAL_RUNTIME_PRIVATE_PILOT_ADAPTER_INJECTION_REVIEW`. Review and merge V082 if checks remain clean. Do not execute private pilot upload until V082 is merged and a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload/comment/scheduler execution remains blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.

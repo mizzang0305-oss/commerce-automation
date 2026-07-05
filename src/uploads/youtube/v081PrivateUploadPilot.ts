@@ -36,7 +36,8 @@ export type V081PrivateUploadPilotBlocker =
   | "BLOCKED_V081_REAL_ADAPTER_DISABLED"
   | "BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE"
   | "BLOCKED_V081_UNSAFE_REPORT_REQUESTED"
-  | "BLOCKED_V081_MUTATION_ATTEMPT_OUTSIDE_APPROVED_PATH";
+  | "BLOCKED_V081_MUTATION_ATTEMPT_OUTSIDE_APPROVED_PATH"
+  | "BLOCKED_V082_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR";
 
 export type V081PrivateUploadPilotReadinessInput = {
   oauthReady: boolean;
@@ -101,7 +102,7 @@ export type V081RedactionProof = {
   fakeSuccess: false;
 };
 
-export type V081PrivateUploadPilotAdapterMode = "blocked" | "mock";
+export type V081PrivateUploadPilotAdapterMode = "blocked" | "mock" | "real_candidate";
 export type V081PrivateUploadPilotAdapterRequest = {
   uploadPackageId: string;
   queueItemId: string;
@@ -288,9 +289,10 @@ export async function executeV081PrivateUploadPilot(
 ): Promise<V081PrivateUploadPilotResult> {
   const adapter = options.adapter ?? createDefaultV081PrivateUploadPilotAdapter();
   const readiness = buildV081PrivateUploadPilotReadiness(request);
+  const executionReadiness = normalizeReadinessForInjectedAdapter(readiness, adapter.mode);
 
-  if (!readiness.videosInsertAllowedWithInjectedAdapter) {
-    return buildBlockedResult({ request, readiness, adapterMode: adapter.mode });
+  if (!executionReadiness.videosInsertAllowedWithInjectedAdapter) {
+    return buildBlockedResult({ request, readiness: executionReadiness, adapterMode: adapter.mode });
   }
 
   const adapterResult = await adapter.uploadPrivatePilot({
@@ -313,9 +315,9 @@ export async function executeV081PrivateUploadPilot(
     return buildBlockedResult({
       request,
       readiness: {
-        ...readiness,
+        ...executionReadiness,
         blockers: dedupe([
-          ...readiness.blockers,
+          ...executionReadiness.blockers,
           adapterBlocker
         ])
       },
@@ -357,6 +359,20 @@ export async function executeV081PrivateUploadPilot(
     },
     uploadResultStoreItem: storeItem,
     uploadResultStoreReport: storeReport
+  };
+}
+
+function normalizeReadinessForInjectedAdapter(
+  readiness: V081PrivateUploadPilotReadiness,
+  adapterMode: V081PrivateUploadPilotAdapterMode
+): V081PrivateUploadPilotReadiness {
+  if (adapterMode === "blocked") {
+    return readiness;
+  }
+
+  return {
+    ...readiness,
+    blockers: readiness.blockers.filter((blocker) => blocker !== "BLOCKED_V081_REAL_ADAPTER_DISABLED")
   };
 }
 
