@@ -62,7 +62,7 @@ Product discovery
 - PR #194: V083 real private upload execution adapter, `MERGED`
 - PR #194 merge commit: `709c5dc719044cf27c1c3d6a20fd683a163cb928`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW`
+- Current blocker: `V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -406,7 +406,7 @@ Requirements:
 
 ### T015 - V085 Private Pilot Input Binding Preflight
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Bind and verify the V084 private pilot runtime inputs without executing upload.
 
@@ -483,14 +483,15 @@ Requirements:
 - 2026-07-05 KST: T014 V084 private upload execution invocation path opened on `codex/v084-private-upload-execution-invocation-path`. V084 adds the command and server-only invocation contract for V083, but real upload execution remains blocked in this PR. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #195 P1/P2 review fixes pushed at `3e681ef5322b4ad6b5b87d008ddeb3d49d18b37c`. V084 pure planner no longer imports V083 core/adapter or V081 execute path; server-only wiring is isolated behind `import "server-only"`; package script test no longer calls `cmd.exe`. Validation passed and latest-head P1/P2 count is 0. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #195 squash merged. Main synced at `c8a770e1b711714b2c5dbbe724391daef446705b`. T014 is complete. Post-merge plan command is no-upload, and fresh-approval-missing execute check remains blocked before upload. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: PR #196 squash merged. Main synced at `e16cd0825eb6bcfdd135662857844b192e70991d`. T015 is complete. V085 adds the no-upload private pilot input binder and review hardening for video file evidence, channel package binding, and ambient approval stripping. `videos.insert`, `commentThreads.insert`, V084 execute, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW`
+- `V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
 - V084 private pilot invocation path is merged and does not authorize upload by itself.
-- Private pilot execution remains blocked until V085 input binding is reviewed/merged and a separate fresh owner approval plus readiness gate are present.
+- Private pilot execution remains blocked until V085 input binding is run on main and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -507,4 +508,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW. Do not execute private pilot upload until V085 input binding is merged and a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD. Run `npm run upload:v085:private-pilot:bind-inputs --silent` on main as a no-upload binder check. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
