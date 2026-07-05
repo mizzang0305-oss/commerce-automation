@@ -81,6 +81,7 @@ export type V088CoupangProductSourceResolverInput = {
 type ProductCandidate = {
   productName: string | null;
   rawCoupangUrl: string | null;
+  affiliateUrl: string | null;
 };
 
 const DEFAULT_MANIFEST_PATH = path.join(
@@ -137,6 +138,8 @@ export async function resolveV088CoupangProductSource(
           blockers.push("BLOCKED_V088_COUPANG_PRODUCT_CANDIDATE_NOT_FOUND");
         } else if (!productCandidate.rawCoupangUrl) {
           blockers.push("BLOCKED_V088_COUPANG_RAW_URL_MISSING");
+        } else if (productCandidate.affiliateUrl) {
+          affiliateUrl = productCandidate.affiliateUrl;
         }
       }
     } catch {
@@ -144,7 +147,7 @@ export async function resolveV088CoupangProductSource(
     }
   }
 
-  if (blockers.length === 0 && productCandidate?.rawCoupangUrl) {
+  if (blockers.length === 0 && productCandidate?.rawCoupangUrl && !affiliateUrl) {
     const deeplink = await requestCoupangDeeplinkAffiliateUrls({
       rawCoupangUrls: [productCandidate.rawCoupangUrl],
       env,
@@ -163,12 +166,16 @@ export async function resolveV088CoupangProductSource(
     }
   }
 
+  if (blockers.length === 0 && !isHttpsCoupangAffiliateUrl(affiliateUrl)) {
+    blockers.push("BLOCKED_V088_COUPANG_AFFILIATE_URL_MISSING");
+  }
+
   let localManifestWritten = false;
   if (blockers.length === 0 && existingManifest && productCandidate?.rawCoupangUrl && affiliateUrl) {
     try {
       await fs.writeFile(manifestPath, `${JSON.stringify({
         ...existingManifest,
-        productName: productCandidate.productName || productQuery,
+        productName: productQuery,
         rawCoupangUrl: productCandidate.rawCoupangUrl,
         selectedAffiliateUrl: affiliateUrl
       }, null, 2)}\n`, "utf8");
@@ -258,6 +265,8 @@ function normalizeProductCandidate(record: Record<string, unknown>): ProductCand
     "name"
   ]));
   const rawCoupangUrl = trimOrNull(readField(record, [
+    "rawCoupangUrl",
+    "raw_coupang_url",
     "productUrl",
     "product_url",
     "landingUrl",
@@ -266,7 +275,34 @@ function normalizeProductCandidate(record: Record<string, unknown>): ProductCand
     "original_url",
     "url"
   ]));
-  return { productName, rawCoupangUrl };
+  const affiliateUrl = trimOrNull(readField(record, [
+    "selectedAffiliateUrl",
+    "selected_affiliate_url",
+    "affiliateUrl",
+    "affiliate_url",
+    "deeplinkUrl",
+    "deeplink_url",
+    "shortenUrl",
+    "shorten_url",
+    "productUrl",
+    "product_url",
+    "landingUrl",
+    "landing_url"
+  ]));
+  return normalizeCandidateUrls({ productName, rawCoupangUrl, affiliateUrl });
+}
+
+function normalizeCandidateUrls(candidate: ProductCandidate): ProductCandidate {
+  const affiliateUrl = isHttpsCoupangAffiliateUrl(candidate.affiliateUrl) ? candidate.affiliateUrl : null;
+  const rawCoupangUrl = isRawCoupangProductUrl(candidate.rawCoupangUrl)
+    ? candidate.rawCoupangUrl
+    : materializeRawCoupangUrlFromAffiliate(affiliateUrl);
+
+  return {
+    productName: candidate.productName,
+    rawCoupangUrl,
+    affiliateUrl
+  };
 }
 
 function readField(record: Record<string, unknown> | null, keys: string[]) {
@@ -314,6 +350,42 @@ function isHttpsCoupangUrl(value: string | null | undefined) {
   } catch {
     return false;
   }
+}
+
+function isRawCoupangProductUrl(value: string | null | undefined) {
+  if (!isHttpsCoupangUrl(value)) return false;
+  try {
+    const url = new URL(value!);
+    return url.hostname !== "link.coupang.com" && url.pathname.includes("/vp/products/");
+  } catch {
+    return false;
+  }
+}
+
+function isHttpsCoupangAffiliateUrl(value: string | null | undefined) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname === "link.coupang.com" &&
+      !url.hostname.includes("example");
+  } catch {
+    return false;
+  }
+}
+
+function materializeRawCoupangUrlFromAffiliate(value: string | null) {
+  if (!isHttpsCoupangAffiliateUrl(value)) return null;
+  const url = new URL(value!);
+  const pageKey = url.searchParams.get("pageKey");
+  if (!pageKey || !/^\d+$/.test(pageKey)) return null;
+
+  const raw = new URL(`https://www.coupang.com/vp/products/${pageKey}`);
+  for (const key of ["itemId", "vendorItemId"]) {
+    const param = url.searchParams.get(key);
+    if (param && /^\d+$/.test(param)) raw.searchParams.set(key, param);
+  }
+  return raw.toString();
 }
 
 function hashPrefix(value: string | null | undefined) {

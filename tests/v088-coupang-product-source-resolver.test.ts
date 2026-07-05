@@ -94,6 +94,49 @@ describe("v088 Coupang product source resolver", () => {
     }
   });
 
+  test("uses live Partners productUrl as affiliate evidence and derives raw product URL from pageKey", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd);
+      const partnersProductUrl = [
+        "https://link.coupang.com",
+        "re",
+        "AFFSDP?lptag=AF0000000&pageKey=111222333&itemId=444555&vendorItemId=666777"
+      ].join("/");
+      const result = await resolveV088CoupangProductSource({
+        cwd,
+        env: readyEnv(manifestPath),
+        fetchImpl: mockFetch({
+          searchPayload: {
+            data: {
+              productData: [
+                {
+                  productName: PRODUCT_NAME,
+                  productUrl: partnersProductUrl
+                }
+              ]
+            }
+          },
+          deeplinkOk: false
+        })
+      });
+
+      expect(result.status).toBe("bound");
+      expect(result.productSearchApiCalled).toBe(true);
+      expect(result.deeplinkApiCalled).toBe(false);
+      expect(result.rawCoupangUrlPresent).toBe(true);
+      expect(result.affiliateUrlPresent).toBe(true);
+      expect(result.localManifestWritten).toBe(true);
+      expect(JSON.stringify(result)).not.toContain(partnersProductUrl);
+
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      expect(manifest.rawCoupangUrl).toContain("https://www.coupang.com/vp/products/111222333");
+      expect(manifest.selectedAffiliateUrl).toBe(partnersProductUrl);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("blocks when the product search response has no usable Coupang candidate", async () => {
     const cwd = await makeCwd();
     try {
