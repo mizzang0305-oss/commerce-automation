@@ -62,7 +62,7 @@ Product discovery
 - PR #194: V083 real private upload execution adapter, `MERGED`
 - PR #194 merge commit: `709c5dc719044cf27c1c3d6a20fd683a163cb928`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
+- Current blocker: `PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -404,6 +404,41 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T015 - V085 Private Pilot Input Binding Preflight
+
+Status: `PR_OPEN`
+
+Goal: Bind and verify the V084 private pilot runtime inputs without executing upload.
+
+Requirements:
+
+- resolve exactly one private pilot queue item candidate
+- resolve its upload package identifier
+- derive `V084_RUNTIME_READY` from readiness evidence, not manual assertion
+- verify video asset evidence
+- verify affiliate evidence
+- verify Coupang Partners disclosure evidence
+- verify duplicate guard evidence
+- verify target channel evidence
+- verify token provider and upload scope evidence
+- call V084 plan only
+- do not call V084 execute
+- no videos.insert call
+- no commentThreads.insert call
+- no public or unlisted upload
+- no comment automation
+- no scheduler execution
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw URL, full video ID, full channel ID, token, secret, client_secret, Authorization, or HMAC output
+- if ready, report only `ready_for_fresh_approval`
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -451,11 +486,11 @@ Requirements:
 
 ## Current Blocker
 
-- `V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
+- `PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
 - V084 private pilot invocation path is merged and does not authorize upload by itself.
-- Private pilot execution remains blocked until a separate fresh owner approval plus readiness gate are present.
+- Private pilot execution remains blocked until V085 input binding is reviewed/merged and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -472,4 +507,4 @@ Requirements:
 
 ## Next Exact Action
 
-- V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW. Do not execute private pilot upload until V085 input binding is merged and a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
