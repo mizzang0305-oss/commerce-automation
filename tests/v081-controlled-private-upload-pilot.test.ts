@@ -7,6 +7,8 @@ import {
   MockV081PrivateUploadPilotAdapter,
   buildV081PrivateUploadPilotReadiness,
   executeV081PrivateUploadPilot,
+  type V081PrivateUploadPilotAdapter,
+  type V081PrivateUploadPilotAdapterResult,
   type V081PrivateUploadPilotBlocker,
   type V081PrivateUploadPilotRequest
 } from "../src/uploads/youtube/v081PrivateUploadPilot";
@@ -185,6 +187,29 @@ describe("v081 controlled private upload pilot", () => {
     });
   });
 
+  test.each([
+    ["youtubeVideoId missing", { youtubeVideoId: null, channelId: FULL_CHANNEL_ID, uploadedAt: "2026-07-05T00:00:00.000Z" }],
+    ["channelId missing", { youtubeVideoId: FULL_VIDEO_ID, channelId: null, uploadedAt: "2026-07-05T00:00:00.000Z" }],
+    ["uploadedAt missing", { youtubeVideoId: FULL_VIDEO_ID, channelId: FULL_CHANNEL_ID, uploadedAt: null }],
+    ["all upload evidence missing", { youtubeVideoId: null, channelId: null, uploadedAt: null }]
+  ])("blocks when adapter reports videos.insert but %s", async (_label, adapterEvidence) => {
+    const result = await executeV081PrivateUploadPilot(makeRequest(), {
+      adapter: new IncompleteEvidenceV081Adapter(adapterEvidence)
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.status).not.toBe("private_upload_completed");
+    expect(result.videosInsertCalled).toBe(true);
+    expect(result.videosInsertTotalCount).toBe(1);
+    expect(result.blockers).toContain("BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE");
+    expect(result.uploadResultEvidence.present).toBe(false);
+    expect(result.uploadResultStoreItem).toBeNull();
+    expect(result.uploadResultStoreReport).toBeNull();
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(result.fake_success).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
   test("does not expose raw URLs, full IDs, secrets, tokens, or fake success in reports", async () => {
     const result = await executeV081PrivateUploadPilot(makeRequest(), {
       adapter: new MockV081PrivateUploadPilotAdapter({
@@ -251,4 +276,33 @@ function makeRequest(overrides: Partial<V081PrivateUploadPilotRequest> = {}): V0
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+class IncompleteEvidenceV081Adapter implements V081PrivateUploadPilotAdapter {
+  readonly mode = "mock" as const;
+
+  constructor(
+    private readonly evidence: Pick<
+      V081PrivateUploadPilotAdapterResult,
+      "youtubeVideoId" | "channelId" | "uploadedAt"
+    >
+  ) {}
+
+  async uploadPrivatePilot(): Promise<V081PrivateUploadPilotAdapterResult> {
+    return {
+      status: "MOCK_ONLY",
+      blocker: null,
+      youtubeVideoId: this.evidence.youtubeVideoId,
+      channelId: this.evidence.channelId,
+      uploadedAt: this.evidence.uploadedAt,
+      videosInsertCalled: true,
+      videosInsertTotalCount: 1,
+      commentThreadsInsertCalled: false,
+      fakeSuccess: false,
+      rawUrlsPrinted: false,
+      rawVideoIdsPrinted: false,
+      rawChannelIdsPrinted: false,
+      secretsPrinted: false
+    };
+  }
 }

@@ -84,6 +84,7 @@ V081 blocks:
 - missing metadata readiness
 - missing quota readiness
 - real adapter disabled
+- incomplete adapter upload evidence after `videosInsertCalled=true`
 - unsafe report requests
 - mutation attempts outside the approved private pilot path
 
@@ -92,6 +93,18 @@ V081 blocks:
 The default adapter is blocked and never calls `videos.insert`.
 
 The mock adapter is test-only and can return `videosInsertCalled=true` only when V081 gates pass.
+
+`videosInsertCalled=true` is not enough for `private_upload_completed`.
+
+Completion also requires complete adapter upload evidence:
+
+- `youtubeVideoId`
+- `channelId`
+- `uploadedAt`
+
+If any of those values are missing or blank, V081 returns `blocked` with
+`BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE`, does not create V076
+upload result store evidence, and keeps `fakeSuccess=false`.
 
 A future real adapter must be injected explicitly and must remain behind the same gates:
 
@@ -105,6 +118,7 @@ A future real adapter must be injected explicitly and must remain behind the sam
 - upload package present
 - affiliate/disclosure evidence present
 - duplicate guard present
+- complete adapter upload evidence present
 
 ## Upload Result Store Integration
 

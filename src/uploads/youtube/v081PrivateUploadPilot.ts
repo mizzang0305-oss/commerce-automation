@@ -34,6 +34,7 @@ export type V081PrivateUploadPilotBlocker =
   | "BLOCKED_V081_METADATA_NOT_READY"
   | "BLOCKED_V081_YOUTUBE_QUOTA_NOT_READY"
   | "BLOCKED_V081_REAL_ADAPTER_DISABLED"
+  | "BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE"
   | "BLOCKED_V081_UNSAFE_REPORT_REQUESTED"
   | "BLOCKED_V081_MUTATION_ATTEMPT_OUTSIDE_APPROVED_PATH";
 
@@ -316,6 +317,21 @@ export async function executeV081PrivateUploadPilot(
     });
   }
 
+  if (!hasCompleteAdapterUploadEvidence(adapterResult)) {
+    return buildBlockedResult({
+      request,
+      readiness: {
+        ...readiness,
+        blockers: dedupe([
+          ...readiness.blockers,
+          "BLOCKED_V081_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE"
+        ])
+      },
+      adapterMode: adapter.mode,
+      adapterResult
+    });
+  }
+
   const storeItem = buildV076UploadResultStoreItem({
     uploadResultId: `v081-${request.uploadPackageId}`,
     uploadPackageId: request.uploadPackageId,
@@ -356,12 +372,16 @@ function buildBlockedResult(input: {
   request: V081PrivateUploadPilotRequest;
   readiness: Pick<V081PrivateUploadPilotReadiness, "approvalAccepted" | "blockers">;
   adapterMode: V081PrivateUploadPilotAdapterMode;
+  adapterResult?: Pick<
+    V081PrivateUploadPilotAdapterResult,
+    "videosInsertCalled" | "videosInsertTotalCount"
+  >;
 }): V081PrivateUploadPilotResult {
   return {
     ...buildBaseResult(input),
     status: "blocked",
-    videosInsertCalled: false,
-    videosInsertTotalCount: 0,
+    videosInsertCalled: input.adapterResult?.videosInsertCalled ?? false,
+    videosInsertTotalCount: input.adapterResult?.videosInsertTotalCount ?? 0,
     uploadResultEvidence: {
       present: false,
       youtubeVideoIdHashPrefix: null,
@@ -487,6 +507,16 @@ function isApprovalAccepted(approvalPhrase: string | null | undefined) {
   return approvalPhrase === APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT;
 }
 
+function hasCompleteAdapterUploadEvidence(
+  adapterResult: V081PrivateUploadPilotAdapterResult
+) {
+  return Boolean(
+    trimOrNull(adapterResult.youtubeVideoId) &&
+    trimOrNull(adapterResult.channelId) &&
+    trimOrNull(adapterResult.uploadedAt)
+  );
+}
+
 function buildRedactionProof(): V081RedactionProof {
   return {
     rawUrlsPrinted: false,
@@ -499,4 +529,9 @@ function buildRedactionProof(): V081RedactionProof {
 
 function dedupe<T>(values: T[]) {
   return [...new Set(values)];
+}
+
+function trimOrNull(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return normalized ? normalized : null;
 }
