@@ -307,6 +307,8 @@ Requirements:
 
 - default V081 adapter remains blocked
 - V082 can create a server-only `real_candidate` adapter only when runtime readiness is complete
+- token readiness must come from sanitized token provider readiness/status, not from token file path configuration alone
+- missing/not-ready token provider readiness, missing upload scope, or unsafe/unreadable token evidence must fail closed
 - real candidate still blocks execution in this PR
 - no videos.insert call in V082
 - no commentThreads.insert call in V082
@@ -365,6 +367,7 @@ Requirements:
 - 2026-07-05 KST: T011 V081 controlled private upload pilot committed at `b8dd86f` and opened as PR #192: https://github.com/mizzang0305-oss/commerce-automation/pull/192. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #192 P2 evidence guard fix merged. Main synced at `98e08f6a697e5de76498ae5c04b79c050dad9a97`. T011 is complete. The private pilot remains waiting for separate fresh owner approval and readiness; public upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: T012 V082 real runtime private pilot adapter injection opened on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 adds a server-only readiness wrapper and real-candidate adapter injection for V081, but real execution remains blocked in this PR. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: PR #193 P2 token readiness guard fix prepared on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 no longer derives `tokenReady` from token file env path configuration alone; sanitized token provider readiness/status is required, and missing/not-ready provider status, missing upload scope, or unsafe/unreadable token evidence fails closed. Upload execution was not run. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 

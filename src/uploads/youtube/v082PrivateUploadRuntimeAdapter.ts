@@ -6,9 +6,14 @@ import {
   type V081PrivateUploadPilotAdapterResult
 } from "./v081PrivateUploadPilot";
 import {
+  buildYouTubeExecuteTokenProviderReadiness,
+  type YouTubeExecuteTokenProviderReadiness
+} from "@/lib/uploads/youtube/youtubeTokenProviderContract";
+import {
   buildV082PrivateUploadRuntimeAdapterReadiness,
   type V082PrivateUploadRuntimeAdapterReadiness,
   type V082PrivateUploadRuntimeAdapterReadinessInput,
+  type V082PrivateUploadTokenProviderReadiness,
   type V082PrivateUploadRuntimeVisibility
 } from "./v082PrivateUploadRuntimeReadiness";
 
@@ -35,6 +40,7 @@ export type V082PrivateUploadRuntimeAdapterFactoryOptions = {
 export type V082PrivateUploadRuntimeAdapterFactoryEnvOptions = {
   env?: NodeJS.ProcessEnv;
   serverOnlyContext?: boolean;
+  tokenProviderReadiness?: V082PrivateUploadTokenProviderReadiness | YouTubeExecuteTokenProviderReadiness | null;
   videoAssetResolverConfigured?: boolean;
   uploadPackageResolverConfigured?: boolean;
   duplicateGuardConfigured?: boolean;
@@ -84,11 +90,12 @@ export function createV082PrivateUploadRuntimeAdapterFactoryFromEnv(
 ): V082PrivateUploadRuntimeAdapterFactory {
   const env = options.env ?? process.env;
   const tokenFileConfigured = TOKEN_FILE_ENVS.some((key) => Boolean(trimOrNull(env[key])));
+  const tokenProviderReadiness = resolveTokenProviderReadiness(options, env);
   const readiness = buildV082PrivateUploadRuntimeAdapterReadiness({
     serverOnlyContext: options.serverOnlyContext ?? isServerOnlyContext(),
     oauthConfigured: Boolean(trimOrNull(env.YOUTUBE_CLIENT_ID) && trimOrNull(env.YOUTUBE_CLIENT_SECRET)),
     tokenProviderConfigured: Boolean(trimOrNull(env.YOUTUBE_TOKEN_PROVIDER_MODE) || tokenFileConfigured),
-    tokenReady: tokenFileConfigured,
+    tokenProviderReadiness,
     videoAssetResolverConfigured: options.videoAssetResolverConfigured ?? false,
     uploadPackageResolverConfigured: options.uploadPackageResolverConfigured ?? false,
     duplicateGuardConfigured: options.duplicateGuardConfigured ?? false,
@@ -127,6 +134,55 @@ function buildFactoryResult(input: {
 
 function isServerOnlyContext() {
   return typeof window === "undefined";
+}
+
+function resolveTokenProviderReadiness(
+  options: V082PrivateUploadRuntimeAdapterFactoryEnvOptions,
+  env: NodeJS.ProcessEnv
+): V082PrivateUploadTokenProviderReadiness | null {
+  if (Object.prototype.hasOwnProperty.call(options, "tokenProviderReadiness")) {
+    return normalizeTokenProviderReadiness(options.tokenProviderReadiness ?? null);
+  }
+
+  return mapExecuteTokenProviderReadiness(buildYouTubeExecuteTokenProviderReadiness(env));
+}
+
+function normalizeTokenProviderReadiness(
+  readiness: V082PrivateUploadRuntimeAdapterFactoryEnvOptions["tokenProviderReadiness"]
+): V082PrivateUploadTokenProviderReadiness | null {
+  if (!readiness) {
+    return null;
+  }
+
+  if ("can_provide_upload_token" in readiness) {
+    return mapExecuteTokenProviderReadiness(readiness);
+  }
+
+  return {
+    providerReady: Boolean(readiness.providerReady),
+    tokenReady: Boolean(readiness.tokenReady),
+    uploadScopeReady: Boolean(readiness.uploadScopeReady),
+    tokenFileSafeAndReadable: Boolean(readiness.tokenFileSafeAndReadable)
+  };
+}
+
+function mapExecuteTokenProviderReadiness(
+  readiness: YouTubeExecuteTokenProviderReadiness
+): V082PrivateUploadTokenProviderReadiness {
+  const blockers = new Set(readiness.blockers);
+  const tokenFileUnsafeOrUnreadable = [
+    "token_file_path_missing",
+    "token_file_missing",
+    "token_file_unreadable",
+    "token_file_inside_repo"
+  ].some((blocker) => blockers.has(blocker));
+
+  return {
+    providerReady: readiness.can_provide_upload_token,
+    tokenReady: readiness.can_provide_upload_token,
+    uploadScopeReady: readiness.can_provide_upload_token && !blockers.has("scopes_not_ready"),
+    tokenFileSafeAndReadable: !tokenFileUnsafeOrUnreadable
+  };
 }
 
 function trimOrNull(value: string | undefined) {

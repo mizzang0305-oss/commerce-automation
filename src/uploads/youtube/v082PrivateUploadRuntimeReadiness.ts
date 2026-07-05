@@ -4,7 +4,11 @@ export type V082PrivateUploadRuntimeBlocker =
   | "BLOCKED_V082_SERVER_ONLY_CONTEXT_REQUIRED"
   | "BLOCKED_V082_YOUTUBE_OAUTH_NOT_CONFIGURED"
   | "BLOCKED_V082_TOKEN_PROVIDER_NOT_CONFIGURED"
+  | "BLOCKED_V082_TOKEN_READINESS_PROVIDER_STATUS_REQUIRED"
+  | "BLOCKED_V082_TOKEN_PROVIDER_NOT_READY"
   | "BLOCKED_V082_TOKEN_NOT_READY"
+  | "BLOCKED_V082_TOKEN_UPLOAD_SCOPE_NOT_READY"
+  | "BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE"
   | "BLOCKED_V082_VIDEO_ASSET_RESOLVER_NOT_CONFIGURED"
   | "BLOCKED_V082_UPLOAD_PACKAGE_RESOLVER_NOT_CONFIGURED"
   | "BLOCKED_V082_DUPLICATE_GUARD_NOT_CONFIGURED"
@@ -16,10 +20,22 @@ export type V082PrivateUploadRuntimeBlocker =
   | "BLOCKED_V082_SCHEDULER_EXECUTION_NOT_ALLOWED"
   | "BLOCKED_V082_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR";
 
+export type V082PrivateUploadTokenProviderReadiness = {
+  providerReady: boolean;
+  tokenReady: boolean;
+  uploadScopeReady: boolean;
+  tokenFileSafeAndReadable: boolean;
+};
+
 export type V082PrivateUploadRuntimeAdapterReadinessInput = {
   serverOnlyContext?: boolean;
   oauthConfigured?: boolean;
   tokenProviderConfigured?: boolean;
+  tokenProviderReadiness?: V082PrivateUploadTokenProviderReadiness | null;
+  /**
+   * Legacy direct token flag. V082 ignores this for completion decisions; token readiness
+   * must come from tokenProviderReadiness so env paths cannot become implicit approval.
+   */
   tokenReady?: boolean;
   videoAssetResolverConfigured?: boolean;
   uploadPackageResolverConfigured?: boolean;
@@ -35,7 +51,11 @@ export type V082PrivateUploadRuntimeAdapterReadinessInput = {
 export type V082PrivateUploadRuntimeAdapterEvidence = {
   oauthConfigured: boolean;
   tokenProviderConfigured: boolean;
+  tokenReadinessProviderStatusPresent: boolean;
+  tokenProviderReady: boolean;
   tokenReady: boolean;
+  uploadScopeReady: boolean;
+  tokenFileSafeAndReadable: boolean;
   videoAssetResolverConfigured: boolean;
   uploadPackageResolverConfigured: boolean;
   duplicateGuardConfigured: boolean;
@@ -137,7 +157,11 @@ export function buildV082PrivateUploadRuntimeAdapterReadiness(
   const evidence = {
     oauthConfigured: normalized.oauthConfigured,
     tokenProviderConfigured: normalized.tokenProviderConfigured,
+    tokenReadinessProviderStatusPresent: normalized.tokenReadinessProviderStatusPresent,
+    tokenProviderReady: normalized.tokenProviderReady,
     tokenReady: normalized.tokenReady,
+    uploadScopeReady: normalized.uploadScopeReady,
+    tokenFileSafeAndReadable: normalized.tokenFileSafeAndReadable,
     videoAssetResolverConfigured: normalized.videoAssetResolverConfigured,
     uploadPackageResolverConfigured: normalized.uploadPackageResolverConfigured,
     duplicateGuardConfigured: normalized.duplicateGuardConfigured,
@@ -232,11 +256,18 @@ export function buildV082PrivateUploadRuntimeReadinessReport(
 }
 
 function normalizeInput(input: V082PrivateUploadRuntimeAdapterReadinessInput) {
+  const tokenProviderReadiness = input.tokenProviderReadiness ?? null;
+  const tokenReadinessProviderStatusPresent = tokenProviderReadiness !== null;
+
   return {
     serverOnlyContext: input.serverOnlyContext ?? true,
     oauthConfigured: input.oauthConfigured ?? false,
     tokenProviderConfigured: input.tokenProviderConfigured ?? false,
-    tokenReady: input.tokenReady ?? false,
+    tokenReadinessProviderStatusPresent,
+    tokenProviderReady: tokenProviderReadiness?.providerReady ?? false,
+    tokenReady: tokenProviderReadiness?.tokenReady ?? false,
+    uploadScopeReady: tokenProviderReadiness?.uploadScopeReady ?? false,
+    tokenFileSafeAndReadable: tokenProviderReadiness?.tokenFileSafeAndReadable ?? false,
     videoAssetResolverConfigured: input.videoAssetResolverConfigured ?? false,
     uploadPackageResolverConfigured: input.uploadPackageResolverConfigured ?? false,
     duplicateGuardConfigured: input.duplicateGuardConfigured ?? false,
@@ -263,8 +294,20 @@ function buildBlockers(
   if (!input.tokenProviderConfigured) {
     blockers.push("BLOCKED_V082_TOKEN_PROVIDER_NOT_CONFIGURED");
   }
+  if (!input.tokenReadinessProviderStatusPresent) {
+    blockers.push("BLOCKED_V082_TOKEN_READINESS_PROVIDER_STATUS_REQUIRED");
+  }
+  if (input.tokenReadinessProviderStatusPresent && !input.tokenProviderReady) {
+    blockers.push("BLOCKED_V082_TOKEN_PROVIDER_NOT_READY");
+  }
   if (!input.tokenReady) {
     blockers.push("BLOCKED_V082_TOKEN_NOT_READY");
+  }
+  if (input.tokenReadinessProviderStatusPresent && !input.uploadScopeReady) {
+    blockers.push("BLOCKED_V082_TOKEN_UPLOAD_SCOPE_NOT_READY");
+  }
+  if (input.tokenReadinessProviderStatusPresent && !input.tokenFileSafeAndReadable) {
+    blockers.push("BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE");
   }
   if (!input.videoAssetResolverConfigured) {
     blockers.push("BLOCKED_V082_VIDEO_ASSET_RESOLVER_NOT_CONFIGURED");

@@ -9,7 +9,8 @@ import {
 import {
   buildV082PrivateUploadRuntimeAdapterReadiness,
   buildV082PrivateUploadRuntimeReadinessReport,
-  type V082PrivateUploadRuntimeAdapterReadinessInput
+  type V082PrivateUploadRuntimeAdapterReadinessInput,
+  type V082PrivateUploadTokenProviderReadiness
 } from "../src/uploads/youtube/v082PrivateUploadRuntimeReadiness";
 import {
   createV082PrivateUploadRuntimeAdapterFactory,
@@ -54,6 +55,7 @@ describe("v082 real runtime private pilot adapter injection", () => {
     expect(factory.readiness.blockers).toEqual(expect.arrayContaining([
       "BLOCKED_V082_YOUTUBE_OAUTH_NOT_CONFIGURED",
       "BLOCKED_V082_TOKEN_PROVIDER_NOT_CONFIGURED",
+      "BLOCKED_V082_TOKEN_READINESS_PROVIDER_STATUS_REQUIRED",
       "BLOCKED_V082_TOKEN_NOT_READY",
       "BLOCKED_V082_VIDEO_ASSET_RESOLVER_NOT_CONFIGURED",
       "BLOCKED_V082_UPLOAD_PACKAGE_RESOLVER_NOT_CONFIGURED",
@@ -70,7 +72,6 @@ describe("v082 real runtime private pilot adapter injection", () => {
     ["serverOnlyContext", false, "BLOCKED_V082_SERVER_ONLY_CONTEXT_REQUIRED"],
     ["oauthConfigured", false, "BLOCKED_V082_YOUTUBE_OAUTH_NOT_CONFIGURED"],
     ["tokenProviderConfigured", false, "BLOCKED_V082_TOKEN_PROVIDER_NOT_CONFIGURED"],
-    ["tokenReady", false, "BLOCKED_V082_TOKEN_NOT_READY"],
     ["videoAssetResolverConfigured", false, "BLOCKED_V082_VIDEO_ASSET_RESOLVER_NOT_CONFIGURED"],
     ["uploadPackageResolverConfigured", false, "BLOCKED_V082_UPLOAD_PACKAGE_RESOLVER_NOT_CONFIGURED"],
     ["duplicateGuardConfigured", false, "BLOCKED_V082_DUPLICATE_GUARD_NOT_CONFIGURED"],
@@ -85,6 +86,103 @@ describe("v082 real runtime private pilot adapter injection", () => {
     expect(readiness.adapterMode).toBe("blocked");
     expect(readiness.blockers).toContain(blocker);
     expect(readiness.canCallVideosInsert).toBe(false);
+  });
+
+  test("blocks when token file env exists but provider readiness status is missing", () => {
+    const factory = createV082PrivateUploadRuntimeAdapterFactoryFromEnv({
+      env: {
+        YOUTUBE_CLIENT_ID: "client-id-that-must-not-leak",
+        YOUTUBE_CLIENT_SECRET: "client-secret-that-must-not-leak",
+        YOUTUBE_LOCAL_TOKEN_FILE_PATH: "C:/outside/token.json",
+        YOUTUBE_TOKEN_PROVIDER_MODE: "local_file"
+      } as NodeJS.ProcessEnv,
+      tokenProviderReadiness: null,
+      videoAssetResolverConfigured: true,
+      uploadPackageResolverConfigured: true,
+      duplicateGuardConfigured: true,
+      disclosureGuardConfigured: true
+    });
+    const serialized = JSON.stringify(factory.readiness);
+
+    expect(factory.readiness.ready).toBe(false);
+    expect(factory.readiness.adapterMode).toBe("blocked");
+    expect(factory.readiness.evidence.tokenProviderConfigured).toBe(true);
+    expect(factory.readiness.evidence.tokenReadinessProviderStatusPresent).toBe(false);
+    expect(factory.readiness.evidence.tokenReady).toBe(false);
+    expect(factory.readiness.blockers).toEqual(expect.arrayContaining([
+      "BLOCKED_V082_TOKEN_READINESS_PROVIDER_STATUS_REQUIRED",
+      "BLOCKED_V082_TOKEN_NOT_READY"
+    ]));
+    expect(factory.adapter.mode).toBe("blocked");
+    expect(serialized).not.toMatch(/client-id-that-must-not-leak|client-secret-that-must-not-leak|outside\/token|outside\\token/i);
+  });
+
+  test("does not derive tokenReady from token file env path alone", () => {
+    const factory = createV082PrivateUploadRuntimeAdapterFactoryFromEnv({
+      env: {
+        YOUTUBE_CLIENT_ID: "client-id-that-must-not-leak",
+        YOUTUBE_CLIENT_SECRET: "client-secret-that-must-not-leak",
+        YOUTUBE_LOCAL_TOKEN_FILE_PATH: "C:/definitely-missing/token.json",
+        YOUTUBE_TOKEN_PROVIDER_MODE: "local_file"
+      } as NodeJS.ProcessEnv,
+      videoAssetResolverConfigured: true,
+      uploadPackageResolverConfigured: true,
+      duplicateGuardConfigured: true,
+      disclosureGuardConfigured: true
+    });
+
+    expect(factory.readiness.ready).toBe(false);
+    expect(factory.readiness.adapterMode).toBe("blocked");
+    expect(factory.readiness.evidence.tokenProviderConfigured).toBe(true);
+    expect(factory.readiness.evidence.tokenReadinessProviderStatusPresent).toBe(true);
+    expect(factory.readiness.evidence.tokenReady).toBe(false);
+    expect(factory.readiness.evidence.tokenFileSafeAndReadable).toBe(false);
+    expect(factory.readiness.blockers).toEqual(expect.arrayContaining([
+      "BLOCKED_V082_TOKEN_PROVIDER_NOT_READY",
+      "BLOCKED_V082_TOKEN_NOT_READY",
+      "BLOCKED_V082_TOKEN_UPLOAD_SCOPE_NOT_READY",
+      "BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE"
+    ]));
+    expect(factory.adapter.mode).toBe("blocked");
+  });
+
+  test.each([
+    [
+      "provider not ready",
+      { providerReady: false },
+      "BLOCKED_V082_TOKEN_PROVIDER_NOT_READY"
+    ],
+    [
+      "token file missing",
+      { providerReady: false, tokenReady: false, uploadScopeReady: false, tokenFileSafeAndReadable: false },
+      "BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE"
+    ],
+    [
+      "token file unreadable",
+      { providerReady: false, tokenReady: false, uploadScopeReady: false, tokenFileSafeAndReadable: false },
+      "BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE"
+    ],
+    [
+      "token file inside repo",
+      { providerReady: false, tokenReady: false, uploadScopeReady: false, tokenFileSafeAndReadable: false },
+      "BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE"
+    ],
+    [
+      "upload scope missing",
+      { providerReady: false, tokenReady: true, uploadScopeReady: false, tokenFileSafeAndReadable: true },
+      "BLOCKED_V082_TOKEN_UPLOAD_SCOPE_NOT_READY"
+    ]
+  ] as const)("blocks when token provider readiness reports %s", (_label, tokenReadinessOverride, blocker) => {
+    const readiness = buildV082PrivateUploadRuntimeAdapterReadiness({
+      ...readyInput({
+        tokenProviderReadiness: tokenProviderReadiness(tokenReadinessOverride)
+      })
+    });
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.adapterMode).toBe("blocked");
+    expect(readiness.canCallVideosInsert).toBe(false);
+    expect(readiness.blockers).toContain(blocker);
   });
 
   test.each([
@@ -171,7 +269,7 @@ describe("v082 real runtime private pilot adapter injection", () => {
     expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
-  test("env factory uses configured booleans only and never exposes raw env values", () => {
+  test("env factory requires provider-status token readiness and never exposes raw env values", () => {
     const factory = createV082PrivateUploadRuntimeAdapterFactoryFromEnv({
       env: {
         YOUTUBE_CLIENT_ID: "client-id-that-must-not-leak",
@@ -179,6 +277,7 @@ describe("v082 real runtime private pilot adapter injection", () => {
         YOUTUBE_LOCAL_TOKEN_FILE_PATH: "C:/outside/token.json",
         YOUTUBE_TOKEN_PROVIDER_MODE: "local_file"
       } as NodeJS.ProcessEnv,
+      tokenProviderReadiness: tokenProviderReadiness(),
       videoAssetResolverConfigured: true,
       uploadPackageResolverConfigured: true,
       duplicateGuardConfigured: true,
@@ -189,7 +288,11 @@ describe("v082 real runtime private pilot adapter injection", () => {
     expect(factory.readiness.evidence).toMatchObject({
       oauthConfigured: true,
       tokenProviderConfigured: true,
+      tokenReadinessProviderStatusPresent: true,
+      tokenProviderReady: true,
       tokenReady: true,
+      uploadScopeReady: true,
+      tokenFileSafeAndReadable: true,
       videoAssetResolverConfigured: true,
       uploadPackageResolverConfigured: true,
       duplicateGuardConfigured: true,
@@ -251,7 +354,7 @@ function readyInput(
     serverOnlyContext: true,
     oauthConfigured: true,
     tokenProviderConfigured: true,
-    tokenReady: true,
+    tokenProviderReadiness: tokenProviderReadiness(),
     videoAssetResolverConfigured: true,
     uploadPackageResolverConfigured: true,
     duplicateGuardConfigured: true,
@@ -261,6 +364,18 @@ function readyInput(
     schedulerExecutionRequested: false,
     maxItems: 1,
     realUploadExecutionRequested: false,
+    ...overrides
+  };
+}
+
+function tokenProviderReadiness(
+  overrides: Partial<V082PrivateUploadTokenProviderReadiness> = {}
+): V082PrivateUploadTokenProviderReadiness {
+  return {
+    providerReady: true,
+    tokenReady: true,
+    uploadScopeReady: true,
+    tokenFileSafeAndReadable: true,
     ...overrides
   };
 }

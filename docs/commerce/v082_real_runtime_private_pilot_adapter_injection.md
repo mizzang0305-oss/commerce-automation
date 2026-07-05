@@ -51,7 +51,11 @@ V082 blocks on:
 - `BLOCKED_V082_SERVER_ONLY_CONTEXT_REQUIRED`
 - `BLOCKED_V082_YOUTUBE_OAUTH_NOT_CONFIGURED`
 - `BLOCKED_V082_TOKEN_PROVIDER_NOT_CONFIGURED`
+- `BLOCKED_V082_TOKEN_READINESS_PROVIDER_STATUS_REQUIRED`
+- `BLOCKED_V082_TOKEN_PROVIDER_NOT_READY`
 - `BLOCKED_V082_TOKEN_NOT_READY`
+- `BLOCKED_V082_TOKEN_UPLOAD_SCOPE_NOT_READY`
+- `BLOCKED_V082_TOKEN_FILE_UNSAFE_OR_UNREADABLE`
 - `BLOCKED_V082_VIDEO_ASSET_RESOLVER_NOT_CONFIGURED`
 - `BLOCKED_V082_UPLOAD_PACKAGE_RESOLVER_NOT_CONFIGURED`
 - `BLOCKED_V082_DUPLICATE_GUARD_NOT_CONFIGURED`
@@ -79,15 +83,25 @@ blocked and no V076 upload result evidence is created in this PR.
 
 ## Server-Only Safety
 
-The env-based factory only converts runtime configuration into booleans:
+The env-based factory only converts runtime configuration into sanitized
+booleans:
 
 - OAuth configured
 - token provider configured
 - token ready
+- token provider readiness status present
+- token provider ready
+- upload scope ready
+- token file safe and readable
 - video asset resolver configured
 - upload package resolver configured
 - duplicate guard configured
 - disclosure guard configured
+
+`tokenReady` is never derived from a non-empty token file path. It is derived
+only from the sanitized YouTube token provider readiness/status contract. If the
+status is missing, not ready, missing upload scope, unreadable, or unsafe, V082
+returns a blocked adapter and cannot create a `real_candidate`.
 
 It does not print token file paths, token values, client secrets, auth headers,
 raw Coupang URLs, raw affiliate URLs, full video IDs, or full channel IDs.
