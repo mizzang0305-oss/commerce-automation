@@ -2,7 +2,7 @@
 
 V084 adds the invocation path.
 
-V084 is not a real upload execution PR. It provides the server-only command and invocation contract that will be used by a later fresh approval gate.
+V084 is not a real upload execution PR. It provides the command and invocation contract that will be used by a later fresh approval gate.
 
 No videos.insert is called by V084 tests or plan commands. No commentThreads.insert is called by V084 tests or plan commands.
 
@@ -14,6 +14,12 @@ npm run upload:v084:private-pilot:execute
 ```
 
 The plan command is always no-upload. The execute command also remains fail-closed in this PR and returns `BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR` when all readiness gates pass.
+
+## Server-Only Boundary
+
+`src/uploads/youtube/v084PrivateUploadExecutionInvocation.ts` is a pure no-upload planner. It does not import the V083 real execution adapter or its core implementation.
+
+Server-only wiring lives in `src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts`, which imports `server-only` before importing the guarded V083 adapter entrypoint. This keeps the real execution adapter behind the same server-only boundary used by V083 while allowing the CLI plan command to generate a sanitized report without pulling a browser-reachable execution adapter into the dependency graph.
 
 ## Invocation Contract
 

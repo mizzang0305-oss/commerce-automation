@@ -32,23 +32,23 @@ const FORBIDDEN_REPORT_PATTERN = new RegExp([
 ].map(escapeRegExp).join("|"), "i");
 
 describe("v084 private upload execution invocation path", () => {
-  test("invocation path references the V083 adapter and blocks real execution in this PR", async () => {
+  test("invocation path blocks real execution without importing the V083 adapter", async () => {
     const result = await buildV084PrivateUploadPilotInvocation(readyRequest({
       dryRun: false
     }));
 
     expect(result.status).toBe("blocked");
     expect(result.mode).toBe("private_upload_pilot_invocation");
-    expect(result.v083AdapterInvoked).toBe(true);
-    expect(result.v083AdapterMode).toBe("real_candidate");
+    expect(result.v083AdapterInvoked).toBe(false);
+    expect(result.v083AdapterMode).toBeNull();
     expect(result.blockers).toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
-    expect(result.v081ResultStatus).toBe("blocked");
-    expect(result.v081Blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
+    expect(result.v081ResultStatus).toBeNull();
+    expect(result.v081Blockers).toEqual([]);
     expect(result.videosInsertCalled).toBe(false);
     expect(result.commentThreadsInsertCalled).toBe(false);
   });
 
-  test("plan mode can become ready for private execution without calling videos.insert", async () => {
+  test("plan mode can become ready for private execution without importing or invoking V083", async () => {
     const result = await buildV084PrivateUploadPilotInvocation(readyRequest({
       dryRun: true
     }));
@@ -57,7 +57,8 @@ describe("v084 private upload execution invocation path", () => {
     expect(result.dryRun).toBe(true);
     expect(result.executionAllowed).toBe(false);
     expect(result.approvalAccepted).toBe(true);
-    expect(result.v083AdapterInvoked).toBe(true);
+    expect(result.v083AdapterInvoked).toBe(false);
+    expect(result.v083AdapterMode).toBeNull();
     expect(result.videosInsertCalled).toBe(false);
     expect(result.commentThreadsInsertCalled).toBe(false);
     expect(result.blockers).toEqual([]);
@@ -202,11 +203,15 @@ describe("v084 private upload execution invocation path", () => {
   });
 
   test("package plan command returns sanitized no-upload JSON", () => {
-    const output = execFileSync("cmd.exe", [
-      "/d",
-      "/s",
-      "/c",
-      "npm run upload:v084:private-pilot:plan --silent"
+    const npmCli = process.env.npm_execpath;
+
+    expect(npmCli).toBeTruthy();
+
+    const output = execFileSync(process.execPath, [
+      npmCli as string,
+      "run",
+      "upload:v084:private-pilot:plan",
+      "--silent"
     ], {
       cwd: process.cwd(),
       encoding: "utf8",
@@ -226,6 +231,28 @@ describe("v084 private upload execution invocation path", () => {
     expect(parsed.videosInsertCalled).toBe(false);
     expect(parsed.commentThreadsInsertCalled).toBe(false);
     expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("package plan command test uses a cross-platform npm executable", async () => {
+    const testSource = await readFile("tests/v084-private-upload-execution-invocation-path.test.ts", "utf8");
+
+    expect(testSource).toContain("process.execPath");
+    expect(testSource).toContain("process.env.npm_execpath");
+    expect(testSource).not.toContain(["cmd", ".exe"].join(""));
+  });
+
+  test("V084 pure invocation module does not bypass server-only V083 adapter guard", async () => {
+    const invocationSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocation.ts", "utf8");
+    const serverSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts", "utf8");
+    const v083Wrapper = await readFile("src/uploads/youtube/v083RealPrivateUploadExecutionAdapter.ts", "utf8");
+
+    expect(invocationSource).not.toContain("v083RealPrivateUploadExecutionAdapterCore");
+    expect(invocationSource).not.toContain("v083RealPrivateUploadExecutionAdapter");
+    expect(invocationSource).not.toContain("executeV081PrivateUploadPilot");
+    expect(serverSource).toMatch(/import\s+"server-only";/);
+    expect(serverSource).toContain("./v083RealPrivateUploadExecutionAdapter");
+    expect(serverSource).not.toContain("./v083RealPrivateUploadExecutionAdapterCore");
+    expect(v083Wrapper).toMatch(/import\s+"server-only";/);
   });
 
   test("package.json exposes plan and execute scripts", async () => {

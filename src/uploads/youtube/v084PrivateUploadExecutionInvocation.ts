@@ -1,13 +1,9 @@
 import type { ChannelKey } from "../multi-channel/channelProfiles";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
-  executeV081PrivateUploadPilot,
-  type V081PrivateUploadPilotResult,
   type V081PrivateUploadPilotVisibility
 } from "./v081PrivateUploadPilot";
-import {
-  createV083RealPrivateUploadExecutionAdapterFactory
-} from "./v083RealPrivateUploadExecutionAdapterCore";
+import type { V081PrivateUploadPilotResult } from "./v081PrivateUploadPilot";
 import type {
   V083PrivateUploadExecutionBlocker
 } from "./v083PrivateUploadExecutionReadiness";
@@ -179,71 +175,23 @@ export async function buildV084PrivateUploadPilotInvocation(
     return buildResult({ request: normalized, blockers });
   }
 
-  const factory = createV083RealPrivateUploadExecutionAdapterFactory({
-    buildApprovalPhrase: "APPROVE_BUILD_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD",
-    serverOnlyContext: true,
-    v081PilotReady: normalized.readiness.v081PilotReady,
-    v082RuntimeAdapterReady: normalized.readiness.v082RuntimeAdapterReady,
-    tokenProviderReady: normalized.readiness.tokenProviderReady,
-    uploadScopeReady: normalized.readiness.uploadScopeReady,
-    videoAssetReady: normalized.readiness.videoAssetReady,
-    uploadPackageReady: normalized.readiness.uploadPackageReady,
-    duplicateGuardReady: normalized.readiness.duplicateGuardReady,
-    disclosureGuardReady: normalized.readiness.disclosureGuardReady,
-    affiliateEvidenceReady: normalized.readiness.affiliateEvidenceReady,
-    targetChannelEvidenceReady: normalized.readiness.targetChannelEvidenceReady,
-    requestedVisibility: "private",
-    maxItems: 1,
-    commentAutomationRequested: false,
-    schedulerExecutionRequested: false
-  });
-
   if (normalized.dryRun) {
     return buildResult({
       request: normalized,
       blockers: [],
       status: "ready_for_private_execution",
-      v083AdapterInvoked: true,
-      v083AdapterMode: factory.adapter.mode,
-      v083Blockers: factory.readiness.blockers
+      v083AdapterInvoked: false,
+      v083AdapterMode: null,
+      v083Blockers: []
     });
   }
-
-  const v081Result = await executeV081PrivateUploadPilot({
-    queueItemId: normalized.queueItemId,
-    uploadPackageId: normalized.uploadPackageId,
-    channelKey: normalized.channelKey,
-    visibility: "private",
-    approvalPhrase: normalized.approvalPhrase,
-    commentAutomationAllowed: false,
-    schedulerExecutionAllowed: false,
-    maxItems: 1,
-    targetChannelId: null,
-    videoAssetHashPrefix: normalized.videoAssetHashPrefix,
-    generatedAt: normalized.generatedAt,
-    readiness: {
-      oauthReady: normalized.readiness.tokenProviderReady,
-      tokenProviderReady: normalized.readiness.tokenProviderReady,
-      videoAssetReady: normalized.readiness.videoAssetReady,
-      uploadPackageReady: normalized.readiness.uploadPackageReady,
-      affiliateUrlEvidenceReady: normalized.readiness.affiliateEvidenceReady,
-      coupangDisclosureReady: normalized.readiness.disclosureGuardReady,
-      duplicateGuardReady: normalized.readiness.duplicateGuardReady,
-      targetChannelReady: normalized.readiness.targetChannelEvidenceReady,
-      metadataReady: normalized.readiness.metadataReady,
-      quotaReady: normalized.readiness.quotaReady
-    }
-  }, {
-    adapter: factory.adapter
-  });
 
   return buildResult({
     request: normalized,
     blockers: ["BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR"],
-    v083AdapterInvoked: true,
-    v083AdapterMode: factory.adapter.mode,
-    v083Blockers: factory.readiness.blockers,
-    v081Result
+    v083AdapterInvoked: false,
+    v083AdapterMode: null,
+    v083Blockers: []
   });
 }
 
