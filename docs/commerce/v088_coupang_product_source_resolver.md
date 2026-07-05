@@ -17,6 +17,25 @@ commerce-assets/review/v057/father_jobs/product-source-v057.local.json
 
 The manifest is local operator evidence and must not be committed.
 
+## Channel Binding Guard
+
+V088 is scoped to `father_jobs` only. Before any Coupang API call or local
+manifest write, the resolver verifies:
+
+- selected channel is `father_jobs`
+- manifest `channelKey` is `father_jobs`
+- manifest `targetChannelKey` is `father_jobs`
+
+If either manifest channel field is missing or points to another channel, the
+resolver fails closed and does not write URL evidence.
+
+Sanitized report proof:
+
+- `manifestChannelMatchesSelected`
+- `manifestTargetChannelMatchesSelected`
+- `localManifestWriteAllowed`
+- `rawManifestPathPrinted=false`
+
 ## Scope
 
 This is a no-upload resolver. It does not call YouTube APIs and does not invoke the

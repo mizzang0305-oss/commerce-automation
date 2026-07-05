@@ -55,13 +55,18 @@ describe("v088 Coupang product source resolver", () => {
       expect(result.deeplinkApiCalled).toBe(true);
       expect(result.rawCoupangUrlPresent).toBe(true);
       expect(result.affiliateUrlPresent).toBe(true);
+      expect(result.manifestChannelMatchesSelected).toBe(true);
+      expect(result.manifestTargetChannelMatchesSelected).toBe(true);
+      expect(result.localManifestWriteAllowed).toBe(true);
       expect(result.localManifestWritten).toBe(true);
       expect(result.v084ExecuteCalled).toBe(false);
       expect(result.videosInsertCalled).toBe(false);
       expect(result.commentThreadsInsertCalled).toBe(false);
       expect(result.rawUrlsPrinted).toBe(false);
+      expect(result.rawManifestPathPrinted).toBe(false);
       expect(result.secretsPrinted).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+      expect(JSON.stringify(result)).not.toContain(manifestPath);
 
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
       expect(manifest.rawCoupangUrl).toBe(RAW_COUPANG_URL);
@@ -88,6 +93,7 @@ describe("v088 Coupang product source resolver", () => {
       expect(result.blockers).toContain("BLOCKED_V088_COUPANG_ACCESS_KEY_MISSING");
       expect(result.productSearchApiCalled).toBe(false);
       expect(result.deeplinkApiCalled).toBe(false);
+      expect(result.localManifestWriteAllowed).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -126,8 +132,12 @@ describe("v088 Coupang product source resolver", () => {
       expect(result.deeplinkApiCalled).toBe(false);
       expect(result.rawCoupangUrlPresent).toBe(true);
       expect(result.affiliateUrlPresent).toBe(true);
+      expect(result.manifestChannelMatchesSelected).toBe(true);
+      expect(result.manifestTargetChannelMatchesSelected).toBe(true);
+      expect(result.localManifestWriteAllowed).toBe(true);
       expect(result.localManifestWritten).toBe(true);
       expect(JSON.stringify(result)).not.toContain(partnersProductUrl);
+      expect(JSON.stringify(result)).not.toContain(manifestPath);
 
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
       expect(manifest.rawCoupangUrl).toContain("https://www.coupang.com/vp/products/111222333");
@@ -198,16 +208,135 @@ describe("v088 Coupang product source resolver", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  test("blocks when manifest path points at another channel manifest", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd, {
+        channelKey: "neoman_moleulgeol",
+        targetChannelKey: "neoman_moleulgeol"
+      }, "neoman_moleulgeol");
+      const before = await readFile(manifestPath, "utf8");
+      const result = await resolveV088CoupangProductSource({
+        cwd,
+        env: readyEnv(manifestPath),
+        fetchImpl: mockFetch({
+          searchPayload: {
+            data: [
+              {
+                productName: PRODUCT_NAME,
+                productUrl: RAW_COUPANG_URL
+              }
+            ]
+          },
+          deeplinkPayload: {
+            data: [
+              {
+                shortenUrl: AFFILIATE_URL
+              }
+            ]
+          }
+        })
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISMATCH");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISMATCH");
+      expect(result.manifestChannelMatchesSelected).toBe(false);
+      expect(result.manifestTargetChannelMatchesSelected).toBe(false);
+      expect(result.localManifestWriteAllowed).toBe(false);
+      expect(result.localManifestWritten).toBe(false);
+      expect(result.productSearchApiCalled).toBe(false);
+      expect(result.deeplinkApiCalled).toBe(false);
+      expect(await readFile(manifestPath, "utf8")).toBe(before);
+      expect(JSON.stringify(result)).not.toContain(manifestPath);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("blocks when manifest channelKey is missing", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd, { channelKey: undefined });
+      const result = await resolveV088CoupangProductSource({
+        cwd,
+        env: readyEnv(manifestPath),
+        fetchImpl: mockFetch({})
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISSING");
+      expect(result.manifestChannelMatchesSelected).toBe(false);
+      expect(result.localManifestWriteAllowed).toBe(false);
+      expect(result.localManifestWritten).toBe(false);
+      expect(result.productSearchApiCalled).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("blocks when manifest targetChannelKey is missing", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd, { targetChannelKey: undefined });
+      const result = await resolveV088CoupangProductSource({
+        cwd,
+        env: readyEnv(manifestPath),
+        fetchImpl: mockFetch({})
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISSING");
+      expect(result.manifestTargetChannelMatchesSelected).toBe(false);
+      expect(result.localManifestWriteAllowed).toBe(false);
+      expect(result.localManifestWritten).toBe(false);
+      expect(result.productSearchApiCalled).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("blocks when selected channel does not match father_jobs resolver scope", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeManifest(cwd);
+      const result = await resolveV088CoupangProductSource({
+        cwd,
+        channelKey: "lets_buy",
+        env: readyEnv(manifestPath),
+        fetchImpl: mockFetch({})
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V088_SELECTED_CHANNEL_KEY_MISMATCH");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISMATCH");
+      expect(result.blockers).toContain("BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISMATCH");
+      expect(result.localManifestWriteAllowed).toBe(false);
+      expect(result.localManifestWritten).toBe(false);
+      expect(result.productSearchApiCalled).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 async function makeCwd() {
   return mkdtemp(path.join(os.tmpdir(), "commerce-v088-"));
 }
 
-async function writeManifest(cwd: string) {
-  const manifestPath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "product-source-v057.local.json");
+async function writeManifest(
+  cwd: string,
+  overrides: Record<string, unknown> = {},
+  channelDir = "father_jobs"
+) {
+  const manifestPath = path.join(cwd, "commerce-assets", "review", "v057", channelDir, "product-source-v057.local.json");
   await mkdir(path.dirname(manifestPath), { recursive: true });
-  await writeFile(manifestPath, `${JSON.stringify({
+  const manifest = {
     productSourceId: "ps-father-v057",
     queueItemId: "queue-father-v057",
     uploadPackageId: "upload-father-v057",
@@ -215,8 +344,13 @@ async function writeManifest(cwd: string) {
     targetChannelKey: "father_jobs",
     productName: PRODUCT_NAME,
     rawCoupangUrl: "",
-    selectedAffiliateUrl: ""
-  }, null, 2)}\n`, "utf8");
+    selectedAffiliateUrl: "",
+    ...overrides
+  };
+  for (const [key, value] of Object.entries(manifest)) {
+    if (value === undefined) delete (manifest as Record<string, unknown>)[key];
+  }
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return manifestPath;
 }
 

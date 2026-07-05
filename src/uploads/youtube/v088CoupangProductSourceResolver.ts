@@ -24,13 +24,18 @@ export type V088CoupangProductSourceResolverBlocker =
   | "BLOCKED_V088_COUPANG_AFFILIATE_URL_MISSING"
   | "BLOCKED_V088_LOCAL_MANIFEST_MISSING"
   | "BLOCKED_V088_LOCAL_MANIFEST_WRITE_FAILED"
+  | "BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISSING"
+  | "BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISSING"
+  | "BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISMATCH"
+  | "BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISMATCH"
+  | "BLOCKED_V088_SELECTED_CHANNEL_KEY_MISMATCH"
   | "BLOCKED_V088_UNSAFE_REPORT_REQUESTED";
 
 export type V088CoupangProductSourceResolverReport = {
   version: "v088";
   status: "blocked" | "bound";
   mode: "coupang_api_product_source_resolution_no_upload";
-  selectedChannelKey: "father_jobs";
+  selectedChannelKey: string;
   blockers: V088CoupangProductSourceResolverBlocker[];
   credentials: {
     search: CoupangPartnersEnvReadiness;
@@ -46,9 +51,13 @@ export type V088CoupangProductSourceResolverReport = {
   rawCoupangUrlHashPrefix: string | null;
   affiliateUrlPresent: boolean;
   affiliateUrlHashPrefix: string | null;
+  manifestChannelMatchesSelected: boolean;
+  manifestTargetChannelMatchesSelected: boolean;
+  localManifestWriteAllowed: boolean;
   localManifestPresent: boolean;
   localManifestWritten: boolean;
   rawUrlsPrinted: false;
+  rawManifestPathPrinted: false;
   rawFilePathsPrinted: false;
   rawVideoIdsPrinted: false;
   rawChannelIdsPrinted: false;
@@ -72,7 +81,7 @@ export type V088CoupangProductSourceResolverInput = {
   cwd?: string;
   env?: Record<string, string | undefined>;
   manifestPath?: string;
-  channelKey?: "father_jobs";
+  channelKey?: string;
   fetchImpl?: typeof fetch;
   deeplinkFetchImpl?: typeof fetch;
   unsafeReportRequested?: boolean;
@@ -97,13 +106,25 @@ export async function resolveV088CoupangProductSource(
 ): Promise<V088CoupangProductSourceResolverReport> {
   const cwd = input.cwd ?? process.cwd();
   const env = input.env ?? process.env;
+  const selectedChannelKey = input.channelKey ?? "father_jobs";
   const manifestPath = path.resolve(cwd, input.manifestPath ?? env.V088_PRODUCT_SOURCE_MANIFEST_PATH ?? DEFAULT_MANIFEST_PATH);
   const blockers: V088CoupangProductSourceResolverBlocker[] = [];
 
   if (input.unsafeReportRequested) blockers.push("BLOCKED_V088_UNSAFE_REPORT_REQUESTED");
+  if (selectedChannelKey !== "father_jobs") blockers.push("BLOCKED_V088_SELECTED_CHANNEL_KEY_MISMATCH");
 
   const existingManifest = await readJson(manifestPath);
   if (!existingManifest) blockers.push("BLOCKED_V088_LOCAL_MANIFEST_MISSING");
+  const manifestChannelKey = trimOrNull(readField(existingManifest, ["channelKey", "channel_key"]));
+  const manifestTargetChannelKey = trimOrNull(readField(existingManifest, ["targetChannelKey", "target_channel_key"]));
+  const manifestChannelMatchesSelected = manifestChannelKey === selectedChannelKey;
+  const manifestTargetChannelMatchesSelected = manifestTargetChannelKey === selectedChannelKey;
+  if (existingManifest && !manifestChannelKey) blockers.push("BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISSING");
+  if (existingManifest && !manifestTargetChannelKey) blockers.push("BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISSING");
+  if (manifestChannelKey && !manifestChannelMatchesSelected) blockers.push("BLOCKED_V088_MANIFEST_CHANNEL_KEY_MISMATCH");
+  if (manifestTargetChannelKey && !manifestTargetChannelMatchesSelected) {
+    blockers.push("BLOCKED_V088_MANIFEST_TARGET_CHANNEL_KEY_MISMATCH");
+  }
 
   const productQuery = trimOrNull(readField(existingManifest, ["productName", "product_name"]));
   if (!productQuery) blockers.push("BLOCKED_V088_PRODUCT_QUERY_MISSING");
@@ -170,8 +191,13 @@ export async function resolveV088CoupangProductSource(
     blockers.push("BLOCKED_V088_COUPANG_AFFILIATE_URL_MISSING");
   }
 
+  const localManifestWriteAllowed = blockers.length === 0 &&
+    Boolean(existingManifest) &&
+    selectedChannelKey === "father_jobs" &&
+    manifestChannelMatchesSelected &&
+    manifestTargetChannelMatchesSelected;
   let localManifestWritten = false;
-  if (blockers.length === 0 && existingManifest && productCandidate?.rawCoupangUrl && affiliateUrl) {
+  if (localManifestWriteAllowed && existingManifest && productCandidate?.rawCoupangUrl && affiliateUrl) {
     try {
       await fs.writeFile(manifestPath, `${JSON.stringify({
         ...existingManifest,
@@ -189,7 +215,7 @@ export async function resolveV088CoupangProductSource(
     version: "v088",
     status: blockers.length === 0 ? "bound" : "blocked",
     mode: "coupang_api_product_source_resolution_no_upload",
-    selectedChannelKey: "father_jobs",
+    selectedChannelKey,
     blockers: [...new Set(blockers)],
     credentials: {
       search: searchRequest.safe_summary,
@@ -205,9 +231,13 @@ export async function resolveV088CoupangProductSource(
     rawCoupangUrlHashPrefix: hashPrefix(productCandidate?.rawCoupangUrl),
     affiliateUrlPresent: Boolean(affiliateUrl),
     affiliateUrlHashPrefix: hashPrefix(affiliateUrl),
+    manifestChannelMatchesSelected,
+    manifestTargetChannelMatchesSelected,
+    localManifestWriteAllowed,
     localManifestPresent: Boolean(existingManifest),
     localManifestWritten,
     rawUrlsPrinted: false,
+    rawManifestPathPrinted: false,
     rawFilePathsPrinted: false,
     rawVideoIdsPrinted: false,
     rawChannelIdsPrinted: false,
