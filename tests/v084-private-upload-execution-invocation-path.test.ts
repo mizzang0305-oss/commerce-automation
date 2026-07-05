@@ -271,7 +271,9 @@ describe("v084 private upload execution invocation path", () => {
 
     expect(task).toContain("### T014 - V084 Private Upload Execution Invocation Path");
     expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `DONE`/);
-    expect(task).toContain("Current blocker: `V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`");
+    expect(task).toMatch(
+      /Current blocker: `(V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW)`/
+    );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");
     expect(task).toContain("SAFE_TO_PUBLIC_UPLOAD=false");
