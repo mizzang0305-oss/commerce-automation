@@ -3,14 +3,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  buildV085PrivatePilotInputBinding
-} from "../../src/uploads/youtube/v085PrivatePilotInputBinding";
+  resolveV088CoupangProductSource
+} from "../../src/uploads/youtube/v088CoupangProductSourceResolver";
 
 async function main() {
-  const cwd = process.env.V085_CWD || process.cwd();
-  const env = loadLocalEnv(cwd, process.env);
-  const report = await buildV085PrivatePilotInputBinding({
-    cwd,
+  const env = loadLocalEnv(process.cwd(), process.env);
+  const report = await resolveV088CoupangProductSource({
+    cwd: env.V088_CWD || process.cwd(),
     env
   });
 
@@ -39,17 +38,31 @@ function loadLocalEnv(cwd: string, baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEn
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(() => {
     process.stdout.write(`${JSON.stringify({
-      version: "v085",
+      version: "v088",
       status: "blocked",
-      mode: "private_pilot_input_binding_no_upload",
-      blockers: ["BLOCKED_V085_UNSAFE_REPORT_REQUESTED"],
+      mode: "coupang_api_product_source_resolution_no_upload",
+      selectedChannelKey: "father_jobs",
+      blockers: ["BLOCKED_V088_UNSAFE_REPORT_REQUESTED"],
+      productSearchApiCalled: false,
+      deeplinkApiCalled: false,
+      rawUrlsPrinted: false,
+      rawFilePathsPrinted: false,
+      rawVideoIdsPrinted: false,
+      rawChannelIdsPrinted: false,
+      secretsPrinted: false,
+      authorizationHeaderPrinted: false,
+      hmacSignaturePrinted: false,
+      v084ExecuteCalled: false,
       videosInsertCalled: false,
       commentThreadsInsertCalled: false,
-      raw_urls_printed: false,
-      raw_video_ids_printed: false,
-      raw_channel_ids_printed: false,
-      secrets_printed: false,
-      fake_success: false
+      visibilityChanged: false,
+      R2Upload: false,
+      DBWrite: false,
+      productAssetsWrite: false,
+      n8nWebhookCalled: false,
+      fakeSuccess: false,
+      safeToUpload: false,
+      safeToPublicUpload: false
     }, null, 2)}\n`);
     process.exitCode = 1;
   });

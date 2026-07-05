@@ -359,6 +359,43 @@ describe("v085 private pilot input binding preflight", () => {
       await rm(TOKEN_PATH, { force: true });
     }
   });
+
+  test("package script loads readiness env from V085_CWD .env.local", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd);
+      await writeTokenFile();
+      await writeEnvLocal(cwd, readyEnv());
+      const npmCli = process.env.npm_execpath;
+      expect(npmCli).toBeTruthy();
+
+      const output = execFileSync(process.execPath, [
+        npmCli as string,
+        "run",
+        "upload:v085:private-pilot:bind-inputs",
+        "--silent"
+      ], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          V085_CWD: cwd,
+          V084_CHANNEL_KEY: "father_jobs"
+        }
+      });
+      const parsed = JSON.parse(output);
+
+      expect(parsed.status).toBe("ready_for_fresh_approval");
+      expect(parsed.targetChannelEvidenceReady).toBe(true);
+      expect(parsed.quotaReady).toBe(true);
+      expect(parsed.videosInsertCalled).toBe(false);
+      expect(parsed.commentThreadsInsertCalled).toBe(false);
+      expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
 });
 
 async function makeCwd() {
@@ -421,6 +458,16 @@ async function writeTokenFile(options: { scopes?: string[] } = {}) {
     refresh_token: "refresh-token-v085",
     scopes: options.scopes ?? ["https://www.googleapis.com/auth/youtube.upload"]
   }, null, 2)}\n`, "utf8");
+}
+
+async function writeEnvLocal(cwd: string, env: NodeJS.ProcessEnv) {
+  await writeFile(
+    path.join(cwd, ".env.local"),
+    Object.entries(env)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n") + "\n",
+    "utf8"
+  );
 }
 
 function readyEnv(): NodeJS.ProcessEnv {

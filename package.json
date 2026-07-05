@@ -53,6 +53,7 @@
     "upload:v084:private-pilot:execute": "tsx scripts/uploads/run-v084-private-upload-pilot.ts --execute",
     "upload:v085:private-pilot:bind-inputs": "tsx scripts/uploads/resolve-v085-private-pilot-inputs.ts",
     "upload:v087:bind-product-source": "tsx scripts/uploads/resolve-v087-authoritative-product-source.ts",
+    "upload:v088:resolve-coupang-product-source": "tsx scripts/uploads/resolve-v088-coupang-product-source.ts",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
     "review:v040": "tsx scripts/uploads/generate-v040-real-image-semantic-review-packets.ts",
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",
