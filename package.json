@@ -49,6 +49,8 @@
     "upload:v073:generate-packages": "tsx scripts/uploads/generate-v073-upload-packages.ts",
     "upload:v074:preflight": "tsx scripts/uploads/generate-v074-public-upload-preflight.ts",
     "upload:v075:preflight": "tsx scripts/uploads/generate-v075-comment-writer-preflight.ts",
+    "upload:v084:private-pilot:plan": "tsx scripts/uploads/run-v084-private-upload-pilot.ts --plan",
+    "upload:v084:private-pilot:execute": "tsx scripts/uploads/run-v084-private-upload-pilot.ts --execute",
     "review:v036": "tsx scripts/uploads/generate-v036-multi-channel-commerce-plan.ts",
     "review:v040": "tsx scripts/uploads/generate-v040-real-image-semantic-review-packets.ts",
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",

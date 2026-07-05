@@ -62,11 +62,11 @@ Product discovery
 - PR #194: V083 real private upload execution adapter, `MERGED`
 - PR #194 merge commit: `709c5dc719044cf27c1c3d6a20fd683a163cb928`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`
+- Current blocker: `PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
-- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE
 - PUBLIC_UPLOAD=BLOCKED
 - COMMENT_AUTOMATION=BLOCKED
 - SCHEDULER_EXECUTION=BLOCKED
@@ -371,6 +371,39 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T014 - V084 Private Upload Execution Invocation Path
+
+Status: `PR_OPEN`
+
+Goal: Add the server-only private pilot invocation path and CLI entrypoint without executing a real upload.
+
+Requirements:
+
+- invocation path must call the V083 adapter factory
+- `upload:v084:private-pilot:plan` must be no-upload
+- `upload:v084:private-pilot:execute` remains fail-closed in this PR
+- exact fresh private pilot approval phrase required before any ready state
+- visibility must be private
+- maxItems must be exactly 1
+- public and unlisted uploads remain blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- queue item and upload package identifiers are required
+- readiness must be complete before ready state
+- V076 sanitized upload result evidence path remains connected through V081 result evidence
+- no videos.insert call in this PR
+- no commentThreads.insert call in this PR
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw URL, full video ID, full channel ID, token, secret, client_secret, Authorization, or HMAC output
+- merge does not authorize execution; a new fresh owner approval is required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -412,19 +445,21 @@ Requirements:
 - 2026-07-05 KST: PR #193 P2 token readiness guard fix prepared on `codex/v082-real-runtime-private-pilot-adapter-injection`. V082 no longer derives `tokenReady` from token file env path configuration alone; sanitized token provider readiness/status is required, and missing/not-ready provider status, missing upload scope, or unsafe/unreadable token evidence fails closed. Upload execution was not run. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #193 squash merged. Main synced at `09065c44207526bbb29a1547cbedbbbd5b3d35e1`. T012 is complete. The V082 runtime adapter factory is merged, including the token provider-status guard, but private pilot execution remains blocked until a separate fresh owner approval and readiness gate. Public upload, unlisted upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #194 squash merged. Main synced at `709c5dc719044cf27c1c3d6a20fd683a163cb928`. T013 is complete. The V083 server-only real private upload execution adapter wiring is merged, but this does not authorize upload execution. The next step is to check or build the explicit real execution invocation path in V084. Private pilot execution still requires separate fresh owner approval and readiness after that path is verified. Public upload, unlisted upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: T014 V084 private upload execution invocation path opened on `codex/v084-private-upload-execution-invocation-path`. V084 adds the command and server-only invocation contract for V083, but real upload execution remains blocked in this PR. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`
+- `PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
-- Private pilot execution remains blocked until V084 verifies or builds the explicit invocation path and a separate fresh owner approval plus readiness gate are present.
+- V084 private pilot invocation path is under review and does not execute upload in this PR.
+- Private pilot execution remains blocked until V084 is merged and a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
 - Daily batch upload remains blocked.
 - `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
-- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED_AFTER_MERGE`
 - `PUBLIC_UPLOAD=BLOCKED`
 - `COMMENT_AUTOMATION=BLOCKED`
 - `SCHEDULER_EXECUTION=BLOCKED`
@@ -435,4 +470,4 @@ Requirements:
 
 ## Next Exact Action
 
-- `V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_CHECK_OR_BUILD`. First check whether main has an explicit real execution invocation path for the V083 adapter. If it is missing, build it as a no-upload V084 PR. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present after the invocation path is verified. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review/merge V084 invocation path, then require fresh approval for private 1-item execution. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present after merge. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
