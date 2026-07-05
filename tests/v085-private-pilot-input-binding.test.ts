@@ -110,6 +110,8 @@ describe("v085 private pilot input binding preflight", () => {
       });
       expect(result.v084Plan.status).toBe("blocked");
       expect(result.v084Plan.blockers).toContain("BLOCKED_V084_FRESH_APPROVAL_REQUIRED");
+      expect(result.approvalForwardedToV084Plan).toBe(false);
+      expect(result.ambientApprovalStripped).toBe(true);
       expect(result.v084Plan.videosInsertCalled).toBe(false);
       expect(result.v084Plan.commentThreadsInsertCalled).toBe(false);
       expect(result.videosInsertCalled).toBe(false);
@@ -169,6 +171,129 @@ describe("v085 private pilot input binding preflight", () => {
       expect(result.status).toBe("blocked");
       expect(result.blockers).toContain(expectedBlocker);
       expect(result.videosInsertCalled).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("blocks when upload package has path/hash evidence but the video file is missing", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd, {
+        skipVideo: "father_jobs"
+      });
+      await writeTokenFile();
+
+      const result = await buildV085PrivatePilotInputBinding({
+        cwd,
+        env: readyEnv(),
+        channelKey: "father_jobs"
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.videoAssetReady).toBe(false);
+      expect(result.videoAssetFileExists).toBe(false);
+      expect(result.videoAssetFileReadable).toBe(false);
+      expect(result.blockers).toEqual(expect.arrayContaining([
+        "BLOCKED_V085_VIDEO_ASSET_FILE_NOT_FOUND",
+        "BLOCKED_V085_VIDEO_ASSET_EVIDENCE_INCOMPLETE",
+        "BLOCKED_V085_RUNTIME_READY_MISSING"
+      ]));
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+      expect(JSON.stringify(result)).not.toContain("corrected-preview-v057.mp4");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("blocks when upload package video evidence points at an unreadable file target", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd, {
+        videoAsDirectory: "father_jobs"
+      });
+      await writeTokenFile();
+
+      const result = await buildV085PrivatePilotInputBinding({
+        cwd,
+        env: readyEnv(),
+        channelKey: "father_jobs"
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.videoAssetReady).toBe(false);
+      expect(result.videoAssetFileExists).toBe(true);
+      expect(result.videoAssetFileReadable).toBe(false);
+      expect(result.blockers).toEqual(expect.arrayContaining([
+        "BLOCKED_V085_VIDEO_ASSET_FILE_UNREADABLE",
+        "BLOCKED_V085_VIDEO_ASSET_EVIDENCE_INCOMPLETE",
+        "BLOCKED_V085_RUNTIME_READY_MISSING"
+      ]));
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+      expect(JSON.stringify(result)).not.toContain("corrected-preview-v057.mp4");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("does not fall back to another channel package when requested channel package is missing", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd, {
+        skipSource: "father_jobs"
+      });
+      await writeTokenFile();
+
+      const result = await buildV085PrivatePilotInputBinding({
+        cwd,
+        env: readyEnv(),
+        channelKey: "father_jobs"
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.selectedChannelPackagePresent).toBe(false);
+      expect(result.channelPackageMatchesRequest).toBe(false);
+      expect(result.boundV084Env.V084_CHANNEL_KEY).toBe("father_jobs");
+      expect(result.queueItemIdPresent).toBe(false);
+      expect(result.uploadPackageIdPresent).toBe(false);
+      expect(result.blockers).toEqual(expect.arrayContaining([
+        "BLOCKED_V085_SELECTED_CHANNEL_PACKAGE_MISSING",
+        "BLOCKED_V085_CHANNEL_PACKAGE_MISMATCH"
+      ]));
+      expect(result.status).not.toBe("ready_for_fresh_approval");
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("strips ambient V084 approval before nested plan", async () => {
+    const cwd = await makeCwd();
+    try {
+      await writeReadyInputs(cwd);
+      await writeTokenFile();
+
+      const result = await buildV085PrivatePilotInputBinding({
+        cwd,
+        env: {
+          ...readyEnv(),
+          V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: "APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT"
+        },
+        channelKey: "father_jobs"
+      });
+
+      expect(result.status).toBe("ready_for_fresh_approval");
+      expect(result.approvalForwardedToV084Plan).toBe(false);
+      expect(result.ambientApprovalStripped).toBe(true);
+      expect(result.v084Plan.approvalAccepted).toBe(false);
+      expect(result.v084Plan.blockers).toContain("BLOCKED_V084_FRESH_APPROVAL_REQUIRED");
+      expect(result.v084Plan.status).toBe("blocked");
+      expect(result.v084Plan.videosInsertCalled).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -243,6 +368,9 @@ async function makeCwd() {
 async function writeReadyInputs(cwd: string, options: {
   queueOverrides?: Partial<Record<ChannelKey, Record<string, unknown>>>;
   contentOverrides?: Partial<Record<ChannelKey, Record<string, unknown>>>;
+  skipSource?: ChannelKey;
+  skipVideo?: ChannelKey;
+  videoAsDirectory?: ChannelKey;
   disclosureOverrides?: Partial<Record<ChannelKey, {
     descriptionDisclosurePresent?: boolean;
     commentDisclosurePresent?: boolean;
@@ -251,12 +379,17 @@ async function writeReadyInputs(cwd: string, options: {
   for (const channelKey of CHANNEL_KEYS) {
     const channelDir = path.join(cwd, "commerce-assets", "review", "v057", channelKey);
     await mkdir(channelDir, { recursive: true });
-    await writeFile(path.join(channelDir, "corrected-preview-v057.mp4"), `fake-v085-${channelKey}-mp4`, "utf8");
+    if (options.videoAsDirectory === channelKey) {
+      await mkdir(path.join(channelDir, "corrected-preview-v057.mp4"));
+    } else if (options.skipVideo !== channelKey) {
+      await writeFile(path.join(channelDir, "corrected-preview-v057.mp4"), `fake-v085-${channelKey}-mp4`, "utf8");
+    }
     await writeFile(path.join(channelDir, "first-frame-v057.jpg"), `fake-v085-${channelKey}-jpg`, "utf8");
   }
 
   await mkdir(path.join(cwd, "data"), { recursive: true });
-  await writeFile(path.join(cwd, "data", "queue.json"), `${JSON.stringify(CHANNEL_KEYS.map((channelKey, index) => ({
+  const sourceChannels = CHANNEL_KEYS.filter((channelKey) => channelKey !== options.skipSource);
+  await writeFile(path.join(cwd, "data", "queue.json"), `${JSON.stringify(sourceChannels.map((channelKey, index) => ({
     id: `queue-v085-${channelKey}`,
     channelKey,
     assetProfile: V057_REUPLOAD_ASSET_PROFILE,
@@ -267,7 +400,7 @@ async function writeReadyInputs(cwd: string, options: {
     priority: index + 1,
     ...options.queueOverrides?.[channelKey]
   })), null, 2)}\n`, "utf8");
-  await writeFile(path.join(cwd, "data", "contents.json"), `${JSON.stringify(CHANNEL_KEYS.map((channelKey) => ({
+  await writeFile(path.join(cwd, "data", "contents.json"), `${JSON.stringify(sourceChannels.map((channelKey) => ({
     id: `content-v085-${channelKey}`,
     product_queue_id: `queue-v085-${channelKey}`,
     channelKey,

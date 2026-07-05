@@ -19,12 +19,17 @@ export type V085PrivatePilotInputBindingBlocker =
   | "BLOCKED_V085_UPLOAD_PACKAGE_ID_MISSING"
   | "BLOCKED_V085_RUNTIME_READY_MISSING"
   | "BLOCKED_V085_VIDEO_ASSET_NOT_READY"
+  | "BLOCKED_V085_VIDEO_ASSET_FILE_NOT_FOUND"
+  | "BLOCKED_V085_VIDEO_ASSET_FILE_UNREADABLE"
+  | "BLOCKED_V085_VIDEO_ASSET_EVIDENCE_INCOMPLETE"
   | "BLOCKED_V085_AFFILIATE_EVIDENCE_NOT_READY"
   | "BLOCKED_V085_DISCLOSURE_EVIDENCE_NOT_READY"
   | "BLOCKED_V085_DUPLICATE_GUARD_NOT_READY"
   | "BLOCKED_V085_TARGET_CHANNEL_EVIDENCE_NOT_READY"
   | "BLOCKED_V085_TOKEN_PROVIDER_NOT_READY"
   | "BLOCKED_V085_UPLOAD_SCOPE_NOT_READY"
+  | "BLOCKED_V085_SELECTED_CHANNEL_PACKAGE_MISSING"
+  | "BLOCKED_V085_CHANNEL_PACKAGE_MISMATCH"
   | "BLOCKED_V085_UNSAFE_REPORT_REQUESTED";
 
 export type V085PrivatePilotInputBindingInput = {
@@ -49,10 +54,17 @@ export type V085PrivatePilotInputBindingReport = {
   status: V085PrivatePilotInputBindingStatus;
   mode: V085PrivatePilotInputBindingMode;
   selectedChannelKey: ChannelKey;
+  selectedChannelPackagePresent: boolean;
+  channelPackageMatchesRequest: boolean;
   queueItemIdPresent: boolean;
   uploadPackageIdPresent: boolean;
   runtimeReady: boolean;
   videoAssetReady: boolean;
+  videoAssetPathPresent: boolean;
+  videoAssetHashEvidencePresent: boolean;
+  videoAssetFileExists: boolean;
+  videoAssetFileReadable: boolean;
+  videoAssetPathUnsafe: boolean;
   affiliateEvidenceReady: boolean;
   disclosureEvidenceReady: boolean;
   duplicateGuardReady: boolean;
@@ -66,6 +78,8 @@ export type V085PrivatePilotInputBindingReport = {
     V084_RUNTIME_READY: "ready" | "missing";
   };
   boundV084Env: V085BoundV084Env;
+  approvalForwardedToV084Plan: false;
+  ambientApprovalStripped: true;
   blockers: V085PrivatePilotInputBindingBlocker[];
   v084Plan: V084PrivateUploadPilotInvocationResult;
   videosInsertCalled: false;
@@ -98,6 +112,14 @@ type TokenEvidence = {
   uploadScopeReady: boolean;
 };
 
+type VideoAssetFileEvidence = {
+  pathPresent: boolean;
+  hashEvidencePresent: boolean;
+  fileExists: boolean;
+  fileReadable: boolean;
+  pathUnsafe: boolean;
+};
+
 export async function buildV085PrivatePilotInputBinding(
   input: V085PrivatePilotInputBindingInput = {}
 ): Promise<V085PrivatePilotInputBindingReport> {
@@ -111,10 +133,16 @@ export async function buildV085PrivatePilotInputBinding(
     disclosureOverrides: input.disclosureOverrides
   });
   const selectedPackage = selectPackage(packageResult.packages, selectedChannelKey);
+  const selectedChannelPackagePresent = Boolean(selectedPackage);
+  const channelPackageMatchesRequest = selectedPackage?.channelKey === selectedChannelKey;
   const tokenEvidence = await resolveTokenEvidence({ cwd, env });
+  const videoAssetFileEvidence = await resolveVideoAssetFileEvidence({
+    cwd,
+    selectedPackage
+  });
   const queueItemId = selectedPackage?.queueItemId ?? trimOrNull(env.V084_QUEUE_ITEM_ID);
   const uploadPackageId = selectedPackage?.packageId ?? trimOrNull(env.V084_UPLOAD_PACKAGE_ID);
-  const evidence = buildEvidence(selectedPackage, tokenEvidence, env);
+  const evidence = buildEvidence(selectedPackage, tokenEvidence, videoAssetFileEvidence, env);
   const runtimeReady = Object.values(evidence).every(Boolean);
   const boundV084Env: V085BoundV084Env = {
     V084_QUEUE_ITEM_ID: queueItemId,
@@ -135,7 +163,7 @@ export async function buildV085PrivatePilotInputBinding(
     env: {
       ...env,
       ...toProcessEnv(boundV084Env),
-      V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: env.V084_PRIVATE_UPLOAD_APPROVAL_PHRASE ?? ""
+      V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: ""
     }
   });
 
@@ -144,10 +172,17 @@ export async function buildV085PrivatePilotInputBinding(
     status: blockers.length === 0 ? "ready_for_fresh_approval" : "blocked",
     mode: "private_pilot_input_binding_no_upload",
     selectedChannelKey,
+    selectedChannelPackagePresent,
+    channelPackageMatchesRequest,
     queueItemIdPresent: Boolean(queueItemId),
     uploadPackageIdPresent: Boolean(uploadPackageId),
     runtimeReady,
     videoAssetReady: evidence.videoAssetReady,
+    videoAssetPathPresent: videoAssetFileEvidence.pathPresent,
+    videoAssetHashEvidencePresent: videoAssetFileEvidence.hashEvidencePresent,
+    videoAssetFileExists: videoAssetFileEvidence.fileExists,
+    videoAssetFileReadable: videoAssetFileEvidence.fileReadable,
+    videoAssetPathUnsafe: videoAssetFileEvidence.pathUnsafe,
     affiliateEvidenceReady: evidence.affiliateEvidenceReady,
     disclosureEvidenceReady: evidence.disclosureEvidenceReady,
     duplicateGuardReady: evidence.duplicateGuardReady,
@@ -161,6 +196,8 @@ export async function buildV085PrivatePilotInputBinding(
       V084_RUNTIME_READY: runtimeReady ? "ready" : "missing"
     },
     boundV084Env,
+    approvalForwardedToV084Plan: false,
+    ambientApprovalStripped: true,
     blockers,
     v084Plan,
     videosInsertCalled: false,
@@ -184,16 +221,26 @@ export async function buildV085PrivatePilotInputBinding(
 }
 
 function selectPackage(packages: V073UploadPackage[], channelKey: ChannelKey) {
-  return packages.find((item) => item.channelKey === channelKey) ?? packages[0] ?? null;
+  return packages.find((item) => item.channelKey === channelKey) ?? null;
 }
 
 function buildEvidence(
   selectedPackage: V073UploadPackage | null,
   tokenEvidence: TokenEvidence,
+  videoAssetFileEvidence: VideoAssetFileEvidence,
   env: NodeJS.ProcessEnv
 ) {
+  const channelPackageMatchesRequest = Boolean(selectedPackage);
   return {
-    videoAssetReady: Boolean(selectedPackage?.videoAsset.path && selectedPackage.videoAsset.hashEvidence),
+    selectedChannelPackagePresent: Boolean(selectedPackage),
+    channelPackageMatchesRequest,
+    videoAssetFileExists: videoAssetFileEvidence.fileExists,
+    videoAssetFileReadable: videoAssetFileEvidence.fileReadable,
+    videoAssetReady: videoAssetFileEvidence.pathPresent &&
+      videoAssetFileEvidence.hashEvidencePresent &&
+      videoAssetFileEvidence.fileExists &&
+      videoAssetFileEvidence.fileReadable &&
+      !videoAssetFileEvidence.pathUnsafe,
     affiliateEvidenceReady: selectedPackage?.deeplink.status === "ready" &&
       Boolean(selectedPackage.deeplink.sanitizedEvidence.affiliateUrlPresent),
     disclosureEvidenceReady: Boolean(selectedPackage?.commentPackage.coupangPartnersDisclosurePresent),
@@ -215,7 +262,14 @@ function buildBlockers(input: {
 
   if (!input.queueItemId) blockers.push("BLOCKED_V085_QUEUE_ITEM_ID_MISSING");
   if (!input.uploadPackageId) blockers.push("BLOCKED_V085_UPLOAD_PACKAGE_ID_MISSING");
+  if (!input.evidence.selectedChannelPackagePresent) blockers.push("BLOCKED_V085_SELECTED_CHANNEL_PACKAGE_MISSING");
+  if (!input.evidence.channelPackageMatchesRequest) blockers.push("BLOCKED_V085_CHANNEL_PACKAGE_MISMATCH");
   if (!input.evidence.videoAssetReady) blockers.push("BLOCKED_V085_VIDEO_ASSET_NOT_READY");
+  if (!input.evidence.videoAssetReady) blockers.push("BLOCKED_V085_VIDEO_ASSET_EVIDENCE_INCOMPLETE");
+  if (!input.evidence.videoAssetFileExists) blockers.push("BLOCKED_V085_VIDEO_ASSET_FILE_NOT_FOUND");
+  if (input.evidence.videoAssetFileExists && !input.evidence.videoAssetFileReadable) {
+    blockers.push("BLOCKED_V085_VIDEO_ASSET_FILE_UNREADABLE");
+  }
   if (!input.evidence.affiliateEvidenceReady) blockers.push("BLOCKED_V085_AFFILIATE_EVIDENCE_NOT_READY");
   if (!input.evidence.disclosureEvidenceReady) blockers.push("BLOCKED_V085_DISCLOSURE_EVIDENCE_NOT_READY");
   if (!input.evidence.duplicateGuardReady) blockers.push("BLOCKED_V085_DUPLICATE_GUARD_NOT_READY");
@@ -226,6 +280,65 @@ function buildBlockers(input: {
   if (input.unsafeReportRequested) blockers.push("BLOCKED_V085_UNSAFE_REPORT_REQUESTED");
 
   return [...new Set(blockers)];
+}
+
+async function resolveVideoAssetFileEvidence(input: {
+  cwd: string;
+  selectedPackage: V073UploadPackage | null;
+}): Promise<VideoAssetFileEvidence> {
+  const videoPath = trimOrNull(input.selectedPackage?.videoAsset.path);
+  const hashEvidence = trimOrNull(input.selectedPackage?.videoAsset.hashEvidence);
+  if (!videoPath) {
+    return {
+      pathPresent: false,
+      hashEvidencePresent: Boolean(hashEvidence),
+      fileExists: false,
+      fileReadable: false,
+      pathUnsafe: false
+    };
+  }
+
+  const resolvedPath = path.resolve(videoPath);
+  const pathUnsafe = !isPathInside(resolvedPath, path.resolve(input.cwd));
+  if (pathUnsafe) {
+    return {
+      pathPresent: true,
+      hashEvidencePresent: Boolean(hashEvidence),
+      fileExists: false,
+      fileReadable: false,
+      pathUnsafe: true
+    };
+  }
+
+  try {
+    const stat = await fs.stat(resolvedPath);
+    if (!stat.isFile()) {
+      return {
+        pathPresent: true,
+        hashEvidencePresent: Boolean(hashEvidence),
+        fileExists: true,
+        fileReadable: false,
+        pathUnsafe: false
+      };
+    }
+    const handle = await fs.open(resolvedPath, "r");
+    await handle.close();
+    return {
+      pathPresent: true,
+      hashEvidencePresent: Boolean(hashEvidence),
+      fileExists: true,
+      fileReadable: true,
+      pathUnsafe: false
+    };
+  } catch {
+    return {
+      pathPresent: true,
+      hashEvidencePresent: Boolean(hashEvidence),
+      fileExists: false,
+      fileReadable: false,
+      pathUnsafe: false
+    };
+  }
 }
 
 async function resolveTokenEvidence(input: {

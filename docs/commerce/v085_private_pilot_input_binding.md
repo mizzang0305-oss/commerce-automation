@@ -20,13 +20,18 @@ V085 reads existing system artifacts only:
 
 - V073 upload package generation from product queue/generated content/review package sources
 - v057 corrected video asset binding
+- sanitized video file existence/readability evidence
 - sanitized target channel evidence
 - affiliate evidence presence
 - Coupang Partners disclosure evidence
 - duplicate guard evidence
 - local YouTube token metadata readiness
 
-Raw Coupang URLs, affiliate URLs, full channel IDs, token paths, token values, client secrets, and authorization headers are not printed.
+Raw Coupang URLs, affiliate URLs, full channel IDs, raw video file paths, token paths, token values, client secrets, and authorization headers are not printed.
+
+When a channel is requested, V085 selects only the matching channel package. It does not fall back to the first available package because that could bind the wrong product/channel content.
+
+V085 strips any ambient `V084_PRIVATE_UPLOAD_APPROVAL_PHRASE` before calling the nested V084 plan. This preflight can become `ready_for_fresh_approval`, but it cannot consume or forward a real execution approval.
 
 ## Command
 
@@ -47,12 +52,17 @@ The command prints a sanitized JSON report only.
 - `BLOCKED_V085_UPLOAD_PACKAGE_ID_MISSING`
 - `BLOCKED_V085_RUNTIME_READY_MISSING`
 - `BLOCKED_V085_VIDEO_ASSET_NOT_READY`
+- `BLOCKED_V085_VIDEO_ASSET_FILE_NOT_FOUND`
+- `BLOCKED_V085_VIDEO_ASSET_FILE_UNREADABLE`
+- `BLOCKED_V085_VIDEO_ASSET_EVIDENCE_INCOMPLETE`
 - `BLOCKED_V085_AFFILIATE_EVIDENCE_NOT_READY`
 - `BLOCKED_V085_DISCLOSURE_EVIDENCE_NOT_READY`
 - `BLOCKED_V085_DUPLICATE_GUARD_NOT_READY`
 - `BLOCKED_V085_TARGET_CHANNEL_EVIDENCE_NOT_READY`
 - `BLOCKED_V085_TOKEN_PROVIDER_NOT_READY`
 - `BLOCKED_V085_UPLOAD_SCOPE_NOT_READY`
+- `BLOCKED_V085_SELECTED_CHANNEL_PACKAGE_MISSING`
+- `BLOCKED_V085_CHANNEL_PACKAGE_MISMATCH`
 - `BLOCKED_V085_UNSAFE_REPORT_REQUESTED`
 
 ## Safety
