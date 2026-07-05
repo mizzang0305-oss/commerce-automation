@@ -55,8 +55,10 @@ Product discovery
 - PR #190 merge commit: `57683be19023695f0545c3c5817b1f8057c1d2e0`
 - PR #191: V080 manual MVP operation pack / release gate, `MERGED`
 - PR #191 merge commit: `cae0dca3be958b9cd9cb47d71ab93dba86b00260`
+- PR #192: V081 controlled private upload pilot, `MERGED`
+- PR #192 merge commit: `98e08f6a697e5de76498ae5c04b79c050dad9a97`
 - Existing v057 corrected package: orphan / fail-closed
-- Current blocker: `PR_OPEN_T011_V081_CONTROLLED_PRIVATE_UPLOAD_PILOT_REVIEW`
+- Current blocker: `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`
 - `SAFE_TO_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
 - PUBLIC_UPLOAD=BLOCKED
@@ -270,7 +272,7 @@ Requirements:
 
 ### T011 - V081 Controlled YouTube Private Upload Pilot
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add a controlled one-item YouTube private upload pilot executor behind an exact owner approval gate.
 
@@ -329,11 +331,12 @@ Requirements:
 - 2026-07-05 KST: PR #191 squash merged. Main synced at `cae0dca3be958b9cd9cb47d71ab93dba86b00260`. T010 is complete and project status is `NO_UPLOAD_MANUAL_MVP_READY`. This is manual MVP operation readiness only: an operator can review and manually upload outside automation after direct confirmation, while the system remains limited to generation, validation, and monitoring. Public upload approval, comment automation approval, and scheduler execution approval remain `BLOCKED_FRESH_APPROVAL_REQUIRED`. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T011 started on `codex/v081-controlled-private-upload-pilot` from main `9b92a8b`. Work is a controlled one-item private upload pilot gate only; public upload, comment automation, scheduler execution, n8n webhook calls, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`.
 - 2026-07-05 KST: T011 V081 controlled private upload pilot committed at `b8dd86f` and opened as PR #192: https://github.com/mizzang0305-oss/commerce-automation/pull/192. Validation passed. Upload execution, real comment mutation, scheduler auto-execution, n8n webhook calls, DB/R2/product asset writes were not run. Raw URLs, full video IDs, secrets, and full channel IDs were not printed. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-05 KST: PR #192 P2 evidence guard fix merged. Main synced at `98e08f6a697e5de76498ae5c04b79c050dad9a97`. T011 is complete. The private pilot remains waiting for separate fresh owner approval and readiness; public upload, comment automation, scheduler execution, webhooks, DB/R2/product asset writes, and raw URL/full ID/secret output remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `PR_OPEN_T011_V081_CONTROLLED_PRIVATE_UPLOAD_PILOT_REVIEW`
-- Controlled private upload pilot executor PR #192 is open for review behind an exact owner approval gate.
+- `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`
+- Controlled private upload pilot executor PR #192 is merged, but execution is blocked until separate fresh owner approval and readiness gates are present.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -349,4 +352,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge PR #192 only after checks/review stay clean. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval and readiness gate are present. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- `V081_PRIVATE_UPLOAD_PILOT_WAITING_FOR_FRESH_OWNER_APPROVAL_AND_READINESS`. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval and readiness gate are present. Public upload/comment/scheduler execution remains blocked until a separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
