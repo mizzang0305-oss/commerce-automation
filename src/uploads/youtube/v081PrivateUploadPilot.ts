@@ -115,7 +115,7 @@ export type V081PrivateUploadPilotAdapterRequest = {
   generatedAt: string;
 };
 export type V081PrivateUploadPilotAdapterResult = {
-  status: "BLOCKED" | "MOCK_ONLY";
+  status: "BLOCKED" | "MOCK_ONLY" | "UPLOADED";
   blocker: V081PrivateUploadPilotBlocker | null;
   youtubeVideoId: string | null;
   channelId: string | null;

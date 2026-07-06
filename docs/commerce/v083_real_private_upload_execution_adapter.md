@@ -62,6 +62,21 @@ The constructor-bearing adapter class is not exported. Executor injection must g
 
 This keeps PR validation no-upload while making the remaining runtime gap explicit: a later server-only execution path must inject the real upload executor only after a separate fresh private pilot approval and the full readiness chain pass.
 
+## V092 Update
+
+V092 adds the server-only YouTube private upload executor boundary for the later controlled one-item private pilot execution.
+
+The real executor lives behind `import "server-only"` and creates the production YouTube upload adapter only through the server execution wiring. CLI-safe runtime execution uses a no-upload placeholder executor, so package validation can still reach the V081/V083 boundary without importing the real YouTube adapter or calling `videos.insert`.
+
+The server-only executor can report completed upload evidence only when all required adapter evidence is present:
+
+- `videosInsertCalled=true`
+- `youtubeVideoId`
+- `channelId`
+- `uploadedAt`
+
+If any evidence is missing, the result remains blocked and does not create completed V076 store/report evidence. V092 does not authorize private, public, or unlisted upload by itself; a separate fresh private pilot approval and complete runtime evidence are still required after merge.
+
 ## Evidence Policy
 
 Adapter evidence is complete only when all of these are present:

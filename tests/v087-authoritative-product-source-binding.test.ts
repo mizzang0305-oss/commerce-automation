@@ -255,13 +255,13 @@ describe("v087 authoritative v057 product source binding", () => {
     }
   });
 
-  test("TASK.md records V087 PR-open blocker and keeps upload surfaces blocked", async () => {
+  test("TASK.md records the current private pilot review blocker and keeps upload surfaces blocked", async () => {
     const task = await import("node:fs/promises").then((fs) => fs.readFile("TASK.md", "utf8"));
 
     expect(task).toContain("### T016 - V087 Authoritative V057 Product Source Binding");
     expect(task).toMatch(/### T016 - V087 Authoritative V057 Product Source Binding[\s\S]*Status: `(PR_OPEN|DONE)`/);
     expect(task).toMatch(
-      /Current blocker: `(PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW)`/
+      /Current blocker: `(PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW)`/
     );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");

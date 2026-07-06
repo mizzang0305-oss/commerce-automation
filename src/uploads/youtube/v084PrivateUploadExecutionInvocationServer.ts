@@ -8,6 +8,10 @@ import {
 import {
   createV083RealPrivateUploadExecutionAdapterFactory
 } from "./v083RealPrivateUploadExecutionAdapter";
+import {
+  createV092ServerOnlyYouTubePrivateUploadExecutor
+} from "./v092ServerOnlyYouTubePrivateUploadExecutor";
+import type { V092PrivateUploadExecutorOptions } from "./v092PrivateUploadExecutorBoundary";
 
 export type V084PrivateUploadPilotServerExecutionWiring = {
   version: "v084-server";
@@ -26,7 +30,8 @@ export type V084PrivateUploadPilotServerExecutionWiring = {
 };
 
 export async function buildV084PrivateUploadPilotServerExecutionWiring(
-  request: V084PrivateUploadPilotInvocationRequest
+  request: V084PrivateUploadPilotInvocationRequest,
+  options: V092PrivateUploadExecutorOptions = {}
 ): Promise<V084PrivateUploadPilotServerExecutionWiring> {
   const invocation = await buildV084PrivateUploadPilotInvocation(request);
   const factory = invocation.status === "ready_for_private_execution"
@@ -46,7 +51,8 @@ export async function buildV084PrivateUploadPilotServerExecutionWiring(
       requestedVisibility: "private",
       maxItems: 1,
       commentAutomationRequested: false,
-      schedulerExecutionRequested: false
+      schedulerExecutionRequested: false,
+      uploadExecutor: createV092ServerOnlyYouTubePrivateUploadExecutor(options)
     })
     : null;
 

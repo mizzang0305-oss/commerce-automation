@@ -21,6 +21,8 @@ The plan command is always no-upload. The execute command no longer keeps the V0
 
 Server-only wiring lives in `src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts`, which imports `server-only` before importing the guarded V083 adapter entrypoint. This keeps the real execution adapter behind the same server-only boundary used by V083 while allowing the CLI plan command to generate a sanitized report without pulling a browser-reachable execution adapter into the dependency graph.
 
+V092 extends this boundary by injecting the actual YouTube private upload executor only from the server-only wiring module. The CLI-safe runtime path injects a no-upload placeholder executor instead. This means validation can reach the V081/V083 executor boundary and remain blocked without importing the real YouTube upload adapter, token provider, or upload mutation path.
+
 ## Invocation Contract
 
 The invocation request uses:
@@ -55,11 +57,13 @@ The invocation request uses:
 - `BLOCKED_V084_V081_EXECUTION_BLOCKED`
 - `BLOCKED_V084_UNSAFE_REPORT_REQUESTED`
 - `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED` through nested V081/V083 execution
+- `BLOCKED_V081_UPLOAD_PACKAGE_MISSING` through the CLI-safe no-upload V092 placeholder boundary
 
 ## Evidence And Redaction
 
 V084 keeps V076 evidence integration available through the V081 private pilot result contract, but it does not create completed evidence unless a future real adapter result includes all required values:
 
+- `videosInsertCalled=true`
 - `youtubeVideoId`
 - `channelId`
 - `uploadedAt`
