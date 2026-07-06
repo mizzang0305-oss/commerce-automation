@@ -13,7 +13,7 @@ npm run upload:v084:private-pilot:plan
 npm run upload:v084:private-pilot:execute
 ```
 
-The plan command is always no-upload. The execute command no longer keeps the V084-only PR lock. When all V084 readiness gates pass, it routes into the V081/V083 private pilot execution contract and remains blocked there unless a real server-only adapter returns complete upload evidence.
+The plan command is always no-upload. The execute command no longer keeps the V084-only PR lock. When all V084 readiness gates pass, it routes into the V081/V083 private pilot execution contract and remains blocked there unless a real server-only executor is injected and returns complete upload evidence.
 
 ## Server-Only Boundary
 
@@ -54,6 +54,7 @@ The invocation request uses:
 - `BLOCKED_V084_READINESS_NOT_READY`
 - `BLOCKED_V084_V081_EXECUTION_BLOCKED`
 - `BLOCKED_V084_UNSAFE_REPORT_REQUESTED`
+- `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED` through nested V081/V083 execution
 
 ## Evidence And Redaction
 

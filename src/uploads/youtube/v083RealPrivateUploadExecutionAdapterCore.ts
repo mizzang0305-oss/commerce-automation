@@ -1,6 +1,7 @@
 import {
   BlockedV081PrivateUploadPilotAdapter,
   type V081PrivateUploadPilotAdapter,
+  type V081PrivateUploadPilotAdapterRequest,
   type V081PrivateUploadPilotAdapterResult
 } from "./v081PrivateUploadPilot";
 import {
@@ -10,7 +11,13 @@ import {
 } from "./v083PrivateUploadExecutionReadiness";
 
 export type V083RealPrivateUploadExecutionAdapterFactoryInput =
-  V083PrivateUploadExecutionReadinessInput;
+  V083PrivateUploadExecutionReadinessInput & {
+    uploadExecutor?: V083RealPrivateUploadExecutor;
+  };
+
+export type V083RealPrivateUploadExecutor = (
+  request: V081PrivateUploadPilotAdapterRequest
+) => Promise<V081PrivateUploadPilotAdapterResult>;
 
 export type V083RealPrivateUploadExecutionAdapterFactory = {
   version: "v083";
@@ -30,25 +37,33 @@ export type V083RealPrivateUploadExecutionAdapterFactory = {
   fake_success: false;
 };
 
-export class V083RealPrivateUploadExecutionAdapter implements V081PrivateUploadPilotAdapter {
+class V083RealPrivateUploadExecutionAdapter implements V081PrivateUploadPilotAdapter {
   readonly mode = "real_candidate" as const;
 
-  async uploadPrivatePilot(): Promise<V081PrivateUploadPilotAdapterResult> {
-    return {
-      status: "BLOCKED",
-      blocker: "BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR",
-      youtubeVideoId: null,
-      channelId: null,
-      uploadedAt: null,
-      videosInsertCalled: false,
-      videosInsertTotalCount: 0,
-      commentThreadsInsertCalled: false,
-      fakeSuccess: false,
-      rawUrlsPrinted: false,
-      rawVideoIdsPrinted: false,
-      rawChannelIdsPrinted: false,
-      secretsPrinted: false
-    };
+  constructor(private readonly uploadExecutor?: V083RealPrivateUploadExecutor) {}
+
+  async uploadPrivatePilot(
+    request: V081PrivateUploadPilotAdapterRequest
+  ): Promise<V081PrivateUploadPilotAdapterResult> {
+    if (!this.uploadExecutor) {
+      return {
+        status: "BLOCKED",
+        blocker: "BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED",
+        youtubeVideoId: null,
+        channelId: null,
+        uploadedAt: null,
+        videosInsertCalled: false,
+        videosInsertTotalCount: 0,
+        commentThreadsInsertCalled: false,
+        fakeSuccess: false,
+        rawUrlsPrinted: false,
+        rawVideoIdsPrinted: false,
+        rawChannelIdsPrinted: false,
+        secretsPrinted: false
+      };
+    }
+
+    return this.uploadExecutor(request);
   }
 }
 
@@ -57,7 +72,7 @@ export function createV083RealPrivateUploadExecutionAdapterFactory(
 ): V083RealPrivateUploadExecutionAdapterFactory {
   const readiness = buildV083PrivateUploadExecutionReadiness(input);
   const adapter = readiness.ready
-    ? new V083RealPrivateUploadExecutionAdapter()
+    ? new V083RealPrivateUploadExecutionAdapter(input.uploadExecutor)
     : new BlockedV081PrivateUploadPilotAdapter();
 
   return {
