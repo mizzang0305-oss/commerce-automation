@@ -25,14 +25,31 @@ The resolver:
 - loads V073 upload packages through the existing generator by default
 - can be overridden in tests with a fake package loader
 - matches `queueItemId`, `uploadPackageId`, and `channelKey`
-- builds a V092 private upload request with `visibility=private`
+- builds a V092 private upload request with `visibility=private` only through `buildYouTubeUploadRequest`
 - keeps `execution_intent=private_execute`
 - resolves target channel evidence from server-side env
+- cross-checks runtime target-channel hash evidence against the V073/V085 package target-channel hash prefix
+- fails closed if the request builder rejects disclosure, affiliate URL, asset, visibility, metadata, or shorts quality evidence
 - returns `null` when package evidence is missing or mismatched
 
 `src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts` injects this resolver into the V092 server-only executor by default. Test overrides remain available.
 
 The CLI/runtime path still uses `createV092NoUploadPrivateExecutorPlaceholder()` and does not import the server-only resolver or real upload adapter.
+
+## Review Fixes
+
+The V094 resolver must not create a fallback `YouTubeUploadRequest` when `buildYouTubeUploadRequest` returns `ok=false`.
+Builder failures are mapped to sanitized V081 blockers and stop before adapter upload.
+
+The resolver also must not trust the runtime target channel id by itself. It requires:
+
+- package target-channel evidence exists
+- package target-channel evidence has valid format status
+- package target-channel hash prefix exists
+- runtime target-channel id validates locally
+- runtime target-channel hash prefix matches the package hash prefix
+
+If target-channel evidence is missing or mismatched, the resolver returns a sanitized target-channel blocker without printing the full channel id.
 
 ## Safety
 

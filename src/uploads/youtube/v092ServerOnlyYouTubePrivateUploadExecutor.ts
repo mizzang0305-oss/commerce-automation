@@ -15,6 +15,7 @@ import type {
 } from "./v081PrivateUploadPilot";
 import {
   blockedV092PrivateExecutorResult,
+  isV092BlockedPrivateUploadRequestResolution,
   type V092PrivateUploadExecutorOptions,
   type V092ResolvedPrivateUploadRequest
 } from "./v092PrivateUploadExecutorBoundary";
@@ -36,6 +37,9 @@ export function createV092ServerOnlyYouTubePrivateUploadExecutor(
     const resolved = await options.uploadRequestResolver(request);
     if (!resolved) {
       return blockedResult("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
+    }
+    if (isV092BlockedPrivateUploadRequestResolution(resolved)) {
+      return blockedResult(resolved.blocker);
     }
 
     const uploadRequestBlocker = validateResolvedUploadRequest(resolved);

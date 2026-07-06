@@ -665,6 +665,7 @@ Requirements:
 - 2026-07-07 KST: V093 rebound runtime evidence without upload execution. V088 bound, V087 ready_for_fresh_approval, V085 ready_for_fresh_approval, and V084 plan blocked only by fresh approval required. `videos.insert=0`, `commentThreads.insert=false`, `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-07 KST: A fresh private pilot execution attempt was called exactly once after V093 evidence rebound, but V081 blocked before upload with `BLOCKED_V081_UPLOAD_PACKAGE_MISSING`. `videos.insert=0`, `commentThreads.insert=false`, no completed V076 evidence/store/report was created, and public/unlisted/comment/scheduler remained blocked.
 - 2026-07-07 KST: T021 V094 upload package to V081 server executor bridge started on `codex/v094-bind-upload-package-to-v081-server-executor-no-upload`. V094 is a no-upload review PR that wires the already-bound V073/V085 upload package evidence into the V092 server-only request resolver path. `npm run upload:v084:private-pilot:execute --silent` is not run during PR validation. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: PR #202 latest-head P1/P2 review fixes prepared on `codex/v094-bind-upload-package-to-v081-server-executor-no-upload`. V094 now fails closed when `buildYouTubeUploadRequest` rejects package evidence and verifies runtime target-channel hash evidence against the bound package target-channel hash prefix before returning a request. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ### T021 - V094 Bind Upload Package To V081 Server Executor
 
@@ -676,6 +677,8 @@ Requirements:
 
 - add a server-only V094 upload package request resolver
 - resolve V073 upload package evidence by `queueItemId`, `uploadPackageId`, and `channelKey`
+- fail closed when `buildYouTubeUploadRequest` rejects disclosure, affiliate, server-accessible asset, metadata, or shorts quality evidence
+- cross-check runtime target-channel hash evidence against the bound package target-channel hash prefix
 - inject the resolver from V084 server-only wiring into the V092 server-only executor
 - keep CLI/runtime validation on the no-upload placeholder
 - do not run `npm run upload:v084:private-pilot:execute --silent` during PR validation
