@@ -3,7 +3,6 @@ import {
   BlockedV081PrivateUploadPilotAdapter,
   executeV081PrivateUploadPilot,
   type V081PrivateUploadPilotAdapter,
-  type V081PrivateUploadPilotAdapterResult,
   type V081PrivateUploadPilotBlocker,
   type V081PrivateUploadPilotRequest
 } from "./v081PrivateUploadPilot";
@@ -12,6 +11,9 @@ import {
   buildV083PrivateUploadExecutionReadiness,
   type V083PrivateUploadExecutionBlocker
 } from "./v083PrivateUploadExecutionReadiness";
+import {
+  createV083RealPrivateUploadExecutionAdapterFactory
+} from "./v083RealPrivateUploadExecutionAdapterCore";
 import {
   buildV084PrivateUploadPilotInvocation,
   type V084PrivateUploadPilotInvocationRequest,
@@ -122,7 +124,7 @@ function buildRuntimeResolverBinderBlockers(
 }
 
 function createDefaultV083Adapter(request: V084PrivateUploadPilotInvocationRequest) {
-  const readiness = buildV083PrivateUploadExecutionReadiness({
+  const readinessInput = {
     buildApprovalPhrase: APPROVE_BUILD_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD,
     serverOnlyContext: request.serverOnlyContext ?? true,
     v081PilotReady: request.readiness.v081PilotReady,
@@ -139,33 +141,12 @@ function createDefaultV083Adapter(request: V084PrivateUploadPilotInvocationReque
     maxItems: 1,
     commentAutomationRequested: false,
     schedulerExecutionRequested: false
-  });
+  } as const;
+  const readiness = buildV083PrivateUploadExecutionReadiness(readinessInput);
 
   return readiness.ready
-    ? new NoUploadV083RealCandidateAdapter()
+    ? createV083RealPrivateUploadExecutionAdapterFactory(readinessInput).adapter
     : new BlockedV081PrivateUploadPilotAdapter();
-}
-
-class NoUploadV083RealCandidateAdapter implements V081PrivateUploadPilotAdapter {
-  readonly mode = "real_candidate" as const;
-
-  async uploadPrivatePilot(): Promise<V081PrivateUploadPilotAdapterResult> {
-    return {
-      status: "BLOCKED",
-      blocker: "BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR",
-      youtubeVideoId: null,
-      channelId: null,
-      uploadedAt: null,
-      videosInsertCalled: false,
-      videosInsertTotalCount: 0,
-      commentThreadsInsertCalled: false,
-      fakeSuccess: false,
-      rawUrlsPrinted: false,
-      rawVideoIdsPrinted: false,
-      rawChannelIdsPrinted: false,
-      secretsPrinted: false
-    };
-  }
 }
 
 function toV081Request(

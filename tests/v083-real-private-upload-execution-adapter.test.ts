@@ -117,7 +117,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     ]));
   });
 
-  test("all readiness pass creates an executable candidate but this PR still blocks execution", async () => {
+  test("all readiness pass creates an executable candidate but requires an injected executor", async () => {
     const factory = createV083RealPrivateUploadExecutionAdapterFactory(readyInput());
     const report = buildV083PrivateUploadExecutionReadinessReport(factory.readiness);
     const adapterResult = await factory.adapter.uploadPrivatePilot({
@@ -137,7 +137,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(report.FINAL_STATUS).toBe("READY_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD");
     expect(report.FINAL_STATUS).not.toContain("SUCCESS");
     expect(adapterResult.status).toBe("BLOCKED");
-    expect(adapterResult.blocker).toBe("BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
+    expect(adapterResult.blocker).toBe("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
     expect(adapterResult.videosInsertCalled).toBe(false);
     expect(adapterResult.videosInsertTotalCount).toBe(0);
     expect(adapterResult.commentThreadsInsertCalled).toBe(false);
@@ -153,7 +153,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(result.adapterMode).toBe("real_candidate");
     expect(result.status).toBe("blocked");
     expect(result.status).not.toBe("private_upload_completed");
-    expect(result.blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
+    expect(result.blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
     expect(result.videosInsertCalled).toBe(false);
     expect(result.videosInsertTotalCount).toBe(0);
     expect(result.commentThreadsInsertCalled).toBe(false);
@@ -161,6 +161,46 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(result.uploadResultStoreItem).toBeNull();
     expect(result.uploadResultStoreReport).toBeNull();
     expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("V083 adapter delegates to an injected no-upload executor without calling videos.insert", async () => {
+    let executorCalled = false;
+    const factory = createV083RealPrivateUploadExecutionAdapterFactory({
+      ...readyInput(),
+      uploadExecutor: async () => {
+        executorCalled = true;
+        return {
+          status: "BLOCKED",
+          blocker: "BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED",
+          youtubeVideoId: null,
+          channelId: null,
+          uploadedAt: null,
+          videosInsertCalled: false,
+          videosInsertTotalCount: 0,
+          commentThreadsInsertCalled: false,
+          fakeSuccess: false,
+          rawUrlsPrinted: false,
+          rawVideoIdsPrinted: false,
+          rawChannelIdsPrinted: false,
+          secretsPrinted: false
+        };
+      }
+    });
+    const result = await factory.adapter.uploadPrivatePilot({
+      uploadPackageId: "pkg-v083",
+      queueItemId: "queue-v083",
+      channelKey: "father_jobs",
+      visibility: "private",
+      maxItems: 1,
+      videoAssetHashPrefix: "asset",
+      generatedAt: "2026-07-05T00:00:00.000Z"
+    });
+
+    expect(executorCalled).toBe(true);
+    expect(result.blocker).toBe("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.videosInsertTotalCount).toBe(0);
+    expect(result.commentThreadsInsertCalled).toBe(false);
   });
 
   test.each([
@@ -232,7 +272,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(task).toContain("### T013 - V083 Real Private Upload Execution Adapter");
     expect(task).toMatch(/### T013 - V083 Real Private Upload Execution Adapter[\s\S]*Status: `(PR_OPEN|DONE)`/);
     expect(task).toMatch(
-      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW|PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW)`/
+      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|PR_OPEN_T013_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_REVIEW|PR_OPEN_T014_V084_PRIVATE_UPLOAD_EXECUTION_INVOCATION_PATH_REVIEW|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW)`/
     );
     expect(task).toMatch(
       /PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED(_AFTER_MERGE)?/
@@ -247,7 +287,7 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
   test("docs state that V083 is no-upload wiring and needs fresh approval after merge", async () => {
     const docs = await readFile("docs/commerce/v083_real_private_upload_execution_adapter.md", "utf8");
 
-    expect(docs).toContain("V083 is not an upload execution PR.");
+    expect(docs).toContain("V083/V091 is not an upload execution PR.");
     expect(docs).toContain("No videos.insert is called by V083 tests or readiness checks.");
     expect(docs).toContain("A new fresh owner approval is required after merge.");
     expect(docs).not.toMatch(FORBIDDEN_REPORT_PATTERN);

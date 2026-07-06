@@ -1,8 +1,8 @@
 # V083 Real Private Upload Execution Adapter
 
-V083 is not an upload execution PR.
+V083/V091 is not an upload execution PR.
 
-It adds server-only wiring for a future controlled one-item YouTube private upload execution path. The adapter can become an executable candidate only when V081 private pilot readiness, V082 runtime adapter readiness, token provider readiness, upload scope readiness, package evidence, asset evidence, duplicate guard, disclosure guard, affiliate evidence, and target channel evidence all pass.
+It adds server-only wiring for a controlled one-item YouTube private upload execution path. The adapter can become an executable candidate only when V081 private pilot readiness, V082 runtime adapter readiness, token provider readiness, upload scope readiness, package evidence, asset evidence, duplicate guard, disclosure guard, affiliate evidence, and target channel evidence all pass.
 
 No videos.insert is called by V083 tests or readiness checks. No commentThreads.insert is called by V083 tests or readiness checks.
 
@@ -15,7 +15,7 @@ No videos.insert is called by V083 tests or readiness checks. No commentThreads.
 - Unlisted upload: blocked
 - Comment automation: blocked
 - Scheduler execution: blocked
-- Execution in this PR: blocked
+- Execution in this PR: blocked unless an explicit executor is injected by a later server-only runtime
 - Upload result evidence: sanitized only through the V076 contract
 
 ## Required Approval
@@ -28,13 +28,7 @@ APPROVE_BUILD_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD
 
 This phrase does not authorize a real upload.
 
-A new fresh owner approval is required after merge.
-
-The private one-item execution path can be invoked only after that approval and a clean readiness gate:
-
-```text
-APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT
-```
+A new fresh owner approval is required after merge. The private one-item execution path can be invoked only after that approval and a clean readiness gate. The execution approval phrase is intentionally not duplicated in this V091 no-upload review document.
 
 ## Blockers
 
@@ -57,8 +51,14 @@ The readiness gate fails closed for missing or unsafe evidence:
 - `BLOCKED_V083_COMMENT_AUTOMATION_NOT_ALLOWED`
 - `BLOCKED_V083_SCHEDULER_EXECUTION_NOT_ALLOWED`
 - `BLOCKED_V083_MAX_ITEMS_MUST_BE_ONE`
-- `BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR`
+- `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED`
 - `BLOCKED_V083_ADAPTER_UPLOAD_EVIDENCE_INCOMPLETE`
+
+## V091 Update
+
+V091 removes the old PR-only V083 blocker and replaces it with a fail-closed injected-executor requirement. With no executor injected, the real-candidate adapter returns `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED`, `videosInsertCalled=false`, and `commentThreadsInsertCalled=false`.
+
+This keeps PR validation no-upload while making the remaining runtime gap explicit: a later server-only execution path must inject the real upload executor only after a separate fresh private pilot approval and the full readiness chain pass.
 
 ## Evidence Policy
 
@@ -82,4 +82,4 @@ V083 keeps:
 - `COMMENT_AUTOMATION=BLOCKED`
 - `SCHEDULER_EXECUTION=BLOCKED`
 
-Merge of V083 only prepares the next execution adapter review step. It does not authorize private, public, or unlisted upload.
+Merge of V083/V091 only prepares the next execution adapter review step. It does not authorize private, public, or unlisted upload.
