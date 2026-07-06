@@ -28,7 +28,7 @@ export type V084PrivateUploadPilotInvocationBlocker =
   | "BLOCKED_V084_UPLOAD_PACKAGE_REQUIRED"
   | "BLOCKED_V084_QUEUE_ITEM_REQUIRED"
   | "BLOCKED_V084_READINESS_NOT_READY"
-  | "BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR"
+  | "BLOCKED_V084_V081_EXECUTION_BLOCKED"
   | "BLOCKED_V084_UNSAFE_REPORT_REQUESTED";
 
 export type V084PrivateUploadPilotInvocationReadiness = {
@@ -93,8 +93,8 @@ export type V084PrivateUploadPilotInvocationResult = {
   v083Blockers: V083PrivateUploadExecutionBlocker[];
   v081ResultStatus: V081PrivateUploadPilotResult["status"] | null;
   v081Blockers: V081PrivateUploadPilotResult["blockers"];
-  videosInsertCalled: false;
-  videosInsertTotalCount: 0;
+  videosInsertCalled: boolean;
+  videosInsertTotalCount: 0 | 1;
   commentThreadsInsertCalled: false;
   comment_create_update_delete_called: false;
   scheduler_auto_execution_called: false;
@@ -188,7 +188,8 @@ export async function buildV084PrivateUploadPilotInvocation(
 
   return buildResult({
     request: normalized,
-    blockers: ["BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR"],
+    blockers: [],
+    status: "ready_for_private_execution",
     v083AdapterInvoked: false,
     v083AdapterMode: null,
     v083Blockers: []
@@ -309,8 +310,8 @@ function buildResult(input: {
     v083Blockers: input.v083Blockers ?? [],
     v081ResultStatus: input.v081Result?.status ?? null,
     v081Blockers: input.v081Result?.blockers ?? [],
-    videosInsertCalled: false,
-    videosInsertTotalCount: 0,
+    videosInsertCalled: input.v081Result?.videosInsertCalled ?? false,
+    videosInsertTotalCount: input.v081Result?.videosInsertTotalCount ?? 0,
     commentThreadsInsertCalled: false,
     comment_create_update_delete_called: false,
     scheduler_auto_execution_called: false,

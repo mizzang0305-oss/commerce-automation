@@ -68,7 +68,7 @@ Product discovery
 - PR #197: V087 authoritative v057 product source binding, `MERGED`
 - PR #198 merge commit: `bdce087a7ddf24e13b3b27b8d9c1717459198005`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
+- Current blocker: `PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -507,6 +507,40 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T018 - V090 Unlock V084 Private Pilot Execute Gate
+
+Status: `PR_OPEN`
+
+Goal: Remove the V084-only execute hard lock without executing a real upload.
+
+Requirements:
+
+- remove `BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR` from the V084 execute path
+- route V084 execute into the V081/V083 private pilot execution contract after all V084 gates pass
+- require exact fresh private pilot approval before any ready state
+- reject stale private pilot approval reuse
+- visibility must be private
+- maxItems must be exactly 1
+- V088 resolver status, V087 binder status, V085 evidence, token/scope/quota/video/affiliate/disclosure/duplicate/target evidence must be ready before execution can proceed
+- V076 sanitized upload result evidence must be created only after complete adapter success evidence is present
+- no evidence is created for blocked/no-op/ready states
+- no videos.insert call during this PR validation
+- no commentThreads.insert call during this PR validation
+- no public or unlisted upload
+- no comment automation
+- no scheduler execution
+- no R2/DB/product_assets write
+- no n8n webhook call
+- no raw affiliate URL, raw Coupang URL, full video ID, full channel ID, token, secret, client_secret, Authorization, HMAC, or raw evidence output
+- fake success remains blocked
+- merge does not authorize execution; a new fresh owner approval is required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Latest Evidence
 
 - 2026-07-04 KST: `TASK.md` created as sanitized source-of-truth document. PR #182 is the current merge gate. `SAFE_TO_UPLOAD=false`.
@@ -555,13 +589,15 @@ Requirements:
 - 2026-07-05 KST: T016 V087 authoritative v057 product source binding opened on `codex/v087-authoritative-v057-product-source-binding`. Existing upstream metadata remained absent, so V087 adds a no-upload local manifest binder that validates product source evidence, writes only local protected v057 product-source metadata, and calls V085 binder without forwarding upload approval. `videos.insert`, `commentThreads.insert`, V084 execute, public/unlisted/private upload execution, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-05 KST: PR #197 squash merged. Main synced at `7eca4ab5ed160e41425616cfa55b08af557c8586`. T016 is complete. V087 canonical first-frame evidence guard is merged and requires `commerce-assets/review/v057/<channelKey>/first-frame-v057.jpg` evidence before V085 can reach ready-for-fresh-approval. Upload execution, V084 execute, real comment mutation, scheduler execution, webhooks, DB/R2/product asset writes, raw URL/full ID/raw file path/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-06 KST: PR #198 squash merged. Main synced at `bdce087a7ddf24e13b3b27b8d9c1717459198005`. T017 is complete. V088 Coupang API product source resolver is merged with manifest channel/target-channel guard, sanitized URL evidence binding, and V085 CLI env loading. Post-merge no-upload binders reached `ready_for_fresh_approval`; upload execution remains blocked until separate fresh owner approval. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-06 KST: T018 V090 V084 private pilot execute gate unlock started on `codex/v090-unlock-v084-private-execute-no-upload`. The V084-only execute hard lock is removed in code, while PR validation remains no-upload and routes through V081/V083 blocked execution evidence. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 
-- `V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL`
+- `PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 is merged, but upload execution is not authorized.
 - V084 private pilot invocation path is merged and does not authorize upload by itself.
+- V090 removes the V084-only execute lock in a no-upload PR and keeps execution blocked unless fresh approval plus complete server-only adapter evidence are present after merge.
 - V088 Coupang API product source resolver PR #198 is merged and no-upload binders are ready for fresh approval.
 - Private pilot execution remains blocked until a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
@@ -580,4 +616,4 @@ Requirements:
 
 ## Next Exact Action
 
-- V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL. Do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Merge T018/V090 after review and clean validation. After merge, do not execute private pilot upload until a separate fresh `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT` approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
