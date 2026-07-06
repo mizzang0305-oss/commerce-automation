@@ -163,6 +163,25 @@ describe("v084 private upload execution invocation path", () => {
     ]));
   });
 
+  test("blocks before adapter invocation when resolver or binder status evidence is missing", async () => {
+    const result = await runV084PrivateUploadPilotExecution(readyRequest({
+      dryRun: false,
+      v088ResolverStatus: "missing",
+      v087BinderStatus: "missing",
+      v085BinderStatus: "blocked"
+    }));
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockers).toEqual(expect.arrayContaining([
+      "BLOCKED_V084_V088_RESOLVER_NOT_BOUND",
+      "BLOCKED_V084_V087_BINDER_NOT_READY",
+      "BLOCKED_V084_V085_BINDER_NOT_READY"
+    ]));
+    expect(result.v083AdapterInvoked).toBe(false);
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+  });
+
   test("blocks unsafe report requests before invocation", async () => {
     const result = await buildV084PrivateUploadPilotInvocation(readyRequest({
       unsafeReportRequested: true
@@ -224,6 +243,9 @@ describe("v084 private upload execution invocation path", () => {
         V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
         V084_QUEUE_ITEM_ID: "queue-v084-script",
         V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
+        V084_V088_RESOLVER_STATUS: "bound",
+        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
+        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
         V084_RUNTIME_READY: "true"
       }
     });
@@ -255,6 +277,9 @@ describe("v084 private upload execution invocation path", () => {
         V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
         V084_QUEUE_ITEM_ID: "queue-v084-script",
         V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
+        V084_V088_RESOLVER_STATUS: "bound",
+        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
+        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
         V084_RUNTIME_READY: "true"
       }
     });
@@ -266,6 +291,43 @@ describe("v084 private upload execution invocation path", () => {
     expect(parsed.blockers).not.toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
     expect(parsed.blockers).toContain("BLOCKED_V084_V081_EXECUTION_BLOCKED");
     expect(parsed.v081Blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
+    expect(parsed.videosInsertCalled).toBe(false);
+    expect(parsed.commentThreadsInsertCalled).toBe(false);
+    expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("package execute command preserves unsafe automation blockers from env", () => {
+    const npmCli = process.env.npm_execpath;
+
+    expect(npmCli).toBeTruthy();
+
+    const output = execFileSync(process.execPath, [
+      npmCli as string,
+      "run",
+      "upload:v084:private-pilot:execute",
+      "--silent"
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
+        V084_QUEUE_ITEM_ID: "queue-v084-script",
+        V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
+        V084_V088_RESOLVER_STATUS: "bound",
+        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
+        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
+        V084_RUNTIME_READY: "true",
+        V084_COMMENT_AUTOMATION_ALLOWED: "true",
+        V084_SCHEDULER_EXECUTION_ALLOWED: "true"
+      }
+    });
+    const parsed = JSON.parse(output);
+
+    expect(parsed.status).toBe("blocked");
+    expect(parsed.blockers).toContain("BLOCKED_V084_COMMENT_AUTOMATION_NOT_ALLOWED");
+    expect(parsed.blockers).toContain("BLOCKED_V084_SCHEDULER_EXECUTION_NOT_ALLOWED");
+    expect(parsed.v083AdapterInvoked).toBe(false);
     expect(parsed.videosInsertCalled).toBe(false);
     expect(parsed.commentThreadsInsertCalled).toBe(false);
     expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
@@ -338,6 +400,9 @@ function readyRequest(
     dryRun: true,
     serverOnlyContext: true,
     v083AdapterAvailable: true,
+    v088ResolverStatus: "bound",
+    v087BinderStatus: "ready_for_fresh_approval",
+    v085BinderStatus: "ready_for_fresh_approval",
     queueItemId: "queue-v084-father",
     uploadPackageId: "pkg-v084-father",
     channelKey: "father_jobs",

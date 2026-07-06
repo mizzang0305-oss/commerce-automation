@@ -19,14 +19,17 @@ async function main() {
       dryRun: false,
       serverOnlyContext: plan.v083AdapterAvailable,
       v083AdapterAvailable: plan.v083AdapterAvailable,
+      v088ResolverStatus: readV088ResolverStatus(process.env.V084_V088_RESOLVER_STATUS),
+      v087BinderStatus: readBinderStatus(process.env.V084_V087_BINDER_STATUS),
+      v085BinderStatus: readBinderStatus(process.env.V084_V085_BINDER_STATUS),
       queueItemId: plan.queueItemIdPresent ? process.env.V084_QUEUE_ITEM_ID ?? "" : "",
       uploadPackageId: plan.uploadPackageIdPresent ? process.env.V084_UPLOAD_PACKAGE_ID ?? "" : "",
       channelKey: plan.channelKey,
       visibility: plan.requestedVisibility,
       maxItems: plan.requestedMaxItems,
       approvalPhrase: process.env.V084_PRIVATE_UPLOAD_APPROVAL_PHRASE ?? null,
-      commentAutomationAllowed: false,
-      schedulerExecutionAllowed: false,
+      commentAutomationAllowed: process.env.V084_COMMENT_AUTOMATION_ALLOWED === "true",
+      schedulerExecutionAllowed: process.env.V084_SCHEDULER_EXECUTION_ALLOWED === "true",
       generatedAt: process.env.V084_GENERATED_AT,
       videoAssetHashPrefix: process.env.V084_VIDEO_ASSET_HASH_PREFIX ?? null,
       readiness: {
@@ -46,6 +49,16 @@ async function main() {
     });
 
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+function readV088ResolverStatus(value: string | undefined) {
+  return value === "bound" || value === "blocked" ? value : "missing";
+}
+
+function readBinderStatus(value: string | undefined) {
+  return value === "ready_for_fresh_approval" || value === "blocked" || value === "not_run"
+    ? value
+    : "missing";
 }
 
 main().catch((error: unknown) => {
