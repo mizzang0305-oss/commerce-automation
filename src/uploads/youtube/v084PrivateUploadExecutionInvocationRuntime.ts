@@ -18,6 +18,12 @@ import {
   type V084PrivateUploadPilotInvocationResult
 } from "./v084PrivateUploadExecutionInvocation";
 
+type RuntimeResolverBinderEvidence = {
+  v088ResolverStatus: NonNullable<V084PrivateUploadPilotInvocationRequest["v088ResolverStatus"]>;
+  v087BinderStatus: NonNullable<V084PrivateUploadPilotInvocationRequest["v087BinderStatus"]>;
+  v085BinderStatus: NonNullable<V084PrivateUploadPilotInvocationRequest["v085BinderStatus"]>;
+};
+
 export type V084PrivateUploadPilotExecutionRuntimeOptions = {
   adapter?: V081PrivateUploadPilotAdapter;
 };
@@ -26,8 +32,10 @@ export async function runV084PrivateUploadPilotExecution(
   request: V084PrivateUploadPilotInvocationRequest,
   options: V084PrivateUploadPilotExecutionRuntimeOptions = {}
 ): Promise<V084PrivateUploadPilotInvocationResult> {
+  const resolverBinderEvidence = normalizeRuntimeResolverBinderEvidence(request);
   const plan = await buildV084PrivateUploadPilotInvocation({
     ...request,
+    ...resolverBinderEvidence,
     dryRun: true
   });
 
@@ -38,7 +46,7 @@ export async function runV084PrivateUploadPilotExecution(
     };
   }
 
-  const runtimeReadinessBlockers = buildRuntimeResolverBinderBlockers(plan);
+  const runtimeReadinessBlockers = buildRuntimeResolverBinderBlockers(resolverBinderEvidence);
   if (runtimeReadinessBlockers.length > 0) {
     return {
       ...plan,
@@ -87,17 +95,27 @@ export async function runV084PrivateUploadPilotExecution(
   };
 }
 
+function normalizeRuntimeResolverBinderEvidence(
+  request: V084PrivateUploadPilotInvocationRequest
+): RuntimeResolverBinderEvidence {
+  return {
+    v088ResolverStatus: request.v088ResolverStatus ?? "missing",
+    v087BinderStatus: request.v087BinderStatus ?? "missing",
+    v085BinderStatus: request.v085BinderStatus ?? "missing"
+  };
+}
+
 function buildRuntimeResolverBinderBlockers(
-  plan: V084PrivateUploadPilotInvocationResult
+  evidence: RuntimeResolverBinderEvidence
 ): V084PrivateUploadPilotInvocationResult["blockers"] {
   const blockers: V084PrivateUploadPilotInvocationResult["blockers"] = [];
-  if (!plan.v088ResolverBound) {
+  if (evidence.v088ResolverStatus !== "bound") {
     blockers.push("BLOCKED_V084_V088_RESOLVER_NOT_BOUND");
   }
-  if (!plan.v087BinderReady) {
+  if (evidence.v087BinderStatus !== "ready_for_fresh_approval") {
     blockers.push("BLOCKED_V084_V087_BINDER_NOT_READY");
   }
-  if (!plan.v085BinderReady) {
+  if (evidence.v085BinderStatus !== "ready_for_fresh_approval") {
     blockers.push("BLOCKED_V084_V085_BINDER_NOT_READY");
   }
   return blockers;

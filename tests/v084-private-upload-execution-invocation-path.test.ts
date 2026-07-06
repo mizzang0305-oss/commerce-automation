@@ -188,9 +188,13 @@ describe("v084 private upload execution invocation path", () => {
       "utf8"
     );
 
-    expect(runtimeSource).toContain("buildRuntimeResolverBinderBlockers(plan)");
-    expect(runtimeSource.indexOf("buildRuntimeResolverBinderBlockers(plan)"))
+    expect(runtimeSource).toContain("normalizeRuntimeResolverBinderEvidence(request)");
+    expect(runtimeSource).toContain("buildRuntimeResolverBinderBlockers(resolverBinderEvidence)");
+    expect(runtimeSource.indexOf("buildRuntimeResolverBinderBlockers(resolverBinderEvidence)"))
       .toBeLessThan(runtimeSource.indexOf("executeV081PrivateUploadPilot("));
+    expect(runtimeSource).toContain("request.v088ResolverStatus");
+    expect(runtimeSource).toContain("request.v087BinderStatus");
+    expect(runtimeSource).toContain("request.v085BinderStatus");
     expect(runtimeSource).toContain("BLOCKED_V084_V088_RESOLVER_NOT_BOUND");
     expect(runtimeSource).toContain("BLOCKED_V084_V087_BINDER_NOT_READY");
     expect(runtimeSource).toContain("BLOCKED_V084_V085_BINDER_NOT_READY");
