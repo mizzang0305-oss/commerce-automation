@@ -38,6 +38,17 @@ export async function runV084PrivateUploadPilotExecution(
     };
   }
 
+  const runtimeReadinessBlockers = buildRuntimeResolverBinderBlockers(plan);
+  if (runtimeReadinessBlockers.length > 0) {
+    return {
+      ...plan,
+      dryRun: false,
+      status: "blocked",
+      blockers: [...new Set([...plan.blockers, ...runtimeReadinessBlockers])],
+      v083AdapterInvoked: false
+    };
+  }
+
   const adapter = options.adapter ?? createDefaultV083Adapter(request);
   const v081Result = await executeV081PrivateUploadPilot(toV081Request(request), {
     adapter
@@ -74,6 +85,22 @@ export async function runV084PrivateUploadPilotExecution(
     secrets_printed: v081Result.secrets_printed,
     fake_success: v081Result.fake_success
   };
+}
+
+function buildRuntimeResolverBinderBlockers(
+  plan: V084PrivateUploadPilotInvocationResult
+): V084PrivateUploadPilotInvocationResult["blockers"] {
+  const blockers: V084PrivateUploadPilotInvocationResult["blockers"] = [];
+  if (!plan.v088ResolverBound) {
+    blockers.push("BLOCKED_V084_V088_RESOLVER_NOT_BOUND");
+  }
+  if (!plan.v087BinderReady) {
+    blockers.push("BLOCKED_V084_V087_BINDER_NOT_READY");
+  }
+  if (!plan.v085BinderReady) {
+    blockers.push("BLOCKED_V084_V085_BINDER_NOT_READY");
+  }
+  return blockers;
 }
 
 function createDefaultV083Adapter(request: V084PrivateUploadPilotInvocationRequest) {

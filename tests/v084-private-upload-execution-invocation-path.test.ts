@@ -182,6 +182,20 @@ describe("v084 private upload execution invocation path", () => {
     expect(result.commentThreadsInsertCalled).toBe(false);
   });
 
+  test("runtime wrapper gates resolver and binder evidence before adapter invocation", async () => {
+    const runtimeSource = await readFile(
+      "src/uploads/youtube/v084PrivateUploadExecutionInvocationRuntime.ts",
+      "utf8"
+    );
+
+    expect(runtimeSource).toContain("buildRuntimeResolverBinderBlockers(plan)");
+    expect(runtimeSource.indexOf("buildRuntimeResolverBinderBlockers(plan)"))
+      .toBeLessThan(runtimeSource.indexOf("executeV081PrivateUploadPilot("));
+    expect(runtimeSource).toContain("BLOCKED_V084_V088_RESOLVER_NOT_BOUND");
+    expect(runtimeSource).toContain("BLOCKED_V084_V087_BINDER_NOT_READY");
+    expect(runtimeSource).toContain("BLOCKED_V084_V085_BINDER_NOT_READY");
+  });
+
   test("blocks unsafe report requests before invocation", async () => {
     const result = await buildV084PrivateUploadPilotInvocation(readyRequest({
       unsafeReportRequested: true
