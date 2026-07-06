@@ -44,6 +44,9 @@ export type V085BoundV084Env = {
   V084_QUEUE_ITEM_ID: string | null;
   V084_UPLOAD_PACKAGE_ID: string | null;
   V084_RUNTIME_READY: "true" | "false";
+  V084_V088_RESOLVER_STATUS: "bound" | "blocked" | "missing";
+  V084_V087_BINDER_STATUS: "ready_for_fresh_approval" | "blocked" | "not_run" | "missing";
+  V084_V085_BINDER_STATUS: "ready_for_fresh_approval" | "blocked";
   V084_CHANNEL_KEY: ChannelKey;
   V084_VISIBILITY: "private";
   V084_MAX_ITEMS: "1";
@@ -148,6 +151,9 @@ export async function buildV085PrivatePilotInputBinding(
     V084_QUEUE_ITEM_ID: queueItemId,
     V084_UPLOAD_PACKAGE_ID: uploadPackageId,
     V084_RUNTIME_READY: runtimeReady ? "true" : "false",
+    V084_V088_RESOLVER_STATUS: normalizeV088Status(env.V084_V088_RESOLVER_STATUS),
+    V084_V087_BINDER_STATUS: normalizeBinderStatus(env.V084_V087_BINDER_STATUS),
+    V084_V085_BINDER_STATUS: "blocked",
     V084_CHANNEL_KEY: selectedChannelKey,
     V084_VISIBILITY: "private",
     V084_MAX_ITEMS: "1"
@@ -158,6 +164,9 @@ export async function buildV085PrivatePilotInputBinding(
     evidence,
     unsafeReportRequested: input.unsafeReportRequested
   });
+  boundV084Env.V084_V085_BINDER_STATUS = blockers.length === 0
+    ? "ready_for_fresh_approval"
+    : "blocked";
   const v084Plan = await buildV084PrivateUploadPilotInvocationFromEnv({
     dryRun: true,
     env: {
@@ -423,10 +432,23 @@ function toProcessEnv(env: V085BoundV084Env): Record<string, string> {
     V084_QUEUE_ITEM_ID: env.V084_QUEUE_ITEM_ID ?? "",
     V084_UPLOAD_PACKAGE_ID: env.V084_UPLOAD_PACKAGE_ID ?? "",
     V084_RUNTIME_READY: env.V084_RUNTIME_READY,
+    V084_V088_RESOLVER_STATUS: env.V084_V088_RESOLVER_STATUS,
+    V084_V087_BINDER_STATUS: env.V084_V087_BINDER_STATUS,
+    V084_V085_BINDER_STATUS: env.V084_V085_BINDER_STATUS,
     V084_CHANNEL_KEY: env.V084_CHANNEL_KEY,
     V084_VISIBILITY: env.V084_VISIBILITY,
     V084_MAX_ITEMS: env.V084_MAX_ITEMS
   };
+}
+
+function normalizeV088Status(value: string | undefined): V085BoundV084Env["V084_V088_RESOLVER_STATUS"] {
+  return value === "bound" || value === "blocked" ? value : "missing";
+}
+
+function normalizeBinderStatus(value: string | undefined): V085BoundV084Env["V084_V087_BINDER_STATUS"] {
+  return value === "ready_for_fresh_approval" || value === "blocked" || value === "not_run"
+    ? value
+    : "missing";
 }
 
 export function v085HashPrefix(value: string | null | undefined) {

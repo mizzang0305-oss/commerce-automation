@@ -217,6 +217,7 @@ export async function buildV087AuthoritativeProductSourceBinding(input: {
         ...env,
         V051_UPLOAD_ASSET_PROFILE: V057_REUPLOAD_ASSET_PROFILE,
         V084_CHANNEL_KEY: selectedChannelKey,
+        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
         V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: "",
         V084_RUNTIME_READY: ""
       },

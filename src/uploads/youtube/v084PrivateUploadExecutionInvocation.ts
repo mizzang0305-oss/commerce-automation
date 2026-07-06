@@ -14,11 +14,20 @@ export type V084PrivateUploadPilotInvocationStatus =
   | "ready_for_private_execution"
   | "private_upload_completed";
 export type V084PrivateUploadPilotInvocationVisibility = "private" | "public" | "unlisted";
+export type V084PrivateUploadPilotResolverStatus = "bound" | "blocked" | "missing";
+export type V084PrivateUploadPilotBinderStatus =
+  | "ready_for_fresh_approval"
+  | "blocked"
+  | "not_run"
+  | "missing";
 export type V084PrivateUploadPilotInvocationBlocker =
   | "BLOCKED_V084_FRESH_APPROVAL_REQUIRED"
   | "BLOCKED_V084_STALE_APPROVAL_REJECTED"
   | "BLOCKED_V084_SERVER_ONLY_CONTEXT_REQUIRED"
   | "BLOCKED_V084_V083_ADAPTER_NOT_AVAILABLE"
+  | "BLOCKED_V084_V088_RESOLVER_NOT_BOUND"
+  | "BLOCKED_V084_V087_BINDER_NOT_READY"
+  | "BLOCKED_V084_V085_BINDER_NOT_READY"
   | "BLOCKED_V084_VISIBILITY_MUST_BE_PRIVATE"
   | "BLOCKED_V084_MAX_ITEMS_MUST_BE_ONE"
   | "BLOCKED_V084_PUBLIC_UPLOAD_NOT_ALLOWED"
@@ -28,7 +37,7 @@ export type V084PrivateUploadPilotInvocationBlocker =
   | "BLOCKED_V084_UPLOAD_PACKAGE_REQUIRED"
   | "BLOCKED_V084_QUEUE_ITEM_REQUIRED"
   | "BLOCKED_V084_READINESS_NOT_READY"
-  | "BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR"
+  | "BLOCKED_V084_V081_EXECUTION_BLOCKED"
   | "BLOCKED_V084_UNSAFE_REPORT_REQUESTED";
 
 export type V084PrivateUploadPilotInvocationReadiness = {
@@ -51,6 +60,9 @@ export type V084PrivateUploadPilotInvocationRequest = {
   dryRun: boolean;
   serverOnlyContext?: boolean;
   v083AdapterAvailable?: boolean;
+  v088ResolverStatus?: V084PrivateUploadPilotResolverStatus | null;
+  v087BinderStatus?: V084PrivateUploadPilotBinderStatus | null;
+  v085BinderStatus?: V084PrivateUploadPilotBinderStatus | null;
   queueItemId: string | null;
   uploadPackageId: string | null;
   channelKey?: ChannelKey;
@@ -88,13 +100,16 @@ export type V084PrivateUploadPilotInvocationResult = {
   SAFE_TO_PUBLIC_UPLOAD: false;
   blockers: V084PrivateUploadPilotInvocationBlocker[];
   v083AdapterAvailable: boolean;
+  v088ResolverBound: boolean;
+  v087BinderReady: boolean;
+  v085BinderReady: boolean;
   v083AdapterInvoked: boolean;
   v083AdapterMode: "blocked" | "mock" | "real_candidate" | null;
   v083Blockers: V083PrivateUploadExecutionBlocker[];
   v081ResultStatus: V081PrivateUploadPilotResult["status"] | null;
   v081Blockers: V081PrivateUploadPilotResult["blockers"];
-  videosInsertCalled: false;
-  videosInsertTotalCount: 0;
+  videosInsertCalled: boolean;
+  videosInsertTotalCount: 0 | 1;
   commentThreadsInsertCalled: false;
   comment_create_update_delete_called: false;
   scheduler_auto_execution_called: false;
@@ -138,6 +153,9 @@ export async function buildV084PrivateUploadPilotInvocationFromEnv(
     dryRun: options.dryRun,
     serverOnlyContext: true,
     v083AdapterAvailable: true,
+    v088ResolverStatus: normalizeResolverStatus(env.V084_V088_RESOLVER_STATUS),
+    v087BinderStatus: normalizeBinderStatus(env.V084_V087_BINDER_STATUS),
+    v085BinderStatus: normalizeBinderStatus(env.V084_V085_BINDER_STATUS),
     queueItemId: env.V084_QUEUE_ITEM_ID ?? null,
     uploadPackageId: env.V084_UPLOAD_PACKAGE_ID ?? null,
     channelKey: normalizeChannelKey(env.V084_CHANNEL_KEY),
@@ -188,7 +206,8 @@ export async function buildV084PrivateUploadPilotInvocation(
 
   return buildResult({
     request: normalized,
-    blockers: ["BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR"],
+    blockers: [],
+    status: "ready_for_private_execution",
     v083AdapterInvoked: false,
     v083AdapterMode: null,
     v083Blockers: []
@@ -204,6 +223,9 @@ type NormalizedRequest = Omit<
   channelKey: ChannelKey;
   generatedAt: string;
   videoAssetHashPrefix: string | null;
+  v088ResolverStatus: V084PrivateUploadPilotResolverStatus;
+  v087BinderStatus: V084PrivateUploadPilotBinderStatus;
+  v085BinderStatus: V084PrivateUploadPilotBinderStatus;
   approvalAccepted: boolean;
 };
 
@@ -212,6 +234,9 @@ function normalizeRequest(request: V084PrivateUploadPilotInvocationRequest): Nor
     ...request,
     serverOnlyContext: request.serverOnlyContext ?? true,
     v083AdapterAvailable: request.v083AdapterAvailable ?? true,
+    v088ResolverStatus: request.v088ResolverStatus ?? "missing",
+    v087BinderStatus: request.v087BinderStatus ?? "missing",
+    v085BinderStatus: request.v085BinderStatus ?? "missing",
     queueItemId: trimOrEmpty(request.queueItemId),
     uploadPackageId: trimOrEmpty(request.uploadPackageId),
     channelKey: request.channelKey ?? "father_jobs",
@@ -234,6 +259,15 @@ function buildBlockers(request: NormalizedRequest): V084PrivateUploadPilotInvoca
   }
   if (!request.v083AdapterAvailable) {
     blockers.push("BLOCKED_V084_V083_ADAPTER_NOT_AVAILABLE");
+  }
+  if (request.v088ResolverStatus !== "bound") {
+    blockers.push("BLOCKED_V084_V088_RESOLVER_NOT_BOUND");
+  }
+  if (request.v087BinderStatus !== "ready_for_fresh_approval") {
+    blockers.push("BLOCKED_V084_V087_BINDER_NOT_READY");
+  }
+  if (request.v085BinderStatus !== "ready_for_fresh_approval") {
+    blockers.push("BLOCKED_V084_V085_BINDER_NOT_READY");
   }
   if (request.visibility !== "private") {
     blockers.push("BLOCKED_V084_VISIBILITY_MUST_BE_PRIVATE");
@@ -304,13 +338,16 @@ function buildResult(input: {
     SAFE_TO_PUBLIC_UPLOAD: false,
     blockers: input.blockers,
     v083AdapterAvailable: Boolean(input.request.v083AdapterAvailable),
+    v088ResolverBound: input.request.v088ResolverStatus === "bound",
+    v087BinderReady: input.request.v087BinderStatus === "ready_for_fresh_approval",
+    v085BinderReady: input.request.v085BinderStatus === "ready_for_fresh_approval",
     v083AdapterInvoked: input.v083AdapterInvoked ?? false,
     v083AdapterMode: input.v083AdapterMode ?? null,
     v083Blockers: input.v083Blockers ?? [],
     v081ResultStatus: input.v081Result?.status ?? null,
     v081Blockers: input.v081Result?.blockers ?? [],
-    videosInsertCalled: false,
-    videosInsertTotalCount: 0,
+    videosInsertCalled: input.v081Result?.videosInsertCalled ?? false,
+    videosInsertTotalCount: input.v081Result?.videosInsertTotalCount ?? 0,
     commentThreadsInsertCalled: false,
     comment_create_update_delete_called: false,
     scheduler_auto_execution_called: false,
@@ -357,6 +394,26 @@ function normalizeVisibility(value: string | undefined): V081PrivateUploadPilotV
 
 function normalizeChannelKey(value: string | undefined): ChannelKey {
   return value === "neoman_moleulgeol" || value === "lets_buy" ? value : "father_jobs";
+}
+
+function normalizeResolverStatus(
+  value: string | undefined
+): V084PrivateUploadPilotResolverStatus {
+  return value === "bound" || value === "blocked" ? value : "missing";
+}
+
+function normalizeBinderStatus(
+  value: string | undefined
+): V084PrivateUploadPilotBinderStatus {
+  if (
+    value === "ready_for_fresh_approval" ||
+    value === "blocked" ||
+    value === "not_run"
+  ) {
+    return value;
+  }
+
+  return "missing";
 }
 
 function trimOrEmpty(value: string | null | undefined) {
