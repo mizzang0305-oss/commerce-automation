@@ -15,6 +15,9 @@ import {
   createV083RealPrivateUploadExecutionAdapterFactory
 } from "./v083RealPrivateUploadExecutionAdapterCore";
 import {
+  createV092NoUploadPrivateExecutorPlaceholder
+} from "./v092PrivateUploadExecutorBoundary";
+import {
   buildV084PrivateUploadPilotInvocation,
   type V084PrivateUploadPilotInvocationRequest,
   type V084PrivateUploadPilotInvocationResult
@@ -145,7 +148,10 @@ function createDefaultV083Adapter(request: V084PrivateUploadPilotInvocationReque
   const readiness = buildV083PrivateUploadExecutionReadiness(readinessInput);
 
   return readiness.ready
-    ? createV083RealPrivateUploadExecutionAdapterFactory(readinessInput).adapter
+    ? createV083RealPrivateUploadExecutionAdapterFactory({
+      ...readinessInput,
+      uploadExecutor: createV092NoUploadPrivateExecutorPlaceholder()
+    }).adapter
     : new BlockedV081PrivateUploadPilotAdapter();
 }
 

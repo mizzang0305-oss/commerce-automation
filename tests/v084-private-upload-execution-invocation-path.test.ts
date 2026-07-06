@@ -47,7 +47,8 @@ describe("v084 private upload execution invocation path", () => {
     expect(result.blockers).not.toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
     expect(result.blockers).toContain("BLOCKED_V084_V081_EXECUTION_BLOCKED");
     expect(result.v081ResultStatus).toBe("blocked");
-    expect(result.v081Blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(result.v081Blockers).not.toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(result.v081Blockers).toContain("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
     expect(result.videosInsertCalled).toBe(false);
     expect(result.commentThreadsInsertCalled).toBe(false);
   });
@@ -277,7 +278,7 @@ describe("v084 private upload execution invocation path", () => {
     expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
-  test("package execute command reaches V081/V083 no-upload executor-injection blocker without V084 hard lock", () => {
+  test("package execute command reaches V081/V083 no-upload executor boundary without V084 hard lock", () => {
     const npmCli = process.env.npm_execpath;
 
     expect(npmCli).toBeTruthy();
@@ -308,7 +309,8 @@ describe("v084 private upload execution invocation path", () => {
     expect(parsed.dryRun).toBe(false);
     expect(parsed.blockers).not.toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
     expect(parsed.blockers).toContain("BLOCKED_V084_V081_EXECUTION_BLOCKED");
-    expect(parsed.v081Blockers).toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(parsed.v081Blockers).not.toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(parsed.v081Blockers).toContain("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
     expect(parsed.videosInsertCalled).toBe(false);
     expect(parsed.commentThreadsInsertCalled).toBe(false);
     expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
@@ -390,7 +392,7 @@ describe("v084 private upload execution invocation path", () => {
     expect(task).toContain("### T014 - V084 Private Upload Execution Invocation Path");
     expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `DONE`/);
     expect(task).toMatch(
-      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW)`/
+      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW)`/
     );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");
