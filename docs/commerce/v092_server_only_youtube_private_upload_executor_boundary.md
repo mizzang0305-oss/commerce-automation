@@ -27,8 +27,14 @@ The boundary is split into two modules:
   - creates `ServerYouTubeUploadAdapter`
   - obtains the upload token through the existing server upload token provider
   - requires an upload request resolver before any adapter call
+- `src/uploads/youtube/v094ServerOnlyUploadPackageRequestResolver.ts`
+  - imports `server-only`
+  - resolves the already-bound V073/V085 upload package evidence into a V092 private upload request
+  - never prints raw URLs, full channel IDs, token values, Authorization headers, or signatures
 
 `src/uploads/youtube/v084PrivateUploadExecutionInvocationRuntime.ts` uses only the no-upload placeholder. `src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts` is the only V084 path that injects the server-only executor.
+
+V094 wires the server-only V084 path to a default upload package request resolver. The CLI/runtime path remains on the no-upload placeholder and is still safe for focused validation.
 
 ## Completion Evidence
 

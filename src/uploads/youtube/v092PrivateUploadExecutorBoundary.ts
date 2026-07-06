@@ -18,6 +18,8 @@ export type V092PrivateUploadExecutorOptions = {
   uploadRequestResolver?: V092PrivateUploadRequestResolver;
   uploadAdapter?: YouTubeUploadAdapter;
   env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  uploadAssetProfile?: string | null;
   fetchImpl?: typeof fetch;
   now?: () => string;
 };

@@ -94,6 +94,12 @@ function createDefaultServerUploadAdapter(
 
 function validateAdapterRequest(request: V081PrivateUploadPilotAdapterRequest):
   V081PrivateUploadPilotAdapterResult["blocker"] {
+  if (!trimOrNull(request.queueItemId)) {
+    return "BLOCKED_V081_QUEUE_ITEM_MISSING";
+  }
+  if (!trimOrNull(request.uploadPackageId)) {
+    return "BLOCKED_V081_UPLOAD_PACKAGE_MISSING";
+  }
   if (request.visibility !== "private") {
     return request.visibility === "unlisted"
       ? "BLOCKED_V081_UNLISTED_UPLOAD_REQUESTED"

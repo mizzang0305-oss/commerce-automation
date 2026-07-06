@@ -12,6 +12,9 @@ import {
   createV092ServerOnlyYouTubePrivateUploadExecutor
 } from "./v092ServerOnlyYouTubePrivateUploadExecutor";
 import type { V092PrivateUploadExecutorOptions } from "./v092PrivateUploadExecutorBoundary";
+import {
+  createV094ServerOnlyUploadPackageRequestResolver
+} from "./v094ServerOnlyUploadPackageRequestResolver";
 
 export type V084PrivateUploadPilotServerExecutionWiring = {
   version: "v084-server";
@@ -34,6 +37,12 @@ export async function buildV084PrivateUploadPilotServerExecutionWiring(
   options: V092PrivateUploadExecutorOptions = {}
 ): Promise<V084PrivateUploadPilotServerExecutionWiring> {
   const invocation = await buildV084PrivateUploadPilotInvocation(request);
+  const uploadRequestResolver = options.uploadRequestResolver ??
+    createV094ServerOnlyUploadPackageRequestResolver({
+      cwd: options.cwd,
+      env: options.env,
+      uploadAssetProfile: options.uploadAssetProfile
+    });
   const factory = invocation.status === "ready_for_private_execution"
     ? createV083RealPrivateUploadExecutionAdapterFactory({
       buildApprovalPhrase: "APPROVE_BUILD_V083_REAL_PRIVATE_UPLOAD_EXECUTION_ADAPTER_NO_UPLOAD",
@@ -52,7 +61,10 @@ export async function buildV084PrivateUploadPilotServerExecutionWiring(
       maxItems: 1,
       commentAutomationRequested: false,
       schedulerExecutionRequested: false,
-      uploadExecutor: createV092ServerOnlyYouTubePrivateUploadExecutor(options)
+      uploadExecutor: createV092ServerOnlyYouTubePrivateUploadExecutor({
+        ...options,
+        uploadRequestResolver
+      })
     })
     : null;
 
