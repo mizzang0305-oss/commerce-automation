@@ -58,6 +58,8 @@ The readiness gate fails closed for missing or unsafe evidence:
 
 V091 removes the old PR-only V083 blocker and replaces it with a fail-closed injected-executor requirement. With no executor injected, the real-candidate adapter returns `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED`, `videosInsertCalled=false`, and `commentThreadsInsertCalled=false`.
 
+The constructor-bearing adapter class is not exported. Executor injection must go through `createV083RealPrivateUploadExecutionAdapterFactory`, and the factory only attaches an executor after `buildV083PrivateUploadExecutionReadiness` returns ready. If readiness is false, the factory returns the blocked V081 adapter and never calls the injected executor.
+
 This keeps PR validation no-upload while making the remaining runtime gap explicit: a later server-only execution path must inject the real upload executor only after a separate fresh private pilot approval and the full readiness chain pass.
 
 ## Evidence Policy

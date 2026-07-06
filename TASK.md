@@ -554,6 +554,8 @@ Requirements:
 - replace the V083 PR-only upload blocker with a fail-closed injected-executor requirement
 - V083 adapter can delegate to an injected executor only after all V083 readiness gates pass
 - default V083 factory remains no-upload when no executor is injected
+- constructor-capable V083 adapter class is not exported
+- executor injection must go through the V083 factory/readiness gate
 - V084 runtime reaches V083 through the same V081 execution contract
 - no completed V076 evidence/store/report without complete adapter success evidence
 - no videos.insert call during this PR validation
@@ -625,6 +627,7 @@ Requirements:
 - 2026-07-06 KST: T018 V090 V084 private pilot execute gate unlock started on `codex/v090-unlock-v084-private-execute-no-upload`. The V084-only execute hard lock is removed in code, while PR validation remains no-upload and routes through V081/V083 blocked execution evidence. `videos.insert`, `commentThreads.insert`, public/unlisted upload, comment automation, scheduler execution, DB/R2/product asset writes, raw URL/full ID/secret output, and fake success remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-06 KST: PR #199 squash merged at `2bd8207dffda7c79bee8d492c22777958a8070e6`. V084 reached the private pilot execute path with clean evidence, but the V083 PR-only no-upload lock remained. No retry was performed after the blocked attempt. `videos.insert` remained unconfirmed/blocked, `commentThreads.insert=false`, and public/unlisted/comment/scheduler remained blocked.
 - 2026-07-06 KST: T019 V091 V083 real private adapter execution gate unlock started on `codex/v091-unlock-v083-real-private-adapter-execution-no-upload`. V091 replaces the V083 PR-only hard blocker with a fail-closed injected-executor requirement. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-06 KST: PR #200 P1 review fix prepared. V083 executor-bearing adapter class is no longer exported, and executor injection is factory/readiness-gate only. Readiness false returns a blocked adapter and does not call an injected executor. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 
 ## Current Blocker
 

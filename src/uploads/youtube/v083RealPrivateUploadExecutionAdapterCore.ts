@@ -37,7 +37,7 @@ export type V083RealPrivateUploadExecutionAdapterFactory = {
   fake_success: false;
 };
 
-export class V083RealPrivateUploadExecutionAdapter implements V081PrivateUploadPilotAdapter {
+class V083RealPrivateUploadExecutionAdapter implements V081PrivateUploadPilotAdapter {
   readonly mode = "real_candidate" as const;
 
   constructor(private readonly uploadExecutor?: V083RealPrivateUploadExecutor) {}

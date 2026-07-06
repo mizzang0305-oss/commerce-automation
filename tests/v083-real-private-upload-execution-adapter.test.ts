@@ -203,6 +203,62 @@ describe("v083 real private upload execution adapter no-upload wiring", () => {
     expect(result.commentThreadsInsertCalled).toBe(false);
   });
 
+  test("does not export a constructor-capable V083 adapter class outside the factory", async () => {
+    const coreSource = await readFile(
+      "src/uploads/youtube/v083RealPrivateUploadExecutionAdapterCore.ts",
+      "utf8"
+    );
+    const serverOnlyEntrypoint = await readFile(
+      "src/uploads/youtube/v083RealPrivateUploadExecutionAdapter.ts",
+      "utf8"
+    );
+
+    expect(coreSource).not.toContain("export class V083RealPrivateUploadExecutionAdapter");
+    expect(serverOnlyEntrypoint).not.toContain("V083RealPrivateUploadExecutionAdapter,");
+    expect(serverOnlyEntrypoint).toContain("createV083RealPrivateUploadExecutionAdapterFactory");
+  });
+
+  test("factory does not call injected executor when readiness is false", async () => {
+    let executorCalled = false;
+    const factory = createV083RealPrivateUploadExecutionAdapterFactory({
+      ...readyInput({ tokenProviderReady: false }),
+      uploadExecutor: async () => {
+        executorCalled = true;
+        return {
+          status: "MOCK_ONLY",
+          blocker: null,
+          youtubeVideoId: FULL_VIDEO_ID,
+          channelId: FULL_CHANNEL_ID,
+          uploadedAt: "2026-07-05T00:00:00.000Z",
+          videosInsertCalled: true,
+          videosInsertTotalCount: 1,
+          commentThreadsInsertCalled: false,
+          fakeSuccess: false,
+          rawUrlsPrinted: false,
+          rawVideoIdsPrinted: false,
+          rawChannelIdsPrinted: false,
+          secretsPrinted: false
+        };
+      }
+    });
+
+    const result = await factory.adapter.uploadPrivatePilot({
+      uploadPackageId: "pkg-v083",
+      queueItemId: "queue-v083",
+      channelKey: "father_jobs",
+      visibility: "private",
+      maxItems: 1,
+      videoAssetHashPrefix: "asset",
+      generatedAt: "2026-07-05T00:00:00.000Z"
+    });
+
+    expect(factory.readiness.ready).toBe(false);
+    expect(factory.adapter.mode).toBe("blocked");
+    expect(executorCalled).toBe(false);
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+  });
+
   test.each([
     ["youtubeVideoId missing", { youtubeVideoId: null, channelId: FULL_CHANNEL_ID, uploadedAt: "2026-07-05T00:00:00.000Z" }],
     ["channelId missing", { youtubeVideoId: FULL_VIDEO_ID, channelId: null, uploadedAt: "2026-07-05T00:00:00.000Z" }],
