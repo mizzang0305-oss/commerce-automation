@@ -580,7 +580,7 @@ Requirements:
 
 ### T020 - V092 Inject Server-Only YouTube Private Upload Executor Boundary
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Inject the server-only YouTube private upload executor boundary without executing a real upload during review.
 
@@ -661,16 +661,54 @@ Requirements:
 - 2026-07-06 KST: PR #200 P1 review fix prepared. V083 executor-bearing adapter class is no longer exported, and executor injection is factory/readiness-gate only. Readiness false returns a blocked adapter and does not call an injected executor. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-06 KST: PR #200 squash merged at `118dcb069d077f77995d7bc8910651e74ded73a0`. T019 is complete. V083 now requires factory/readiness-gated executor injection. Private pilot execution remains blocked until V092 server-only executor boundary review plus separate fresh private pilot approval and complete runtime evidence. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
 - 2026-07-06 KST: T020 V092 server-only YouTube private upload executor boundary started on `codex/v092-inject-server-only-youtube-private-upload-executor-no-upload`. V092 separates CLI no-upload placeholder execution from server-only real executor injection. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-06 KST: PR #201 squash merged at `407d0b51c306654886b037b8854b35d86628b3cd`. T020 is complete. V092 keeps CLI validation on a no-upload placeholder and places the real YouTube private upload executor behind server-only wiring. Private execution still requires separate fresh approval plus runtime evidence. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: V093 rebound runtime evidence without upload execution. V088 bound, V087 ready_for_fresh_approval, V085 ready_for_fresh_approval, and V084 plan blocked only by fresh approval required. `videos.insert=0`, `commentThreads.insert=false`, `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: A fresh private pilot execution attempt was called exactly once after V093 evidence rebound, but V081 blocked before upload with `BLOCKED_V081_UPLOAD_PACKAGE_MISSING`. `videos.insert=0`, `commentThreads.insert=false`, no completed V076 evidence/store/report was created, and public/unlisted/comment/scheduler remained blocked.
+- 2026-07-07 KST: T021 V094 upload package to V081 server executor bridge started on `codex/v094-bind-upload-package-to-v081-server-executor-no-upload`. V094 is a no-upload review PR that wires the already-bound V073/V085 upload package evidence into the V092 server-only request resolver path. `npm run upload:v084:private-pilot:execute --silent` is not run during PR validation. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: PR #202 latest-head P1/P2 review fixes prepared on `codex/v094-bind-upload-package-to-v081-server-executor-no-upload`. V094 now fails closed when `buildYouTubeUploadRequest` rejects package evidence and verifies runtime target-channel hash evidence against the bound package target-channel hash prefix before returning a request. PR validation remains no-upload. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+
+### T021 - V094 Bind Upload Package To V081 Server Executor
+
+Status: `PR_OPEN`
+
+Goal: Bind already-resolved V085/V084 queue item and upload package evidence into the V081/V092 server-only executor request path without executing a real upload during PR review.
+
+Requirements:
+
+- add a server-only V094 upload package request resolver
+- resolve V073 upload package evidence by `queueItemId`, `uploadPackageId`, and `channelKey`
+- fail closed when `buildYouTubeUploadRequest` rejects disclosure, affiliate, server-accessible asset, metadata, or shorts quality evidence
+- cross-check runtime target-channel hash evidence against the bound package target-channel hash prefix
+- inject the resolver from V084 server-only wiring into the V092 server-only executor
+- keep CLI/runtime validation on the no-upload placeholder
+- do not run `npm run upload:v084:private-pilot:execute --silent` during PR validation
+- do not call real `videos.insert`
+- do not call `commentThreads.insert`
+- public upload remains blocked
+- unlisted upload remains blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- no completed V076 evidence/store/report without complete adapter success evidence
+- no raw affiliate URL, raw Coupang URL, full video ID, full channel ID, token, secret, client_secret, Authorization, HMAC, or raw evidence output
+- fake success remains blocked
+- merge does not authorize execution; a separate fresh private pilot approval is required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
 
 ## Current Blocker
 
-- `PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW`
+- `PR_OPEN_T021_V094_BIND_UPLOAD_PACKAGE_TO_V081_SERVER_EXECUTOR_NO_UPLOAD_REVIEW`
 - Controlled private upload pilot executor PR #192 and V082 runtime adapter injection PR #193 are merged.
 - V083 real private upload execution adapter wiring PR #194 and V091 injected-executor gate PR #200 are merged, but upload execution is not authorized.
 - V084 private pilot invocation path is merged and does not authorize upload by itself.
 - V090 removed the V084-only execute lock in a no-upload PR.
 - V091 completed the V083 injected-executor gate.
-- V092 prepares the server-only YouTube private upload executor boundary; private pilot execution remains blocked until merge plus a separate fresh private pilot approval and complete runtime evidence.
+- V092 server-only YouTube private upload executor boundary is merged.
+- V094 is open to bind the already-resolved upload package evidence into the V081/V092 server-only executor request path.
 - V088 Coupang API product source resolver PR #198 is merged and no-upload binders are ready for fresh approval.
 - Private pilot execution remains blocked until a separate fresh owner approval plus readiness gate are present.
 - Public upload remains blocked.
@@ -689,4 +727,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T020/V092 only after clean validation. After merge, do not execute private pilot upload until a separate fresh private pilot approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review and merge T021/V094 only after clean validation. After merge, do not retry private pilot upload until a separate fresh private pilot approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.

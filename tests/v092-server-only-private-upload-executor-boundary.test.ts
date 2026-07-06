@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import crypto from "node:crypto";
 import { describe, expect, test } from "vitest";
 
+import { DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "../src/lib/uploads/youtube";
 import type { YouTubeUploadAdapter, YouTubeUploadRequest, YouTubeUploadResult } from "../src/lib/uploads/youtube/types";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
@@ -11,8 +13,13 @@ import {
 } from "../src/uploads/youtube/v092ServerOnlyYouTubePrivateUploadExecutor";
 import type { V092PrivateUploadRequestResolver } from "../src/uploads/youtube/v092PrivateUploadExecutorBoundary";
 import {
+  createV094ServerOnlyUploadPackageRequestResolver
+} from "../src/uploads/youtube/v094ServerOnlyUploadPackageRequestResolver";
+import {
   runV084PrivateUploadPilotExecution
 } from "../src/uploads/youtube/v084PrivateUploadExecutionInvocationRuntime";
+import type { V073UploadPackage } from "../src/uploads/multi-channel/v073UploadPackage";
+import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const FULL_VIDEO_ID = "v092FullVideoIdMustNotLeak";
 const FULL_CHANNEL_ID = `UC${"9".repeat(22)}`;
@@ -60,6 +67,8 @@ describe("v092 server-only YouTube private upload executor boundary", () => {
     expect(runtimeSource).not.toContain("v092ServerOnlyYouTubePrivateUploadExecutor");
     expect(serverWiringSource).toMatch(/import\s+"server-only";/);
     expect(serverWiringSource).toContain("createV092ServerOnlyYouTubePrivateUploadExecutor");
+    expect(serverWiringSource).toContain("createV094ServerOnlyUploadPackageRequestResolver");
+    expect(serverWiringSource).toContain("const uploadRequestResolver = options.uploadRequestResolver ??");
     expect(purePlannerSource).not.toContain("v092ServerOnlyYouTubePrivateUploadExecutor");
     expect(purePlannerSource).not.toContain("ServerYouTubeUploadAdapter");
   });
@@ -91,6 +100,225 @@ describe("v092 server-only YouTube private upload executor boundary", () => {
     expect(result.videosInsertTotalCount).toBe(0);
     expect(result.commentThreadsInsertCalled).toBe(false);
     expect(result.fakeSuccess).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("server-only executor blocks missing queue item evidence before resolver upload", async () => {
+    const executor = createV092ServerOnlyYouTubePrivateUploadExecutor({
+      uploadRequestResolver: readyUploadRequestResolver()
+    });
+    const result = await executor({
+      ...v081AdapterRequest(),
+      queueItemId: ""
+    });
+
+    expect(result.status).toBe("BLOCKED");
+    expect(result.blocker).toBe("BLOCKED_V081_QUEUE_ITEM_MISSING");
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.videosInsertTotalCount).toBe(0);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("server-only upload package resolver builds a private execute request from bound package evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage()]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).not.toBeNull();
+    expect(resolved?.targetChannelId).toBe(FULL_CHANNEL_ID);
+    expect(resolved?.uploadRequest.visibility).toBe("private");
+    expect(resolved?.uploadRequest.execution_intent).toBe("private_execute");
+    expect(resolved?.uploadRequest.candidate_id).toBe("pkg-v092-father");
+    expect(resolved?.uploadRequest.title).toContain("v092");
+    expect(resolved?.uploadRequest.description).toContain("Coupang");
+    expect(resolved?.uploadRequest.selected_affiliate_url).toBe(RAW_AFFILIATE_URL);
+    expect(resolved?.uploadRequest.prepared_video_asset.mime_type).toBe("video/mp4");
+    expect(resolved?.uploadRequest.prepared_video_asset.server_accessible).toBe(true);
+  });
+
+  test("server-only upload package resolver fails closed when upload request builder rejects package evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        deeplink: {
+          ...v094ReadyUploadPackage().deeplink,
+          selectedAffiliateUrl: null,
+          sanitizedEvidence: {
+            affiliateUrlPresent: false,
+            affiliateUrlPrinted: false,
+            affiliateHashPrefix: null
+          }
+        }
+      })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_AFFILIATE_URL_EVIDENCE_MISSING"
+    });
+  });
+
+  test("server-only upload package resolver blocks missing disclosure instead of building a fallback request", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        commentPackage: {
+          ...v094ReadyUploadPackage().commentPackage,
+          coupangPartnersDisclosurePresent: false
+        }
+      })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_COUPANG_DISCLOSURE_EVIDENCE_MISSING"
+    });
+  });
+
+  test("server-only upload package resolver blocks non-server-accessible asset instead of building a fallback request", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        videoAsset: {
+          ...v094ReadyUploadPackage().videoAsset,
+          path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4"
+        }
+      })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_VIDEO_ASSET_MISSING"
+    });
+  });
+
+  test("server-only upload package resolver blocks target channel hash mismatch without exposing the full channel id", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: `UC${"8".repeat(22)}`
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage()]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+    const serialized = JSON.stringify(resolved);
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_TARGET_CHANNEL_EVIDENCE_MISSING"
+    });
+    expect(serialized).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("server-only upload package resolver blocks invalid target channel package evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        targetChannel: {
+          ...v094ReadyUploadPackage().targetChannel,
+          formatValid: false
+        }
+      })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_TARGET_CHANNEL_EVIDENCE_MISSING"
+    });
+  });
+
+  test("server-only upload package resolver returns null for mismatched package evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({ packageId: "pkg-other" })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toBeNull();
+  });
+
+  test.each([
+    ["public" as const, "BLOCKED_V081_PUBLIC_UPLOAD_REQUESTED"],
+    ["unlisted" as const, "BLOCKED_V081_UNLISTED_UPLOAD_REQUESTED"]
+  ])("server-only executor blocks resolver %s visibility", async (visibility, blocker) => {
+    const executor = createV092ServerOnlyYouTubePrivateUploadExecutor({
+      uploadRequestResolver: async () => ({
+        ...(await readyUploadRequestResolver()(v081AdapterRequest())),
+        uploadRequest: {
+          ...(await readyUploadRequestResolver()(v081AdapterRequest()))!.uploadRequest,
+          visibility
+        }
+      }),
+      uploadAdapter: new FakeYouTubeUploadAdapter({
+        youtubeVideoId: FULL_VIDEO_ID,
+        succeeded: true,
+        youtubeUploadExecuted: true
+      })
+    });
+    const result = await executor(v081AdapterRequest());
+
+    expect(result.status).toBe("BLOCKED");
+    expect(result.blocker).toBe(blocker);
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("server-only executor blocks non-private execution intent returned by resolver", async () => {
+    const executor = createV092ServerOnlyYouTubePrivateUploadExecutor({
+      uploadRequestResolver: async () => ({
+        ...(await readyUploadRequestResolver()(v081AdapterRequest())),
+        uploadRequest: {
+          ...(await readyUploadRequestResolver()(v081AdapterRequest()))!.uploadRequest,
+          execution_intent: "live_smoke"
+        }
+      }),
+      uploadAdapter: new FakeYouTubeUploadAdapter({
+        youtubeVideoId: FULL_VIDEO_ID,
+        succeeded: true,
+        youtubeUploadExecuted: true
+      })
+    });
+    const result = await executor(v081AdapterRequest());
+
+    expect(result.status).toBe("BLOCKED");
+    expect(result.blocker).toBe("BLOCKED_V081_MUTATION_ATTEMPT_OUTSIDE_APPROVED_PATH");
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
+  test("server-only executor blocks missing target channel returned by resolver", async () => {
+    const executor = createV092ServerOnlyYouTubePrivateUploadExecutor({
+      uploadRequestResolver: async () => ({
+        ...(await readyUploadRequestResolver()(v081AdapterRequest())),
+        targetChannelId: null
+      }),
+      uploadAdapter: new FakeYouTubeUploadAdapter({
+        youtubeVideoId: FULL_VIDEO_ID,
+        succeeded: true,
+        youtubeUploadExecuted: true
+      })
+    });
+    const result = await executor(v081AdapterRequest());
+
+    expect(result.status).toBe("BLOCKED");
+    expect(result.blocker).toBe("BLOCKED_V081_TARGET_CHANNEL_EVIDENCE_MISSING");
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
     expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
@@ -275,6 +503,131 @@ function readyUploadRequestResolver(): V092PrivateUploadRequestResolver {
     },
     targetChannelId: FULL_CHANNEL_ID
   });
+}
+
+type V094TestUploadPackage = V073UploadPackage & {
+  shortsContentQuality?: unknown;
+};
+
+function v094ReadyUploadPackage(overrides: Partial<V094TestUploadPackage> = {}): V094TestUploadPackage {
+  const base = v073UploadPackage({
+    videoAsset: {
+      ...v073UploadPackage().videoAsset,
+      path: "https://assets.example.test/v092-private-pilot.mp4"
+    },
+    youtubeMetadata: {
+      ...v073UploadPackage().youtubeMetadata,
+      description: `Coupang private pilot package.\n\n${DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT}`
+    },
+    commentPackage: {
+      ...v073UploadPackage().commentPackage,
+      commentText: `${DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT}\n\nmasked comment`,
+      coupangPartnersDisclosurePresent: true
+    },
+    targetChannel: {
+      ...v073UploadPackage().targetChannel,
+      channelIdHashPrefix: hashPrefix(FULL_CHANNEL_ID),
+      formatValid: true
+    }
+  }) as V094TestUploadPackage;
+  return {
+    ...base,
+    shortsContentQuality: PASSING_SHORTS_CONTENT_QUALITY,
+    ...overrides
+  };
+}
+
+function v073UploadPackage(overrides: Partial<V073UploadPackage> = {}): V073UploadPackage {
+  return {
+    packageId: "pkg-v092-father",
+    queueItemId: "queue-v092-father",
+    generatedContentId: "generated-v092-father",
+    channelKey: "father_jobs",
+    assetProfile: "v057_corrected_reupload",
+    productSource: {
+      rawCoupangUrl: RAW_COUPANG_URL,
+      productName: "v092 product",
+      sourceKind: "trusted_upstream_manifest",
+      sourceEvidenceHash: "sourcehashv092",
+      runtimeSourceApproved: true
+    },
+    deeplink: {
+      selectedAffiliateUrl: RAW_AFFILIATE_URL,
+      source: "deeplink",
+      status: "ready",
+      sanitizedEvidence: {
+        affiliateUrlPresent: true,
+        affiliateUrlPrinted: false,
+        affiliateHashPrefix: "affiliate"
+      }
+    },
+    videoAsset: {
+      path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4",
+      basename: "corrected-preview-v057.mp4",
+      hashEvidence: "videoasset",
+      firstFramePath: "commerce-assets/review/v057/father_jobs/first-frame-v057.jpg",
+      firstFrameBasename: "first-frame-v057.jpg",
+      firstFrameHashEvidence: "firstframe",
+      duration: null,
+      resolution: null
+    },
+    youtubeMetadata: {
+      title: "v092 private pilot title",
+      description: "Coupang Partners disclosure for v092 private pilot",
+      tags: ["v092", "shorts"],
+      categoryId: "26",
+      defaultLanguage: "ko",
+      defaultAudioLanguage: "ko"
+    },
+    youtubeAdvancedSettings: {
+      privacyStatus: "public",
+      selfDeclaredMadeForKids: false,
+      containsSyntheticMedia: true,
+      paidProductPlacementDetails: {
+        hasPaidProductPlacement: true
+      },
+      license: "youtube",
+      embeddable: true,
+      publicStatsViewable: true,
+      defaultLanguage: "ko",
+      defaultAudioLanguage: "ko"
+    },
+    commentPackage: {
+      commentText: "Coupang Partners disclosure comment",
+      affiliateUrlRequiredBeforeExecution: true,
+      coupangPartnersDisclosurePresent: true
+    },
+    targetChannel: {
+      channelKey: "father_jobs",
+      channelIdHashPrefix: hashPrefix(FULL_CHANNEL_ID),
+      formatValid: true,
+      rawChannelIdPrinted: false
+    },
+    duplicateGuard: {
+      ready: true,
+      duplicateUploadRisk: false,
+      signature: "duplicate"
+    },
+    quotaGuard: {
+      ready: true,
+      publicUploadExecutionDisabled: true
+    },
+    approvalGate: {
+      freshApprovalRequired: true,
+      approvalPresent: false,
+      publicUploadExecutionDisabled: true
+    },
+    resultStore: {
+      status: "placeholder",
+      rawUrlsStored: false,
+      secretsStored: false
+    },
+    ...overrides
+  };
+}
+
+function hashPrefix(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 10);
 }
 
 class FakeYouTubeUploadAdapter implements YouTubeUploadAdapter {

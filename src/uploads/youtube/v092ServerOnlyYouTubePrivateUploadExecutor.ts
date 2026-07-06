@@ -15,6 +15,7 @@ import type {
 } from "./v081PrivateUploadPilot";
 import {
   blockedV092PrivateExecutorResult,
+  isV092BlockedPrivateUploadRequestResolution,
   type V092PrivateUploadExecutorOptions,
   type V092ResolvedPrivateUploadRequest
 } from "./v092PrivateUploadExecutorBoundary";
@@ -36,6 +37,9 @@ export function createV092ServerOnlyYouTubePrivateUploadExecutor(
     const resolved = await options.uploadRequestResolver(request);
     if (!resolved) {
       return blockedResult("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
+    }
+    if (isV092BlockedPrivateUploadRequestResolution(resolved)) {
+      return blockedResult(resolved.blocker);
     }
 
     const uploadRequestBlocker = validateResolvedUploadRequest(resolved);
@@ -94,6 +98,12 @@ function createDefaultServerUploadAdapter(
 
 function validateAdapterRequest(request: V081PrivateUploadPilotAdapterRequest):
   V081PrivateUploadPilotAdapterResult["blocker"] {
+  if (!trimOrNull(request.queueItemId)) {
+    return "BLOCKED_V081_QUEUE_ITEM_MISSING";
+  }
+  if (!trimOrNull(request.uploadPackageId)) {
+    return "BLOCKED_V081_UPLOAD_PACKAGE_MISSING";
+  }
   if (request.visibility !== "private") {
     return request.visibility === "unlisted"
       ? "BLOCKED_V081_UNLISTED_UPLOAD_REQUESTED"

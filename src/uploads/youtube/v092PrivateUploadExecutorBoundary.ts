@@ -10,14 +10,20 @@ export type V092ResolvedPrivateUploadRequest = {
   targetChannelId: string | null;
 };
 
+export type V092BlockedPrivateUploadRequestResolution = {
+  blocker: NonNullable<V081PrivateUploadPilotAdapterResult["blocker"]>;
+};
+
 export type V092PrivateUploadRequestResolver = (
   request: V081PrivateUploadPilotAdapterRequest
-) => Promise<V092ResolvedPrivateUploadRequest | null>;
+) => Promise<V092ResolvedPrivateUploadRequest | V092BlockedPrivateUploadRequestResolution | null>;
 
 export type V092PrivateUploadExecutorOptions = {
   uploadRequestResolver?: V092PrivateUploadRequestResolver;
   uploadAdapter?: YouTubeUploadAdapter;
   env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  uploadAssetProfile?: string | null;
   fetchImpl?: typeof fetch;
   now?: () => string;
 };
@@ -30,6 +36,12 @@ export function blockedV092PrivateExecutorResult(
   blocker: NonNullable<V081PrivateUploadPilotAdapterResult["blocker"]>
 ): V081PrivateUploadPilotAdapterResult {
   return blockedResult(blocker);
+}
+
+export function isV092BlockedPrivateUploadRequestResolution(
+  value: V092ResolvedPrivateUploadRequest | V092BlockedPrivateUploadRequestResolution | null
+): value is V092BlockedPrivateUploadRequestResolution {
+  return Boolean(value && "blocker" in value);
 }
 
 function blockedResult(

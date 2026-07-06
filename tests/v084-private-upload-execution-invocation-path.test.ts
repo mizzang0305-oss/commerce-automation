@@ -278,79 +278,37 @@ describe("v084 private upload execution invocation path", () => {
     expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
-  test("package execute command reaches V081/V083 no-upload executor boundary without V084 hard lock", () => {
-    const npmCli = process.env.npm_execpath;
+  test("runtime execute function reaches V081/V083 no-upload boundary without invoking package execute command", async () => {
+    const result = await runV084PrivateUploadPilotExecution(readyRequest({
+      dryRun: false
+    }));
 
-    expect(npmCli).toBeTruthy();
-
-    const output = execFileSync(process.execPath, [
-      npmCli as string,
-      "run",
-      "upload:v084:private-pilot:execute",
-      "--silent"
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
-        V084_QUEUE_ITEM_ID: "queue-v084-script",
-        V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
-        V084_V088_RESOLVER_STATUS: "bound",
-        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_RUNTIME_READY: "true"
-      }
-    });
-    const parsed = JSON.parse(output);
-
-    expect(parsed.mode).toBe("private_upload_pilot_invocation");
-    expect(parsed.status).toBe("blocked");
-    expect(parsed.dryRun).toBe(false);
-    expect(parsed.blockers).not.toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
-    expect(parsed.blockers).toContain("BLOCKED_V084_V081_EXECUTION_BLOCKED");
-    expect(parsed.v081Blockers).not.toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
-    expect(parsed.v081Blockers).toContain("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
-    expect(parsed.videosInsertCalled).toBe(false);
-    expect(parsed.commentThreadsInsertCalled).toBe(false);
-    expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    expect(result.mode).toBe("private_upload_pilot_invocation");
+    expect(result.status).toBe("blocked");
+    expect(result.dryRun).toBe(false);
+    expect(result.blockers).not.toContain("BLOCKED_V084_REAL_EXECUTION_NOT_ALLOWED_IN_THIS_PR");
+    expect(result.blockers).toContain("BLOCKED_V084_V081_EXECUTION_BLOCKED");
+    expect(result.v081Blockers).not.toContain("BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED");
+    expect(result.v081Blockers).toContain("BLOCKED_V081_UPLOAD_PACKAGE_MISSING");
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
-  test("package execute command preserves unsafe automation blockers from env", () => {
-    const npmCli = process.env.npm_execpath;
+  test("runtime execute function preserves unsafe automation blockers without invoking package execute command", async () => {
+    const result = await runV084PrivateUploadPilotExecution(readyRequest({
+      dryRun: false,
+      commentAutomationAllowed: true,
+      schedulerExecutionAllowed: true
+    }));
 
-    expect(npmCli).toBeTruthy();
-
-    const output = execFileSync(process.execPath, [
-      npmCli as string,
-      "run",
-      "upload:v084:private-pilot:execute",
-      "--silent"
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
-        V084_QUEUE_ITEM_ID: "queue-v084-script",
-        V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
-        V084_V088_RESOLVER_STATUS: "bound",
-        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_RUNTIME_READY: "true",
-        V084_COMMENT_AUTOMATION_ALLOWED: "true",
-        V084_SCHEDULER_EXECUTION_ALLOWED: "true"
-      }
-    });
-    const parsed = JSON.parse(output);
-
-    expect(parsed.status).toBe("blocked");
-    expect(parsed.blockers).toContain("BLOCKED_V084_COMMENT_AUTOMATION_NOT_ALLOWED");
-    expect(parsed.blockers).toContain("BLOCKED_V084_SCHEDULER_EXECUTION_NOT_ALLOWED");
-    expect(parsed.v083AdapterInvoked).toBe(false);
-    expect(parsed.videosInsertCalled).toBe(false);
-    expect(parsed.commentThreadsInsertCalled).toBe(false);
-    expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    expect(result.status).toBe("blocked");
+    expect(result.blockers).toContain("BLOCKED_V084_COMMENT_AUTOMATION_NOT_ALLOWED");
+    expect(result.blockers).toContain("BLOCKED_V084_SCHEDULER_EXECUTION_NOT_ALLOWED");
+    expect(result.v083AdapterInvoked).toBe(false);
+    expect(result.videosInsertCalled).toBe(false);
+    expect(result.commentThreadsInsertCalled).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
   test("package plan command test uses a cross-platform npm executable", async () => {
