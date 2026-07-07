@@ -81,7 +81,7 @@ Product discovery
 - PR #205: V097 upload package resolution bridge, `MERGED`
 - PR #205 merge commit: `43c935dc346b4ca0187515dd3117cec837d319bb`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T025_V098_SERVER_ACCESSIBLE_VIDEO_ASSET_BRIDGE_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_T026_V099_PREPARED_ASSET_EVIDENCE_BINDING_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -92,6 +92,7 @@ Product discovery
 - Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- V099 prepared asset evidence binding: `PR_OPEN`
 
 ## Status Legend
 
@@ -875,7 +876,7 @@ Requirements:
 
 ### T025 - V098 Server-Accessible Video Asset Bridge
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add a no-upload bridge that allows V094 to build a private upload request only when the local v057 MP4 evidence is paired with a server-accessible `PreparedVideoAssetRef`.
 
@@ -930,4 +931,53 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T025/V098 only after clean validation. After merge, run V095 preflight, V096 execute-context dry-run, and V097 package-resolution dry-run on main. Do not retry private pilot upload until V098 proves server-accessible prepared video asset evidence and a separate fresh owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- PR #206 was merged. V098 is on main and proves package resolution plus local MP4 evidence, but runtime still lacks an uploadable HTTPS prepared asset URL. Current blocker remains `BLOCKED_V081_VIDEO_ASSET_MISSING` until V099 binds validated prepared asset evidence. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+
+### T026 - V099 Prepared Asset Evidence Binding
+
+Status: `PR_OPEN`
+
+Goal: Bind already-prepared HTTPS video asset evidence into the V094/V097 no-upload resolver path without performing storage upload, R2 write, DB write, product_assets write, or YouTube execution.
+
+Requirements:
+
+- add a V099 prepared asset evidence binding contract
+- accept only server-accessible HTTPS `prepared_video_asset_url` or HTTPS `signed_url`
+- require provider label, `asset_id`, `video/mp4`, hash/checksum evidence, and non-expired signed URL evidence
+- keep local MP4-only evidence blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING`
+- keep `storage_key`-only evidence blocked for future storage provider work
+- add `npm run upload:v099:prepared-asset-dry-run`
+- report only sanitized booleans, provider labels, and hash prefixes
+- do not print raw signed URLs, raw prepared URLs, raw local paths, raw affiliate URLs, raw Coupang URLs, full video IDs, full channel IDs, tokens, secrets, Authorization, or HMAC values
+- do not call `npm run upload:v084:private-pilot:execute --silent`
+- do not call `videos.insert`
+- do not call `commentThreads.insert`
+- do not enable public/unlisted/private upload execution
+- do not enable comment automation
+- do not enable scheduler execution
+- do not call n8n webhook
+- do not create V076 evidence/store/report without real complete upload evidence
+- fake success remains blocked
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+## Current Blocker
+
+- `PR_OPEN_T026_V099_PREPARED_ASSET_EVIDENCE_BINDING_NO_UPLOAD_REVIEW`
+- PR #206 is merged and V098 is on main.
+- V097/V098 dry-run can find the package object and local MP4 evidence but cannot build an upload request without prepared HTTPS asset evidence.
+- Runtime V099 dry-run remains blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING` until an existing server-accessible prepared asset reference is supplied.
+- Private pilot execution remains blocked until V099 is reviewed/merged, no-upload validation is clean, and a separate fresh owner approval is supplied.
+- Public upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
+- `PUBLIC_UPLOAD=BLOCKED`
+- `COMMENT_AUTOMATION=BLOCKED`
+- `SCHEDULER_EXECUTION=BLOCKED`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+## Next Exact Action
+
+- Review and merge T026/V099 only after clean validation. After merge, run V095/V096/V097/V099 no-upload checks on main. Do not retry private pilot upload until prepared HTTPS asset evidence exists and a separate fresh owner approval is supplied.
