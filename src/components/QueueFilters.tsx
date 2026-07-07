@@ -1,6 +1,8 @@
 import type { QueueStatus } from "@/types/automation";
 import { queueStatusLabels } from "@/lib/statusLabels";
 
+const channels = ["all", "father_jobs", "neoman_moleulgeol", "lets_buy"] as const;
+
 const statuses: Array<QueueStatus | "all"> = [
   "all",
   "scheduled",
@@ -21,6 +23,7 @@ export function QueueFilters({
 }: {
   defaults: {
     date?: string;
+    channelKey?: string;
     status?: string;
     upload_status?: string;
     keyword?: string;
@@ -30,7 +33,17 @@ export function QueueFilters({
 }) {
   return (
     <form action="/queue" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-7">
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-500">Channel</span>
+          <select name="channelKey" defaultValue={defaults.channelKey ?? "all"} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            {channels.map((channel) => (
+              <option key={channel} value={channel}>
+                {channel}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <span className="text-xs font-semibold text-slate-500">날짜</span>
           <input name="date" type="date" defaultValue={defaults.date} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

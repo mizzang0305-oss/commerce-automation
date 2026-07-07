@@ -13,6 +13,7 @@ export function RunLogTable({ runs }: { runs: AutomationRun[] }) {
         <thead className="bg-slate-100 text-xs uppercase text-slate-500">
           <tr>
             <th className="px-4 py-3">유형</th>
+            <th className="px-4 py-3">Channel</th>
             <th className="px-4 py-3">상태</th>
             <th className="px-4 py-3">처리</th>
             <th className="px-4 py-3">오류</th>
@@ -26,6 +27,7 @@ export function RunLogTable({ runs }: { runs: AutomationRun[] }) {
           {runs.map((run) => (
             <tr key={run.id} className={run.status === "failed" ? "bg-red-50" : "bg-white"}>
               <td className="px-4 py-4 font-semibold text-slate-900">{run.run_type}</td>
+              <td className="px-4 py-4 text-slate-700">{run.channelKey ?? "-"}</td>
               <td className="px-4 py-4">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${run.status === "success" ? "bg-emerald-100 text-emerald-700" : run.status === "running" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
                   {run.status === "success" ? "성공" : run.status === "running" ? "실행 중" : "실패"}

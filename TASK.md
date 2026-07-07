@@ -79,7 +79,7 @@ Product discovery
 - PR #204: V096 V084 execute context auto-load fix, `MERGED`
 - PR #204 merge commit: `aa30620d78f7a14f41b4268583cf95721bc8b231`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T024_V097_UPLOAD_PACKAGE_RESOLUTION_BRIDGE_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V100_CHANNEL_AUTOMATION_MVP_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -90,6 +90,10 @@ Product discovery
 - Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Private upload blocker chase: `FROZEN_FOR_CHANNEL_AUTOMATION_MVP`
+- V100 channel automation MVP: `PR_OPEN`
+- V100 operating mode: `generate_only`
+- V100 ready state target: `ready_for_manual_upload`
 
 ## Status Legend
 

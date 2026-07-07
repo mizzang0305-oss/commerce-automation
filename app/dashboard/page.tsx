@@ -1,6 +1,11 @@
 import { DashboardView } from "@/components/DashboardView";
 import { listArtifactQaSummaries } from "@/lib/artifacts/artifactQa";
 import { buildCandidateAnalytics, buildCandidateSeedDryRunPlan } from "@/lib/candidates/candidateAnalytics";
+import {
+  buildChannelAutomationCards,
+  CHANNEL_AUTOMATION_KEYS,
+  toChannelAutomationSettings
+} from "@/lib/channelAutomation";
 import { buildProductionReadinessSummary } from "@/lib/ops/productionReadiness";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { getN8nConfigStatus } from "@/lib/server/n8nClient";
@@ -26,6 +31,10 @@ export default async function DashboardPage() {
       items.map(async (item) => [item.id, await repository.getGeneratedContentByQueueItem(item.id)] as const)
     )
   );
+  const channelAutomationCards = buildChannelAutomationCards({
+    items,
+    settings: CHANNEL_AUTOMATION_KEYS.map((channelKey) => toChannelAutomationSettings(channelKey, settings))
+  });
 
   return (
     <DashboardView
@@ -37,6 +46,7 @@ export default async function DashboardPage() {
       workerHeartbeats={workerHeartbeats}
       contents={contents}
       diagnostics={getN8nConfigStatus()}
+      channelAutomationCards={channelAutomationCards}
       productionReadiness={buildProductionReadinessSummary()}
       candidateSummary={{
         total: candidates.length,

@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelAutomationKey,
   ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
@@ -168,9 +169,11 @@ const STATUS_PATTERN: QueueStatus[] = [
   "hold",
   "scheduled"
 ];
+const CHANNEL_PATTERN: ChannelAutomationKey[] = ["father_jobs", "neoman_moleulgeol", "lets_buy"];
 
 function createQueueItem(index: number, status: QueueStatus, date: string): ProductQueueItem {
   const example = EXAMPLE_PRODUCTS[(index - 1) % EXAMPLE_PRODUCTS.length];
+  const channelKey = CHANNEL_PATTERN[(index - 1) % CHANNEL_PATTERN.length];
   const hasAffiliate = !["scheduled", "processing", "error", "skipped", "hold"].includes(status);
   const hasVideo = [
     "video_ready",
@@ -184,6 +187,7 @@ function createQueueItem(index: number, status: QueueStatus, date: string): Prod
 
   return {
     id,
+    channelKey,
     queue_date: date,
     queue_rank: index,
     upload_slot: Math.ceil(index / 3),
@@ -365,6 +369,9 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
   async getQueue(filters: QueueFilters = {}) {
     let items = [...this.queue];
 
+    if (filters.channelKey && filters.channelKey !== "all") {
+      items = items.filter((item) => item.channelKey === filters.channelKey);
+    }
     if (filters.date) {
       items = items.filter((item) => item.queue_date === filters.date);
     }

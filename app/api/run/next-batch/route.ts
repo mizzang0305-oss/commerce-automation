@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import type { GeneratedContent, ProductQueueItem, WorkerJob } from "@/types/automation";
 import { canProcessBatch } from "@/lib/guards";
+import {
+  buildChannelNextBatchPayload,
+  getDueQueueItems,
+  isChannelAutomationKey,
+  toChannelAutomationSettings
+} from "@/lib/channelAutomation";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { callN8nWebhook } from "@/lib/server/n8nClient";
 import { createAutomationRun } from "@/lib/server/runLog";
 import { buildStoryboardRenderPlan } from "@/lib/video/storyboardTemplatePlanner";
 import { getEffectiveRenderPlan } from "@/lib/video/renderPlanOverride";
@@ -9,10 +16,130 @@ import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request?: Request) {
   const repository = getAutomationRepository();
   const settings = await repository.getSettings();
   const requestId = `next_batch-${Date.now()}`;
+  const channelKey = request ? await getRequestedChannelKey(request) : null;
+
+  if (channelKey) {
+    const channelSettings = toChannelAutomationSettings(channelKey, settings);
+    const now = new Date();
+    const dueItems = getDueQueueItems(await repository.getQueue({ channelKey, status: "scheduled" }), channelSettings, now, channelKey);
+    const selectedItems = dueItems.slice(0, channelSettings.batch_size);
+
+    if (selectedItems.length === 0) {
+      const message = "No due queue items for this channel. No upload or comment mutation was attempted.";
+      await repository.appendRun(
+        createAutomationRun({
+          request_id: requestId,
+          run_type: "channel_next_batch",
+          channelKey,
+          status: "success",
+          processed_count: 0,
+          error_count: 0,
+          log: message,
+          safe_message: message
+        })
+      );
+      return NextResponse.json({
+        ok: true,
+        message,
+        request_id: requestId,
+        channel_key: channelKey,
+        selected_items: 0,
+        created_jobs: 0,
+        items: [],
+        uploadExecuteCalled: false,
+        videosInsertCalled: false,
+        commentThreadsInsertCalled: false,
+        SAFE_TO_UPLOAD: false,
+        SAFE_TO_PUBLIC_UPLOAD: false
+      });
+    }
+
+    for (const item of selectedItems) {
+      await repository.updateQueueItemById(item.id, { queue_status: "processing", error_message: "" });
+    }
+
+    const payload = buildChannelNextBatchPayload({
+      channelKey,
+      settings: channelSettings,
+      requestId,
+      requestedAt: now.toISOString(),
+      items: selectedItems,
+      callbackBaseUrl: process.env.PUBLIC_APP_BASE_URL
+    });
+    const n8nResult = await callN8nWebhook("next_batch", payload);
+
+    if (!n8nResult.ok) {
+      for (const item of selectedItems) {
+        await repository.updateQueueItemById(item.id, {
+          queue_status: "scheduled",
+          error_message: ""
+        });
+      }
+      await repository.appendRun(
+        createAutomationRun({
+          request_id: requestId,
+          n8n_run_id: n8nResult.runId,
+          http_status: n8nResult.httpStatus,
+          run_type: "channel_next_batch",
+          channelKey,
+          status: "failed",
+          processed_count: 0,
+          error_count: 1,
+          log: n8nResult.log,
+          safe_message: n8nResult.message
+        })
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          message: n8nResult.message,
+          request_id: requestId,
+          channel_key: channelKey,
+          selected_items: selectedItems.length,
+          created_jobs: 0,
+          videosInsertCalled: false,
+          commentThreadsInsertCalled: false,
+          SAFE_TO_UPLOAD: false,
+          SAFE_TO_PUBLIC_UPLOAD: false
+        },
+        { status: 502 }
+      );
+    }
+
+    const message = "Channel next-batch payload sent to n8n. Upload and comment automation remain disabled.";
+    await repository.appendRun(
+      createAutomationRun({
+        request_id: requestId,
+        n8n_run_id: n8nResult.runId,
+        http_status: n8nResult.httpStatus,
+        run_type: "channel_next_batch",
+        channelKey,
+        status: "success",
+        processed_count: selectedItems.length,
+        error_count: 0,
+        log: n8nResult.log,
+        safe_message: message
+      })
+    );
+    return NextResponse.json({
+      ok: true,
+      message,
+      request_id: requestId,
+      channel_key: channelKey,
+      selected_items: selectedItems.length,
+      created_jobs: 0,
+      items: payload.items,
+      uploadExecuteCalled: false,
+      videosInsertCalled: false,
+      commentThreadsInsertCalled: false,
+      SAFE_TO_UPLOAD: false,
+      SAFE_TO_PUBLIC_UPLOAD: false
+    });
+  }
 
   const guard = canProcessBatch(settings);
   if (!guard.ok) {
@@ -168,6 +295,26 @@ export async function POST() {
         safe_message: message
       })
     );
+  }
+}
+
+async function getRequestedChannelKey(request: Request) {
+  const url = new URL(request.url);
+  const queryValue = url.searchParams.get("channelKey") ?? url.searchParams.get("channel_key");
+  if (isChannelAutomationKey(queryValue)) {
+    return queryValue;
+  }
+
+  try {
+    const contentType = request.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json") && request.body === null) {
+      return null;
+    }
+    const body = (await request.clone().json()) as { channelKey?: unknown; channel_key?: unknown };
+    const bodyValue = body.channelKey ?? body.channel_key;
+    return isChannelAutomationKey(bodyValue) ? bodyValue : null;
+  } catch {
+    return null;
   }
 }
 

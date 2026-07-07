@@ -6,6 +6,8 @@ export type RunMode =
   | "youtube_unlisted"
   | "youtube_public";
 
+export type ChannelAutomationKey = "father_jobs" | "neoman_moleulgeol" | "lets_buy";
+
 export type QueueStatus =
   | "scheduled"
   | "processing"
@@ -60,6 +62,7 @@ export type AutomationRunType =
   | "nightly_scout"
   | "hourly_batch"
   | "next_batch"
+  | "channel_next_batch"
   | "manual_batch"
   | "retry_item"
   | "hold_item"
@@ -88,8 +91,25 @@ export type AutomationSettings = {
   updated_at: string;
 };
 
+export type ChannelAutomationSettings = {
+  channelKey: ChannelAutomationKey;
+  displayName: string;
+  enabled: boolean;
+  daily_target_count: number;
+  batch_size: number;
+  interval_hours: number;
+  run_mode: "generate_only";
+  youtube_upload_enabled: false;
+  approval_required: true;
+  max_daily_uploads: 0;
+  category_include: string[];
+  category_exclude: string[];
+  updated_at: string;
+};
+
 export type ProductQueueItem = {
   id: string;
+  channelKey?: ChannelAutomationKey;
   queue_date: string;
   queue_rank: number;
   upload_slot: number;
@@ -155,6 +175,7 @@ export type AutomationRun = {
   request_id?: string;
   n8n_run_id?: string;
   http_status?: number;
+  channelKey?: ChannelAutomationKey;
   run_type: AutomationRunType;
   status: AutomationRunStatus;
   processed_count: number;

@@ -1,6 +1,7 @@
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelAutomationKey,
   ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
@@ -22,6 +23,7 @@ import type {
 
 export type QueueFilters = {
   date?: string;
+  channelKey?: ChannelAutomationKey | "all";
   status?: QueueStatus | "all";
   upload_status?: string;
   keyword?: string;

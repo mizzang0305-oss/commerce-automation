@@ -4,7 +4,7 @@ import { StatCard } from "@/components/StatCard";
 import { summarizeQueueItems } from "@/lib/queueAnalytics";
 import { getQueueStatusLabel } from "@/lib/statusLabels";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
-import type { QueueStatus } from "@/types/automation";
+import type { ChannelAutomationKey, QueueStatus } from "@/types/automation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ export default async function QueuePage({
 }) {
   const params = await searchParams;
   const date = scalar(params.date);
+  const channelKey = scalar(params.channelKey);
   const status = scalar(params.status);
   const uploadStatus = scalar(params.upload_status);
   const keyword = scalar(params.keyword);
@@ -24,6 +25,7 @@ export default async function QueuePage({
   const [items, workerJobs] = await Promise.all([
     repository.getQueue({
       date: date || undefined,
+      channelKey: (channelKey as ChannelAutomationKey | "all" | undefined) || undefined,
       status: (status as QueueStatus | "all" | undefined) || undefined,
       upload_status: uploadStatus || undefined,
       keyword: keyword || undefined,
@@ -84,7 +86,7 @@ export default async function QueuePage({
         </div>
       </section>
 
-      <QueueFilters defaults={{ date, status, upload_status: uploadStatus, keyword, theme, priority }} />
+      <QueueFilters defaults={{ date, channelKey, status, upload_status: uploadStatus, keyword, theme, priority }} />
       <QueueTable items={items} workerJobs={workerJobs} />
     </div>
   );
