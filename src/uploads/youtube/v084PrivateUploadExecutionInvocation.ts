@@ -7,6 +7,9 @@ import type { V081PrivateUploadPilotResult } from "./v081PrivateUploadPilot";
 import type {
   V083PrivateUploadExecutionBlocker
 } from "./v083PrivateUploadExecutionReadiness";
+import {
+  loadV095PrivatePilotExecutionContextForV084
+} from "./v095PrivatePilotExecutionContext";
 
 export type V084PrivateUploadPilotInvocationMode = "private_upload_pilot_invocation";
 export type V084PrivateUploadPilotInvocationStatus =
@@ -38,6 +41,10 @@ export type V084PrivateUploadPilotInvocationBlocker =
   | "BLOCKED_V084_QUEUE_ITEM_REQUIRED"
   | "BLOCKED_V084_READINESS_NOT_READY"
   | "BLOCKED_V084_V081_EXECUTION_BLOCKED"
+  | "BLOCKED_V084_EXECUTION_CONTEXT_STALE"
+  | "BLOCKED_V084_EXECUTION_CONTEXT_CONFLICT"
+  | "BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE"
+  | "BLOCKED_V084_EXECUTION_CONTEXT_UNSAFE"
   | "BLOCKED_V084_UNSAFE_REPORT_REQUESTED";
 
 export type V084PrivateUploadPilotInvocationReadiness = {
@@ -75,6 +82,7 @@ export type V084PrivateUploadPilotInvocationRequest = {
   videoAssetHashPrefix?: string | null;
   readiness: V084PrivateUploadPilotInvocationReadiness;
   unsafeReportRequested?: boolean;
+  preflightBlockers?: V084PrivateUploadPilotInvocationBlocker[];
 };
 
 export type V084PrivateUploadPilotInvocationResult = {
@@ -142,31 +150,36 @@ export type V084PrivateUploadPilotInvocationFromEnvOptions = {
   dryRun: boolean;
 };
 
-export async function buildV084PrivateUploadPilotInvocationFromEnv(
+export async function buildV084PrivateUploadPilotInvocationRequestFromEnv(
   options: V084PrivateUploadPilotInvocationFromEnvOptions
-): Promise<V084PrivateUploadPilotInvocationResult> {
+): Promise<V084PrivateUploadPilotInvocationRequest> {
   const env = options.env ?? process.env;
-  const runtimeReady = env.V084_RUNTIME_READY === "true";
+  const cwd = env.V095_CWD || env.V084_CWD || process.cwd();
+  const context = await loadV095PrivatePilotExecutionContextForV084({ cwd, env });
+  const contextValues = context.values;
+  const runtimeReady = contextValues
+    ? contextValues.readiness.v081PilotReady
+    : env.V084_RUNTIME_READY === "true";
 
-  return buildV084PrivateUploadPilotInvocation({
+  return {
     mode: "private_upload_pilot_invocation",
     dryRun: options.dryRun,
     serverOnlyContext: true,
     v083AdapterAvailable: true,
-    v088ResolverStatus: normalizeResolverStatus(env.V084_V088_RESOLVER_STATUS),
-    v087BinderStatus: normalizeBinderStatus(env.V084_V087_BINDER_STATUS),
-    v085BinderStatus: normalizeBinderStatus(env.V084_V085_BINDER_STATUS),
-    queueItemId: env.V084_QUEUE_ITEM_ID ?? null,
-    uploadPackageId: env.V084_UPLOAD_PACKAGE_ID ?? null,
-    channelKey: normalizeChannelKey(env.V084_CHANNEL_KEY),
-    visibility: normalizeVisibility(env.V084_VISIBILITY),
-    maxItems: Number(env.V084_MAX_ITEMS ?? 1),
+    v088ResolverStatus: contextValues?.v088ResolverStatus ?? normalizeResolverStatus(env.V084_V088_RESOLVER_STATUS),
+    v087BinderStatus: contextValues?.v087BinderStatus ?? normalizeBinderStatus(env.V084_V087_BINDER_STATUS),
+    v085BinderStatus: contextValues?.v085BinderStatus ?? normalizeBinderStatus(env.V084_V085_BINDER_STATUS),
+    queueItemId: contextValues?.queueItemId ?? env.V084_QUEUE_ITEM_ID ?? null,
+    uploadPackageId: contextValues?.uploadPackageId ?? env.V084_UPLOAD_PACKAGE_ID ?? null,
+    channelKey: contextValues?.channelKey ?? normalizeChannelKey(env.V084_CHANNEL_KEY),
+    visibility: contextValues?.visibility ?? normalizeVisibility(env.V084_VISIBILITY),
+    maxItems: contextValues?.maxItems ?? Number(env.V084_MAX_ITEMS ?? 1),
     approvalPhrase: env.V084_PRIVATE_UPLOAD_APPROVAL_PHRASE ?? null,
     commentAutomationAllowed: env.V084_COMMENT_AUTOMATION_ALLOWED === "true",
     schedulerExecutionAllowed: env.V084_SCHEDULER_EXECUTION_ALLOWED === "true",
-    generatedAt: env.V084_GENERATED_AT,
-    videoAssetHashPrefix: env.V084_VIDEO_ASSET_HASH_PREFIX ?? null,
-    readiness: {
+    generatedAt: contextValues?.generatedAt ?? env.V084_GENERATED_AT,
+    videoAssetHashPrefix: contextValues?.videoAssetHashPrefix ?? env.V084_VIDEO_ASSET_HASH_PREFIX ?? null,
+    readiness: contextValues?.readiness ?? {
       v081PilotReady: runtimeReady,
       v082RuntimeAdapterReady: runtimeReady,
       tokenProviderReady: runtimeReady,
@@ -179,8 +192,17 @@ export async function buildV084PrivateUploadPilotInvocationFromEnv(
       targetChannelEvidenceReady: runtimeReady,
       metadataReady: runtimeReady,
       quotaReady: runtimeReady
-    }
-  });
+    },
+    preflightBlockers: context.blockers
+  };
+}
+
+export async function buildV084PrivateUploadPilotInvocationFromEnv(
+  options: V084PrivateUploadPilotInvocationFromEnvOptions
+): Promise<V084PrivateUploadPilotInvocationResult> {
+  return buildV084PrivateUploadPilotInvocation(
+    await buildV084PrivateUploadPilotInvocationRequestFromEnv(options)
+  );
 }
 
 export async function buildV084PrivateUploadPilotInvocation(
@@ -247,7 +269,9 @@ function normalizeRequest(request: V084PrivateUploadPilotInvocationRequest): Nor
 }
 
 function buildBlockers(request: NormalizedRequest): V084PrivateUploadPilotInvocationBlocker[] {
-  const blockers: V084PrivateUploadPilotInvocationBlocker[] = [];
+  const blockers: V084PrivateUploadPilotInvocationBlocker[] = [
+    ...(request.preflightBlockers ?? [])
+  ];
 
   if (!request.approvalPhrase) {
     blockers.push("BLOCKED_V084_FRESH_APPROVAL_REQUIRED");

@@ -319,6 +319,17 @@ describe("v084 private upload execution invocation path", () => {
     expect(testSource).not.toContain(["cmd", ".exe"].join(""));
   });
 
+  test("package execute command preserves V095 context through shared request generation", async () => {
+    const scriptSource = await readFile("scripts/uploads/run-v084-private-upload-pilot.ts", "utf8");
+
+    expect(scriptSource).toContain("buildV084PrivateUploadPilotInvocationRequestFromEnv");
+    expect(scriptSource).toContain("runV084PrivateUploadPilotExecution(request)");
+    expect(scriptSource).not.toContain("process.env.V084_QUEUE_ITEM_ID ??");
+    expect(scriptSource).not.toContain("process.env.V084_UPLOAD_PACKAGE_ID ??");
+    expect(scriptSource).not.toContain("readV088ResolverStatus");
+    expect(scriptSource).not.toContain("readBinderStatus");
+  });
+
   test("V084 pure invocation module does not bypass server-only V083 adapter guard", async () => {
     const invocationSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocation.ts", "utf8");
     const serverSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts", "utf8");
@@ -350,7 +361,7 @@ describe("v084 private upload execution invocation path", () => {
     expect(task).toContain("### T014 - V084 Private Upload Execution Invocation Path");
     expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `DONE`/);
     expect(task).toMatch(
-      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW)`/
+      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T021_V094_BIND_UPLOAD_PACKAGE_TO_V081_SERVER_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW)`/
     );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");

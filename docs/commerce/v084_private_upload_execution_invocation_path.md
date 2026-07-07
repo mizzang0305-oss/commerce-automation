@@ -23,6 +23,8 @@ Server-only wiring lives in `src/uploads/youtube/v084PrivateUploadExecutionInvoc
 
 V092 extends this boundary by injecting the actual YouTube private upload executor only from the server-only wiring module. The CLI-safe runtime path injects a no-upload placeholder executor instead. This means validation can reach the V081/V083 executor boundary and remain blocked without importing the real YouTube upload adapter, token provider, or upload mutation path.
 
+V095 can supply V084 with a sanitized protected local execution context through `V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH`. Plan and execute share the same V084 from-env request builder, so context-backed queue item id, upload package id, resolver/binder statuses, and readiness booleans are preserved through the runtime request.
+
 ## Invocation Contract
 
 The invocation request uses:
@@ -55,6 +57,10 @@ The invocation request uses:
 - `BLOCKED_V084_QUEUE_ITEM_REQUIRED`
 - `BLOCKED_V084_READINESS_NOT_READY`
 - `BLOCKED_V084_V081_EXECUTION_BLOCKED`
+- `BLOCKED_V084_EXECUTION_CONTEXT_STALE`
+- `BLOCKED_V084_EXECUTION_CONTEXT_CONFLICT`
+- `BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE`
+- `BLOCKED_V084_EXECUTION_CONTEXT_UNSAFE`
 - `BLOCKED_V084_UNSAFE_REPORT_REQUESTED`
 - `BLOCKED_V083_REAL_UPLOAD_EXECUTOR_NOT_INJECTED` through nested V081/V083 execution
 - `BLOCKED_V081_UPLOAD_PACKAGE_MISSING` through the CLI-safe no-upload V092 placeholder boundary

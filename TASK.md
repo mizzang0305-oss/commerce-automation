@@ -71,8 +71,11 @@ Product discovery
 - PR #199 merge commit: `2bd8207dffda7c79bee8d492c22777958a8070e6`
 - PR #200: V091 unlock V083 real private adapter execution gate, `MERGED`
 - PR #200 merge commit: `118dcb069d077f77995d7bc8910651e74ded73a0`
+- PR #201: V092 server-only YouTube private upload executor injection, `MERGED`
+- PR #202: V094 upload package to V081 server executor bridge, `MERGED`
+- PR #202 merge commit: `01864045d1b2421fc155ec10d34c5766b5aef04a`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -299,7 +302,7 @@ Requirements:
 - scheduler repeated execution blocked
 - daily batch upload blocked
 - exactly one private upload item allowed
-- exact approval phrase required: `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT`
+- exact private pilot approval phrase required at runtime only; do not persist the phrase in TASK/docs/tests/context
 - default adapter blocked
 - mock adapter test-only
 - videos.insert allowed only after private pilot approval and readiness gates pass through an injected adapter
@@ -669,7 +672,7 @@ Requirements:
 
 ### T021 - V094 Bind Upload Package To V081 Server Executor
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Bind already-resolved V085/V084 queue item and upload package evidence into the V081/V092 server-only executor request path without executing a real upload during PR review.
 
@@ -727,4 +730,72 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T021/V094 only after clean validation. After merge, do not retry private pilot upload until a separate fresh private pilot approval plus readiness gate are present. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: PR #202 squash merged at `01864045d1b2421fc155ec10d34c5766b5aef04a`. V094 is on main and adds the fail-closed V081/V092 upload package request bridge plus target-channel evidence matching. No upload execution was authorized. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- 2026-07-07 KST: A fresh private pilot execution gate was evaluated after PR #202, but execute was not called because V084 had no bound V088/V087/V085 runtime evidence, queue item id, upload package id, or readiness context in that process. `videos.insert=0`, `commentThreads.insert=false`, and public/unlisted/comment/scheduler remained blocked.
+
+### T022 - V095 Private Pilot Execution Context Bridge
+
+Status: `PR_OPEN`
+
+Goal: Add a no-upload protected local execution context bridge so V088/V087/V085 evidence, queue item id, upload package id, and readiness booleans can be passed into the V084 private pilot plan/execute process without storing approval text or raw evidence.
+
+Requirements:
+
+- create a sanitized V095 execution context contract
+- write the context only as a protected local artifact under `commerce-assets/review/v057/father_jobs/`
+- do not store approval text in context, code, docs, TASK, or tests
+- do not store raw affiliate URL, raw Coupang URL, full video ID, full channel ID, token, secret, client_secret, Authorization, HMAC, or raw evidence body
+- allow V084 from-env builder to load context through `V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH`
+- keep approval phrase runtime-env-only and outside the context
+- keep missing context behavior backward compatible
+- fail closed on stale context
+- fail closed on env/context conflicts
+- fail closed on unsafe context content
+- add no-upload prepare and preflight scripts
+- do not run `npm run upload:v084:private-pilot:execute --silent` during PR validation
+- do not call real `videos.insert`
+- do not call `commentThreads.insert`
+- public upload remains blocked
+- unlisted upload remains blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- no completed V076 evidence/store/report without complete adapter success evidence
+- no raw evidence output
+- fake success remains blocked
+- plan and execute request generation must share the same V095 context-backed request builder
+- context path must stay inside `commerce-assets/review/v057/father_jobs/`
+- absolute context paths outside the protected root are blocked
+- context paths containing `..` are blocked
+- merge does not authorize execution; a separate fresh private pilot approval is required after merge
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
+## Current Blocker
+
+- `PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW`
+- PR #202 is merged and V094 is on main.
+- The latest private pilot gate stopped before execute because V084 did not have bound runtime evidence in the execution process.
+- V095 is open to bridge no-upload runtime evidence into a protected local context.
+- Latest PR #203 review fix: V084 plan and execute now share the same context-backed request builder, and V095 context paths are restricted to the protected local review root.
+- Private pilot execution remains blocked until V095 is reviewed/merged, no-upload preflight reaches only fresh-approval-required, and a separate fresh owner approval is supplied.
+- Public upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- Daily batch upload remains blocked.
+- `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
+- `PUBLIC_UPLOAD=BLOCKED`
+- `COMMENT_AUTOMATION=BLOCKED`
+- `SCHEDULER_EXECUTION=BLOCKED`
+- Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. `SAFE_TO_UPLOAD=false`.
+
+## Next Exact Action
+
+- Review and merge T022/V095 only after clean validation. After merge, run V095 no-upload preflight on main. Do not retry private pilot upload until V084 is blocked only by missing fresh approval and a separate owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
