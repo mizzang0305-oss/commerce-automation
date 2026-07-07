@@ -66,6 +66,24 @@ context file.
 If the context is missing, V084 keeps its existing blockers. If the context is
 stale, unsafe, or conflicts with explicit env values, V084 fails closed.
 
+Plan and execute use the same V084 request builder. This prevents the plan from
+loading V095 context while the execute path reconstructs queue item id, upload
+package id, resolver/binder status, or readiness from unrelated process env
+values.
+
+## Protected Path Policy
+
+V095 context paths are restricted to:
+
+```text
+commerce-assets/review/v057/father_jobs/
+```
+
+Absolute paths are accepted only when they resolve inside that protected root.
+Relative paths containing `..` are blocked. Unsafe prepare paths do not write a
+context file, and unsafe load paths are blocked before any read attempt. Reports
+only use the safe context label, not the raw requested path.
+
 ## Safety
 
 V095 keeps:

@@ -8,6 +8,7 @@ import { CHANNEL_KEYS, type ChannelKey } from "../src/uploads/multi-channel/chan
 import { V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS } from "../src/uploads/multi-channel/v057CorrectedReuploadProductSource";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 import {
+  buildV084PrivateUploadPilotInvocationRequestFromEnv,
   buildV084PrivateUploadPilotInvocationFromEnv
 } from "../src/uploads/youtube/v084PrivateUploadExecutionInvocation";
 import {
@@ -91,7 +92,9 @@ describe("v095 private pilot execution context bridge", () => {
       const result = await buildV084PrivateUploadPilotInvocationFromEnv({
         dryRun: true,
         env: {
-          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH)
+          V095_CWD: cwd,
+          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH),
+          V084_NOW_ISO: "2026-07-07T00:01:00.000Z"
         }
       });
 
@@ -107,6 +110,51 @@ describe("v095 private pilot execution context bridge", () => {
       expect(result.videosInsertCalled).toBe(false);
       expect(result.commentThreadsInsertCalled).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("context-backed V084 request generation preserves ids, statuses, and readiness for execute runtime", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeReadyInputs(cwd);
+      await writeTokenFile();
+      await prepareV095PrivatePilotExecutionContext({
+        cwd,
+        env: readyEnv(manifestPath),
+        now: () => "2026-07-07T00:00:00.000Z"
+      });
+      const contextPath = path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH);
+      const context = JSON.parse(await readFile(contextPath, "utf8"));
+
+      const request = await buildV084PrivateUploadPilotInvocationRequestFromEnv({
+        dryRun: false,
+        env: {
+          V095_CWD: cwd,
+          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: contextPath,
+          V084_NOW_ISO: "2026-07-07T00:01:00.000Z",
+          V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: PRIVATE_APPROVAL_PHRASE
+        }
+      });
+      const serialized = JSON.stringify({
+        ...request,
+        approvalPhrase: request.approvalPhrase ? "<runtime-env-only>" : null
+      });
+
+      expect(request.dryRun).toBe(false);
+      expect(request.queueItemId).toBe(context.queueItemId);
+      expect(request.uploadPackageId).toBe(context.uploadPackageId);
+      expect(request.channelKey).toBe(CHANNEL);
+      expect(request.v088ResolverStatus).toBe("bound");
+      expect(request.v087BinderStatus).toBe("ready_for_fresh_approval");
+      expect(request.v085BinderStatus).toBe("ready_for_fresh_approval");
+      expect(request.visibility).toBe("private");
+      expect(request.maxItems).toBe(1);
+      expect(Object.values(request.readiness).every(Boolean)).toBe(true);
+      expect(request.approvalPhrase).toBe(PRIVATE_APPROVAL_PHRASE);
+      expect(serialized).not.toMatch(FORBIDDEN_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(TOKEN_PATH, { force: true });
@@ -140,11 +188,61 @@ describe("v095 private pilot execution context bridge", () => {
     }
   });
 
+  test("prepare blocks context paths outside the protected root and does not write", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeReadyInputs(cwd);
+      await writeTokenFile();
+      const outsidePath = path.join(cwd, "outside-context.local.json");
+
+      const result = await prepareV095PrivatePilotExecutionContext({
+        cwd,
+        env: readyEnv(manifestPath),
+        contextPath: outsidePath,
+        now: () => "2026-07-07T00:00:00.000Z"
+      });
+
+      await expect(readFile(outsidePath, "utf8")).rejects.toThrow();
+      expect(result.status).toBe("blocked");
+      expect(result.localContextWritten).toBe(false);
+      expect(result.blockers).toContain("BLOCKED_V095_CONTEXT_PATH_UNSAFE");
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("prepare blocks path traversal context paths and does not write", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeReadyInputs(cwd);
+      await writeTokenFile();
+
+      const result = await prepareV095PrivatePilotExecutionContext({
+        cwd,
+        env: readyEnv(manifestPath),
+        contextPath: path.join("commerce-assets", "review", "v057", "father_jobs", "..", "outside.local.json"),
+        now: () => "2026-07-07T00:00:00.000Z"
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.localContextWritten).toBe(false);
+      expect(result.blockers).toContain("BLOCKED_V095_CONTEXT_PATH_UNSAFE");
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
   test("missing context keeps existing V084 blockers", async () => {
+    const cwd = await makeCwd();
     const result = await buildV084PrivateUploadPilotInvocationFromEnv({
       dryRun: true,
       env: {
-        V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(os.tmpdir(), "missing-v095-context.json")
+        V095_CWD: cwd,
+        V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH)
       }
     });
 
@@ -159,6 +257,44 @@ describe("v095 private pilot execution context bridge", () => {
       "BLOCKED_V084_READINESS_NOT_READY"
     ]));
     expect(result.videosInsertCalled).toBe(false);
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  test("load blocks context paths outside the protected root before reading", async () => {
+    const cwd = await makeCwd();
+    try {
+      const outsidePath = path.join(cwd, "outside-v095-context.json");
+      await writeFile(outsidePath, `${JSON.stringify({
+        version: "v095",
+        channelKey: CHANNEL,
+        queueItemId: "queue-v095-father",
+        uploadPackageId: "pkg-v095-father",
+        v088ResolverStatus: "bound",
+        v087BinderStatus: "ready_for_fresh_approval",
+        v085BinderStatus: "ready_for_fresh_approval",
+        visibility: "private",
+        maxItems: 1,
+        readiness: readyReadiness(),
+        contextCreatedAt: "2026-07-07T00:00:00.000Z",
+        contextExpiresAt: "2026-07-07T00:30:00.000Z"
+      }, null, 2)}\n`, "utf8");
+
+      const result = await buildV084PrivateUploadPilotInvocationFromEnv({
+        dryRun: true,
+        env: {
+          V095_CWD: cwd,
+          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: outsidePath
+        }
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockers).toContain("BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE");
+      expect(result.videosInsertCalled).toBe(false);
+      expect(result.commentThreadsInsertCalled).toBe(false);
+      expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   test("stale context blocks before execution readiness", async () => {
@@ -176,6 +312,7 @@ describe("v095 private pilot execution context bridge", () => {
       const result = await buildV084PrivateUploadPilotInvocationFromEnv({
         dryRun: true,
         env: {
+          V095_CWD: cwd,
           V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH),
           V084_NOW_ISO: "2026-07-07T00:00:01.000Z"
         }
@@ -205,6 +342,7 @@ describe("v095 private pilot execution context bridge", () => {
       const result = await buildV084PrivateUploadPilotInvocationFromEnv({
         dryRun: true,
         env: {
+          V095_CWD: cwd,
           V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH),
           V084_CHANNEL_KEY: "lets_buy",
           V084_QUEUE_ITEM_ID: "other-queue"
@@ -247,6 +385,7 @@ describe("v095 private pilot execution context bridge", () => {
       const result = await buildV084PrivateUploadPilotInvocationFromEnv({
         dryRun: true,
         env: {
+          V095_CWD: cwd,
           V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: contextPath,
           V084_NOW_ISO: "2026-07-07T00:01:00.000Z"
         }

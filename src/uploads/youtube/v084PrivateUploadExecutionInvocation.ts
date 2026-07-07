@@ -43,6 +43,7 @@ export type V084PrivateUploadPilotInvocationBlocker =
   | "BLOCKED_V084_V081_EXECUTION_BLOCKED"
   | "BLOCKED_V084_EXECUTION_CONTEXT_STALE"
   | "BLOCKED_V084_EXECUTION_CONTEXT_CONFLICT"
+  | "BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE"
   | "BLOCKED_V084_EXECUTION_CONTEXT_UNSAFE"
   | "BLOCKED_V084_UNSAFE_REPORT_REQUESTED";
 
@@ -149,17 +150,18 @@ export type V084PrivateUploadPilotInvocationFromEnvOptions = {
   dryRun: boolean;
 };
 
-export async function buildV084PrivateUploadPilotInvocationFromEnv(
+export async function buildV084PrivateUploadPilotInvocationRequestFromEnv(
   options: V084PrivateUploadPilotInvocationFromEnvOptions
-): Promise<V084PrivateUploadPilotInvocationResult> {
+): Promise<V084PrivateUploadPilotInvocationRequest> {
   const env = options.env ?? process.env;
-  const context = await loadV095PrivatePilotExecutionContextForV084({ env });
+  const cwd = env.V095_CWD || env.V084_CWD || process.cwd();
+  const context = await loadV095PrivatePilotExecutionContextForV084({ cwd, env });
   const contextValues = context.values;
   const runtimeReady = contextValues
     ? contextValues.readiness.v081PilotReady
     : env.V084_RUNTIME_READY === "true";
 
-  return buildV084PrivateUploadPilotInvocation({
+  return {
     mode: "private_upload_pilot_invocation",
     dryRun: options.dryRun,
     serverOnlyContext: true,
@@ -192,7 +194,15 @@ export async function buildV084PrivateUploadPilotInvocationFromEnv(
       quotaReady: runtimeReady
     },
     preflightBlockers: context.blockers
-  });
+  };
+}
+
+export async function buildV084PrivateUploadPilotInvocationFromEnv(
+  options: V084PrivateUploadPilotInvocationFromEnvOptions
+): Promise<V084PrivateUploadPilotInvocationResult> {
+  return buildV084PrivateUploadPilotInvocation(
+    await buildV084PrivateUploadPilotInvocationRequestFromEnv(options)
+  );
 }
 
 export async function buildV084PrivateUploadPilotInvocation(

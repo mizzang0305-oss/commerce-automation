@@ -762,6 +762,10 @@ Requirements:
 - no completed V076 evidence/store/report without complete adapter success evidence
 - no raw evidence output
 - fake success remains blocked
+- plan and execute request generation must share the same V095 context-backed request builder
+- context path must stay inside `commerce-assets/review/v057/father_jobs/`
+- absolute context paths outside the protected root are blocked
+- context paths containing `..` are blocked
 - merge does not authorize execution; a separate fresh private pilot approval is required after merge
 - PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
 - PUBLIC_UPLOAD=BLOCKED
@@ -776,6 +780,7 @@ Requirements:
 - PR #202 is merged and V094 is on main.
 - The latest private pilot gate stopped before execute because V084 did not have bound runtime evidence in the execution process.
 - V095 is open to bridge no-upload runtime evidence into a protected local context.
+- Latest PR #203 review fix: V084 plan and execute now share the same context-backed request builder, and V095 context paths are restricted to the protected local review root.
 - Private pilot execution remains blocked until V095 is reviewed/merged, no-upload preflight reaches only fresh-approval-required, and a separate fresh owner approval is supplied.
 - Public upload remains blocked.
 - Comment automation remains blocked.

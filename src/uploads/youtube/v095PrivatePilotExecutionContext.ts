@@ -35,6 +35,7 @@ export type V095PrivatePilotExecutionContextBlocker =
   | "BLOCKED_V095_QUEUE_ITEM_ID_MISSING"
   | "BLOCKED_V095_UPLOAD_PACKAGE_ID_MISSING"
   | "BLOCKED_V095_CONTEXT_WRITE_FAILED"
+  | "BLOCKED_V095_CONTEXT_PATH_UNSAFE"
   | "BLOCKED_V095_CONTEXT_UNSAFE"
   | "BLOCKED_V095_CONTEXT_STALE"
   | "BLOCKED_V095_READINESS_NOT_READY";
@@ -200,6 +201,9 @@ export async function prepareV095PrivatePilotExecutionContext(
     uploadPackageId,
     readiness
   });
+  if (!contextPath.safe) {
+    blockers.push("BLOCKED_V095_CONTEXT_PATH_UNSAFE");
+  }
   let localContextWritten = false;
 
   if (blockers.length === 0 && queueItemId && uploadPackageId) {
@@ -225,8 +229,8 @@ export async function prepareV095PrivatePilotExecutionContext(
       blockers.push("BLOCKED_V095_CONTEXT_UNSAFE");
     } else {
       try {
-        await fs.mkdir(path.dirname(contextPath), { recursive: true });
-        await fs.writeFile(contextPath, `${JSON.stringify(context, null, 2)}\n`, "utf8");
+        await fs.mkdir(path.dirname(contextPath.absolutePath), { recursive: true });
+        await fs.writeFile(contextPath.absolutePath, `${JSON.stringify(context, null, 2)}\n`, "utf8");
         localContextWritten = true;
       } catch {
         blockers.push("BLOCKED_V095_CONTEXT_WRITE_FAILED");
@@ -259,8 +263,15 @@ export async function loadV095PrivatePilotExecutionContextForV084(input: {
   if (!contextPathValue) return { found: false, values: null, blockers: [] };
 
   const cwd = input.cwd ?? process.cwd();
-  const contextPath = path.resolve(cwd, contextPathValue);
-  const parsed = await readContext(contextPath);
+  const contextPath = resolveContextPath(cwd, contextPathValue);
+  if (!contextPath.safe) {
+    return {
+      found: true,
+      values: null,
+      blockers: ["BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE"]
+    };
+  }
+  const parsed = await readContext(contextPath.absolutePath);
   if (!parsed) return { found: false, values: null, blockers: [] };
 
   const blockers: V084PrivateUploadPilotInvocationBlocker[] = [];
@@ -608,7 +619,23 @@ function buildReport(input: {
 }
 
 function resolveContextPath(cwd: string, filePath: string | null | undefined) {
-  return path.resolve(cwd, filePath ?? DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH);
+  const requestedPath = filePath ?? DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH;
+  const absolutePath = path.resolve(cwd, requestedPath);
+  const protectedRoot = path.resolve(cwd, "commerce-assets", "review", "v057", "father_jobs");
+  const relativeToRoot = path.relative(protectedRoot, absolutePath);
+  const safe = !containsPathTraversal(requestedPath) &&
+    Boolean(relativeToRoot) &&
+    !relativeToRoot.startsWith("..") &&
+    !path.isAbsolute(relativeToRoot);
+
+  return {
+    absolutePath,
+    safe
+  };
+}
+
+function containsPathTraversal(filePath: string) {
+  return filePath.split(/[\\/]+/).includes("..");
 }
 
 function readTargetChannelId(env: NodeJS.ProcessEnv, channelKey: ChannelKey) {

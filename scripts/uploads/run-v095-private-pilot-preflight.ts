@@ -19,6 +19,7 @@ async function main() {
     dryRun: true,
     env: {
       ...env,
+      V095_CWD: cwd,
       V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: contextPath,
       V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: ""
     }

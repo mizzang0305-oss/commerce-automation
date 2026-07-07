@@ -319,6 +319,17 @@ describe("v084 private upload execution invocation path", () => {
     expect(testSource).not.toContain(["cmd", ".exe"].join(""));
   });
 
+  test("package execute command preserves V095 context through shared request generation", async () => {
+    const scriptSource = await readFile("scripts/uploads/run-v084-private-upload-pilot.ts", "utf8");
+
+    expect(scriptSource).toContain("buildV084PrivateUploadPilotInvocationRequestFromEnv");
+    expect(scriptSource).toContain("runV084PrivateUploadPilotExecution(request)");
+    expect(scriptSource).not.toContain("process.env.V084_QUEUE_ITEM_ID ??");
+    expect(scriptSource).not.toContain("process.env.V084_UPLOAD_PACKAGE_ID ??");
+    expect(scriptSource).not.toContain("readV088ResolverStatus");
+    expect(scriptSource).not.toContain("readBinderStatus");
+  });
+
   test("V084 pure invocation module does not bypass server-only V083 adapter guard", async () => {
     const invocationSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocation.ts", "utf8");
     const serverSource = await readFile("src/uploads/youtube/v084PrivateUploadExecutionInvocationServer.ts", "utf8");
