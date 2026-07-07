@@ -57,6 +57,7 @@
     "upload:v095:prepare-execution-context": "tsx scripts/uploads/prepare-v095-private-pilot-execution-context.ts",
     "upload:v095:preflight-private-pilot": "tsx scripts/uploads/run-v095-private-pilot-preflight.ts",
     "upload:v096:execute-context-dry-run": "tsx scripts/uploads/dry-run-v096-execute-context.ts",
+    "upload:v097:package-resolution-dry-run": "tsx scripts/uploads/dry-run-v097-upload-package-resolution.ts",
     "upload:v084:focused": "vitest run tests/v084-private-upload-execution-invocation-path.test.ts",
     "upload:v085:focused": "vitest run tests/v085-private-pilot-input-binding.test.ts",
     "upload:v087:focused": "vitest run tests/v087-authoritative-product-source-binding.test.ts",

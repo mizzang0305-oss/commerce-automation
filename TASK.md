@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #203 merge: `29fc343eaa7764ac2d64ac2843d4ad5d160bd20d`
+- main HEAD after PR #204 merge: `aa30620d78f7a14f41b4268583cf95721bc8b231`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -76,8 +76,10 @@ Product discovery
 - PR #202 merge commit: `01864045d1b2421fc155ec10d34c5766b5aef04a`
 - PR #203: V095 private pilot execution context bridge, `MERGED`
 - PR #203 merge commit: `29fc343eaa7764ac2d64ac2843d4ad5d160bd20d`
+- PR #204: V096 V084 execute context auto-load fix, `MERGED`
+- PR #204 merge commit: `aa30620d78f7a14f41b4268583cf95721bc8b231`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T023_V096_FIX_V084_EXECUTE_CONTEXT_LOADING_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_T024_V097_UPLOAD_PACKAGE_RESOLUTION_BRIDGE_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -805,7 +807,7 @@ Requirements:
 
 ### T023 - V096 Fix V084 Execute Context Loading
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Fix the no-upload V084 execute request path so it loads the canonical protected V095 execution context by default instead of requiring `V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH` to be passed explicitly.
 
@@ -835,3 +837,62 @@ Requirements:
 - SCHEDULER_EXECUTION=BLOCKED
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
+
+### T024 - V097 Upload Package Resolution Bridge
+
+Status: `PR_OPEN`
+
+Goal: Add a no-upload diagnostic bridge that proves the V084 context-backed `uploadPackageId`, `queueItemId`, and `channelKey` can resolve to the same V073/V094 upload package object before any real private pilot execution retry.
+
+Requirements:
+
+- add `npm run upload:v097:package-resolution-dry-run`
+- load the canonical protected V095 execution context without storing or accepting a private upload approval phrase
+- build the V084 request from the same context-backed values used by plan/execute
+- construct the V081 adapter request shape with the same `queueItemId`, `uploadPackageId`, and `channelKey`
+- call V094 package resolution diagnostics without calling the YouTube upload adapter
+- distinguish sanitized package count, package id match, queue item id match, channel match, package found, upload request built, and resolver blocker evidence
+- preserve explicit `V051_UPLOAD_ASSET_PROFILE` into V094 package generation/resolution
+- keep the previous consumed approval invalid for retry; a new fresh owner approval is required only after this PR is merged and no-upload validation is clean
+- do not run `npm run upload:v084:private-pilot:execute --silent` during PR validation
+- do not call real `videos.insert`
+- do not call `commentThreads.insert`
+- no completed V076 evidence/store/report without complete adapter success evidence
+- public upload remains blocked
+- unlisted upload remains blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- no raw affiliate URL, raw Coupang URL, raw file path, full video id, full channel id, token, secret, Authorization, approval phrase, or HMAC output
+- fake success remains blocked
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
+## Current Blocker
+
+- `PR_OPEN_T024_V097_UPLOAD_PACKAGE_RESOLUTION_BRIDGE_NO_UPLOAD_REVIEW`
+- PR #204 is merged and V096 is on main.
+- The latest fresh private pilot approval was consumed by a single execute attempt and must not be reused.
+- That attempt loaded V095 context but blocked before upload because V081/V092/V094 could not resolve the context-backed upload package object.
+- V097 is open to add a no-upload package-resolution bridge and sanitized diagnostics for package id / queue item / channel matching.
+- Private pilot execution remains blocked until V097 is reviewed/merged, no-upload dry-run resolves the package object, and a separate fresh owner approval is supplied.
+- Public upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- Daily batch upload remains blocked.
+- `PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true`
+- `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
+- `PUBLIC_UPLOAD=BLOCKED`
+- `COMMENT_AUTOMATION=BLOCKED`
+- `SCHEDULER_EXECUTION=BLOCKED`
+- Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
+- Public upload, real comment mutation, scheduler auto-execution, and external webhook/API calls remain blocked. `SAFE_TO_UPLOAD=false`.
+
+## Next Exact Action
+
+- Review and merge T024/V097 only after clean validation. After merge, run V095 preflight, V096 execute-context dry-run, and V097 package-resolution dry-run on main. Do not retry private pilot upload until V097 proves package resolution and a separate fresh owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
