@@ -203,6 +203,36 @@ describe("v092 server-only YouTube private upload executor boundary", () => {
     });
   });
 
+  test("server-only upload package resolver accepts a bound server-accessible prepared asset for local MP4 evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        videoAsset: {
+          ...v094ReadyUploadPackage().videoAsset,
+          path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4"
+        }
+      })],
+      preparedVideoAssetRefs: {
+        father_jobs: {
+          asset_id: "asset-v092-prepared",
+          signed_url: "https://assets.example.test/v092-prepared.mp4",
+          prepared_video_asset_url: "https://assets.example.test/v092-prepared.mp4",
+          mime_type: "video/mp4",
+          provider: "signed_url",
+          server_accessible: true
+        }
+      }
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).not.toBeNull();
+    expect(resolved).not.toMatchObject({ blocker: expect.any(String) });
+    expect(resolved?.uploadRequest.prepared_video_asset.asset_id).toBe("asset-v092-prepared");
+    expect(resolved?.uploadRequest.prepared_video_asset.server_accessible).toBe(true);
+  });
+
   test("server-only upload package resolver blocks target channel hash mismatch without exposing the full channel id", async () => {
     const resolver = createV094ServerOnlyUploadPackageRequestResolver({
       env: {

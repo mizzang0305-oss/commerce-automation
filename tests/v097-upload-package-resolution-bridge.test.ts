@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 
 import { DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "../src/lib/uploads/youtube";
+import type { PreparedVideoAssetRef } from "../src/lib/uploads/youtube/uploadAssetContract";
 import type { V073UploadPackage } from "../src/uploads/multi-channel/v073UploadPackage";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 import {
@@ -18,11 +19,13 @@ import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQ
 const FULL_CHANNEL_ID = `UC${"7".repeat(22)}`;
 const RAW_AFFILIATE_URL = ["https://link.coupang.com", "a", "v097-hidden"].join("/");
 const RAW_COUPANG_URL = ["https://www.coupang.com", "vp", "products", "997000001"].join("/");
+const RAW_SIGNED_VIDEO_ASSET_URL = ["https://asset-bridge.example.test", "private", "v097-hidden.mp4?signature=secret"].join("/");
 const PRIVATE_APPROVAL_PHRASE = ["APPROVE_YOUTUBE_PRIVATE_UPLOAD", "PILOT_1_ITEM_NO_COMMENT"].join("_");
 const FORBIDDEN_REPORT_PATTERN = new RegExp([
   FULL_CHANNEL_ID,
   RAW_AFFILIATE_URL,
   RAW_COUPANG_URL,
+  RAW_SIGNED_VIDEO_ASSET_URL,
   PRIVATE_APPROVAL_PHRASE,
   "COUPANG_SECRET_KEY",
   "YOUTUBE_CLIENT_SECRET",
@@ -42,7 +45,10 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       const report = await buildV097UploadPackageResolutionDryRun({
         cwd,
         env: readyEnv(),
-        loadUploadPackages: async () => [readyUploadPackage()]
+        loadUploadPackages: async () => [readyUploadPackage()],
+        preparedVideoAssetRefs: {
+          father_jobs: preparedVideoAssetRef()
+        }
       });
 
       expect(report.status).toBe("package_resolution_ready");
@@ -54,6 +60,9 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       expect(report.v081UploadPackageIdPresent).toBe(true);
       expect(report.v081QueueItemIdPresent).toBe(true);
       expect(report.resolverPackageFound).toBe(true);
+      expect(report.videoAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetServerAccessible).toBe(true);
       expect(report.resolverUploadRequestBuilt).toBe(true);
       expect(report.resolverBlocker).toBeNull();
       expect(report.packageCount).toBe(1);
@@ -72,13 +81,70 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
     }
   });
 
+  test("keeps local-only MP4 evidence blocked until a server-accessible prepared asset ref is bound", async () => {
+    const cwd = await writeContextBackedCwd();
+    try {
+      const report = await buildV097UploadPackageResolutionDryRun({
+        cwd,
+        env: readyEnv(),
+        loadUploadPackages: async () => [readyUploadPackage()]
+      });
+
+      expect(report.status).toBe("blocked");
+      expect(report.resolverPackageFound).toBe(true);
+      expect(report.videoAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetEvidencePresent).toBe(false);
+      expect(report.preparedAssetServerAccessible).toBe(false);
+      expect(report.resolverUploadRequestBuilt).toBe(false);
+      expect(report.resolverBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+      expect(report.videosInsertCalled).toBe(false);
+      expect(report.commentThreadsInsertCalled).toBe(false);
+      expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["server_accessible false", { server_accessible: false }],
+    ["missing server URL", { signed_url: null, prepared_video_asset_url: null }],
+    ["expired server URL", { expires_at: "2020-01-01T00:00:00.000Z" }]
+  ])("blocks prepared video asset evidence when %s", async (_label, assetOverrides) => {
+    const cwd = await writeContextBackedCwd();
+    try {
+      const report = await buildV097UploadPackageResolutionDryRun({
+        cwd,
+        env: readyEnv(),
+        loadUploadPackages: async () => [readyUploadPackage()],
+        preparedVideoAssetRefs: {
+          father_jobs: preparedVideoAssetRef(assetOverrides)
+        }
+      });
+
+      expect(report.status).toBe("blocked");
+      expect(report.videoAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetServerAccessible).toBe(assetOverrides.server_accessible === false ? false : true);
+      expect(report.resolverUploadRequestBuilt).toBe(false);
+      expect(report.resolverBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+      expect(report.videosInsertCalled).toBe(false);
+      expect(report.commentThreadsInsertCalled).toBe(false);
+      expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("reports sanitized package id mismatch instead of hiding it as a generic missing package", async () => {
     const cwd = await writeContextBackedCwd();
     try {
       const report = await buildV097UploadPackageResolutionDryRun({
         cwd,
         env: readyEnv(),
-        loadUploadPackages: async () => [readyUploadPackage({ packageId: "pkg-v097-other" })]
+        loadUploadPackages: async () => [readyUploadPackage({ packageId: "pkg-v097-other" })],
+        preparedVideoAssetRefs: {
+          father_jobs: preparedVideoAssetRef()
+        }
       });
 
       expect(report.status).toBe("blocked");
@@ -103,7 +169,10 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       const report = await buildV097UploadPackageResolutionDryRun({
         cwd,
         env: readyEnv({ V051_UPLOAD_ASSET_PROFILE: V057_REUPLOAD_ASSET_PROFILE }),
-        loadUploadPackages: async () => [readyUploadPackage()]
+        loadUploadPackages: async () => [readyUploadPackage()],
+        preparedVideoAssetRefs: {
+          father_jobs: preparedVideoAssetRef()
+        }
       });
 
       expect(report.uploadAssetProfileLabel).toBe(V057_REUPLOAD_ASSET_PROFILE);
@@ -195,7 +264,7 @@ function readyUploadPackage(overrides: Partial<V073UploadPackage> = {}): V073Upl
       }
     },
     videoAsset: {
-      path: "https://assets.example.test/v097-private-pilot.mp4",
+      path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4",
       basename: "corrected-preview-v057.mp4",
       hashEvidence: "videoasset",
       firstFramePath: "commerce-assets/review/v057/father_jobs/first-frame-v057.jpg",
@@ -260,6 +329,20 @@ function readyUploadPackage(overrides: Partial<V073UploadPackage> = {}): V073Upl
 
   return {
     ...base,
+    ...overrides
+  };
+}
+
+function preparedVideoAssetRef(overrides: Partial<PreparedVideoAssetRef> = {}): PreparedVideoAssetRef {
+  return {
+    asset_id: "asset-v097-prepared",
+    signed_url: RAW_SIGNED_VIDEO_ASSET_URL,
+    prepared_video_asset_url: RAW_SIGNED_VIDEO_ASSET_URL,
+    mime_type: "video/mp4",
+    checksum_sha256: "videoasset",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    provider: "signed_url",
+    server_accessible: true,
     ...overrides
   };
 }
