@@ -6,6 +6,8 @@ V099 binds prepared video asset evidence into the private pilot package-resoluti
 
 This does not upload the local MP4 to storage. It only validates whether an existing prepared asset reference is safe and uploadable.
 
+V099 binds prepared evidence by the selected channel reported by the V095/V097 context. It must not hard-code `father_jobs` when the context selects `neoman_moleulgeol` or `lets_buy`.
+
 ## Current Runtime Status
 
 Runtime remains blocked when only local MP4 evidence exists:
@@ -24,6 +26,8 @@ A prepared asset is uploadable only when all of these are true:
 - `server_accessible=true`
 - `prepared_video_asset_url` or `signed_url` is HTTPS
 - provider is one of:
+  - `r2`
+  - `supabase_storage`
   - `external_https`
   - `signed_https`
   - `signed_url`
@@ -44,6 +48,9 @@ Blocked cases:
 - missing MIME type
 - missing asset id
 - raw URL report output
+- wrong-channel prepared evidence
+
+Provider allowlisting and uploadability are separate checks. A provider can be recognized by the prepared asset validator and still remain blocked until an HTTPS `prepared_video_asset_url` or HTTPS `signed_url` exists.
 
 ## No-Upload Boundaries
 

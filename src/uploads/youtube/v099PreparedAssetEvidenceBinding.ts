@@ -21,6 +21,7 @@ export type V099PreparedAssetEvidenceDryRunReport = {
   contextFound: boolean;
   contextLoaded: boolean;
   packageFound: boolean;
+  selectedChannelKey: ChannelKey;
   videoAssetEvidencePresent: boolean;
   preparedAssetEvidencePresent: boolean;
   preparedAssetServerAccessible: boolean;
@@ -58,11 +59,6 @@ export async function buildV099PreparedAssetEvidenceDryRun(
   input: V099PreparedAssetEvidenceDryRunInput = {}
 ): Promise<V099PreparedAssetEvidenceDryRunReport> {
   const env = input.env ?? process.env;
-  const channelKey = "father_jobs";
-  const preparedBinding = bindV099PreparedVideoAssetEvidence({
-    preparedVideoAssetRef: input.preparedVideoAssetRefs?.[channelKey],
-    videoAssetHashPrefix: null
-  });
   const v097Report = await buildV097UploadPackageResolutionDryRun({
     cwd: input.cwd,
     env: {
@@ -71,6 +67,10 @@ export async function buildV099PreparedAssetEvidenceDryRun(
     },
     loadUploadPackages: input.loadUploadPackages,
     preparedVideoAssetRefs: input.preparedVideoAssetRefs
+  });
+  const preparedBinding = bindV099PreparedVideoAssetEvidence({
+    preparedVideoAssetRef: input.preparedVideoAssetRefs?.[v097Report.selectedChannelKey],
+    videoAssetHashPrefix: null
   });
   const effectiveBinding = mergeBindingWithV097(preparedBinding, v097Report);
   const ready = v097Report.resolverUploadRequestBuilt && !v097Report.resolverBlocker;
@@ -82,6 +82,7 @@ export async function buildV099PreparedAssetEvidenceDryRun(
     contextFound: v097Report.contextFound,
     contextLoaded: v097Report.contextLoaded,
     packageFound: v097Report.resolverPackageFound,
+    selectedChannelKey: v097Report.selectedChannelKey,
     videoAssetEvidencePresent: v097Report.videoAssetEvidencePresent,
     preparedAssetEvidencePresent: v097Report.preparedAssetEvidencePresent,
     preparedAssetServerAccessible: v097Report.preparedAssetServerAccessible,

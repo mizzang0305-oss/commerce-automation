@@ -944,6 +944,8 @@ Requirements:
 - add a V099 prepared asset evidence binding contract
 - accept only server-accessible HTTPS `prepared_video_asset_url` or HTTPS `signed_url`
 - require provider label, `asset_id`, `video/mp4`, hash/checksum evidence, and non-expired signed URL evidence
+- bind prepared evidence by the selected channel from V095/V097 context, not a hard-coded channel
+- align prepared asset validator provider allowlist with the upload asset contract
 - keep local MP4-only evidence blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING`
 - keep `storage_key`-only evidence blocked for future storage provider work
 - add `npm run upload:v099:prepared-asset-dry-run`
@@ -967,6 +969,7 @@ Requirements:
 - PR #206 is merged and V098 is on main.
 - V097/V098 dry-run can find the package object and local MP4 evidence but cannot build an upload request without prepared HTTPS asset evidence.
 - Runtime V099 dry-run remains blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING` until an existing server-accessible prepared asset reference is supplied.
+- V099 latest-head P2 fixes bind prepared refs by selected channel and align accepted provider labels between upload contract and prepared asset validator.
 - Private pilot execution remains blocked until V099 is reviewed/merged, no-upload validation is clean, and a separate fresh owner approval is supplied.
 - Public upload remains blocked.
 - Comment automation remains blocked.
