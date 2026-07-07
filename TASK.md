@@ -883,10 +883,12 @@ Requirements:
 
 - add `resolveV098PreparedVideoAssetBridge`
 - keep local-only MP4 paths blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING`
-- allow injected server-accessible prepared asset evidence for tests and future runtime binding
-- reject missing, non-server-accessible, invalid, or expired prepared asset refs
+- allow injected server-accessible prepared asset evidence only when it includes an HTTPS `prepared_video_asset_url` or HTTPS `signed_url`
+- reject missing, non-server-accessible, storage-key-only, non-HTTPS, invalid, or expired prepared asset refs
 - extend V097 package-resolution dry-run with sanitized video/prepared asset evidence booleans
+- include `preparedAssetUploadableUrlPresent` as a sanitized diagnostic boolean
 - do not convert local paths into fake HTTPS URLs
+- do not implement storage retrieval in V098; `storage_key`-only refs remain future work
 - do not print raw local paths, raw signed URLs, raw affiliate URLs, full video IDs, full channel IDs, tokens, secrets, Authorization, or HMAC values
 - do not run V084 execute during PR validation
 - do not call real `videos.insert`

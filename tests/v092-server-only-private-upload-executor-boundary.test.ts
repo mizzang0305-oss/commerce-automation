@@ -233,6 +233,70 @@ describe("v092 server-only YouTube private upload executor boundary", () => {
     expect(resolved?.uploadRequest.prepared_video_asset.server_accessible).toBe(true);
   });
 
+  test("server-only upload package resolver accepts signed_url-only HTTPS prepared asset evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        videoAsset: {
+          ...v094ReadyUploadPackage().videoAsset,
+          path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4"
+        }
+      })],
+      preparedVideoAssetRefs: {
+        father_jobs: {
+          asset_id: "asset-v092-signed-only",
+          signed_url: "https://assets.example.test/v092-signed-only.mp4",
+          prepared_video_asset_url: null,
+          mime_type: "video/mp4",
+          provider: "signed_url",
+          server_accessible: true
+        }
+      }
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).not.toBeNull();
+    expect(resolved).not.toMatchObject({ blocker: expect.any(String) });
+    expect(resolved?.uploadRequest.prepared_video_asset.asset_id).toBe("asset-v092-signed-only");
+    expect(resolved?.uploadRequest.prepared_video_asset.signed_url).toMatch(/^https:\/\//);
+  });
+
+  test.each([
+    ["r2 storage key only", "r2" as const],
+    ["supabase storage key only", "supabase_storage" as const]
+  ])("server-only upload package resolver blocks %s prepared evidence", async (_label, provider) => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        videoAsset: {
+          ...v094ReadyUploadPackage().videoAsset,
+          path: "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4"
+        }
+      })],
+      preparedVideoAssetRefs: {
+        father_jobs: {
+          asset_id: `asset-v092-${provider}`,
+          storage_key: `private/${provider}/v092.mp4`,
+          signed_url: null,
+          prepared_video_asset_url: null,
+          mime_type: "video/mp4",
+          provider,
+          server_accessible: true
+        }
+      }
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_VIDEO_ASSET_MISSING"
+    });
+    expect(JSON.stringify(resolved)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+  });
+
   test("server-only upload package resolver blocks target channel hash mismatch without exposing the full channel id", async () => {
     const resolver = createV094ServerOnlyUploadPackageRequestResolver({
       env: {

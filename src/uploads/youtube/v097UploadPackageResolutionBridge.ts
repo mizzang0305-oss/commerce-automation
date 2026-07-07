@@ -30,6 +30,7 @@ export type V097UploadPackageResolutionDryRunReport = {
   videoAssetEvidencePresent: boolean;
   preparedAssetEvidencePresent: boolean;
   preparedAssetServerAccessible: boolean;
+  preparedAssetUploadableUrlPresent: boolean;
   resolverUploadRequestBuilt: boolean;
   resolverBlocker: string | null;
   packageCount: number;
@@ -112,6 +113,7 @@ export async function buildV097UploadPackageResolutionDryRun(
     videoAssetEvidencePresent: diagnostics.videoAssetEvidencePresent,
     preparedAssetEvidencePresent: diagnostics.preparedAssetEvidencePresent,
     preparedAssetServerAccessible: diagnostics.preparedAssetServerAccessible,
+    preparedAssetUploadableUrlPresent: diagnostics.preparedAssetUploadableUrlPresent,
     resolverUploadRequestBuilt: diagnostics.resolverUploadRequestBuilt,
     resolverBlocker: diagnostics.resolverBlocker,
     packageCount: diagnostics.packageCount,

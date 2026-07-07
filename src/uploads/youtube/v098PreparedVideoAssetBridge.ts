@@ -15,6 +15,7 @@ export type V098PreparedVideoAssetBridgeResult = {
   videoAssetEvidencePresent: boolean;
   preparedAssetEvidencePresent: boolean;
   preparedAssetServerAccessible: boolean;
+  preparedAssetUploadableUrlPresent: boolean;
 };
 
 export function resolveV098PreparedVideoAssetBridge(input: {
@@ -29,18 +30,25 @@ export function resolveV098PreparedVideoAssetBridge(input: {
     buildHttpsPreparedAssetRefFromPackage(input.uploadPackage);
   const normalized = normalizePreparedVideoAssetRef(candidate);
   const preparedAssetEvidencePresent = Boolean(normalized);
+  const preparedAssetUploadableUrlPresent = hasUploadableHttpsUrl(normalized);
   const readiness = buildPreparedVideoAssetReadiness({
     prepared_video_asset: normalized,
     video_path_or_url: input.uploadPackage.videoAsset.path
   });
 
-  if (!videoAssetEvidencePresent || !normalized || !readiness.asset_ready) {
+  if (
+    !videoAssetEvidencePresent ||
+    !normalized ||
+    !readiness.asset_ready ||
+    !preparedAssetUploadableUrlPresent
+  ) {
     return {
       preparedAsset: null,
       blocker: "BLOCKED_V081_VIDEO_ASSET_MISSING",
       videoAssetEvidencePresent,
       preparedAssetEvidencePresent,
-      preparedAssetServerAccessible: Boolean(normalized?.server_accessible)
+      preparedAssetServerAccessible: Boolean(normalized?.server_accessible),
+      preparedAssetUploadableUrlPresent
     };
   }
 
@@ -49,7 +57,8 @@ export function resolveV098PreparedVideoAssetBridge(input: {
     blocker: null,
     videoAssetEvidencePresent,
     preparedAssetEvidencePresent,
-    preparedAssetServerAccessible: readiness.server_accessible
+    preparedAssetServerAccessible: readiness.server_accessible,
+    preparedAssetUploadableUrlPresent
   };
 }
 
@@ -74,6 +83,13 @@ function buildHttpsPreparedAssetRefFromPackage(
 
 function isHttpsUrl(value: string) {
   return /^https:\/\//i.test(value.trim());
+}
+
+function hasUploadableHttpsUrl(value: PreparedVideoAssetRef | null) {
+  return Boolean(
+    value &&
+    (isHttpsUrl(value.prepared_video_asset_url ?? "") || isHttpsUrl(value.signed_url ?? ""))
+  );
 }
 
 function trimOrNull(value: string | null | undefined) {

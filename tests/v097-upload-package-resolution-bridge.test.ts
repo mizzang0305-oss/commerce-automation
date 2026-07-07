@@ -63,6 +63,7 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       expect(report.videoAssetEvidencePresent).toBe(true);
       expect(report.preparedAssetEvidencePresent).toBe(true);
       expect(report.preparedAssetServerAccessible).toBe(true);
+      expect(report.preparedAssetUploadableUrlPresent).toBe(true);
       expect(report.resolverUploadRequestBuilt).toBe(true);
       expect(report.resolverBlocker).toBeNull();
       expect(report.packageCount).toBe(1);
@@ -95,6 +96,7 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       expect(report.videoAssetEvidencePresent).toBe(true);
       expect(report.preparedAssetEvidencePresent).toBe(false);
       expect(report.preparedAssetServerAccessible).toBe(false);
+      expect(report.preparedAssetUploadableUrlPresent).toBe(false);
       expect(report.resolverUploadRequestBuilt).toBe(false);
       expect(report.resolverBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
       expect(report.videosInsertCalled).toBe(false);
@@ -106,10 +108,39 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
   });
 
   test.each([
-    ["server_accessible false", { server_accessible: false }],
-    ["missing server URL", { signed_url: null, prepared_video_asset_url: null }],
-    ["expired server URL", { expires_at: "2020-01-01T00:00:00.000Z" }]
-  ])("blocks prepared video asset evidence when %s", async (_label, assetOverrides) => {
+    ["server_accessible false", { server_accessible: false }, true],
+    ["missing server URL", { signed_url: null, prepared_video_asset_url: null }, false],
+    ["expired server URL", { expires_at: "2020-01-01T00:00:00.000Z" }, true],
+    ["storage_key only", { signed_url: null, prepared_video_asset_url: null, storage_key: "private/v097.mp4" }, false],
+    [
+      "r2 storage_key only",
+      {
+        signed_url: null,
+        prepared_video_asset_url: null,
+        storage_key: "private/v097-r2.mp4",
+        provider: "r2" as const
+      },
+      false
+    ],
+    [
+      "supabase_storage storage_key only",
+      {
+        signed_url: null,
+        prepared_video_asset_url: null,
+        storage_key: "private/v097-supabase.mp4",
+        provider: "supabase_storage" as const
+      },
+      false
+    ],
+    [
+      "non-HTTPS prepared URL",
+      {
+        signed_url: null,
+        prepared_video_asset_url: "http://asset-bridge.example.test/private/v097.mp4"
+      },
+      false
+    ]
+  ])("blocks prepared video asset evidence when %s", async (_label, assetOverrides, uploadableUrlPresent) => {
     const cwd = await writeContextBackedCwd();
     try {
       const report = await buildV097UploadPackageResolutionDryRun({
@@ -125,8 +156,37 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
       expect(report.videoAssetEvidencePresent).toBe(true);
       expect(report.preparedAssetEvidencePresent).toBe(true);
       expect(report.preparedAssetServerAccessible).toBe(assetOverrides.server_accessible === false ? false : true);
+      expect(report.preparedAssetUploadableUrlPresent).toBe(uploadableUrlPresent);
       expect(report.resolverUploadRequestBuilt).toBe(false);
       expect(report.resolverBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+      expect(report.videosInsertCalled).toBe(false);
+      expect(report.commentThreadsInsertCalled).toBe(false);
+      expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts a prepared ref when only signed_url is an uploadable HTTPS URL", async () => {
+    const cwd = await writeContextBackedCwd();
+    try {
+      const report = await buildV097UploadPackageResolutionDryRun({
+        cwd,
+        env: readyEnv(),
+        loadUploadPackages: async () => [readyUploadPackage()],
+        preparedVideoAssetRefs: {
+          father_jobs: preparedVideoAssetRef({
+            prepared_video_asset_url: null,
+            signed_url: RAW_SIGNED_VIDEO_ASSET_URL
+          })
+        }
+      });
+
+      expect(report.status).toBe("package_resolution_ready");
+      expect(report.preparedAssetEvidencePresent).toBe(true);
+      expect(report.preparedAssetServerAccessible).toBe(true);
+      expect(report.preparedAssetUploadableUrlPresent).toBe(true);
+      expect(report.resolverUploadRequestBuilt).toBe(true);
       expect(report.videosInsertCalled).toBe(false);
       expect(report.commentThreadsInsertCalled).toBe(false);
       expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
@@ -177,6 +237,7 @@ describe("v097 upload package resolution bridge no-upload dry run", () => {
 
       expect(report.uploadAssetProfileLabel).toBe(V057_REUPLOAD_ASSET_PROFILE);
       expect(report.resolverUploadRequestBuilt).toBe(true);
+      expect(report.preparedAssetUploadableUrlPresent).toBe(true);
       expect(report.videosInsertCalled).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });

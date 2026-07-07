@@ -58,6 +58,7 @@ export type V094UploadPackageResolutionDiagnostics = {
   videoAssetEvidencePresent: boolean;
   preparedAssetEvidencePresent: boolean;
   preparedAssetServerAccessible: boolean;
+  preparedAssetUploadableUrlPresent: boolean;
   resolverUploadRequestBuilt: boolean;
   resolverBlocker: V094Blocker | null;
   uploadAssetProfileLabel: string | null;
@@ -120,6 +121,7 @@ export async function diagnoseV094UploadPackageResolution(
     videoAssetEvidencePresent: preparedAssetDiagnostics?.videoAssetEvidencePresent ?? false,
     preparedAssetEvidencePresent: preparedAssetDiagnostics?.preparedAssetEvidencePresent ?? false,
     preparedAssetServerAccessible: preparedAssetDiagnostics?.preparedAssetServerAccessible ?? false,
+    preparedAssetUploadableUrlPresent: preparedAssetDiagnostics?.preparedAssetUploadableUrlPresent ?? false,
     resolverUploadRequestBuilt: Boolean(resolved && !("blocker" in resolved)),
     resolverBlocker,
     uploadAssetProfileLabel: options.uploadAssetProfile ?? env.V051_UPLOAD_ASSET_PROFILE ?? V057_REUPLOAD_ASSET_PROFILE
