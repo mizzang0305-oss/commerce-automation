@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #204 merge: `aa30620d78f7a14f41b4268583cf95721bc8b231`
+- main HEAD after PR #205 merge: `43c935dc346b4ca0187515dd3117cec837d319bb`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -78,8 +78,10 @@ Product discovery
 - PR #203 merge commit: `29fc343eaa7764ac2d64ac2843d4ad5d160bd20d`
 - PR #204: V096 V084 execute context auto-load fix, `MERGED`
 - PR #204 merge commit: `aa30620d78f7a14f41b4268583cf95721bc8b231`
+- PR #205: V097 upload package resolution bridge, `MERGED`
+- PR #205 merge commit: `43c935dc346b4ca0187515dd3117cec837d319bb`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T024_V097_UPLOAD_PACKAGE_RESOLUTION_BRIDGE_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_T025_V098_SERVER_ACCESSIBLE_VIDEO_ASSET_BRIDGE_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -840,7 +842,7 @@ Requirements:
 
 ### T024 - V097 Upload Package Resolution Bridge
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add a no-upload diagnostic bridge that proves the V084 context-backed `uploadPackageId`, `queueItemId`, and `channelKey` can resolve to the same V073/V094 upload package object before any real private pilot execution retry.
 
@@ -871,14 +873,47 @@ Requirements:
 - SAFE_TO_UPLOAD=false
 - SAFE_TO_PUBLIC_UPLOAD=false
 
+### T025 - V098 Server-Accessible Video Asset Bridge
+
+Status: `PR_OPEN`
+
+Goal: Add a no-upload bridge that allows V094 to build a private upload request only when the local v057 MP4 evidence is paired with a server-accessible `PreparedVideoAssetRef`.
+
+Requirements:
+
+- add `resolveV098PreparedVideoAssetBridge`
+- keep local-only MP4 paths blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING`
+- allow injected server-accessible prepared asset evidence only when it includes an HTTPS `prepared_video_asset_url` or HTTPS `signed_url`
+- reject missing, non-server-accessible, storage-key-only, non-HTTPS, invalid, or expired prepared asset refs
+- extend V097 package-resolution dry-run with sanitized video/prepared asset evidence booleans
+- include `preparedAssetUploadableUrlPresent` as a sanitized diagnostic boolean
+- do not convert local paths into fake HTTPS URLs
+- do not implement storage retrieval in V098; `storage_key`-only refs remain future work
+- do not print raw local paths, raw signed URLs, raw affiliate URLs, full video IDs, full channel IDs, tokens, secrets, Authorization, or HMAC values
+- do not run V084 execute during PR validation
+- do not call real `videos.insert`
+- do not call `commentThreads.insert`
+- no completed V076 evidence/store/report without complete adapter success evidence
+- public upload remains blocked
+- unlisted upload remains blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- fake success remains blocked
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
+
 ## Current Blocker
 
-- `PR_OPEN_T024_V097_UPLOAD_PACKAGE_RESOLUTION_BRIDGE_NO_UPLOAD_REVIEW`
-- PR #204 is merged and V096 is on main.
+- `PR_OPEN_T025_V098_SERVER_ACCESSIBLE_VIDEO_ASSET_BRIDGE_NO_UPLOAD_REVIEW`
+- PR #205 is merged and V097 is on main.
 - The latest fresh private pilot approval was consumed by a single execute attempt and must not be reused.
-- That attempt loaded V095 context but blocked before upload because V081/V092/V094 could not resolve the context-backed upload package object.
-- V097 is open to add a no-upload package-resolution bridge and sanitized diagnostics for package id / queue item / channel matching.
-- Private pilot execution remains blocked until V097 is reviewed/merged, no-upload dry-run resolves the package object, and a separate fresh owner approval is supplied.
+- V097 proved the context-backed upload package object can resolve, but V094 still blocks with `BLOCKED_V081_VIDEO_ASSET_MISSING` because the MP4 is local evidence and not a server-accessible prepared asset reference.
+- V098 is open to add the server-accessible video asset bridge and sanitized prepared asset diagnostics.
+- Private pilot execution remains blocked until V098 is reviewed/merged, no-upload validation is clean, and a separate fresh owner approval is supplied.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -895,4 +930,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T024/V097 only after clean validation. After merge, run V095 preflight, V096 execute-context dry-run, and V097 package-resolution dry-run on main. Do not retry private pilot upload until V097 proves package resolution and a separate fresh owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review and merge T025/V098 only after clean validation. After merge, run V095 preflight, V096 execute-context dry-run, and V097 package-resolution dry-run on main. Do not retry private pilot upload until V098 proves server-accessible prepared video asset evidence and a separate fresh owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
