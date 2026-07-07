@@ -1,5 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+﻿import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -13,6 +15,9 @@ import {
 import {
   runV084PrivateUploadPilotExecution
 } from "../src/uploads/youtube/v084PrivateUploadExecutionInvocationRuntime";
+import {
+  DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH
+} from "../src/uploads/youtube/v095PrivatePilotExecutionContext";
 
 const FULL_VIDEO_ID = "v084FullVideoIdMustNotLeak";
 const FULL_CHANNEL_ID = `UC${"4".repeat(22)}`;
@@ -212,19 +217,22 @@ describe("v084 private upload execution invocation path", () => {
   });
 
   test("from-env builder fails closed without env approval or runtime evidence", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "commerce-v084-missing-"));
     const result = await buildV084PrivateUploadPilotInvocationFromEnv({
-      env: {},
+      env: { V095_CWD: cwd },
       dryRun: true
     });
 
     expect(result.status).toBe("blocked");
     expect(result.blockers).toEqual(expect.arrayContaining([
+      "BLOCKED_V084_EXECUTION_CONTEXT_NOT_LOADED",
       "BLOCKED_V084_FRESH_APPROVAL_REQUIRED",
       "BLOCKED_V084_UPLOAD_PACKAGE_REQUIRED",
       "BLOCKED_V084_QUEUE_ITEM_REQUIRED",
       "BLOCKED_V084_READINESS_NOT_READY"
     ]));
     expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    await rm(cwd, { recursive: true, force: true });
   });
 
   test("sanitized report never prints raw URLs, full IDs, tokens, secrets, or fake success", async () => {
@@ -244,38 +252,43 @@ describe("v084 private upload execution invocation path", () => {
     expect(serialized).not.toMatch(FORBIDDEN_REPORT_PATTERN);
   });
 
-  test("package plan command returns sanitized no-upload JSON", () => {
+  test("package plan command returns sanitized no-upload JSON from auto-loaded V095 context", async () => {
     const npmCli = process.env.npm_execpath;
 
     expect(npmCli).toBeTruthy();
+    const cwd = await writeV095ExecutionContext();
 
-    const output = execFileSync(process.execPath, [
-      npmCli as string,
-      "run",
-      "upload:v084:private-pilot:plan",
-      "--silent"
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT,
-        V084_QUEUE_ITEM_ID: "queue-v084-script",
-        V084_UPLOAD_PACKAGE_ID: "pkg-v084-script",
-        V084_V088_RESOLVER_STATUS: "bound",
-        V084_V087_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_V085_BINDER_STATUS: "ready_for_fresh_approval",
-        V084_RUNTIME_READY: "true"
-      }
-    });
-    const parsed = JSON.parse(output);
+    try {
+      const output = execFileSync(process.execPath, [
+        npmCli as string,
+        "run",
+        "upload:v084:private-pilot:plan",
+        "--silent"
+      ], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          V095_CWD: cwd,
+          V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT
+        }
+      });
+      const parsed = JSON.parse(output);
 
-    expect(parsed.mode).toBe("private_upload_pilot_invocation");
-    expect(parsed.status).toBe("ready_for_private_execution");
-    expect(parsed.dryRun).toBe(true);
-    expect(parsed.videosInsertCalled).toBe(false);
-    expect(parsed.commentThreadsInsertCalled).toBe(false);
-    expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+      expect(parsed.mode).toBe("private_upload_pilot_invocation");
+      expect(parsed.status).toBe("ready_for_private_execution");
+      expect(parsed.dryRun).toBe(true);
+      expect(parsed.queueItemIdPresent).toBe(true);
+      expect(parsed.uploadPackageIdPresent).toBe(true);
+      expect(parsed.v088ResolverBound).toBe(true);
+      expect(parsed.v087BinderReady).toBe(true);
+      expect(parsed.v085BinderReady).toBe(true);
+      expect(parsed.videosInsertCalled).toBe(false);
+      expect(parsed.commentThreadsInsertCalled).toBe(false);
+      expect(output).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   test("runtime execute function reaches V081/V083 no-upload boundary without invoking package execute command", async () => {
@@ -361,7 +374,7 @@ describe("v084 private upload execution invocation path", () => {
     expect(task).toContain("### T014 - V084 Private Upload Execution Invocation Path");
     expect(task).toMatch(/### T014 - V084 Private Upload Execution Invocation Path[\s\S]*Status: `DONE`/);
     expect(task).toMatch(
-      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T021_V094_BIND_UPLOAD_PACKAGE_TO_V081_SERVER_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW)`/
+      /Current blocker: `(V086_PRIVATE_UPLOAD_INPUT_BINDER_RUN_ON_MAIN_NO_UPLOAD|V085_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T015_V085_PRIVATE_PILOT_INPUT_BINDING_REVIEW|PR_OPEN_T016_V087_AUTHORITATIVE_PRODUCT_SOURCE_BINDING_REVIEW|V088_RUN_V087_AND_V085_BINDERS_ON_MAIN_NO_UPLOAD|V089_PRIVATE_UPLOAD_PILOT_1_ITEM_EXECUTION_WAITING_FOR_FRESH_APPROVAL|PR_OPEN_T018_V090_UNLOCK_V084_PRIVATE_EXECUTE_GATE_NO_UPLOAD_REVIEW|PR_OPEN_T019_V091_UNLOCK_V083_REAL_PRIVATE_ADAPTER_EXECUTION_NO_UPLOAD_REVIEW|PR_OPEN_T020_V092_INJECT_SERVER_ONLY_YOUTUBE_PRIVATE_UPLOAD_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T021_V094_BIND_UPLOAD_PACKAGE_TO_V081_SERVER_EXECUTOR_NO_UPLOAD_REVIEW|PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW|PR_OPEN_T023_V096_FIX_V084_EXECUTE_CONTEXT_LOADING_NO_UPLOAD_REVIEW)`/
     );
     expect(task).toContain("PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED");
     expect(task).toContain("SAFE_TO_UPLOAD=false");
@@ -422,6 +435,43 @@ function readyReadiness() {
     metadataReady: true,
     quotaReady: true
   };
+}
+
+async function writeV095ExecutionContext() {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "commerce-v084-"));
+  const contextPath = path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH);
+  await mkdir(path.dirname(contextPath), { recursive: true });
+  await writeFile(contextPath, `${JSON.stringify({
+    version: "v095",
+    channelKey: "father_jobs",
+    queueItemId: "queue-v084-script",
+    uploadPackageId: "pkg-v084-script",
+    v088ResolverStatus: "bound",
+    v087BinderStatus: "ready_for_fresh_approval",
+    v085BinderStatus: "ready_for_fresh_approval",
+    visibility: "private",
+    maxItems: 1,
+    readiness: {
+      runtimeReady: true,
+      tokenProviderReady: true,
+      uploadScopeReady: true,
+      quotaReady: true,
+      videoAssetReady: true,
+      uploadPackageReady: true,
+      affiliateEvidenceReady: true,
+      disclosureEvidenceReady: true,
+      duplicateGuardReady: true,
+      targetChannelEvidenceReady: true,
+      metadataReady: true
+    },
+    productSourceHashPrefix: "sourcehash",
+    videoAssetHashPrefix: "videohash",
+    targetChannelHashPrefix: "targethash",
+    generatedAt: "2026-07-07T00:00:00.000Z",
+    contextCreatedAt: "2026-07-07T00:00:00.000Z",
+    contextExpiresAt: "2099-01-01T00:00:00.000Z"
+  }, null, 2)}\n`, "utf8");
+  return cwd;
 }
 
 function escapeRegExp(value: string) {

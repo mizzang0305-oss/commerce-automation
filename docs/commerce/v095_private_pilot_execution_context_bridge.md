@@ -53,18 +53,26 @@ Both commands are no-upload. They do not call the private-pilot execute command.
 
 ## V084 Context Loading
 
-`buildV084PrivateUploadPilotInvocationFromEnv` can read:
+`buildV084PrivateUploadPilotInvocationFromEnv` reads the canonical V095 context
+by default:
+
+```text
+commerce-assets/review/v057/father_jobs/private-pilot-execution-context.local.json
+```
+
+An explicit path can override the default through:
 
 ```text
 V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH
 ```
 
-When present, V084 loads sanitized context values before building the plan.
-Approval still comes only from the runtime environment and is not read from the
-context file.
+V084 loads sanitized context values before building the plan or execute request.
+Approval still comes only from the runtime environment and is not read from or
+stored in the context file.
 
-If the context is missing, V084 keeps its existing blockers. If the context is
-stale, unsafe, or conflicts with explicit env values, V084 fails closed.
+If the context is missing, V084 adds
+`BLOCKED_V084_EXECUTION_CONTEXT_NOT_LOADED`. If the context is stale, unsafe, or
+conflicts with explicit env values, V084 fails closed.
 
 Plan and execute use the same V084 request builder. This prevents the plan from
 loading V095 context while the execute path reconstructs queue item id, upload

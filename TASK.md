@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #200 merge: `118dcb069d077f77995d7bc8910651e74ded73a0`
+- main HEAD after PR #203 merge: `29fc343eaa7764ac2d64ac2843d4ad5d160bd20d`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -74,8 +74,10 @@ Product discovery
 - PR #201: V092 server-only YouTube private upload executor injection, `MERGED`
 - PR #202: V094 upload package to V081 server executor bridge, `MERGED`
 - PR #202 merge commit: `01864045d1b2421fc155ec10d34c5766b5aef04a`
+- PR #203: V095 private pilot execution context bridge, `MERGED`
+- PR #203 merge commit: `29fc343eaa7764ac2d64ac2843d4ad5d160bd20d`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_T023_V096_FIX_V084_EXECUTE_CONTEXT_LOADING_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -735,7 +737,7 @@ Requirements:
 
 ### T022 - V095 Private Pilot Execution Context Bridge
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Add a no-upload protected local execution context bridge so V088/V087/V085 evidence, queue item id, upload package id, and readiness booleans can be passed into the V084 private pilot plan/execute process without storing approval text or raw evidence.
 
@@ -776,12 +778,13 @@ Requirements:
 
 ## Current Blocker
 
-- `PR_OPEN_T022_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_BRIDGE_NO_UPLOAD_REVIEW`
+- `PR_OPEN_T023_V096_FIX_V084_EXECUTE_CONTEXT_LOADING_NO_UPLOAD_REVIEW`
 - PR #202 is merged and V094 is on main.
-- The latest private pilot gate stopped before execute because V084 did not have bound runtime evidence in the execution process.
-- V095 is open to bridge no-upload runtime evidence into a protected local context.
-- Latest PR #203 review fix: V084 plan and execute now share the same context-backed request builder, and V095 context paths are restricted to the protected local review root.
-- Private pilot execution remains blocked until V095 is reviewed/merged, no-upload preflight reaches only fresh-approval-required, and a separate fresh owner approval is supplied.
+- PR #203 is merged and V095 is on main.
+- The latest private pilot execution attempt consumed fresh approval and called V084 execute once, but blocked before upload because the execute process did not load the protected V095 context by default.
+- V096 is open to make V084 execute request generation auto-load the canonical V095 context path when no explicit context path is provided.
+- Approval phrase remains runtime-env-only and must not be stored in V095 context, docs, TASK, tests, or reports.
+- Private pilot execution remains blocked until V096 is reviewed/merged, no-upload dry-run reaches only fresh-approval-required, and a separate fresh owner approval is supplied.
 - Public upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
@@ -798,4 +801,37 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T022/V095 only after clean validation. After merge, run V095 no-upload preflight on main. Do not retry private pilot upload until V084 is blocked only by missing fresh approval and a separate owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+- Review and merge T023/V096 only after clean validation. After merge, run V095 preflight and V096 execute-context dry-run on main. Do not retry private pilot upload until V084 is blocked only by missing fresh approval and a separate owner approval is supplied. Public upload, unlisted upload, comment automation, and scheduler execution remain blocked until separate fresh approval and scope. `SAFE_TO_UPLOAD=false`; `SAFE_TO_PUBLIC_UPLOAD=false`.
+
+### T023 - V096 Fix V084 Execute Context Loading
+
+Status: `PR_OPEN`
+
+Goal: Fix the no-upload V084 execute request path so it loads the canonical protected V095 execution context by default instead of requiring `V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH` to be passed explicitly.
+
+Requirements:
+
+- default context path is `commerce-assets/review/v057/father_jobs/private-pilot-execution-context.local.json`
+- explicit `V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH` still takes precedence when provided
+- default and explicit paths stay inside `commerce-assets/review/v057/father_jobs/`
+- missing context returns `BLOCKED_V084_EXECUTION_CONTEXT_NOT_LOADED`
+- stale, unsafe, or conflicting context remains fail-closed
+- V084 execute request generation preserves V095 queue item id, upload package id, resolver/binder statuses, private visibility, `maxItems=1`, readiness booleans, video hash prefix, and generated timestamp
+- approval phrase is read only from execute-time env and is never stored in context or docs
+- add `npm run upload:v096:execute-context-dry-run`
+- do not run `npm run upload:v084:private-pilot:execute --silent` during PR validation
+- do not call real `videos.insert`
+- do not call `commentThreads.insert`
+- no completed V076 evidence/store/report without complete adapter success evidence
+- public upload remains blocked
+- unlisted upload remains blocked
+- comment automation remains blocked
+- scheduler execution remains blocked
+- no raw URL, full video id, full channel id, token, secret, Authorization, or HMAC output
+- fake success remains blocked
+- PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED
+- PUBLIC_UPLOAD=BLOCKED
+- COMMENT_AUTOMATION=BLOCKED
+- SCHEDULER_EXECUTION=BLOCKED
+- SAFE_TO_UPLOAD=false
+- SAFE_TO_PUBLIC_UPLOAD=false
