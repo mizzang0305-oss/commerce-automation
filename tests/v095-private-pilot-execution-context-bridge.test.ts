@@ -78,7 +78,7 @@ describe("v095 private pilot execution context bridge", () => {
     }
   });
 
-  test("V084 plan loads V095 context and leaves only fresh approval required", async () => {
+  test("V084 plan auto-loads the default V095 context and leaves only fresh approval required", async () => {
     const cwd = await makeCwd();
     try {
       const manifestPath = await writeReadyInputs(cwd);
@@ -93,7 +93,6 @@ describe("v095 private pilot execution context bridge", () => {
         dryRun: true,
         env: {
           V095_CWD: cwd,
-          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH),
           V084_NOW_ISO: "2026-07-07T00:01:00.000Z"
         }
       });
@@ -110,6 +109,41 @@ describe("v095 private pilot execution context bridge", () => {
       expect(result.videosInsertCalled).toBe(false);
       expect(result.commentThreadsInsertCalled).toBe(false);
       expect(JSON.stringify(result)).not.toMatch(FORBIDDEN_PATTERN);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(TOKEN_PATH, { force: true });
+    }
+  });
+
+  test("explicit V084 context path still loads the same V095 context", async () => {
+    const cwd = await makeCwd();
+    try {
+      const manifestPath = await writeReadyInputs(cwd);
+      await writeTokenFile();
+      await prepareV095PrivatePilotExecutionContext({
+        cwd,
+        env: readyEnv(manifestPath),
+        now: () => "2026-07-07T00:00:00.000Z"
+      });
+      const contextPath = path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH);
+      const context = JSON.parse(await readFile(contextPath, "utf8"));
+
+      const request = await buildV084PrivateUploadPilotInvocationRequestFromEnv({
+        dryRun: false,
+        env: {
+          V095_CWD: cwd,
+          V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: contextPath,
+          V084_NOW_ISO: "2026-07-07T00:01:00.000Z"
+        }
+      });
+
+      expect(request.queueItemId).toBe(context.queueItemId);
+      expect(request.uploadPackageId).toBe(context.uploadPackageId);
+      expect(request.v088ResolverStatus).toBe("bound");
+      expect(request.v087BinderStatus).toBe("ready_for_fresh_approval");
+      expect(request.v085BinderStatus).toBe("ready_for_fresh_approval");
+      expect(Object.values(request.readiness).every(Boolean)).toBe(true);
+      expect(JSON.stringify(request)).not.toMatch(FORBIDDEN_PATTERN);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(TOKEN_PATH, { force: true });
@@ -236,18 +270,18 @@ describe("v095 private pilot execution context bridge", () => {
     }
   });
 
-  test("missing context keeps existing V084 blockers", async () => {
+  test("missing context adds an explicit V084 execution context blocker", async () => {
     const cwd = await makeCwd();
     const result = await buildV084PrivateUploadPilotInvocationFromEnv({
       dryRun: true,
       env: {
-        V095_CWD: cwd,
-        V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH: path.join(cwd, DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH)
+        V095_CWD: cwd
       }
     });
 
     expect(result.status).toBe("blocked");
     expect(result.blockers).toEqual(expect.arrayContaining([
+      "BLOCKED_V084_EXECUTION_CONTEXT_NOT_LOADED",
       "BLOCKED_V084_FRESH_APPROVAL_REQUIRED",
       "BLOCKED_V084_V088_RESOLVER_NOT_BOUND",
       "BLOCKED_V084_V087_BINDER_NOT_READY",
@@ -449,6 +483,9 @@ describe("v095 private pilot execution context bridge", () => {
     );
     expect(pkg.scripts["upload:v095:preflight-private-pilot"]).toBe(
       "tsx scripts/uploads/run-v095-private-pilot-preflight.ts"
+    );
+    expect(pkg.scripts["upload:v096:execute-context-dry-run"]).toBe(
+      "tsx scripts/uploads/dry-run-v096-execute-context.ts"
     );
     expect(pkg.scripts["upload:v095:private-pilot:execute"]).toBeUndefined();
   });

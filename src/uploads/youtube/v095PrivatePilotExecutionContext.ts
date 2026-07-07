@@ -259,11 +259,12 @@ export async function loadV095PrivatePilotExecutionContextForV084(input: {
   cwd?: string;
   env: NodeJS.ProcessEnv;
 }): Promise<V095ContextLoadForV084Result> {
-  const contextPathValue = trimOrNull(input.env.V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH);
-  if (!contextPathValue) return { found: false, values: null, blockers: [] };
-
   const cwd = input.cwd ?? process.cwd();
-  const contextPath = resolveContextPath(cwd, contextPathValue);
+  const contextPath = resolveContextPath(
+    cwd,
+    trimOrNull(input.env.V084_PRIVATE_PILOT_EXECUTION_CONTEXT_PATH) ??
+      DEFAULT_V095_PRIVATE_PILOT_EXECUTION_CONTEXT_RELATIVE_PATH
+  );
   if (!contextPath.safe) {
     return {
       found: true,
@@ -272,7 +273,13 @@ export async function loadV095PrivatePilotExecutionContextForV084(input: {
     };
   }
   const parsed = await readContext(contextPath.absolutePath);
-  if (!parsed) return { found: false, values: null, blockers: [] };
+  if (!parsed) {
+    return {
+      found: false,
+      values: null,
+      blockers: ["BLOCKED_V084_EXECUTION_CONTEXT_NOT_LOADED"]
+    };
+  }
 
   const blockers: V084PrivateUploadPilotInvocationBlocker[] = [];
   if (containsUnsafeEvidence(parsed)) {
