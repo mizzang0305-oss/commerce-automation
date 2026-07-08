@@ -25,6 +25,16 @@ The selected candidate remains blocked from upload readiness until separate uplo
 | `local_write` | Writes the materialized item to local/mock `data/queue.json` only. |
 | `supabase_write` | Always blocks with `BLOCKED_SUPABASE_WRITE_NOT_APPROVED_NO_UPLOAD`. |
 
+## Queue Item Identity
+
+Generated queue item IDs are derived from the same duplicate-guard seed:
+
+```text
+channelKey | category_path | keyword | queue_date
+```
+
+This keeps same-date reruns idempotent while allowing the same event/theme candidate to be materialized for a different `queue_date` without reusing the previous queue item ID.
+
 ## Safety
 
 V104 reports these safety flags as disabled:

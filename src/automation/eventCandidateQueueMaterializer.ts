@@ -202,17 +202,24 @@ export async function buildV104EventCandidateToQueueReport(
 function buildQueueItemFromCandidate(candidate: V103EventCandidate, today: string): ProductQueueItem {
   const createdAt = `${today}T00:00:00.000Z`;
   const productName = sanitizeQueueValue(candidate.productTheme || candidate.theme || candidate.eventName);
+  const keyword = sanitizeQueueValue(candidate.theme);
+  const categoryPath = `event/${candidate.eventType}/${candidate.eventKey}`;
   return {
-    id: `v104-${candidate.candidateIdHashPrefix}`,
+    id: buildQueueItemId({
+      channelKey: candidate.channelKey,
+      categoryPath,
+      keyword,
+      queueDate: today
+    }),
     channelKey: candidate.channelKey,
     queue_date: today,
     queue_rank: 1,
     upload_slot: 1,
     scheduled_at: createdAt,
-    keyword: sanitizeQueueValue(candidate.theme),
+    keyword,
     theme: sanitizeQueueValue(candidate.eventName),
     product_name: productName,
-    category_path: `event/${candidate.eventType}/${candidate.eventKey}`,
+    category_path: categoryPath,
     price_now_text: "",
     thumbnail_url: "",
     raw_coupang_url: "",
@@ -232,6 +239,20 @@ function buildQueueItemFromCandidate(candidate: V103EventCandidate, today: strin
     created_at: createdAt,
     updated_at: createdAt
   };
+}
+
+function buildQueueItemId(input: {
+  channelKey: ChannelKey;
+  categoryPath: string;
+  keyword: string;
+  queueDate: string;
+}) {
+  return `v104-${hashPrefix([
+    input.channelKey,
+    input.categoryPath,
+    input.keyword,
+    input.queueDate
+  ].join("|"))}`;
 }
 
 function selectCandidateForChannel(

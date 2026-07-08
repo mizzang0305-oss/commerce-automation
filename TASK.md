@@ -1114,6 +1114,7 @@ Current runtime result:
 - V104 dry-run: `SUCCESS_V104_EVENT_CANDIDATE_TO_QUEUE_READY_NO_UPLOAD`.
 - V104 local_write: creates one local/mock `manual_review` / `not_ready` queue item when absent.
 - Duplicate guard: repeated local_write detects the same channel/event/theme/queue_date and prevents duplicates.
+- Queue item ID seed: `channelKey + category_path + keyword + queue_date`, matching the duplicate guard so different queue dates do not reuse the same `ProductQueueItem.id`.
 - Standalone V102 after local_write: `selectedItemFound=true`.
 - Current downstream blocker: `BLOCKED_FIRST_VIDEO_SETTINGS_NOT_READY_NO_UPLOAD`.
 - videos.insert: `0`

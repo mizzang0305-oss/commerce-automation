@@ -119,6 +119,78 @@ describe("v104 event candidate to queue no-upload", () => {
     }
   });
 
+  test("local_write creates date-unique ids while preserving same-date duplicate prevention", async () => {
+    const tempRoot = await makeTempRoot();
+    try {
+      const firstDate = await buildV104EventCandidateToQueueReport({
+        cwd: tempRoot,
+        today: "2026-07-10",
+        materializationMode: "local_write"
+      });
+      const secondDate = await buildV104EventCandidateToQueueReport({
+        cwd: tempRoot,
+        today: "2026-07-11",
+        materializationMode: "local_write"
+      });
+      const secondDateRepeat = await buildV104EventCandidateToQueueReport({
+        cwd: tempRoot,
+        today: "2026-07-11",
+        materializationMode: "local_write"
+      });
+
+      expect(firstDate.selectedEvent).toBe(secondDate.selectedEvent);
+      expect(firstDate.selectedTheme).toBe(secondDate.selectedTheme);
+      expect(firstDate.queueItemCreated).toBe(true);
+      expect(secondDate.queueItemCreated).toBe(true);
+      expect(secondDate.queueItemAlreadyExists).toBe(false);
+      expect(secondDate.duplicateGuard.duplicateDetected).toBe(false);
+      expect(secondDateRepeat.queueItemCreated).toBe(false);
+      expect(secondDateRepeat.queueItemAlreadyExists).toBe(true);
+      expect(secondDateRepeat.duplicateGuard.duplicateDetected).toBe(true);
+      expect(secondDateRepeat.duplicateGuard.duplicatePrevented).toBe(true);
+      expect(firstDate.queueItemShortId).not.toBe(secondDate.queueItemShortId);
+      expect(secondDate.queueItemShortId).toBe(secondDateRepeat.queueItemShortId);
+      expect(secondDate.v102AfterMaterialization).toMatchObject({
+        executed: true,
+        selectedItemFound: true
+      });
+      expect(secondDate.v102AfterMaterialization?.FINAL_STATUS).not.toBe("BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD");
+
+      const queue = JSON.parse(await readFile(path.join(tempRoot, "data", "queue.json"), "utf8")) as Array<Record<string, unknown>>;
+      expect(queue).toHaveLength(2);
+      expect(new Set(queue.map((item) => item.id)).size).toBe(2);
+      expect(queue.map((item) => item.queue_date).sort()).toEqual(["2026-07-10", "2026-07-11"]);
+      expectNoSideEffects(secondDate);
+      expectNoSideEffects(secondDateRepeat);
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true });
+    }
+  });
+
+  test("local_write reports different short ids for 2026-07-09 and 2026-07-10 candidates", async () => {
+    const tempRoot = await makeTempRoot();
+    try {
+      const july9 = await buildV104EventCandidateToQueueReport({
+        cwd: tempRoot,
+        today: "2026-07-09",
+        materializationMode: "local_write"
+      });
+      const july10 = await buildV104EventCandidateToQueueReport({
+        cwd: tempRoot,
+        today: "2026-07-10",
+        materializationMode: "local_write"
+      });
+
+      expect(july9.queueItemCreated).toBe(true);
+      expect(july10.queueItemCreated).toBe(true);
+      expect(july9.queueItemShortId).not.toBe(july10.queueItemShortId);
+      expectNoSideEffects(july9);
+      expectNoSideEffects(july10);
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true });
+    }
+  });
+
   test("supabase_write is fail-closed and does not create a local queue item", async () => {
     const tempRoot = await makeTempRoot();
     try {
