@@ -142,6 +142,9 @@ export class LocalJsonAutomationRepository implements MutableMockAutomationRepos
     await this.ensureInitialized();
     let items = await this.readQueue();
 
+    if (filters.channelKey && filters.channelKey !== "all") {
+      items = items.filter((item) => item.channelKey === filters.channelKey);
+    }
     if (filters.date) {
       items = items.filter((item) => item.queue_date === filters.date);
     }

@@ -66,6 +66,7 @@ export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem
           }
           return [
             item.id,
+            item.channelKey ?? "",
             item.keyword,
             item.theme,
             item.product_name,
@@ -89,6 +90,11 @@ export function QueueTable({ items, workerJobs = [] }: { items: ProductQueueItem
         accessorKey: "scheduled_at",
         header: "예약 시간",
         cell: ({ row }) => <span className="text-slate-600">{formatDateTime(row.original.scheduled_at)}</span>
+      },
+      {
+        accessorKey: "channelKey",
+        header: "Channel",
+        cell: ({ row }) => <span className="text-xs font-semibold text-slate-600">{row.original.channelKey ?? "father_jobs"}</span>
       },
       {
         accessorKey: "keyword",

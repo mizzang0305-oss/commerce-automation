@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #205 merge: `43c935dc346b4ca0187515dd3117cec837d319bb`
+- main HEAD after PR #208 merge: `ad86fa7d2b55fcb56e5cfba7dfb02b1aae232952`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -80,8 +80,10 @@ Product discovery
 - PR #204 merge commit: `aa30620d78f7a14f41b4268583cf95721bc8b231`
 - PR #205: V097 upload package resolution bridge, `MERGED`
 - PR #205 merge commit: `43c935dc346b4ca0187515dd3117cec837d319bb`
+- PR #208: V099 prepared asset evidence binding, `MERGED`
+- PR #208 merge commit: `ad86fa7d2b55fcb56e5cfba7dfb02b1aae232952`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_T026_V099_PREPARED_ASSET_EVIDENCE_BINDING_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V100_CHANNEL_AUTOMATION_MVP_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -92,7 +94,11 @@ Product discovery
 - Public upload approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Comment automation approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
-- V099 prepared asset evidence binding: `PR_OPEN`
+- V099 prepared asset evidence binding: `MERGED`
+- Private upload blocker chase: `FROZEN_FOR_CHANNEL_AUTOMATION_MVP`
+- V100 channel automation MVP: `PR_OPEN`
+- V100 operating mode: `generate_only`
+- V100 ready state target: `ready_for_manual_upload`
 
 ## Status Legend
 
@@ -935,7 +941,7 @@ Requirements:
 
 ### T026 - V099 Prepared Asset Evidence Binding
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Bind already-prepared HTTPS video asset evidence into the V094/V097 no-upload resolver path without performing storage upload, R2 write, DB write, product_assets write, or YouTube execution.
 
@@ -965,13 +971,14 @@ Requirements:
 
 ## Current Blocker
 
-- `PR_OPEN_T026_V099_PREPARED_ASSET_EVIDENCE_BINDING_NO_UPLOAD_REVIEW`
-- PR #206 is merged and V098 is on main.
-- V097/V098 dry-run can find the package object and local MP4 evidence but cannot build an upload request without prepared HTTPS asset evidence.
-- Runtime V099 dry-run remains blocked with `BLOCKED_V081_VIDEO_ASSET_MISSING` until an existing server-accessible prepared asset reference is supplied.
-- V099 latest-head P2 fixes bind prepared refs by selected channel and align accepted provider labels between upload contract and prepared asset validator.
-- Private pilot execution remains blocked until V099 is reviewed/merged, no-upload validation is clean, and a separate fresh owner approval is supplied.
+- `PR_OPEN_V100_CHANNEL_AUTOMATION_MVP_NO_UPLOAD_REVIEW`
+- PR #208 is merged and V099 is on main.
+- The private upload blocker chase is frozen while V100 channel automation MVP is reviewed.
+- V100 is a no-upload, generate-only channel operations MVP.
+- V100 P1 fixes are in progress on PR #207 to persist/filter channel keys in `product_queue` and `automation_runs`.
+- Supabase schema support is represented by a migration file only; no production migration apply has been run.
 - Public upload remains blocked.
+- Private upload remains blocked.
 - Comment automation remains blocked.
 - Scheduler execution remains blocked.
 - `PRIVATE_UPLOAD_PILOT_EXECUTION=BLOCKED_FRESH_APPROVAL_REQUIRED`
@@ -983,4 +990,4 @@ Requirements:
 
 ## Next Exact Action
 
-- Review and merge T026/V099 only after clean validation. After merge, run V095/V096/V097/V099 no-upload checks on main. Do not retry private pilot upload until prepared HTTPS asset evidence exists and a separate fresh owner approval is supplied.
+- Complete PR #207 P1 fixes for V100 channel automation MVP. Keep the branch no-upload and generate-only, validate channel-key persistence/filtering across mock/local/Supabase repositories, and do not apply the migration to production. After clean validation, push the PR branch for owner review.

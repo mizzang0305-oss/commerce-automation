@@ -1,9 +1,10 @@
-import type { AutomationRun, AutomationRunStatus, AutomationRunType } from "@/types/automation";
+import type { AutomationRun, AutomationRunStatus, AutomationRunType, ChannelAutomationKey } from "@/types/automation";
 
 export function createAutomationRun(input: {
   request_id?: string;
   n8n_run_id?: string;
   http_status?: number;
+  channelKey?: ChannelAutomationKey;
   run_type: AutomationRunType;
   status: AutomationRunStatus;
   processed_count?: number;
@@ -19,6 +20,7 @@ export function createAutomationRun(input: {
     request_id: input.request_id,
     n8n_run_id: input.n8n_run_id,
     http_status: input.http_status,
+    channelKey: input.channelKey,
     run_type: input.run_type,
     status: input.status,
     processed_count: input.processed_count ?? 0,

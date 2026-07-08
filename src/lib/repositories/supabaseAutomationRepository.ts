@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AutomationRun,
   AutomationSettings,
+  ChannelAutomationKey,
   ChannelProfile,
   ChannelUploadPackage,
   GeneratedContent,
@@ -31,6 +32,7 @@ import {
   SettingsValidationError,
   validateSettingsInput
 } from "@/lib/repositories/mockAutomationRepository";
+import { isChannelAutomationKey } from "@/lib/channelAutomation";
 import { getQueueSummary } from "@/lib/status";
 import { assignSlots } from "@/lib/scheduler";
 import { getSupabaseAdminClient } from "@/lib/server/supabaseAdmin";
@@ -93,6 +95,7 @@ export type SupabaseRepositoryOptions = {
 
 const VIDEO_RENDER_MISSING_URL_MESSAGE =
   "영상 렌더 결과에 video_url이 없어 완료 처리하지 않았습니다.";
+const DEFAULT_QUEUE_CHANNEL_KEY: ChannelAutomationKey = "father_jobs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -132,6 +135,14 @@ function numberOrDefault(value: unknown, defaultValue: number) {
 
 function booleanOrDefault(value: unknown, defaultValue: boolean) {
   return typeof value === "boolean" ? value : defaultValue;
+}
+
+function channelKeyOrDefault(value: unknown): ChannelAutomationKey {
+  return isChannelAutomationKey(value) ? value : DEFAULT_QUEUE_CHANNEL_KEY;
+}
+
+function optionalChannelKey(value: unknown): ChannelAutomationKey | undefined {
+  return isChannelAutomationKey(value) ? value : undefined;
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -280,9 +291,10 @@ function mapSettingsRow(row: Partial<AutomationSettings> | null | undefined): Au
   };
 }
 
-function mapQueueRow(row: Record<string, unknown>): ProductQueueItem {
+export function mapSupabaseProductQueueRow(row: Record<string, unknown>): ProductQueueItem {
   return {
     id: emptyString(row.id),
+    channelKey: channelKeyOrDefault(row.channel_key ?? row.channelKey),
     queue_date: emptyString(row.queue_date),
     queue_rank: numberOrDefault(row.queue_rank, 0),
     upload_slot: numberOrDefault(row.upload_slot, 0),
@@ -352,12 +364,30 @@ function normalizeRenderPlanOverrideRow(value: unknown): GeneratedContent["rende
     : null;
 }
 
-function mapRunRow(row: Record<string, unknown>): AutomationRun {
+export function serializeSupabaseProductQueueForWrite(item: ProductQueueItem): Record<string, unknown> {
+  const { channelKey, ...row } = item;
+  return stripUndefined({
+    ...row,
+    channel_key: channelKey ?? DEFAULT_QUEUE_CHANNEL_KEY
+  });
+}
+
+export function serializeSupabaseProductQueuePatch(patch: Partial<ProductQueueItem>): Record<string, unknown> {
+  const { channelKey, ...row } = patch;
+  return stripUndefined({
+    ...row,
+    channel_key: channelKey
+  });
+}
+
+export function mapSupabaseAutomationRunRow(row: Record<string, unknown>): AutomationRun {
+  const channelKey = optionalChannelKey(row.channel_key ?? row.channelKey);
   return {
     id: emptyString(row.id),
     request_id: emptyString(row.request_id) || undefined,
     n8n_run_id: emptyString(row.n8n_run_id) || undefined,
     http_status: typeof row.http_status === "number" ? row.http_status : undefined,
+    ...(channelKey ? { channelKey } : {}),
     run_type: (emptyString(row.run_type) || "manual_batch") as AutomationRun["run_type"],
     status: (emptyString(row.status) || "success") as AutomationRun["status"],
     processed_count: numberOrDefault(row.processed_count, 0),
@@ -368,6 +398,29 @@ function mapRunRow(row: Record<string, unknown>): AutomationRun {
     safe_message: emptyString(row.safe_message)
   };
 }
+
+export function serializeSupabaseAutomationRunForWrite(run: AutomationRun): Record<string, unknown> {
+  const { channelKey, ...row } = run;
+  return stripUndefined({
+    ...row,
+    channel_key: channelKey
+  });
+}
+
+function serializeSupabaseRowsForWrite(table: string, rows: unknown): unknown {
+  const serializeOne = (row: unknown) => {
+    if (table === "product_queue") {
+      return serializeSupabaseProductQueueForWrite(row as ProductQueueItem);
+    }
+    if (table === "automation_runs") {
+      return serializeSupabaseAutomationRunForWrite(row as AutomationRun);
+    }
+    return row;
+  };
+
+  return Array.isArray(rows) ? rows.map(serializeOne) : serializeOne(rows);
+}
+
 
 function mapHeartbeatRow(row: Record<string, unknown>): WorkerHeartbeat {
   return {
@@ -531,13 +584,16 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
   }
 
   async getQueue(filters: QueueFilters = {}) {
-    const { data, error } = await this.client
+    let query = this.client
       .from("product_queue")
-      .select("*")
-      .order("queue_rank", { ascending: true });
+      .select("*");
+    if (filters.channelKey && filters.channelKey !== "all") {
+      query = query.eq("channel_key", filters.channelKey);
+    }
+    const { data, error } = await query.order("queue_rank", { ascending: true });
     throwIfSupabaseError(error, "getQueue");
 
-    let items = ((data ?? []) as Record<string, unknown>[]).map(mapQueueRow);
+    let items = ((data ?? []) as Record<string, unknown>[]).map(mapSupabaseProductQueueRow);
     if (filters.date) {
       items = items.filter((item) => item.queue_date === filters.date);
     }
@@ -586,7 +642,7 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       .eq("id", id)
       .maybeSingle();
     throwIfSupabaseError(error, "getQueueItem");
-    return data ? clone(mapQueueRow(data as Record<string, unknown>)) : null;
+    return data ? clone(mapSupabaseProductQueueRow(data as Record<string, unknown>)) : null;
   }
 
   async retryQueueItem(id: string) {
@@ -635,16 +691,16 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
     if (items.length === 0) {
       return;
     }
-    const rows: ProductQueueItem[] = [];
+    const rows: Record<string, unknown>[] = [];
     for (const item of items) {
       const existing = item.raw_coupang_url
         ? await this.getQueueItemByRawUrl(item.raw_coupang_url)
         : null;
-      rows.push({
+      rows.push(serializeSupabaseProductQueueForWrite({
         ...item,
         id: existing?.id || item.id,
         updated_at: nowIso()
-      });
+      }));
     }
     await this.upsertRows("product_queue", rows);
   }
@@ -652,23 +708,23 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
   async updateQueueItemByRawUrl(raw_coupang_url: string, patch: Partial<ProductQueueItem>) {
     const { data, error } = await this.client
       .from("product_queue")
-      .update(stripUndefined({ ...patch, updated_at: nowIso() }))
+      .update(serializeSupabaseProductQueuePatch({ ...patch, updated_at: nowIso() }))
       .eq("raw_coupang_url", raw_coupang_url)
       .select("*")
       .maybeSingle();
     throwIfSupabaseError(error, "updateQueueItemByRawUrl");
-    return data ? clone(mapQueueRow(data as Record<string, unknown>)) : null;
+    return data ? clone(mapSupabaseProductQueueRow(data as Record<string, unknown>)) : null;
   }
 
   async updateQueueItemById(id: string, patch: Partial<ProductQueueItem>) {
     const { data, error } = await this.client
       .from("product_queue")
-      .update(stripUndefined({ ...patch, updated_at: nowIso() }))
+      .update(serializeSupabaseProductQueuePatch({ ...patch, updated_at: nowIso() }))
       .eq("id", id)
       .select("*")
       .maybeSingle();
     throwIfSupabaseError(error, "updateQueueItemById");
-    return data ? clone(mapQueueRow(data as Record<string, unknown>)) : null;
+    return data ? clone(mapSupabaseProductQueueRow(data as Record<string, unknown>)) : null;
   }
 
   async getRuns() {
@@ -677,7 +733,7 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       .select("*")
       .order("started_at", { ascending: false });
     throwIfSupabaseError(error, "getRuns");
-    return clone(((data ?? []) as Record<string, unknown>[]).map(mapRunRow));
+    return clone(((data ?? []) as Record<string, unknown>[]).map(mapSupabaseAutomationRunRow));
   }
 
   async appendRun(run: AutomationRun) {
@@ -1318,7 +1374,8 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
   }
 
   private async upsertRows(table: string, rows: unknown) {
-    const { error } = await this.client.from(table).upsert(rows as object | object[], { onConflict: "id" });
+    const payload = serializeSupabaseRowsForWrite(table, rows);
+    const { error } = await this.client.from(table).upsert(payload as object | object[], { onConflict: "id" });
     throwIfSupabaseError(error, `upsert ${table}`);
   }
 
@@ -1330,7 +1387,7 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       .limit(1)
       .maybeSingle();
     throwIfSupabaseError(error, "getQueueItemByRawUrl");
-    return data ? mapQueueRow(data as Record<string, unknown>) : null;
+    return data ? mapSupabaseProductQueueRow(data as Record<string, unknown>) : null;
   }
 
   private async applyWorkerJobResult(job: WorkerJob) {
