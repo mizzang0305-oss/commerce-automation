@@ -2,10 +2,10 @@ import type {
   PreparedVideoAssetRef
 } from "@/lib/uploads/youtube/uploadAssetContract";
 import {
-  buildPreparedVideoAssetReadiness,
   normalizePreparedVideoAssetRef
 } from "@/lib/uploads/youtube/uploadAssetContract";
 import type { V073UploadPackage } from "../multi-channel/v073UploadPackage";
+import { bindV099PreparedVideoAssetEvidence } from "./v099PreparedAssetEvidenceBindingCore";
 
 export type V098PreparedVideoAssetBridgeBlocker = "BLOCKED_V081_VIDEO_ASSET_MISSING";
 
@@ -29,36 +29,33 @@ export function resolveV098PreparedVideoAssetBridge(input: {
   const candidate = input.preparedVideoAssetRef ??
     buildHttpsPreparedAssetRefFromPackage(input.uploadPackage);
   const normalized = normalizePreparedVideoAssetRef(candidate);
-  const preparedAssetEvidencePresent = Boolean(normalized);
-  const preparedAssetUploadableUrlPresent = hasUploadableHttpsUrl(normalized);
-  const readiness = buildPreparedVideoAssetReadiness({
-    prepared_video_asset: normalized,
-    video_path_or_url: input.uploadPackage.videoAsset.path
+  const binding = bindV099PreparedVideoAssetEvidence({
+    preparedVideoAssetRef: normalized,
+    videoAssetHashPrefix: input.uploadPackage.videoAsset.hashEvidence
   });
 
   if (
     !videoAssetEvidencePresent ||
     !normalized ||
-    !readiness.asset_ready ||
-    !preparedAssetUploadableUrlPresent
+    !binding.ready
   ) {
     return {
       preparedAsset: null,
       blocker: "BLOCKED_V081_VIDEO_ASSET_MISSING",
       videoAssetEvidencePresent,
-      preparedAssetEvidencePresent,
-      preparedAssetServerAccessible: Boolean(normalized?.server_accessible),
-      preparedAssetUploadableUrlPresent
+      preparedAssetEvidencePresent: binding.preparedAssetEvidencePresent,
+      preparedAssetServerAccessible: binding.preparedAssetServerAccessible,
+      preparedAssetUploadableUrlPresent: binding.preparedAssetUploadableUrlPresent
     };
   }
 
   return {
-    preparedAsset: normalized,
+    preparedAsset: binding.preparedAsset,
     blocker: null,
     videoAssetEvidencePresent,
-    preparedAssetEvidencePresent,
-    preparedAssetServerAccessible: readiness.server_accessible,
-    preparedAssetUploadableUrlPresent
+    preparedAssetEvidencePresent: binding.preparedAssetEvidencePresent,
+    preparedAssetServerAccessible: binding.preparedAssetServerAccessible,
+    preparedAssetUploadableUrlPresent: binding.preparedAssetUploadableUrlPresent
   };
 }
 
@@ -83,13 +80,6 @@ function buildHttpsPreparedAssetRefFromPackage(
 
 function isHttpsUrl(value: string) {
   return /^https:\/\//i.test(value.trim());
-}
-
-function hasUploadableHttpsUrl(value: PreparedVideoAssetRef | null) {
-  return Boolean(
-    value &&
-    (isHttpsUrl(value.prepared_video_asset_url ?? "") || isHttpsUrl(value.signed_url ?? ""))
-  );
 }
 
 function trimOrNull(value: string | null | undefined) {

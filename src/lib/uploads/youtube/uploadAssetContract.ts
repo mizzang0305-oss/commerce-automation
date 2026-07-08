@@ -3,6 +3,9 @@ export type PreparedVideoAssetProvider =
   | "r2"
   | "supabase_storage"
   | "signed_url"
+  | "signed_https"
+  | "r2_signed_url"
+  | "supabase_signed_url"
   | "external_https";
 
 export type PreparedVideoAssetRef = {
@@ -119,6 +122,9 @@ function normalizeProvider(input: unknown): PreparedVideoAssetProvider | "" {
     input === "r2" ||
     input === "supabase_storage" ||
     input === "signed_url" ||
+    input === "signed_https" ||
+    input === "r2_signed_url" ||
+    input === "supabase_signed_url" ||
     input === "external_https"
   ) {
     return input;
@@ -130,7 +136,10 @@ function hasServerReference(assetRef: PreparedVideoAssetRef) {
   if (assetRef.provider === "r2" || assetRef.provider === "supabase_storage") {
     return Boolean(assetRef.storage_key || assetRef.signed_url || assetRef.prepared_video_asset_url);
   }
-  if (assetRef.provider === "signed_url") {
+  if (assetRef.provider === "signed_url" || assetRef.provider === "signed_https") {
+    return isHttpsUrl(assetRef.signed_url) || isHttpsUrl(assetRef.prepared_video_asset_url);
+  }
+  if (assetRef.provider === "r2_signed_url" || assetRef.provider === "supabase_signed_url") {
     return isHttpsUrl(assetRef.signed_url) || isHttpsUrl(assetRef.prepared_video_asset_url);
   }
   if (assetRef.provider === "external_https") {

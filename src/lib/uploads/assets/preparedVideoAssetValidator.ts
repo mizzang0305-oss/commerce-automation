@@ -225,6 +225,9 @@ function normalizeProvider(input: unknown): PreparedVideoAssetProvider | "" {
     input === "r2" ||
     input === "supabase_storage" ||
     input === "signed_url" ||
+    input === "signed_https" ||
+    input === "r2_signed_url" ||
+    input === "supabase_signed_url" ||
     input === "external_https"
   ) {
     return input;
