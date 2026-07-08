@@ -59,6 +59,7 @@
     "upload:v096:execute-context-dry-run": "tsx scripts/uploads/dry-run-v096-execute-context.ts",
     "upload:v097:package-resolution-dry-run": "tsx scripts/uploads/dry-run-v097-upload-package-resolution.ts",
     "upload:v099:prepared-asset-dry-run": "tsx scripts/uploads/dry-run-v099-prepared-asset-evidence.ts",
+    "upload:v102:first-video-settings-dry-run": "tsx scripts/uploads/dry-run-v102-first-video-settings.ts",
     "upload:v084:focused": "vitest run tests/v084-private-upload-execution-invocation-path.test.ts",
     "upload:v085:focused": "vitest run tests/v085-private-pilot-input-binding.test.ts",
     "upload:v087:focused": "vitest run tests/v087-authoritative-product-source-binding.test.ts",
