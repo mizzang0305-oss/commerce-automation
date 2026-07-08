@@ -1079,3 +1079,57 @@ Acceptance:
 - No DB write, n8n webhook, videos.insert, commentThreads.insert, or scheduler execution.
 - No raw URL/full ID/secret output.
 - Liberation Day outside 30-day direct window appears only as lower-scored prep candidate.
+
+## Current Blocker
+
+- `PR_OPEN_V104_EVENT_CANDIDATE_TO_QUEUE_NO_UPLOAD_REVIEW`
+- PR #210 is merged and V103 is on main at `c5e29c15cbf33908e2b6e35bbe93621bdbcd6bc9`.
+- V104 adds a no-upload materializer from the V103 selected event candidate into local/mock queue data.
+- V104 default mode is `dry_run`; explicit `V104_MODE=local_write` writes only local/mock `data/queue.json`.
+- Supabase write remains blocked with `BLOCKED_SUPABASE_WRITE_NOT_APPROVED_NO_UPLOAD`.
+- Local V104 materialization moves standalone V102 past `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD` to `BLOCKED_FIRST_VIDEO_SETTINGS_NOT_READY_NO_UPLOAD`.
+- Public upload remains blocked.
+- Private upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- n8n webhook execution remains blocked.
+- `videos.insert=0`
+- `commentThreads.insert=false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+## Next Exact Action
+
+- Review PR for V104 event candidate to queue materialization. After merge, proceed to `V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage.
+
+### T029 - V104 Event Candidate To Queue No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Materialize the V103 selected first event candidate into local/mock queue data so standalone V102 can see one eligible first candidate without any upload, comment, scheduler, n8n, or production DB mutation.
+
+Current runtime result:
+
+- V103 selected candidate source: `father_jobs` / heatwave / cold-noodle theme.
+- V104 dry-run: `SUCCESS_V104_EVENT_CANDIDATE_TO_QUEUE_READY_NO_UPLOAD`.
+- V104 local_write: creates one local/mock `manual_review` / `not_ready` queue item when absent.
+- Duplicate guard: repeated local_write detects the same channel/event/theme/queue_date and prevents duplicates.
+- Standalone V102 after local_write: `selectedItemFound=true`.
+- Current downstream blocker: `BLOCKED_FIRST_VIDEO_SETTINGS_NOT_READY_NO_UPLOAD`.
+- videos.insert: `0`
+- commentThreads.insert: `false`
+- DB/Supabase/storage writes: `false`
+- raw URL/full ID/token/secret/Auth/HMAC output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- V103 selected first candidate converts into a `ProductQueueItem`.
+- `dry_run` does not write queue data.
+- `local_write` writes only local/mock queue data.
+- `supabase_write` is blocked.
+- Missing affiliate/package/asset evidence keeps the item in `manual_review` / `not_ready`.
+- V102 moves beyond no-candidate blocker after local_write.
+- Upload/comment/scheduler/n8n/storage/DB mutation paths remain disabled.
