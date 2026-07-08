@@ -9,7 +9,6 @@ import {
   selectV102FirstVideoCandidate
 } from "../src/uploads/youtube/v102FirstVideoSettingsPreflight";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
-import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const RAW_AFFILIATE_URL = "https://link.coupang.com/a/v102-hidden-affiliate";
 const RAW_COUPANG_URL = "https://www.coupang.com/vp/products/v102-hidden-product";
@@ -105,6 +104,8 @@ describe("v102 first video settings preflight no-upload", () => {
     expect(report.commentSettingsReady).toBe(true);
     expect(report.preparedAssetReady).toBe(true);
     expect(report.currentBlocker).toBeNull();
+    expect(report.videoSettings.packageReadinessEvidencePresent).toBe(true);
+    expect(report.videoSettings.shortsQualityPresent).toBe(true);
     expect(report.videoSettings.serverAccessible).toBe(true);
     expect(report.videoSettings.preparedHttpsAssetEvidencePresent).toBe(true);
     expect(report.commentSettings.rawAffiliateUrlPrinted).toBe(false);
@@ -146,6 +147,61 @@ describe("v102 first video settings preflight no-upload", () => {
     expect(selectV102FirstVideoCandidate([manualReady, scheduled, review], "father_jobs", now)?.id).toBe(scheduled.id);
     expect(selectV102FirstVideoCandidate([manualReady, review], "father_jobs", now)?.id).toBe(manualReady.id);
     expect(selectV102FirstVideoCandidate([review], "father_jobs", now)?.id).toBe(review.id);
+  });
+
+  test("does not use fixture-only shortsContentQuality to decide readiness", async () => {
+    const queueItems = [
+      queueItem({ id: FULL_QUEUE_ID, channelKey: "father_jobs", queue_rank: 1, queue_status: "ready_for_manual_upload" })
+    ];
+
+    const report = await buildV102FirstVideoSettingsPreflight({
+      selectedChannelKey: "father_jobs",
+      queueItems,
+      uploadPackages: [uploadPackage({ queueItemId: FULL_QUEUE_ID, preparedReady: true })],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef()
+      },
+      now: () => "2026-07-08T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("SUCCESS_V102_FIRST_VIDEO_SETTINGS_PREFLIGHT_READY_NO_UPLOAD_NO_COMMENT");
+    expect(report.videoSettings.packageReadinessEvidencePresent).toBe(true);
+    expect(report.videoSettings.shortsQualityPresent).toBe(true);
+    expect(JSON.stringify(report)).not.toContain("shorts_content_quality_fixture");
+  });
+
+  test("does not fallback-select future scheduled rows only because manual_review_status is not_ready", () => {
+    const now = new Date("2026-07-08T00:00:00.000Z");
+    const futureScheduled = queueItem({
+      id: "future-scheduled-not-ready",
+      channelKey: "father_jobs",
+      queue_rank: 1,
+      queue_status: "scheduled",
+      scheduled_at: "2026-07-09T00:00:00.000Z",
+      manual_review_status: "not_ready"
+    });
+
+    expect(selectV102FirstVideoCandidate([futureScheduled], "father_jobs", now)).toBeNull();
+  });
+
+  test("does not fallback-select uploaded or posted rows even when manual review status is approved", () => {
+    const now = new Date("2026-07-08T00:00:00.000Z");
+    const uploaded = queueItem({
+      id: "uploaded-approved",
+      channelKey: "father_jobs",
+      queue_rank: 1,
+      queue_status: "uploaded",
+      manual_review_status: "approved"
+    });
+    const posted = queueItem({
+      id: "posted-ready-review",
+      channelKey: "father_jobs",
+      queue_rank: 2,
+      queue_status: "posted",
+      manual_review_status: "ready_for_review"
+    });
+
+    expect(selectV102FirstVideoCandidate([uploaded, posted], "father_jobs", now)).toBeNull();
   });
 });
 
@@ -274,10 +330,8 @@ function uploadPackage(input: {
       rawUrlsStored: false,
       secretsStored: false
     },
-    shortsContentQuality: PASSING_SHORTS_CONTENT_QUALITY,
     preparedAssetReady: input.preparedReady
   } as V073UploadPackage & {
-    shortsContentQuality: typeof PASSING_SHORTS_CONTENT_QUALITY;
     preparedAssetReady: boolean;
   };
 }

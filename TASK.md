@@ -103,6 +103,8 @@ Product discovery
 - V102 current first eligible candidate: `ABSENT`
 - V102 current blocker: `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`
 - V102 is a no-upload/no-comment owner review preflight; it is not a first-video-ready report.
+- V102 P2 fix: quality/readiness gate uses real V073 package fields only, not fixture-only `shortsContentQuality`.
+- V102 P2 fix: fallback candidate selection is restricted to `queue_status=manual_review`; `manual_review_status` alone cannot select future scheduled, uploaded, posted, or other non-manual rows.
 
 ## Status Legend
 
@@ -1023,4 +1025,6 @@ Acceptance:
 - `npm run upload:v102:first-video-settings-dry-run --silent` emits sanitized JSON.
 - Report says preflight tool ready, not first video ready, when no candidate exists.
 - Exactly one selected channel item is evaluated when candidates exist.
+- Ready gate is based on real V073 package metadata/assets/comment/target/guard/resultStore fields, not fixture-only fields.
+- Fallback selector only chooses `queue_status=manual_review` after due scheduled and `ready_for_manual_upload` candidates are absent.
 - Upload/comment/scheduler/n8n/storage mutations remain disabled until separate owner approval.

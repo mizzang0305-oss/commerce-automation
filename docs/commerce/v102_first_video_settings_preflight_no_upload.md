@@ -12,6 +12,8 @@ It is a no-upload, no-comment, no-scheduler preflight for owner review.
 - Current runtime candidate: absent in local data
 - Current blocker: `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`
 - This is not a "first video ready" report.
+- Readiness gate uses real V073 package fields only; it does not depend on fixture-only `shortsContentQuality`.
+- Fallback candidate selection is restricted to rows whose `queue_status` is exactly `manual_review`.
 - Upload, comment, scheduler, n8n, storage, DB, and migration execution remain disabled.
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
@@ -24,9 +26,11 @@ It is a no-upload, no-comment, no-scheduler preflight for owner review.
 - Selection order:
   1. due `scheduled` item with the lowest `queue_rank`
   2. `ready_for_manual_upload` item with the lowest `queue_rank`
-  3. manual review candidate with the lowest `queue_rank`
+  3. `manual_review` queue item with the lowest `queue_rank`
 
 Excluded queue statuses: `skipped`, `hold`, `error`.
+
+Future scheduled rows are not selected only because their `manual_review_status` is `not_ready`. Uploaded or posted rows are also not fallback candidates.
 
 ## Command
 

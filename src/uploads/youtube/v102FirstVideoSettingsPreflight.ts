@@ -57,6 +57,7 @@ export type V102FirstVideoSettingsReport = {
     unlistedUploadAllowed: false;
     madeForKids: false;
     selfDeclared: false;
+    packageReadinessEvidencePresent: boolean;
     shortsQualityPresent: boolean;
     videoAssetEvidencePresent: boolean;
     videoAssetHashPrefix: string | null;
@@ -177,13 +178,7 @@ export function selectV102FirstVideoCandidate(
     item.queue_status === "scheduled" && isDue(item.scheduled_at, now)
   )) ??
     firstSorted(channelItems.filter((item) => item.queue_status === "ready_for_manual_upload")) ??
-    firstSorted(channelItems.filter((item) =>
-      item.queue_status === "manual_review" ||
-      item.manual_review_status === "not_ready" ||
-      item.manual_review_status === "ready_for_review" ||
-      item.manual_review_status === "manual_review" ||
-      item.manual_review_status === "approved"
-    )) ??
+    firstSorted(channelItems.filter((item) => item.queue_status === "manual_review")) ??
     null;
 }
 
@@ -355,7 +350,26 @@ function summarizeSettings(
     uploadPackage?.videoAsset.firstFrameHashEvidence &&
     uploadPackage.videoAsset.firstFrameBasename
   );
-  const shortsQualityPresent = Boolean((uploadPackage as { shortsContentQuality?: unknown } | null)?.shortsContentQuality);
+  const packageReadinessEvidencePresent = Boolean(
+    uploadPackage &&
+    title &&
+    description &&
+    uploadPackage.youtubeMetadata.tags?.length &&
+    uploadPackage.youtubeMetadata.categoryId &&
+    descriptionDisclosurePresent &&
+    affiliateEvidenceReady &&
+    videoAssetEvidencePresent &&
+    firstFrameEvidencePresent &&
+    uploadPackage.commentPackage.commentText &&
+    uploadPackage.commentPackage.coupangPartnersDisclosurePresent &&
+    uploadPackage.targetChannel.channelKey &&
+    uploadPackage.targetChannel.formatValid &&
+    uploadPackage.duplicateGuard.ready &&
+    uploadPackage.duplicateGuard.duplicateUploadRisk === false &&
+    uploadPackage.quotaGuard.ready &&
+    uploadPackage.approvalGate.freshApprovalRequired === true &&
+    uploadPackage.resultStore.status === "placeholder"
+  );
   const videoSettings = {
     titlePresent: Boolean(title),
     titleLengthSafe: Boolean(title && title.length <= 100),
@@ -368,7 +382,8 @@ function summarizeSettings(
     unlistedUploadAllowed: false as const,
     madeForKids: false as const,
     selfDeclared: false as const,
-    shortsQualityPresent,
+    packageReadinessEvidencePresent,
+    shortsQualityPresent: packageReadinessEvidencePresent,
     videoAssetEvidencePresent,
     videoAssetHashPrefix: safeHashPrefix(uploadPackage?.videoAsset.hashEvidence),
     firstFrameEvidencePresent,
@@ -395,7 +410,7 @@ function summarizeSettings(
     videoSettings.descriptionDisclosurePresent &&
     videoSettings.tagsPresent &&
     videoSettings.categoryIdPresent &&
-    videoSettings.shortsQualityPresent &&
+    videoSettings.packageReadinessEvidencePresent &&
     videoSettings.videoAssetEvidencePresent &&
     videoSettings.firstFrameEvidencePresent
   );
@@ -449,8 +464,12 @@ function isDue(value: string, now: Date) {
 function containsDisclosure(value: string) {
   const text = value.toLowerCase();
   return (
-    (text.includes("coupang") || text.includes("쿠팡")) &&
-    (text.includes("commission") || text.includes("파트너스") || text.includes("수수료"))
+    (text.includes("coupang") || text.includes("\uCFE0\uD321")) &&
+    (
+      text.includes("commission") ||
+      text.includes("\uD30C\uD2B8\uB108\uC2A4") ||
+      text.includes("\uC218\uC218\uB8CC")
+    )
   );
 }
 
