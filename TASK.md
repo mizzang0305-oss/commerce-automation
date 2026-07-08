@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #208 merge: `ad86fa7d2b55fcb56e5cfba7dfb02b1aae232952`
+- main HEAD after PR #207 merge: `8cbb61db4564b124c6aa5987d42fd60ec9e87a92`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -83,7 +83,7 @@ Product discovery
 - PR #208: V099 prepared asset evidence binding, `MERGED`
 - PR #208 merge commit: `ad86fa7d2b55fcb56e5cfba7dfb02b1aae232952`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_V100_CHANNEL_AUTOMATION_MVP_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V102_FIRST_VIDEO_SETTINGS_PREFLIGHT_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -96,9 +96,13 @@ Product discovery
 - Scheduler execution approval: `BLOCKED_FRESH_APPROVAL_REQUIRED`
 - V099 prepared asset evidence binding: `MERGED`
 - Private upload blocker chase: `FROZEN_FOR_CHANNEL_AUTOMATION_MVP`
-- V100 channel automation MVP: `PR_OPEN`
+- V100 channel automation MVP: `MERGED`
 - V100 operating mode: `generate_only`
 - V100 ready state target: `ready_for_manual_upload`
+- V102 first-video settings preflight tool: `READY`
+- V102 current first eligible candidate: `ABSENT`
+- V102 current blocker: `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`
+- V102 is a no-upload/no-comment owner review preflight; it is not a first-video-ready report.
 
 ## Status Legend
 
@@ -990,4 +994,33 @@ Requirements:
 
 ## Next Exact Action
 
-- Complete PR #207 P1 fixes for V100 channel automation MVP. Keep the branch no-upload and generate-only, validate channel-key persistence/filtering across mock/local/Supabase repositories, and do not apply the migration to production. After clean validation, push the PR branch for owner review.
+- Open V102 first-video settings preflight PR for owner review. The V102 tool is ready, but current local `father_jobs` data has no eligible first candidate, so runtime readiness remains blocked by `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. Keep `SAFE_TO_UPLOAD=false` and `SAFE_TO_PUBLIC_UPLOAD=false`. Next operational step after review is to create or select a first eligible channel candidate, then rerun `npm run upload:v102:first-video-settings-dry-run --silent`.
+
+### T027 - V102 First Video Settings Preflight
+
+Status: `PR_OPEN`
+
+Goal: Add a no-upload/no-comment first-video settings preflight for exactly one selected channel item before any n8n or YouTube execution.
+
+Current runtime result:
+
+- V102 preflight tool: `READY`
+- selected channel default: `father_jobs`
+- first eligible candidate: `ABSENT`
+- current blocker: `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`
+- videos.insert: `0`
+- commentThreads.insert: `false`
+- public/unlisted/private upload execution: `false`
+- scheduler execution: `false`
+- n8n webhook execution: `false`
+- raw URL/full ID/token/secret/Auth/HMAC output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- `npm run upload:v102:first-video-settings-dry-run --silent` emits sanitized JSON.
+- Report says preflight tool ready, not first video ready, when no candidate exists.
+- Exactly one selected channel item is evaluated when candidates exist.
+- Upload/comment/scheduler/n8n/storage mutations remain disabled until separate owner approval.
