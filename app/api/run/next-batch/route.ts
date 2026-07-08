@@ -111,20 +111,47 @@ export async function POST(request?: Request) {
     }
 
     const message = "Channel next-batch payload sent to n8n. Upload and comment automation remain disabled.";
-    await repository.appendRun(
-      createAutomationRun({
-        request_id: requestId,
-        n8n_run_id: n8nResult.runId,
-        http_status: n8nResult.httpStatus,
-        run_type: "channel_next_batch",
-        channelKey,
-        status: "success",
-        processed_count: selectedItems.length,
-        error_count: 0,
-        log: n8nResult.log,
-        safe_message: message
-      })
-    );
+    try {
+      await repository.appendRun(
+        createAutomationRun({
+          request_id: requestId,
+          n8n_run_id: n8nResult.runId,
+          http_status: n8nResult.httpStatus,
+          run_type: "channel_next_batch",
+          channelKey,
+          status: "success",
+          processed_count: selectedItems.length,
+          error_count: 0,
+          log: n8nResult.log,
+          safe_message: message
+        })
+      );
+    } catch {
+      const rollbackMessage =
+        "Channel next-batch run log failed after n8n accepted the request. Selected items were returned to scheduled state for manual retry.";
+      for (const item of selectedItems) {
+        await repository.updateQueueItemById(item.id, {
+          queue_status: "scheduled",
+          error_message: rollbackMessage
+        });
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          message: rollbackMessage,
+          request_id: requestId,
+          channel_key: channelKey,
+          selected_items: selectedItems.length,
+          created_jobs: 0,
+          uploadExecuteCalled: false,
+          videosInsertCalled: false,
+          commentThreadsInsertCalled: false,
+          SAFE_TO_UPLOAD: false,
+          SAFE_TO_PUBLIC_UPLOAD: false
+        },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({
       ok: true,
       message,

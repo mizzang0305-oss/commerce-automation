@@ -9,6 +9,9 @@ import type {
   PreparedVideoAssetRef
 } from "@/lib/uploads/youtube/uploadAssetContract";
 import type {
+  ChannelKey
+} from "../multi-channel/channelProfiles";
+import type {
   V073UploadPackage
 } from "../multi-channel/v073UploadPackage";
 import {
@@ -29,6 +32,9 @@ import type {
   V092PrivateUploadRequestResolver,
   V092ResolvedPrivateUploadRequest
 } from "./v092PrivateUploadExecutorBoundary";
+import {
+  resolveV098PreparedVideoAssetBridge
+} from "./v098PreparedVideoAssetBridge";
 
 export type V094UploadPackageLoader = () => Promise<V073UploadPackage[]>;
 
@@ -37,6 +43,7 @@ export type V094UploadPackageRequestResolverOptions = {
   env?: NodeJS.ProcessEnv;
   uploadAssetProfile?: string | null;
   loadUploadPackages?: V094UploadPackageLoader;
+  preparedVideoAssetRefs?: Partial<Record<ChannelKey, PreparedVideoAssetRef | null>>;
 };
 
 export type V094UploadPackageResolutionDiagnostics = {
@@ -48,6 +55,10 @@ export type V094UploadPackageResolutionDiagnostics = {
   queueItemIdMatch: boolean;
   channelKeyMatch: boolean;
   resolverPackageFound: boolean;
+  videoAssetEvidencePresent: boolean;
+  preparedAssetEvidencePresent: boolean;
+  preparedAssetServerAccessible: boolean;
+  preparedAssetUploadableUrlPresent: boolean;
   resolverUploadRequestBuilt: boolean;
   resolverBlocker: V094Blocker | null;
   uploadAssetProfileLabel: string | null;
@@ -79,6 +90,12 @@ export async function diagnoseV094UploadPackageResolution(
       uploadAssetProfile: options.uploadAssetProfile
     });
   const uploadPackage = findMatchingPackage(packages, request);
+  const preparedAssetDiagnostics = uploadPackage
+    ? resolveV098PreparedVideoAssetBridge({
+      uploadPackage,
+      preparedVideoAssetRef: options.preparedVideoAssetRefs?.[uploadPackage.channelKey] ?? null
+    })
+    : null;
   const resolved = uploadPackage
     ? await resolveV094UploadPackageRequest(request, {
       ...options,
@@ -101,6 +118,10 @@ export async function diagnoseV094UploadPackageResolution(
     queueItemIdMatch: packages.some((item) => item.queueItemId === request.queueItemId),
     channelKeyMatch: packages.some((item) => item.channelKey === request.channelKey),
     resolverPackageFound: Boolean(uploadPackage),
+    videoAssetEvidencePresent: preparedAssetDiagnostics?.videoAssetEvidencePresent ?? false,
+    preparedAssetEvidencePresent: preparedAssetDiagnostics?.preparedAssetEvidencePresent ?? false,
+    preparedAssetServerAccessible: preparedAssetDiagnostics?.preparedAssetServerAccessible ?? false,
+    preparedAssetUploadableUrlPresent: preparedAssetDiagnostics?.preparedAssetUploadableUrlPresent ?? false,
     resolverUploadRequestBuilt: Boolean(resolved && !("blocker" in resolved)),
     resolverBlocker,
     uploadAssetProfileLabel: options.uploadAssetProfile ?? env.V051_UPLOAD_ASSET_PROFILE ?? V057_REUPLOAD_ASSET_PROFILE
@@ -135,7 +156,9 @@ async function resolveV094UploadPackageRequest(
     return blocked(targetChannelBlocker);
   }
 
-  const uploadRequest = buildPrivateUploadRequest(uploadPackage);
+  const uploadRequest = buildPrivateUploadRequest(uploadPackage, {
+    preparedVideoAssetRef: options.preparedVideoAssetRefs?.[uploadPackage.channelKey] ?? null
+  });
   if ("blocker" in uploadRequest) {
     return uploadRequest;
   }
@@ -171,13 +194,23 @@ async function loadRuntimePackages(input: {
 }
 
 function buildPrivateUploadRequest(
-  uploadPackage: V073UploadPackage
+  uploadPackage: V073UploadPackage,
+  options: {
+    preparedVideoAssetRef?: PreparedVideoAssetRef | null;
+  } = {}
 ): YouTubeUploadRequest | V092BlockedPrivateUploadRequestResolution {
-  const preparedAsset = buildPreparedVideoAsset(uploadPackage);
+  const preparedAssetResult = resolveV098PreparedVideoAssetBridge({
+    uploadPackage,
+    preparedVideoAssetRef: options.preparedVideoAssetRef ?? null
+  });
+  if (!preparedAssetResult.preparedAsset) {
+    return blocked(preparedAssetResult.blocker ?? "BLOCKED_V081_VIDEO_ASSET_MISSING");
+  }
+
   const input = {
     provider: "youtube",
     candidate_id: uploadPackage.packageId,
-    prepared_video_asset: preparedAsset,
+    prepared_video_asset: preparedAssetResult.preparedAsset,
     video_path_or_url: uploadPackage.videoAsset.path,
     title: uploadPackage.youtubeMetadata.title,
     description: uploadPackage.youtubeMetadata.description,
@@ -198,22 +231,6 @@ function buildPrivateUploadRequest(
   return built.ok
     ? built.request
     : blocked(mapBuildFailureToBlocker(built.missing_reasons));
-}
-
-function buildPreparedVideoAsset(uploadPackage: V073UploadPackage): PreparedVideoAssetRef {
-  const assetUrl = isHttpsUrl(uploadPackage.videoAsset.path)
-    ? uploadPackage.videoAsset.path
-    : null;
-
-  return {
-    asset_id: uploadPackage.videoAsset.hashEvidence || uploadPackage.packageId,
-    signed_url: assetUrl,
-    prepared_video_asset_url: assetUrl,
-    mime_type: "video/mp4",
-    checksum_sha256: uploadPackage.videoAsset.hashEvidence || null,
-    provider: assetUrl ? "external_https" : "local_dev",
-    server_accessible: Boolean(assetUrl)
-  };
 }
 
 function buildDisclosureText(uploadPackage: V073UploadPackage) {
@@ -307,10 +324,6 @@ function mapBuildFailureToBlocker(missingReasons: string[]): V094Blocker {
 
 function blocked(blocker: V094Blocker): V092BlockedPrivateUploadRequestResolution {
   return { blocker };
-}
-
-function isHttpsUrl(value: string) {
-  return /^https:\/\//i.test(value.trim());
 }
 
 function trimOrNull(value: string | null | undefined) {

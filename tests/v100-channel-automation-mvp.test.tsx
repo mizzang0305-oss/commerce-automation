@@ -1,5 +1,8 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import { POST as nextBatch } from "../app/api/run/next-batch/route";
 import { GET as getQueue } from "../app/api/queue/route";
@@ -7,6 +10,14 @@ import { DashboardView } from "../src/components/DashboardView";
 import { QueueFilters } from "../src/components/QueueFilters";
 import { RunLogTable } from "../src/components/RunLogTable";
 import { resetMockRepositoryForTests, getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { createLocalJsonAutomationRepository } from "@/lib/repositories/localJsonAutomationRepository";
+import {
+  mapSupabaseAutomationRunRow,
+  mapSupabaseProductQueueRow,
+  serializeSupabaseAutomationRunForWrite,
+  serializeSupabaseProductQueueForWrite,
+  SupabaseAutomationRepository
+} from "@/lib/repositories/supabaseAutomationRepository";
 import {
   buildChannelNextBatchPayload,
   buildChannelAutomationCards,
@@ -169,6 +180,153 @@ describe("v100 channel automation MVP no-upload", () => {
     expect(response.status).toBe(200);
     expect(payload.items.length).toBeGreaterThan(0);
     expect(payload.items.every((item) => item.channelKey === "lets_buy")).toBe(true);
+  });
+
+  test("local JSON queue repository filters channelKey like the memory repository", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "commerce-v100-local-json-"));
+    try {
+      const localRepository = createLocalJsonAutomationRepository({ dataDir: tempDir });
+      const mockRepository = resetMockRepositoryForTests();
+
+      for (const channelKey of CHANNEL_AUTOMATION_KEYS) {
+        const localItems = await localRepository.getQueue({ channelKey });
+        const mockItems = await mockRepository.getQueue({ channelKey });
+
+        expect(localItems.length).toBeGreaterThan(0);
+        expect(mockItems.length).toBeGreaterThan(0);
+        expect(localItems.every((item) => item.channelKey === channelKey)).toBe(true);
+        expect(mockItems.every((item) => item.channelKey === channelKey)).toBe(true);
+      }
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("Supabase queue and run helpers map channel_key and do not write camelCase-only fields", () => {
+    const queueRow = serializeSupabaseProductQueueForWrite(queueItem("lets-queue", "lets_buy"));
+    expect(queueRow).toMatchObject({ channel_key: "lets_buy" });
+    expect(queueRow).not.toHaveProperty("channelKey");
+    expect(mapSupabaseProductQueueRow({ ...queueRow, channel_key: "lets_buy" }).channelKey).toBe("lets_buy");
+    expect(mapSupabaseProductQueueRow({ ...queueRow, channel_key: "" }).channelKey).toBe("father_jobs");
+
+    const run = serializeSupabaseAutomationRunForWrite({
+      id: "run-channel",
+      request_id: "req-channel",
+      run_type: "channel_next_batch",
+      status: "success",
+      processed_count: 1,
+      error_count: 0,
+      started_at: "2026-07-08T00:00:00.000Z",
+      finished_at: "2026-07-08T00:00:01.000Z",
+      log: "safe",
+      safe_message: "safe",
+      channelKey: "neoman_moleulgeol"
+    });
+    expect(run).toMatchObject({ channel_key: "neoman_moleulgeol" });
+    expect(run).not.toHaveProperty("channelKey");
+    expect(mapSupabaseAutomationRunRow(run).channelKey).toBe("neoman_moleulgeol");
+  });
+
+  test("Supabase queue repository applies channel_key condition for channelKey filters", async () => {
+    const eqCalls: Array<{ column: string; value: unknown }> = [];
+    const client = {
+      from(table: string) {
+        expect(table).toBe("product_queue");
+        return {
+          select() {
+            const builder = {
+              eq(column: string, value: unknown) {
+                eqCalls.push({ column, value });
+                return builder;
+              },
+              async order(column: string, options: Record<string, unknown>) {
+                expect(column).toBe("queue_rank");
+                expect(options).toEqual({ ascending: true });
+                return { data: [], error: null };
+              }
+            };
+            return builder;
+          }
+        };
+      }
+    };
+    const repository = new SupabaseAutomationRepository({ client: client as never });
+
+    await repository.getQueue({ channelKey: "neoman_moleulgeol" });
+
+    expect(eqCalls).toEqual([{ column: "channel_key", value: "neoman_moleulgeol" }]);
+  });
+
+  test("channel next-batch no-due branch writes a channel run log without upload mutation", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 2 });
+    const fatherItems = await repository.getQueue({ channelKey: "father_jobs" });
+    for (const item of fatherItems) {
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "scheduled",
+        scheduled_at: "2099-07-08T00:00:00.000Z"
+      });
+    }
+
+    const response = await nextBatch(
+      new Request("http://localhost/api/run/next-batch?channelKey=father_jobs", { method: "POST" })
+    );
+    const payload = await response.json() as Record<string, unknown>;
+    const runs = await repository.getRuns();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      channel_key: "father_jobs",
+      selected_items: 0,
+      created_jobs: 0,
+      uploadExecuteCalled: false,
+      videosInsertCalled: false,
+      commentThreadsInsertCalled: false
+    });
+    expect(runs[0]).toMatchObject({ run_type: "channel_next_batch", status: "success", channelKey: "father_jobs" });
+  });
+
+  test("channel next-batch rolls selected items back when run log append fails after webhook success", async () => {
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const item = (await repository.getQueue({ channelKey: "father_jobs" }))[0];
+    await repository.updateQueueItemById(item.id, {
+      queue_status: "scheduled",
+      scheduled_at: "2026-07-07T00:00:00.000Z",
+      error_message: ""
+    });
+    process.env.N8N_NEXT_BATCH_WEBHOOK_URL = RAW_WEBHOOK_URL;
+    process.env.N8N_WEBHOOK_SECRET = RAW_SECRET;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, run_id: "n8n-v100", processed_count: 1, error_count: 0 }), {
+        status: 200
+      })
+    );
+    vi.spyOn(repository, "appendRun").mockRejectedValueOnce(new Error("append failed"));
+
+    const response = await nextBatch(
+      new Request("http://localhost/api/run/next-batch?channelKey=father_jobs", { method: "POST" })
+    );
+    const payload = await response.json() as Record<string, unknown>;
+    const updated = await repository.getQueueItem(item.id);
+
+    expect(response.status).toBe(500);
+    expect(payload).toMatchObject({
+      ok: false,
+      channel_key: "father_jobs",
+      selected_items: 1,
+      created_jobs: 0,
+      uploadExecuteCalled: false,
+      videosInsertCalled: false,
+      commentThreadsInsertCalled: false,
+      SAFE_TO_UPLOAD: false,
+      SAFE_TO_PUBLIC_UPLOAD: false
+    });
+    expect(updated?.queue_status).toBe("scheduled");
+    expect(updated?.error_message).toContain("run log failed");
+    expect(JSON.stringify(payload)).not.toContain(RAW_WEBHOOK_URL);
+    expect(JSON.stringify(payload)).not.toContain(RAW_SECRET);
   });
 
   test("dashboard channel cards expose manual-upload readiness without upload controls", () => {

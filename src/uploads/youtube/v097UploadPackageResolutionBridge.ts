@@ -1,5 +1,6 @@
 import type { ChannelKey } from "../multi-channel/channelProfiles";
 import { V057_REUPLOAD_ASSET_PROFILE } from "../multi-channel/v057ReuploadAssetBinding";
+import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 import type { V094UploadPackageLoader } from "./v094UploadPackageRequestResolutionCore";
 import {
   diagnoseV094UploadPackageResolution
@@ -26,6 +27,10 @@ export type V097UploadPackageResolutionDryRunReport = {
   v081UploadPackageIdPresent: boolean;
   v081QueueItemIdPresent: boolean;
   resolverPackageFound: boolean;
+  videoAssetEvidencePresent: boolean;
+  preparedAssetEvidencePresent: boolean;
+  preparedAssetServerAccessible: boolean;
+  preparedAssetUploadableUrlPresent: boolean;
   resolverUploadRequestBuilt: boolean;
   resolverBlocker: string | null;
   packageCount: number;
@@ -59,6 +64,7 @@ export type V097UploadPackageResolutionDryRunInput = {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   loadUploadPackages?: V094UploadPackageLoader;
+  preparedVideoAssetRefs?: Partial<Record<ChannelKey, PreparedVideoAssetRef | null>>;
 };
 
 export async function buildV097UploadPackageResolutionDryRun(
@@ -84,7 +90,8 @@ export async function buildV097UploadPackageResolutionDryRun(
     cwd,
     env: safeEnv,
     uploadAssetProfile: safeEnv.V051_UPLOAD_ASSET_PROFILE ?? V057_REUPLOAD_ASSET_PROFILE,
-    loadUploadPackages: input.loadUploadPackages
+    loadUploadPackages: input.loadUploadPackages,
+    preparedVideoAssetRefs: input.preparedVideoAssetRefs
   });
   const contextPathSafe = !context.blockers.includes("BLOCKED_V084_EXECUTION_CONTEXT_PATH_UNSAFE");
   const resolverReady = diagnostics.resolverPackageFound &&
@@ -103,6 +110,10 @@ export async function buildV097UploadPackageResolutionDryRun(
     v081UploadPackageIdPresent: diagnostics.packageIdPresent,
     v081QueueItemIdPresent: diagnostics.queueItemIdPresent,
     resolverPackageFound: diagnostics.resolverPackageFound,
+    videoAssetEvidencePresent: diagnostics.videoAssetEvidencePresent,
+    preparedAssetEvidencePresent: diagnostics.preparedAssetEvidencePresent,
+    preparedAssetServerAccessible: diagnostics.preparedAssetServerAccessible,
+    preparedAssetUploadableUrlPresent: diagnostics.preparedAssetUploadableUrlPresent,
     resolverUploadRequestBuilt: diagnostics.resolverUploadRequestBuilt,
     resolverBlocker: diagnostics.resolverBlocker,
     packageCount: diagnostics.packageCount,

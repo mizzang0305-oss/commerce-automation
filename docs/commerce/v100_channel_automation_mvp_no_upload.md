@@ -54,8 +54,28 @@ When `channelKey` is provided, V100 uses the channel path:
 7. Mark selected items `processing`.
 8. Send a sanitized n8n payload with `channel_key`, settings, and selected item evidence.
 9. On webhook failure, roll selected items back to `scheduled`.
+10. If the webhook succeeds but the channel run log cannot be written, roll selected items back to `scheduled` and return a blocked safe response instead of fake success.
 
 The V100 path does not create worker jobs and does not call any YouTube upload or comment mutation.
+
+## P1 Review Fixes
+
+V100 persists channel identity as snake_case database evidence:
+
+- `product_queue.channel_key`
+- `automation_runs.channel_key`
+
+The Supabase repository maps `channel_key` to the TypeScript `channelKey` field on read, and serializes `channelKey` back to `channel_key` on writes. It does not upsert unknown camelCase `channelKey` fields into Supabase.
+
+Queue filtering is channel-scoped across mock, local JSON, and Supabase repositories. Supabase applies `eq("channel_key", channelKey)` before returning queue rows; local JSON now filters by `channelKey` like the in-memory repository.
+
+Legacy product queue rows that do not have channel evidence default to `father_jobs` for backward compatibility. Automation run rows keep `channelKey` optional because historical run rows may not have channel evidence.
+
+The schema change is included as a migration file only:
+
+- `supabase/migrations/010_channel_automation_channel_keys.sql`
+
+No production migration apply is part of this no-upload PR.
 
 ## Dashboard
 
