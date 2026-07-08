@@ -1028,3 +1028,54 @@ Acceptance:
 - Ready gate is based on real V073 package metadata/assets/comment/target/guard/resultStore fields, not fixture-only fields.
 - Fallback selector only chooses `queue_status=manual_review` after due scheduled and `ready_for_manual_upload` candidates are absent.
 - Upload/comment/scheduler/n8n/storage mutations remain disabled until separate owner approval.
+
+## Current Blocker
+
+- `PR_OPEN_V103_EVENT_BASED_CANDIDATE_SCOUT_30D_NO_UPLOAD_REVIEW`
+- PR #209 is merged and V102 is on main.
+- V102 preflight tool is ready, but current local `father_jobs` data has no eligible first candidate.
+- V103 adds a no-upload event-based 30-day candidate scout so the first candidate is selected automatically from seasonal/event context instead of manual picking.
+- V103 remains dry-run/memory-fixture only; it does not write queue/DB rows.
+- Public upload remains blocked.
+- Private upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- n8n webhook execution remains blocked.
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+## Next Exact Action
+
+- Review PR for V103 event-based candidate scout. After merge, rerun `npm run automation:v103:event-candidate-scout --silent` and confirm V102 linked dry-run reaches `selectedItemFound=true` while upload/comment/scheduler stay blocked.
+
+### T028 - V103 Event Based Candidate Scout 30D
+
+Status: `PR_OPEN`
+
+Goal: Generate channel-specific first-video candidates automatically from Korean seasonal/event context inside a 30-day window, without DB writes or upload/comment execution.
+
+Current dry-run result:
+
+- event window: system date or `V103_SCOUT_TODAY`, 30 days ahead.
+- channel candidates: generated for `father_jobs`, `neoman_moleulgeol`, and `lets_buy`.
+- selected first candidate: automatic `father_jobs` event candidate.
+- V102 linked dry-run: reaches `selectedItemFound=true`.
+- current downstream blocker: expected settings/package/asset blocker, not `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`.
+- videos.insert: `0`
+- commentThreads.insert: `false`
+- DB write: `false`
+- n8n webhook: `false`
+- raw URL/full ID/token/secret/Auth/HMAC output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- Fixed date `2026-07-09` creates 30-day event candidates.
+- Boknal/heatwave/vacation/school-break candidates score above Constitution Day.
+- `father_jobs` first candidate is selected automatically.
+- Selected candidate can be passed to V102 memory fixture with `selectedItemFound=true`.
+- No DB write, n8n webhook, videos.insert, commentThreads.insert, or scheduler execution.
+- No raw URL/full ID/secret output.
+- Liberation Day outside 30-day direct window appears only as lower-scored prep candidate.
