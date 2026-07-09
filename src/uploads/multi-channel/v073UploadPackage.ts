@@ -33,7 +33,7 @@ export type V073UploadPackage = {
     productName: string;
     sourceKind: V073UploadPackageProductSourceKind;
     sourceEvidenceHash: string;
-    runtimeSourceApproved: true;
+    runtimeSourceApproved: boolean;
   };
   deeplink: {
     selectedAffiliateUrl: string | null;

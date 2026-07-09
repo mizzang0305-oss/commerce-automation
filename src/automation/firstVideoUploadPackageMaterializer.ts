@@ -300,6 +300,7 @@ function buildMaterializedUploadPackage(input: {
   const firstFrameHash = hashEvidence(`v108:${input.selectedChannelKey}:${input.selectedItem.id}:first-frame`).slice(0, 10);
   const selectedAffiliateUrl = input.selectedItem.selected_affiliate_url.trim() || null;
   const affiliateHashPrefix = selectedAffiliateUrl ? hashPrefix(selectedAffiliateUrl) : null;
+  const productSourceApproved = isHttpsCoupangProductUrl(input.selectedItem.raw_coupang_url);
   const packageId = `pkg-v108-${input.selectedItem.id}`;
   const safeProductName = sanitizeLabel(input.selectedItem.product_name) ?? "selected product";
   const safeTheme = sanitizeLabel(input.selectedItem.theme) ?? "first video";
@@ -325,7 +326,7 @@ function buildMaterializedUploadPackage(input: {
       productName: input.selectedItem.product_name,
       sourceKind: "product_queue_item",
       sourceEvidenceHash,
-      runtimeSourceApproved: true
+      runtimeSourceApproved: productSourceApproved
     },
     deeplink: {
       selectedAffiliateUrl,
