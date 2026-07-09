@@ -64,6 +64,7 @@
     "automation:v104:event-candidate-to-queue": "tsx scripts/automation/run-v104-event-candidate-to-queue.ts",
     "automation:v105:queue-to-generate-only-next-batch": "tsx scripts/automation/run-v105-queue-to-generate-only-next-batch.ts",
     "automation:v106:upload-package-evidence": "tsx scripts/automation/run-v106-upload-package-evidence.ts",
+    "automation:v107:owner-review-table": "tsx scripts/automation/run-v107-owner-review-table.ts",
     "upload:v084:focused": "vitest run tests/v084-private-upload-execution-invocation-path.test.ts",
     "upload:v085:focused": "vitest run tests/v085-private-pilot-input-binding.test.ts",
     "upload:v087:focused": "vitest run tests/v087-authoritative-product-source-binding.test.ts",

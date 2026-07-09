@@ -85,8 +85,10 @@ Product discovery
 - PR #209: V102 first-video settings preflight, `MERGED`
 - PR #210: V103 event-based candidate scout, `MERGED`
 - PR #211: V104 event candidate to queue materialization, `MERGED`
+- PR #212: V105 queue-to-generate-only next-batch planner, `MERGED`
+- PR #213: V106 upload package affiliate and asset evidence, `MERGED`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V107_OWNER_REVIEW_FIRST_VIDEO_SETTINGS_TABLE_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -1151,6 +1153,7 @@ Acceptance:
 - V105 reads local/mock queue items and builds a sanitized generate-only next-batch payload.
 - V105 planned payload label sanitization removes URL, full channel ID, token/secret/Auth/HMAC/key-like values, and local paths before `plannedPayloadSanitized=true`.
 - V106 adds a no-upload evidence probe from the V105 selected queue item to matching upload package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence.
+- V107 adds an owner-review first-video settings table that combines V102, V105, and V106 results without upload/comment/scheduler/n8n/storage execution.
 - PR #213 P2 fix hardens the V106 prepared asset final gate: URL/server booleans alone are not sufficient; V099 binding ready, V098 bridge ready/no-blocker, provider policy, expiry, uploadability, and prepared asset hash evidence are required.
 - Current V106 runtime blocker: `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`.
 - V105/V106 do not call the real `/api/run/next-batch` route and do not call n8n.
@@ -1166,10 +1169,11 @@ Acceptance:
 - `commentThreads.insert=false`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
+- V107 status: `PR_OPEN`
 
 ## Next Exact Action
 
-- Review PR for V106 upload package affiliate and asset evidence probing. After merge, proceed to `V107_OWNER_REVIEW_FIRST_VIDEO_SETTINGS_TABLE_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage.
+- Review PR for V107 owner-review first-video settings table. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. After merge, use the owner table to decide whether to create or attach the missing first-video upload package evidence.
 
 ### T030 - V105 Queue To Generate-Only Next Batch No-Upload
 
@@ -1213,7 +1217,7 @@ Acceptance:
 
 ### T031 - V106 Upload Package Affiliate And Asset Evidence No-Upload
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Probe whether the V105 selected queue item has matching upload package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence without executing upload, comment, scheduler, n8n, DB, Supabase, R2, storage, or product asset writes.
 
@@ -1253,3 +1257,46 @@ Acceptance:
 - All evidence present reports `SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD` while keeping `SAFE_TO_UPLOAD=false`.
 - No raw affiliate/Coupang URL, signed URL, full video/channel ID, token, secret, Auth, HMAC, or local absolute path is printed.
 - No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.
+
+### T032 - V107 Owner Review First Video Settings Table No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Combine V102 first-video settings, V105 generate-only selection, and V106 upload package/evidence results into one sanitized owner-review table.
+
+Current runtime result:
+
+- selected channel default: `father_jobs`
+- selected queue item: found from V105 generate-only planning when local/mock queue data is present.
+- V102 first-video preflight input is constrained to the V105 selected queue item only; V102 must not scan the full queue and select a different manual-review row.
+- V102/V105/V106 source item consistency is reported with `v102SelectedItemShortId`, `v106SelectedItemShortId`, `v102InputConstrainedToSelectedItem`, `v102SelectedItemMatchesV105`, `v106SelectedItemMatchesV105`, and `sourceItemConsistency`.
+- owner-review table status: `SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD` when rows are generated.
+- current evidence blocker remains sourced from V106/V102, commonly `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD` until a matching upload package exists.
+- source item mismatch reports `BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
+- `V107_MODE=execute` is fail-closed with `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
+- `n8nWebhookCalled=false`
+- `uploadExecutionAllowed=false`
+- `videosInsertCalled=false`
+- `videosInsertTotalCount=0`
+- `commentThreadsInsertCalled=false`
+- `schedulerExecutionCalled=false`
+- `DB_write=false`
+- `Supabase_write=false`
+- `R2_upload=false`
+- `storage_write=false`
+- raw URL/full ID/token/secret/Auth/HMAC/signed URL/local absolute path output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- Table includes selection, queue, source report, package, YouTube settings, asset, prepared asset, current blocker, and safety rows.
+- Table includes a `Source item consistency` row tying V102, V105, and V106 to the same selected queue item.
+- Table values are sanitized labels, booleans, blocker names, or hash prefixes only.
+- Table success is owner-review readiness only, not upload readiness.
+- Missing selected queue item reports `BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`.
+- V102/V106 source mismatch against the V105 selected item reports `BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
+- Missing required rows/table reports `BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD`.
+- Execute mode reports `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
+- No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
