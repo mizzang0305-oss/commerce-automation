@@ -115,6 +115,63 @@ describe("v106 upload package affiliate and asset evidence no-upload", () => {
     expect(report.preparedHttpsAssetEvidencePresent).toBe(false);
     expect(report.preparedAssetServerAccessible).toBe(false);
     expect(report.preparedAssetHashPrefix).toBe("videoasset");
+    expect(report.preparedAssetBindingReady).toBe(false);
+    expect(report.preparedAssetBridgeReady).toBe(false);
+    expect(report.preparedAssetBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+    expect(report.preparedAssetProviderAllowed).toBe(false);
+    expect(report.preparedAssetExpired).toBeNull();
+    expect(report.preparedAssetUploadable).toBe(false);
+    expectNoSideEffects(report);
+  });
+
+  test("blocks when prepared URL booleans are true but V099 binding is not ready", async () => {
+    const queue = queueItem();
+    const report = await buildV106UploadPackageEvidenceReport({
+      queueItems: [queue],
+      uploadPackages: [uploadPackage({ queueItemId: queue.id })],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef({
+          provider: "local_dev",
+          server_accessible: true
+        })
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD");
+    expect(report.preparedHttpsAssetEvidencePresent).toBe(true);
+    expect(report.preparedAssetServerAccessible).toBe(true);
+    expect(report.preparedAssetBindingReady).toBe(false);
+    expect(report.preparedAssetBridgeReady).toBe(false);
+    expect(report.preparedAssetBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+    expect(report.preparedAssetProviderAllowed).toBe(false);
+    expect(report.preparedAssetExpired).toBe(false);
+    expect(report.preparedAssetUploadable).toBe(false);
+    expectNoSideEffects(report);
+  });
+
+  test("blocks expired prepared assets even when URL and server evidence are present", async () => {
+    const queue = queueItem();
+    const report = await buildV106UploadPackageEvidenceReport({
+      queueItems: [queue],
+      uploadPackages: [uploadPackage({ queueItemId: queue.id })],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef({
+          expires_at: "2000-01-01T00:00:00.000Z"
+        })
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD");
+    expect(report.preparedHttpsAssetEvidencePresent).toBe(true);
+    expect(report.preparedAssetServerAccessible).toBe(true);
+    expect(report.preparedAssetBindingReady).toBe(false);
+    expect(report.preparedAssetBridgeReady).toBe(false);
+    expect(report.preparedAssetBlocker).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING");
+    expect(report.preparedAssetProviderAllowed).toBe(true);
+    expect(report.preparedAssetExpired).toBe(true);
+    expect(report.preparedAssetUploadable).toBe(false);
     expectNoSideEffects(report);
   });
 
@@ -142,6 +199,12 @@ describe("v106 upload package affiliate and asset evidence no-upload", () => {
     expect(report.affiliateEvidenceHashPrefix).toBe("affiliate");
     expect(report.preparedHttpsAssetEvidencePresent).toBe(true);
     expect(report.preparedAssetServerAccessible).toBe(true);
+    expect(report.preparedAssetBindingReady).toBe(true);
+    expect(report.preparedAssetBridgeReady).toBe(true);
+    expect(report.preparedAssetBlocker).toBeNull();
+    expect(report.preparedAssetProviderAllowed).toBe(true);
+    expect(report.preparedAssetExpired).toBe(false);
+    expect(report.preparedAssetUploadable).toBe(true);
     expect(report.SAFE_TO_UPLOAD).toBe(false);
     expect(report.SAFE_TO_PUBLIC_UPLOAD).toBe(false);
     expectNoSideEffects(report);
@@ -322,7 +385,9 @@ function uploadPackage(input: {
   };
 }
 
-function preparedVideoAssetRef(): PreparedVideoAssetRef {
+function preparedVideoAssetRef(
+  overrides: Partial<PreparedVideoAssetRef> = {}
+): PreparedVideoAssetRef {
   return {
     asset_id: "prepared-v106",
     signed_url: RAW_SIGNED_URL,
@@ -332,7 +397,8 @@ function preparedVideoAssetRef(): PreparedVideoAssetRef {
     checksum_sha256: "videoassetprepared",
     expires_at: "2099-01-01T00:00:00.000Z",
     provider: "signed_https",
-    server_accessible: true
+    server_accessible: true,
+    ...overrides
   };
 }
 

@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import type {
+  PreparedVideoAssetProvider,
+  PreparedVideoAssetRef
+} from "@/lib/uploads/youtube/uploadAssetContract";
 import type { ProductQueueItem } from "@/types/automation";
 import type { ChannelKey } from "@/uploads/multi-channel/channelProfiles";
 import { isChannelKey } from "@/uploads/multi-channel/channelProfiles";
@@ -16,6 +19,8 @@ import {
 } from "./queueToGenerateOnlyNextBatchPlanner";
 
 export type V106UploadPackageEvidenceMode = "dry_run" | "execute";
+
+export type V106PreparedAssetBlocker = "BLOCKED_V081_VIDEO_ASSET_MISSING";
 
 export type V106UploadPackageEvidenceFinalStatus =
   | "SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD"
@@ -56,6 +61,12 @@ export type V106UploadPackageEvidenceReport = {
   preparedHttpsAssetEvidencePresent: boolean;
   preparedAssetServerAccessible: boolean;
   preparedAssetHashPrefix: string | null;
+  preparedAssetBindingReady: boolean;
+  preparedAssetBridgeReady: boolean;
+  preparedAssetBlocker: V106PreparedAssetBlocker | null;
+  preparedAssetProviderAllowed: boolean;
+  preparedAssetExpired: boolean | null;
+  preparedAssetUploadable: boolean;
   uploadExecutionAllowed: false;
   videosInsertCalled: false;
   videosInsertTotalCount: 0;
@@ -89,6 +100,14 @@ export type V106UploadPackageEvidenceInput = {
   loadUploadPackages?: () => Promise<V073UploadPackage[]>;
   preparedVideoAssetRefs?: Partial<Record<ChannelKey, PreparedVideoAssetRef | null>>;
 };
+
+const V106_ALLOWED_PREPARED_ASSET_PROVIDERS = new Set<PreparedVideoAssetProvider>([
+  "external_https",
+  "signed_url",
+  "signed_https",
+  "r2_signed_url",
+  "supabase_signed_url"
+]);
 
 export async function buildV106UploadPackageEvidenceReport(
   input: V106UploadPackageEvidenceInput = {}
@@ -190,6 +209,12 @@ function summarizeUploadPackageEvidence(input: {
   | "preparedHttpsAssetEvidencePresent"
   | "preparedAssetServerAccessible"
   | "preparedAssetHashPrefix"
+  | "preparedAssetBindingReady"
+  | "preparedAssetBridgeReady"
+  | "preparedAssetBlocker"
+  | "preparedAssetProviderAllowed"
+  | "preparedAssetExpired"
+  | "preparedAssetUploadable"
 > {
   const uploadPackage = input.uploadPackage;
   if (!uploadPackage) {
@@ -211,7 +236,13 @@ function summarizeUploadPackageEvidence(input: {
       firstFrameHashPrefix: null,
       preparedHttpsAssetEvidencePresent: false,
       preparedAssetServerAccessible: false,
-      preparedAssetHashPrefix: null
+      preparedAssetHashPrefix: null,
+      preparedAssetBindingReady: false,
+      preparedAssetBridgeReady: false,
+      preparedAssetBlocker: "BLOCKED_V081_VIDEO_ASSET_MISSING",
+      preparedAssetProviderAllowed: false,
+      preparedAssetExpired: null,
+      preparedAssetUploadable: false
     };
   }
 
@@ -223,6 +254,23 @@ function summarizeUploadPackageEvidence(input: {
     uploadPackage,
     preparedVideoAssetRef: input.preparedVideoAssetRef
   });
+  const preparedAssetBridgeReady = Boolean(
+    preparedBridge.preparedAsset &&
+    preparedBridge.blocker === null
+  );
+  const preparedAssetProviderAllowed = isPreparedAssetProviderAllowed(
+    preparedBinding.preparedAssetProviderLabel
+  );
+  const preparedAssetBlocker = preparedBridge.blocker ?? preparedBinding.blocker;
+  const preparedAssetUploadable = Boolean(
+    preparedBridge.preparedAssetUploadableUrlPresent &&
+    preparedBridge.preparedAssetServerAccessible &&
+    preparedBinding.ready &&
+    preparedAssetBridgeReady &&
+    preparedAssetProviderAllowed &&
+    preparedBinding.preparedAssetExpired !== true &&
+    preparedBinding.preparedAssetHashPrefix
+  );
 
   return {
     uploadPackageFound: true,
@@ -255,7 +303,13 @@ function summarizeUploadPackageEvidence(input: {
     firstFrameHashPrefix: safeHashPrefix(uploadPackage.videoAsset.firstFrameHashEvidence),
     preparedHttpsAssetEvidencePresent: preparedBridge.preparedAssetUploadableUrlPresent,
     preparedAssetServerAccessible: preparedBridge.preparedAssetServerAccessible,
-    preparedAssetHashPrefix: preparedBinding.preparedAssetHashPrefix
+    preparedAssetHashPrefix: preparedBinding.preparedAssetHashPrefix,
+    preparedAssetBindingReady: preparedBinding.ready,
+    preparedAssetBridgeReady,
+    preparedAssetBlocker,
+    preparedAssetProviderAllowed,
+    preparedAssetExpired: preparedBinding.preparedAssetExpired,
+    preparedAssetUploadable
   };
 }
 
@@ -269,6 +323,13 @@ function resolveFinalStatus(
     | "firstFrameEvidencePresent"
     | "preparedHttpsAssetEvidencePresent"
     | "preparedAssetServerAccessible"
+    | "preparedAssetHashPrefix"
+    | "preparedAssetBindingReady"
+    | "preparedAssetBridgeReady"
+    | "preparedAssetBlocker"
+    | "preparedAssetProviderAllowed"
+    | "preparedAssetExpired"
+    | "preparedAssetUploadable"
     | "titlePresent"
     | "descriptionPresent"
     | "tagsPresent"
@@ -285,7 +346,14 @@ function resolveFinalStatus(
     !evidence.videoAssetEvidencePresent ||
     !evidence.firstFrameEvidencePresent ||
     !evidence.preparedHttpsAssetEvidencePresent ||
-    !evidence.preparedAssetServerAccessible
+    !evidence.preparedAssetServerAccessible ||
+    !evidence.preparedAssetHashPrefix ||
+    !evidence.preparedAssetBindingReady ||
+    !evidence.preparedAssetBridgeReady ||
+    evidence.preparedAssetBlocker !== null ||
+    !evidence.preparedAssetProviderAllowed ||
+    evidence.preparedAssetExpired === true ||
+    !evidence.preparedAssetUploadable
   ) {
     return "BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD";
   }
@@ -385,6 +453,12 @@ function baseSafeReport(input: {
     preparedHttpsAssetEvidencePresent: false,
     preparedAssetServerAccessible: false,
     preparedAssetHashPrefix: null,
+    preparedAssetBindingReady: false,
+    preparedAssetBridgeReady: false,
+    preparedAssetBlocker: null,
+    preparedAssetProviderAllowed: false,
+    preparedAssetExpired: null,
+    preparedAssetUploadable: false,
     uploadExecutionAllowed: false,
     videosInsertCalled: false,
     videosInsertTotalCount: 0,
@@ -418,6 +492,10 @@ function resolveMode(value: unknown): V106UploadPackageEvidenceMode {
 function getQueuePath(cwd: string, env: NodeJS.ProcessEnv) {
   const dataDir = path.resolve(cwd, env.AUTOMATION_DATA_DIR || "./data");
   return path.join(dataDir, "queue.json");
+}
+
+function isPreparedAssetProviderAllowed(value: string | null) {
+  return V106_ALLOWED_PREPARED_ASSET_PROVIDERS.has(value as PreparedVideoAssetProvider);
 }
 
 function isProductQueueItem(value: unknown): value is ProductQueueItem {

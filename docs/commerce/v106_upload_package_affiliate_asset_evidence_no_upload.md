@@ -38,16 +38,24 @@ V106 reports only booleans and hash prefixes:
 - `preparedHttpsAssetEvidencePresent`
 - `preparedAssetServerAccessible`
 - `preparedAssetHashPrefix`
+- `preparedAssetBindingReady`
+- `preparedAssetBridgeReady`
+- `preparedAssetBlocker`
+- `preparedAssetProviderAllowed`
+- `preparedAssetExpired`
+- `preparedAssetUploadable`
+
+Prepared asset success is not based on URL and server-accessible booleans alone. V106 also requires the V099 binding to be ready, the V098 bridge to have no blocker, a hash prefix to be present, the provider policy to be allowed, and the prepared asset to be non-expired/uploadable.
 
 ## Blocker Policy
 
 | Status | Meaning |
 | --- | --- |
-| `SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD` | Package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence are present. |
+| `SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD` | Package, affiliate, disclosure, video, first-frame, V099 binding-ready, and V098 bridge-ready prepared asset evidence are present. |
 | `BLOCKED_V105_NO_QUEUE_ITEM_FOR_NEXT_BATCH_NO_UPLOAD` | V105 cannot select a queue item. |
 | `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD` | No matching upload package exists for the selected queue item. |
 | `BLOCKED_V106_AFFILIATE_OR_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD` | Affiliate or Coupang Partners disclosure evidence is missing. |
-| `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD` | Video, first-frame, prepared HTTPS, or server-accessible asset evidence is missing. |
+| `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD` | Video, first-frame, prepared HTTPS, server-accessible, V099 binding, V098 bridge, provider, expiry, uploadability, or prepared asset hash evidence is missing or blocked. |
 | `BLOCKED_V106_SETTINGS_EVIDENCE_INCOMPLETE_NO_UPLOAD` | Title, description, tags, or category evidence is incomplete. |
 | `BLOCKED_V106_EXECUTE_NOT_APPROVED_NO_UPLOAD` | `V106_MODE=execute` was requested and blocked. |
 
@@ -57,6 +65,8 @@ Even if every evidence field is present, V106 keeps:
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - `videosInsertCalled=false`
 - `commentThreadsInsertCalled=false`
+
+Expired prepared assets, `local_dev` provider evidence, non-uploadable provider evidence, or any V098/V099 prepared asset blocker remain `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`. V106 never prints raw signed URLs or local asset paths while reporting those blockers.
 
 ## Redaction
 

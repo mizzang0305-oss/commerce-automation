@@ -1151,6 +1151,7 @@ Acceptance:
 - V105 reads local/mock queue items and builds a sanitized generate-only next-batch payload.
 - V105 planned payload label sanitization removes URL, full channel ID, token/secret/Auth/HMAC/key-like values, and local paths before `plannedPayloadSanitized=true`.
 - V106 adds a no-upload evidence probe from the V105 selected queue item to matching upload package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence.
+- PR #213 P2 fix hardens the V106 prepared asset final gate: URL/server booleans alone are not sufficient; V099 binding ready, V098 bridge ready/no-blocker, provider policy, expiry, uploadability, and prepared asset hash evidence are required.
 - Current V106 runtime blocker: `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`.
 - V105/V106 do not call the real `/api/run/next-batch` route and do not call n8n.
 - `V105_MODE=execute` remains blocked with `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
@@ -1245,10 +1246,10 @@ Acceptance:
 - V106 uses the V105 selected queue item as source of truth.
 - Matching upload package requires same `channelKey` and queue item id.
 - Affiliate and Coupang Partners disclosure evidence are reported as booleans/hash prefixes only.
-- Video asset, first-frame, prepared HTTPS asset, and server-accessible evidence are reported as booleans/hash prefixes only.
+- Video asset, first-frame, prepared HTTPS asset, server-accessible evidence, V099 binding readiness, V098 bridge readiness/blocker, provider policy, expiry, uploadability, and prepared asset hash evidence are reported as sanitized booleans/enums/hash prefixes only.
 - Missing upload package reports `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`.
 - Missing affiliate/disclosure reports `BLOCKED_V106_AFFILIATE_OR_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD`.
-- Missing video/first-frame/prepared asset evidence reports `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`.
+- Missing video/first-frame/prepared asset evidence, expired prepared assets, `local_dev` provider evidence, non-uploadable provider evidence, or any V098/V099 prepared asset blocker reports `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`.
 - All evidence present reports `SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD` while keeping `SAFE_TO_UPLOAD=false`.
 - No raw affiliate/Coupang URL, signed URL, full video/channel ID, token, secret, Auth, HMAC, or local absolute path is printed.
 - No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.
