@@ -88,7 +88,15 @@ Product discovery
 - PR #212: V105 queue-to-generate-only next-batch planner, `MERGED`
 - PR #213: V106 upload package affiliate and asset evidence, `MERGED`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_V107_OWNER_REVIEW_FIRST_VIDEO_SETTINGS_TABLE_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V108_FIRST_VIDEO_UPLOAD_PACKAGE_MATERIALIZER_NO_UPLOAD_REVIEW`
+- PR #215 V108 safety fix: `IN_PROGRESS`
+- V108 package skeleton privacy: `PRIVATE_ONLY`
+- V108 public default: `BLOCKED`
+- V108 unlisted default: `BLOCKED`
+- V108 product source guard: `VALID_HTTPS_COUPANG_PRODUCT_URL_REQUIRED`
+- V108 stale matching package policy: `MATERIALIZED_SKELETON_REPLACES_MATCHING_STALE_PACKAGE`
+- V108 videos.insert: `0`
+- V108 commentThreads.insert: `false`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -1260,7 +1268,7 @@ Acceptance:
 
 ### T032 - V107 Owner Review First Video Settings Table No-Upload
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Combine V102 first-video settings, V105 generate-only selection, and V106 upload package/evidence results into one sanitized owner-review table.
 
@@ -1300,3 +1308,50 @@ Acceptance:
 - Missing required rows/table reports `BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD`.
 - Execute mode reports `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
 - No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
+
+### T033 - V108 First Video Upload Package Materializer No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Materialize an in-memory V073/V106-compatible first-video upload package evidence object from the V107 selected queue item without upload, comment, scheduler, webhook, DB, Supabase, R2, storage, or product asset writes.
+
+Current runtime expectation:
+
+- selected channel default: `father_jobs`
+- source authority: V107 selected queue item and source consistency
+- V108 default mode: `dry_run`
+- local write mode: `BLOCKED_V108_LOCAL_WRITE_NOT_APPROVED_NO_UPLOAD`
+- execute mode: `BLOCKED_V108_EXECUTE_NOT_APPROVED_NO_UPLOAD`
+- package materialization is in-memory only
+- package report exposes hash prefixes and booleans only
+- current blocker moves from `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD` to the next concrete blocker:
+  - `BLOCKED_V108_AFFILIATE_OR_DISCLOSURE_MISSING_NO_UPLOAD`
+  - or `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`
+  - or `SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD` when all evidence is present
+- `videosInsertCalled=false`
+- `videosInsertTotalCount=0`
+- `commentThreadsInsertCalled=false`
+- `n8nWebhookCalled=false`
+- `schedulerExecutionCalled=false`
+- `DB_write=false`
+- `Supabase_write=false`
+- `R2_upload=false`
+- `storage_write=false`
+- raw URL/full ID/token/secret/Auth/HMAC/signed URL/local absolute path output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- Missing selected queue item reports `BLOCKED_V108_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`.
+- Source mismatch reports `BLOCKED_V108_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
+- Package skeleton must match the selected queue item and channel.
+- Missing affiliate/disclosure reports `BLOCKED_V108_AFFILIATE_OR_DISCLOSURE_MISSING_NO_UPLOAD`.
+- Missing prepared uploadable video evidence reports `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`.
+- All evidence present reports `SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD` while keeping `SAFE_TO_UPLOAD=false`.
+- No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
+
+## Next Exact Action
+
+- Review PR for V108 first-video upload package materializer. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. After merge, run `npm run automation:v108:first-video-upload-package-materializer --silent` on main and resolve the next precise evidence blocker.

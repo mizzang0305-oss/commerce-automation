@@ -9,7 +9,7 @@ export type V073UploadPackageProductSourceKind =
   | "trusted_upstream_manifest";
 
 export type V073YouTubeAdvancedSettings = {
-  privacyStatus: "public";
+  privacyStatus: "public" | "private";
   selfDeclaredMadeForKids: false;
   containsSyntheticMedia: true;
   paidProductPlacementDetails: {
@@ -33,7 +33,7 @@ export type V073UploadPackage = {
     productName: string;
     sourceKind: V073UploadPackageProductSourceKind;
     sourceEvidenceHash: string;
-    runtimeSourceApproved: true;
+    runtimeSourceApproved: boolean;
   };
   deeplink: {
     selectedAffiliateUrl: string | null;
