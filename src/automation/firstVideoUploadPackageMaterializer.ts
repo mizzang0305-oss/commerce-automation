@@ -28,6 +28,7 @@ export type V108FirstVideoUploadPackageMaterializerFinalStatus =
   | "SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD"
   | "BLOCKED_V108_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD"
   | "BLOCKED_V108_SOURCE_ITEM_MISMATCH_NO_UPLOAD"
+  | "BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD"
   | "BLOCKED_V108_UPLOAD_PACKAGE_STILL_MISSING_NO_UPLOAD"
   | "BLOCKED_V108_AFFILIATE_OR_DISCLOSURE_MISSING_NO_UPLOAD"
   | "BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD"
@@ -192,6 +193,19 @@ export async function buildV108FirstVideoUploadPackageMaterializerReport(
     };
   }
 
+  if (!isHttpsCoupangProductUrl(selectedItem.raw_coupang_url)) {
+    return {
+      ...blockedBaseReport({
+        selectedChannelKey,
+        requestedMode,
+        finalStatus: "BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD"
+      }),
+      selectedItemFound: true,
+      selectedItemShortId: hashPrefix(selectedItem.id),
+      v107Status: v107Report.FINAL_STATUS
+    };
+  }
+
   const beforeReport = input.v106BeforeReport ?? await buildV106UploadPackageEvidenceReport({
     cwd,
     env: {
@@ -212,6 +226,13 @@ export async function buildV108FirstVideoUploadPackageMaterializerReport(
     selectedChannelKey,
     selectedItem
   });
+  const uploadPackagesForEvidence = [
+    materializedPackage,
+    ...(input.uploadPackages ?? []).filter((item) =>
+      item.channelKey !== selectedChannelKey ||
+      item.queueItemId !== selectedItem.id
+    )
+  ];
   const afterReport = await buildV106UploadPackageEvidenceReport({
     cwd,
     env: {
@@ -224,10 +245,7 @@ export async function buildV108FirstVideoUploadPackageMaterializerReport(
     now: input.now,
     queueItems: [selectedItem],
     readQueueItems: async () => [selectedItem],
-    uploadPackages: [
-      ...(input.uploadPackages ?? []),
-      materializedPackage
-    ],
+    uploadPackages: uploadPackagesForEvidence,
     preparedVideoAssetRefs: input.preparedVideoAssetRefs
   });
   const finalStatus = mapV106AfterStatus(afterReport.FINAL_STATUS);
@@ -533,6 +551,22 @@ function sanitizeLabel(value: unknown): string | null {
     .replace(/\bUC[a-zA-Z0-9_-]{20,}\b/g, "[redacted_channel]")
     .replace(/(token|secret|signature|authorization|hmac|api_key)=?[^\s|]*/gi, "[redacted_secret]")
     .slice(0, 100);
+}
+
+function isHttpsCoupangProductUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  try {
+    const url = new URL(trimmed);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "coupang.com" || url.hostname.endsWith(".coupang.com")) &&
+      url.pathname.includes("/vp/products/")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hashEvidence(value: string) {

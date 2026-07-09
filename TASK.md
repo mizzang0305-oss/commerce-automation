@@ -93,6 +93,8 @@ Product discovery
 - V108 package skeleton privacy: `PRIVATE_ONLY`
 - V108 public default: `BLOCKED`
 - V108 unlisted default: `BLOCKED`
+- V108 product source guard: `VALID_HTTPS_COUPANG_PRODUCT_URL_REQUIRED`
+- V108 stale matching package policy: `MATERIALIZED_SKELETON_REPLACES_MATCHING_STALE_PACKAGE`
 - V108 videos.insert: `0`
 - V108 commentThreads.insert: `false`
 - `SAFE_TO_UPLOAD=false`

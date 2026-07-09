@@ -33,10 +33,13 @@ V108 treats V107 as the selection authority:
 - V107 must find a selected queue item.
 - V107 source consistency must pass.
 - The selected item must match the selected channel and selected item hash prefix.
+- The selected item must have a valid HTTPS Coupang product URL before V108 materializes a package skeleton.
 - The materialized package must match the selected queue item id and channel key.
+- If an older matching package is supplied to the dry-run, V108 replaces that matching package with the newly materialized skeleton before running V106 evidence probing.
 
 If V107 cannot select an item, V108 reports `BLOCKED_V108_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`.
 If V107 reports a source mismatch, V108 reports `BLOCKED_V108_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
+If product-source evidence is missing or invalid, V108 reports `BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD`.
 
 ## Evidence Behavior
 
@@ -58,6 +61,7 @@ It never prints raw affiliate URLs, raw Coupang URLs, signed URLs, prepared asse
 - `SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD`: package evidence was materialized in memory and V106 evidence is complete. `SAFE_TO_UPLOAD` remains false.
 - `BLOCKED_V108_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`: V107 could not select a queue item.
 - `BLOCKED_V108_SOURCE_ITEM_MISMATCH_NO_UPLOAD`: V107 source consistency failed.
+- `BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD`: selected queue item does not carry valid Coupang product-source evidence.
 - `BLOCKED_V108_UPLOAD_PACKAGE_STILL_MISSING_NO_UPLOAD`: V108 could not connect a package to V106.
 - `BLOCKED_V108_AFFILIATE_OR_DISCLOSURE_MISSING_NO_UPLOAD`: package exists, but affiliate or Coupang Partners disclosure evidence is incomplete.
 - `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`: package/affiliate/disclosure evidence exists, but prepared uploadable video asset evidence is incomplete.

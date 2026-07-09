@@ -4,6 +4,8 @@ import { describe, expect, test } from "vitest";
 
 import type { PreparedVideoAssetRef } from "../src/lib/uploads/youtube/uploadAssetContract";
 import type { ProductQueueItem } from "../src/types/automation";
+import type { V073UploadPackage } from "../src/uploads/multi-channel/v073UploadPackage";
+import { V057_REUPLOAD_ASSET_PROFILE } from "../src/uploads/multi-channel/v057ReuploadAssetBinding";
 import {
   buildV108FirstVideoUploadPackageMaterializerReport,
   type V108FirstVideoUploadPackageMaterializerReport
@@ -156,6 +158,50 @@ describe("v108 first video upload package materializer no-upload", () => {
     expectNoSideEffects(report);
   });
 
+  test("blocks invalid product source instead of reporting materialized success", async () => {
+    const queue = queueItem({
+      raw_coupang_url: "https://example.com/not-coupang"
+    });
+    const report = await buildV108FirstVideoUploadPackageMaterializerReport({
+      queueItems: [queue],
+      uploadPackages: [],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef()
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD");
+    expect(report.selectedItemFound).toBe(true);
+    expect(report.selectedItemShortId).toBe(hashPrefix(queue.id));
+    expect(report.packageMaterialized).toBe(false);
+    expect(report.packagePrivacyStatus).toBeNull();
+    expect(report.packagePrivateOnly).toBe(false);
+    expect(report.nextBlocker).toBe("BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD");
+    expectNoSideEffects(report);
+  });
+
+  test("materialized skeleton replaces stale matching packages before V106 evidence probing", async () => {
+    const queue = queueItem();
+    const report = await buildV108FirstVideoUploadPackageMaterializerReport({
+      queueItems: [queue],
+      uploadPackages: [staleUploadPackage(queue)],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef()
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD");
+    expect(report.packageMaterialized).toBe(true);
+    expect(report.packageHashPrefix).toBe(hashPrefix(`pkg-v108-${queue.id}`));
+    expectPrivateOnlyPackageEvidence(report);
+    expect(report.affiliateEvidencePresent).toBe(true);
+    expect(report.coupangDisclosurePresent).toBe(true);
+    expect(report.preparedAssetUploadable).toBe(true);
+    expectNoSideEffects(report);
+  });
+
   test("local_write and execute modes remain blocked in this PR", async () => {
     const localWrite = await buildV108FirstVideoUploadPackageMaterializerReport({
       mode: "local_write",
@@ -240,6 +286,94 @@ function preparedVideoAssetRef(overrides: Partial<PreparedVideoAssetRef> = {}): 
     provider: "signed_https",
     server_accessible: true,
     ...overrides
+  };
+}
+
+function staleUploadPackage(queue: ProductQueueItem): V073UploadPackage {
+  return {
+    packageId: "stale-v108-package",
+    queueItemId: queue.id,
+    generatedContentId: null,
+    channelKey: "father_jobs",
+    assetProfile: V057_REUPLOAD_ASSET_PROFILE,
+    productSource: {
+      rawCoupangUrl: queue.raw_coupang_url,
+      productName: queue.product_name,
+      sourceKind: "product_queue_item",
+      sourceEvidenceHash: hashPrefix(`stale:${queue.id}`),
+      runtimeSourceApproved: true
+    },
+    deeplink: {
+      selectedAffiliateUrl: null,
+      source: "deeplink",
+      status: "pending",
+      sanitizedEvidence: {
+        affiliateUrlPresent: false,
+        affiliateUrlPrinted: false,
+        affiliateHashPrefix: null
+      }
+    },
+    videoAsset: {
+      path: "v108-memory://stale",
+      basename: "",
+      hashEvidence: "",
+      firstFramePath: "v108-memory://stale-first-frame",
+      firstFrameBasename: "",
+      firstFrameHashEvidence: "",
+      duration: null,
+      resolution: null
+    },
+    youtubeMetadata: {
+      title: "",
+      description: "",
+      tags: [],
+      categoryId: "26",
+      defaultLanguage: "ko",
+      defaultAudioLanguage: "ko"
+    },
+    youtubeAdvancedSettings: {
+      privacyStatus: "public",
+      selfDeclaredMadeForKids: false,
+      containsSyntheticMedia: true,
+      paidProductPlacementDetails: {
+        hasPaidProductPlacement: true
+      },
+      license: "youtube",
+      embeddable: true,
+      publicStatsViewable: true,
+      defaultLanguage: "ko",
+      defaultAudioLanguage: "ko"
+    },
+    commentPackage: {
+      commentText: "",
+      affiliateUrlRequiredBeforeExecution: true,
+      coupangPartnersDisclosurePresent: false
+    },
+    targetChannel: {
+      channelKey: "father_jobs",
+      channelIdHashPrefix: hashPrefix("target:father_jobs"),
+      formatValid: false,
+      rawChannelIdPrinted: false
+    },
+    duplicateGuard: {
+      ready: true,
+      duplicateUploadRisk: false,
+      signature: hashPrefix(`stale:${queue.id}:duplicate`)
+    },
+    quotaGuard: {
+      ready: true,
+      publicUploadExecutionDisabled: true
+    },
+    approvalGate: {
+      freshApprovalRequired: true,
+      approvalPresent: false,
+      publicUploadExecutionDisabled: true
+    },
+    resultStore: {
+      status: "placeholder",
+      rawUrlsStored: false,
+      secretsStored: false
+    }
   };
 }
 
