@@ -50,6 +50,10 @@ export type V108FirstVideoUploadPackageMaterializerReport = {
   packageHashPrefix: string | null;
   packageQueueItemMatches: boolean;
   packageChannelMatches: boolean;
+  packagePrivacyStatus: "private" | null;
+  packagePublicUploadDefaultDisabled: boolean;
+  packageUnlistedUploadDefaultDisabled: boolean;
+  packagePrivateOnly: boolean;
   titlePresent: boolean;
   descriptionPresent: boolean;
   tagsPresent: boolean;
@@ -227,6 +231,7 @@ export async function buildV108FirstVideoUploadPackageMaterializerReport(
     preparedVideoAssetRefs: input.preparedVideoAssetRefs
   });
   const finalStatus = mapV106AfterStatus(afterReport.FINAL_STATUS);
+  const packagePrivateOnly = materializedPackage.youtubeAdvancedSettings.privacyStatus === "private";
 
   return {
     ...blockedBaseReport({
@@ -240,6 +245,10 @@ export async function buildV108FirstVideoUploadPackageMaterializerReport(
     packageHashPrefix: afterReport.packageHashPrefix,
     packageQueueItemMatches: afterReport.packageQueueItemMatches,
     packageChannelMatches: afterReport.packageChannelMatches,
+    packagePrivacyStatus: packagePrivateOnly ? "private" : null,
+    packagePublicUploadDefaultDisabled: packagePrivateOnly,
+    packageUnlistedUploadDefaultDisabled: packagePrivateOnly,
+    packagePrivateOnly,
     titlePresent: afterReport.titlePresent,
     descriptionPresent: afterReport.descriptionPresent,
     tagsPresent: afterReport.tagsPresent,
@@ -333,7 +342,7 @@ function buildMaterializedUploadPackage(input: {
       defaultAudioLanguage: "ko"
     },
     youtubeAdvancedSettings: {
-      privacyStatus: "public",
+      privacyStatus: "private",
       selfDeclaredMadeForKids: false,
       containsSyntheticMedia: true,
       paidProductPlacementDetails: {
@@ -416,6 +425,10 @@ function blockedBaseReport(input: {
     packageHashPrefix: null,
     packageQueueItemMatches: false,
     packageChannelMatches: false,
+    packagePrivacyStatus: null,
+    packagePublicUploadDefaultDisabled: false,
+    packageUnlistedUploadDefaultDisabled: false,
+    packagePrivateOnly: false,
     titlePresent: false,
     descriptionPresent: false,
     tagsPresent: false,

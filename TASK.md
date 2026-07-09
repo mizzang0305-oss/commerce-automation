@@ -89,6 +89,12 @@ Product discovery
 - PR #213: V106 upload package affiliate and asset evidence, `MERGED`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
 - Current blocker: `PR_OPEN_V108_FIRST_VIDEO_UPLOAD_PACKAGE_MATERIALIZER_NO_UPLOAD_REVIEW`
+- PR #215 V108 safety fix: `IN_PROGRESS`
+- V108 package skeleton privacy: `PRIVATE_ONLY`
+- V108 public default: `BLOCKED`
+- V108 unlisted default: `BLOCKED`
+- V108 videos.insert: `0`
+- V108 commentThreads.insert: `false`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true

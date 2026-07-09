@@ -95,6 +95,7 @@ describe("v108 first video upload package materializer no-upload", () => {
     expect(report.packageHashPrefix).toBe(hashPrefix(`pkg-v108-${queue.id}`));
     expect(report.packageQueueItemMatches).toBe(true);
     expect(report.packageChannelMatches).toBe(true);
+    expectPrivateOnlyPackageEvidence(report);
     expect(report.titlePresent).toBe(true);
     expect(report.descriptionPresent).toBe(true);
     expect(report.tagsPresent).toBe(true);
@@ -116,6 +117,7 @@ describe("v108 first video upload package materializer no-upload", () => {
 
     expect(report.FINAL_STATUS).toBe("BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD");
     expect(report.packageMaterialized).toBe(true);
+    expectPrivateOnlyPackageEvidence(report);
     expect(report.affiliateEvidencePresent).toBe(true);
     expect(report.coupangDisclosurePresent).toBe(true);
     expect(report.videoAssetEvidencePresent).toBe(true);
@@ -140,6 +142,7 @@ describe("v108 first video upload package materializer no-upload", () => {
 
     expect(report.FINAL_STATUS).toBe("SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD");
     expect(report.packageMaterialized).toBe(true);
+    expectPrivateOnlyPackageEvidence(report);
     expect(report.affiliateEvidencePresent).toBe(true);
     expect(report.coupangDisclosurePresent).toBe(true);
     expect(report.videoAssetEvidencePresent).toBe(true);
@@ -171,6 +174,14 @@ describe("v108 first video upload package materializer no-upload", () => {
     expect(execute.nextBlocker).toBe("BLOCKED_V108_EXECUTE_NOT_APPROVED_NO_UPLOAD");
     expectNoSideEffects(localWrite);
     expectNoSideEffects(execute);
+    expect(localWrite.packagePrivacyStatus).toBeNull();
+    expect(localWrite.packagePrivateOnly).toBe(false);
+    expect(localWrite.packagePublicUploadDefaultDisabled).toBe(false);
+    expect(localWrite.packageUnlistedUploadDefaultDisabled).toBe(false);
+    expect(execute.packagePrivacyStatus).toBeNull();
+    expect(execute.packagePrivateOnly).toBe(false);
+    expect(execute.packagePublicUploadDefaultDisabled).toBe(false);
+    expect(execute.packageUnlistedUploadDefaultDisabled).toBe(false);
   });
 
   test("package.json exposes the V108 no-upload materializer command", async () => {
@@ -250,7 +261,16 @@ function expectNoSideEffects(report: V108FirstVideoUploadPackageMaterializerRepo
   expect(report.fake_success).toBe(false);
   expect(report.SAFE_TO_UPLOAD).toBe(false);
   expect(report.SAFE_TO_PUBLIC_UPLOAD).toBe(false);
+  expect(JSON.stringify(report)).not.toContain('"privacyStatus":"public"');
+  expect(JSON.stringify(report)).not.toContain('"privacyStatus":"unlisted"');
   expect(JSON.stringify(report)).not.toMatch(FORBIDDEN_REPORT_PATTERN);
+}
+
+function expectPrivateOnlyPackageEvidence(report: V108FirstVideoUploadPackageMaterializerReport) {
+  expect(report.packagePrivacyStatus).toBe("private");
+  expect(report.packagePrivateOnly).toBe(true);
+  expect(report.packagePublicUploadDefaultDisabled).toBe(true);
+  expect(report.packageUnlistedUploadDefaultDisabled).toBe(true);
 }
 
 function hashPrefix(value: string) {

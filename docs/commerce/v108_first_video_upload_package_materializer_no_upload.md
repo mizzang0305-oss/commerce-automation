@@ -16,6 +16,16 @@ This is a no-upload materializer. It does not make the first video ready by itse
 
 The default dry-run mode creates an in-memory V073-compatible package skeleton for the V107 selected item and immediately runs the V106 evidence probe against that skeleton.
 
+The materialized skeleton is private-only by default:
+
+- `youtubeAdvancedSettings.privacyStatus=private`
+- `packagePrivacyStatus=private`
+- `packagePublicUploadDefaultDisabled=true`
+- `packageUnlistedUploadDefaultDisabled=true`
+- `packagePrivateOnly=true`
+
+V108 must never materialize a public or unlisted default package. Private-only metadata is a safety default for later gates, not an upload approval.
+
 ## Source Of Truth
 
 V108 treats V107 as the selection authority:
@@ -39,6 +49,7 @@ The V108 report exposes only sanitized evidence:
 - boolean video/first-frame/prepared asset evidence
 - downstream V106 before/after status
 - next blocker
+- private-only package privacy evidence
 
 It never prints raw affiliate URLs, raw Coupang URLs, signed URLs, prepared asset URLs, local absolute paths, full video IDs, full channel IDs, tokens, secrets, Authorization headers, or HMAC signatures.
 
@@ -70,6 +81,8 @@ V108 always reports:
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 
 V108 is not an upload gate, public upload approval, private upload approval, scheduler approval, or comment automation approval.
+
+Even when V108 returns `SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD`, public and unlisted upload remain forbidden. V109/V110 or any later execution gate still requires a separate fresh approval and must keep `SAFE_TO_UPLOAD=false` and `SAFE_TO_PUBLIC_UPLOAD=false` until that owner-approved execution path is explicitly reached.
 
 ## Next Action
 
