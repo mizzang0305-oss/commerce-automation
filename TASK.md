@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #211 merge: `5753d8a053567bac893bf053ca4337c0bdc5bec8`
+- main HEAD after PR #215 merge: `9e2335fab9041ee0a55fc670cb120f883c1b97a2`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -87,9 +87,13 @@ Product discovery
 - PR #211: V104 event candidate to queue materialization, `MERGED`
 - PR #212: V105 queue-to-generate-only next-batch planner, `MERGED`
 - PR #213: V106 upload package affiliate and asset evidence, `MERGED`
+- PR #214: V107 owner review first-video settings table, `MERGED`
+- PR #215: V108 first-video upload package materializer, `MERGED`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_V108_FIRST_VIDEO_UPLOAD_PACKAGE_MATERIALIZER_NO_UPLOAD_REVIEW`
-- PR #215 V108 safety fix: `IN_PROGRESS`
+- Current blocker: `PR_OPEN_V109_PRODUCT_SOURCE_AND_AFFILIATE_EVIDENCE_BINDING_NO_UPLOAD_REVIEW`
+- Current blocker before V109: `BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD`
+- PR #215 V108 safety fix: `MERGED`
+- V109 product source and affiliate evidence binding: `IN_PROGRESS`
 - V108 package skeleton privacy: `PRIVATE_ONLY`
 - V108 public default: `BLOCKED`
 - V108 unlisted default: `BLOCKED`
@@ -1311,7 +1315,7 @@ Acceptance:
 
 ### T033 - V108 First Video Upload Package Materializer No-Upload
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Materialize an in-memory V073/V106-compatible first-video upload package evidence object from the V107 selected queue item without upload, comment, scheduler, webhook, DB, Supabase, R2, storage, or product asset writes.
 
@@ -1352,6 +1356,47 @@ Acceptance:
 - All evidence present reports `SUCCESS_V108_UPLOAD_PACKAGE_MATERIALIZED_NO_UPLOAD` while keeping `SAFE_TO_UPLOAD=false`.
 - No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
 
+### T034 - V109 Product Source And Affiliate Evidence Binding No-Upload
+
+Status: `IN_PROGRESS`
+
+Goal: Diagnose and bind product-source, affiliate, and Coupang Partners disclosure evidence for the V107 selected queue item without upload, comment, scheduler, webhook, DB, Supabase, R2, storage, or product asset writes.
+
+Current runtime expectation:
+
+- selected channel default: `father_jobs`
+- source authority: V107 selected queue item and source consistency
+- current blocker before V109: `BLOCKED_V108_PRODUCT_SOURCE_MISSING_NO_UPLOAD`
+- V109 default mode: `dry_run`
+- fixture evidence mode: memory-only, selected item only
+- local write mode: `BLOCKED_V109_LOCAL_WRITE_NOT_APPROVED_NO_UPLOAD`
+- execute mode: `BLOCKED_V109_EXECUTE_NOT_APPROVED_NO_UPLOAD`
+- queue patch is planned only; `queuePatchApplied=false`
+- actual Coupang API calls: `false`
+- n8n webhook calls: `false`
+- `videosInsertCalled=false`
+- `videosInsertTotalCount=0`
+- `commentThreadsInsertCalled=false`
+- `schedulerExecutionCalled=false`
+- `DB_write=false`
+- `Supabase_write=false`
+- `R2_upload=false`
+- `storage_write=false`
+- raw URL/full ID/token/secret/Auth/HMAC/signed URL/local absolute path output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- Missing selected queue item reports `BLOCKED_V109_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`.
+- Source mismatch reports `BLOCKED_V109_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
+- Missing or invalid product source evidence reports `BLOCKED_V109_PRODUCT_SOURCE_EVIDENCE_MISSING_NO_UPLOAD`.
+- Missing or invalid affiliate evidence reports `BLOCKED_V109_AFFILIATE_EVIDENCE_MISSING_NO_UPLOAD`.
+- Missing disclosure evidence reports `BLOCKED_V109_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD`.
+- Fixture evidence mode can advance V108 after status in memory without writing queue data.
+- No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
+
 ## Next Exact Action
 
-- Review PR for V108 first-video upload package materializer. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. After merge, run `npm run automation:v108:first-video-upload-package-materializer --silent` on main and resolve the next precise evidence blocker.
+- Review PR for V109 product source and affiliate evidence binding after validation. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. After merge, run `npm run automation:v109:product-source-affiliate-evidence --silent` on main and resolve the next precise evidence blocker.
