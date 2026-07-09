@@ -53,6 +53,25 @@ V105 always reports:
 
 Reports contain sanitized booleans, labels, and hash prefixes only. They must not print raw affiliate URLs, raw Coupang URLs, raw video IDs, raw channel IDs, tokens, secrets, Authorization headers, HMAC signatures, or webhook secrets.
 
+## Planned Payload Label Redaction
+
+`plannedPayloadSanitized=true` is valid only after label fields are redacted beyond URL-only cleanup.
+
+The V105 planner redacts these patterns from `productNameSanitized`, `keywordSanitized`, `themeSanitized`, and `categoryPathSanitized`:
+
+- URL-shaped substrings
+- full YouTube channel IDs such as `UC...`
+- `Authorization` / `Bearer` fragments
+- `token`, `secret`, `client_secret`, `signature`, `signed_url`, `prepared_video_asset_url`, `api_key`, `key`, and `hmac` key-value fragments
+- `HmacSHA256` markers
+- Google API-key-shaped values
+- long key-like alphanumeric/base64-ish values
+- Windows and common local absolute paths
+
+If a label becomes empty after redaction, V105 emits `[redacted]`.
+
+The safe channel keys `father_jobs`, `neoman_moleulgeol`, and `lets_buy` are not full channel IDs and may remain in reports.
+
 ## Statuses
 
 | Status | Meaning |

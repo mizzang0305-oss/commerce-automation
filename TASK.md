@@ -113,6 +113,7 @@ Product discovery
 - V105 queue-to-generate-only next-batch planner: `PR_OPEN`
 - V105 current result: `SUCCESS_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_PLANNED_NO_UPLOAD`
 - V105 execute mode: `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`
+- V105 P2 redaction fix: planned payload labels redact URL, full channel ID, token/secret/Auth/HMAC/key-like values, and local paths.
 
 ## Status Legend
 
@@ -1148,6 +1149,7 @@ Acceptance:
 - `PR_OPEN_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD_REVIEW`
 - PR #211 is merged and V104 is on main at `5753d8a053567bac893bf053ca4337c0bdc5bec8`.
 - V105 adds a no-upload planner that reads local/mock queue items and builds a sanitized generate-only next-batch payload.
+- PR212 P2 redaction fix hardens planned payload label sanitization beyond URL-only cleanup.
 - V105 does not call the real `/api/run/next-batch` route and does not call n8n.
 - `V105_MODE=execute` remains blocked with `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
 - Public upload remains blocked.
@@ -1176,6 +1178,7 @@ Current runtime result:
 - selected channel default: `father_jobs`
 - default batch size: `1`
 - planned payload mode: `generate_only`
+- planned payload label redaction: URL, full channel ID, token/secret/Auth/HMAC/key-like values, and local paths are removed.
 - `manual_review` / `not_ready` remains a fallback for V104 link proof only.
 - queue item is not promoted to upload readiness.
 - `V105_MODE=execute` is fail-closed.
@@ -1201,4 +1204,5 @@ Acceptance:
 - `manual_review` / `not_ready` items are allowed only as generate-only fallback.
 - `hold`, `skipped`, `error`, `uploaded`, and `posted` rows are excluded.
 - Planned payload is sanitized and contains hash prefixes/booleans only.
+- Planned payload label fields remove URL-shaped text, full channel IDs, token/secret/Auth/HMAC/key-like values, and local paths before `plannedPayloadSanitized=true`.
 - No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.

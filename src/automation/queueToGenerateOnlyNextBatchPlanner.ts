@@ -198,10 +198,10 @@ function buildGenerateOnlyPayload(
       scheduledAtPresent: Boolean(item.scheduled_at.trim()),
       queueStatus: item.queue_status,
       manualReviewStatus: item.manual_review_status,
-      productNameSanitized: sanitizeLabel(item.product_name),
-      keywordSanitized: sanitizeLabel(item.keyword),
-      themeSanitized: sanitizeLabel(item.theme),
-      categoryPathSanitized: sanitizeLabel(item.category_path),
+      productNameSanitized: sanitizePayloadLabel(item.product_name),
+      keywordSanitized: sanitizePayloadLabel(item.keyword),
+      themeSanitized: sanitizePayloadLabel(item.theme),
+      categoryPathSanitized: sanitizePayloadLabel(item.category_path),
       rawUrlPresent: Boolean(item.raw_coupang_url.trim()),
       affiliateUrlPresent: Boolean(item.selected_affiliate_url.trim()),
       uploadReadinessPromoted: false
@@ -353,12 +353,32 @@ function isProductQueueItem(value: unknown): value is ProductQueueItem {
   );
 }
 
-function sanitizeLabel(value: string) {
-  return value
-    .replace(/https?:\/\/\S+/gi, "[url]")
+function sanitizePayloadLabel(value: string) {
+  const sanitized = redactSensitiveLabelText(value)
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 100);
+    .slice(0, 100)
+    .trim();
+
+  return sanitized || "[redacted]";
+}
+
+function redactSensitiveLabelText(value: string) {
+  return value
+    .replace(/\b[A-Za-z]:\\(?:[^\s\\/:*?"<>|]+\\)*[^\s\\/:*?"<>|]*/g, "[path]")
+    .replace(/\/(?:Users|home|var|tmp|mnt|opt|workspace|private|Volumes)\/[^\s"'<>]+/gi, "[path]")
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
+    .replace(/\bUC[A-Za-z0-9_-]{20,}\b/g, "[channel-id]")
+    .replace(/\bAuthorization\s*:?\s*Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "[redacted-auth]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "[redacted-auth]")
+    .replace(/\bAuthorization\b/gi, "[redacted-auth]")
+    .replace(/\bHmacSHA256\b/gi, "[redacted-hmac]")
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/g, "[secret]")
+    .replace(
+      /\b(?:token|secret|client_secret|signature|signed_url|prepared_video_asset_url|api_key|key|hmac)\s*[:=]\s*["']?[^"'\s&]+["']?/gi,
+      "[secret]"
+    )
+    .replace(/\b[A-Za-z0-9+/=_-]{48,}\b/g, "[secret]");
 }
 
 function hashPrefix(value: string) {

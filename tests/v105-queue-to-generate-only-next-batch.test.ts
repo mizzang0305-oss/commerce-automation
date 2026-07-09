@@ -7,7 +7,7 @@ import {
 import type { ProductQueueItem } from "../src/types/automation";
 
 const FORBIDDEN_REPORT_PATTERN =
-  /https?:\/\/|"UC[A-Za-z0-9_-]{20,}"|Authorization|Bearer|HmacSHA256|client_secret|token=|secret=|signature=|signed_url|prepared_video_asset_url/i;
+  /https?:\/\/|"UC[A-Za-z0-9_-]{20,}"|Authorization|Bearer|HmacSHA256|client_secret|token=|secret=|signature=|signed_url|prepared_video_asset_url|C:\\|api_key=|AIza[0-9A-Za-z_-]{20,}|abcdefghijklmnopqrstuvwxyz1234567890/i;
 
 describe("v105 queue to generate-only next-batch no-upload", () => {
   test("selects the V104 father_jobs manual_review candidate as a generate-only fallback", async () => {
@@ -120,6 +120,37 @@ describe("v105 queue to generate-only next-batch no-upload", () => {
     expect(report.FINAL_STATUS).toBe("BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD");
     expect(report.currentBlocker).toBe("BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD");
     expect(report.plannedPayloadCreated).toBe(false);
+    expectNoSideEffects(report);
+  });
+
+  test("redacts non-url sensitive evidence from planned payload labels", async () => {
+    const report = await buildV105QueueToGenerateOnlyNextBatchReport({
+      queueItems: [
+        queueItem({
+          id: "sensitive-label-row",
+          queue_status: "manual_review",
+          manual_review_status: "not_ready",
+          product_name: "storage box UC1234567890123456789012",
+          keyword:
+            "Authorization Bearer abcdefghijklmnopqrstuvwxyz1234567890 token=plain secret=plain",
+          theme:
+            "client_secret=plain signature=plain HmacSHA256 api_key=AIzaSy123456789012345678901234",
+          category_path:
+            "C:\\Users\\LOVE\\secret\\payload.json https://example.invalid/signed?signature=raw"
+        })
+      ],
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("SUCCESS_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_PLANNED_NO_UPLOAD");
+    expect(report.plannedPayloadSanitized).toBe(true);
+    expect(report.plannedPayload?.mode).toBe("generate_only");
+    expect(report.plannedPayload?.items[0]).toMatchObject({
+      productNameSanitized: "storage box [channel-id]",
+      keywordSanitized: "[redacted-auth] [secret] [secret]",
+      themeSanitized: "[secret] [secret] [redacted-hmac] [secret]",
+      categoryPathSanitized: "[path] [url]"
+    });
     expectNoSideEffects(report);
   });
 });
