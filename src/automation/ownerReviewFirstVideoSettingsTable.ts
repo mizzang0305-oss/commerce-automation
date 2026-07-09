@@ -1,3 +1,7 @@
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 import type { ProductQueueItem } from "@/types/automation";
 import type { ChannelKey } from "@/uploads/multi-channel/channelProfiles";
@@ -25,6 +29,7 @@ export type V107OwnerReviewMode = "dry_run" | "execute";
 export type V107OwnerReviewFinalStatus =
   | "SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD"
   | "BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD"
+  | "BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD"
   | "BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD"
   | "BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD";
 
@@ -50,6 +55,12 @@ export type V107CurrentBlocker =
   | V105QueueToGenerateOnlyNextBatchFinalStatus
   | V106UploadPackageEvidenceFinalStatus
   | null;
+
+type V107SourceItemConsistency = {
+  v102SelectedItemMatchesV105: boolean;
+  v106SelectedItemMatchesV105: boolean;
+  sourceItemConsistency: boolean;
+};
 
 export type V107OwnerReviewFirstVideoSettingsTableReport = {
   version: "v107";
@@ -91,6 +102,12 @@ export type V107OwnerReviewFirstVideoSettingsTableReport = {
   v102Status: V102FirstVideoSettingsFinalStatus;
   v105Status: V105QueueToGenerateOnlyNextBatchFinalStatus;
   v106Status: V106UploadPackageEvidenceFinalStatus;
+  v102SelectedItemShortId: string | null;
+  v106SelectedItemShortId: string | null;
+  v102InputConstrainedToSelectedItem: boolean;
+  v102SelectedItemMatchesV105: boolean;
+  v106SelectedItemMatchesV105: boolean;
+  sourceItemConsistency: boolean;
   currentBlocker: V107CurrentBlocker;
   ownerReviewRows: V107OwnerReviewRow[];
   ownerReviewMarkdownTable: string;
@@ -192,6 +209,42 @@ export async function buildV107OwnerReviewFirstVideoSettingsTable(
     };
   }
 
+  const queueItems = await resolveQueueItemsForV107({
+    cwd,
+    env,
+    queueItems: input.queueItems,
+    readQueueItems: input.readQueueItems
+  });
+  const selectedQueueItem = resolveSelectedQueueItemForV107({
+    queueItems,
+    selectedChannelKey,
+    v105Report
+  });
+
+  if (!selectedQueueItem) {
+    return {
+      ...baseSafeReport({ selectedChannelKey, requestedMode }),
+      FINAL_STATUS: "BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD",
+      v105Status: v105Report.FINAL_STATUS,
+      currentBlocker: "BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD",
+      sourceReports: {
+        v102: {
+          version: "v102",
+          FINAL_STATUS: "BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD",
+          currentBlocker: "BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD"
+        },
+        v105: sourceSummary(v105Report),
+        v106: {
+          version: "v106",
+          FINAL_STATUS: "BLOCKED_V105_NO_QUEUE_ITEM_FOR_NEXT_BATCH_NO_UPLOAD",
+          currentBlocker: "BLOCKED_V105_NO_QUEUE_ITEM_FOR_NEXT_BATCH_NO_UPLOAD"
+        }
+      }
+    };
+  }
+
+  const selectedQueueItems = [selectedQueueItem];
+  const v102InputConstrainedToSelectedItem = !input.v102Report;
   const [v102Report, v106Report] = await Promise.all([
     input.v102Report ?? buildV102FirstVideoSettingsPreflight({
       cwd,
@@ -201,11 +254,9 @@ export async function buildV107OwnerReviewFirstVideoSettingsTable(
       },
       selectedChannelKey,
       now: () => resolveNow(input.now).toISOString(),
-      queueItems: input.queueItems,
+      queueItems: selectedQueueItems,
       uploadPackages: input.uploadPackages,
-      loadQueueItems: input.readQueueItems
-        ? async () => input.readQueueItems ? input.readQueueItems() : []
-        : undefined,
+      loadQueueItems: async () => selectedQueueItems,
       loadUploadPackages: input.loadUploadPackages,
       preparedVideoAssetRefs: input.preparedVideoAssetRefs
     }),
@@ -219,19 +270,28 @@ export async function buildV107OwnerReviewFirstVideoSettingsTable(
       selectedChannelKey,
       mode: "dry_run",
       now: input.now,
-      queueItems: input.queueItems,
-      readQueueItems: input.readQueueItems,
+      queueItems: selectedQueueItems,
+      readQueueItems: async () => selectedQueueItems,
       uploadPackages: input.uploadPackages,
       loadUploadPackages: input.loadUploadPackages,
       preparedVideoAssetRefs: input.preparedVideoAssetRefs
     })
   ]);
 
+  const sourceItemConsistency = assertSelectedItemConsistency({
+    v105Report,
+    v102Report,
+    v106Report,
+    selectedQueueItem,
+    v102InputConstrainedToSelectedItem
+  });
   const firstPayloadItem = v105Report.plannedPayload?.items[0] ?? null;
   const eventSanitized = sanitizeLabel(firstPayloadItem?.themeSanitized ?? null);
   const themeSanitized = sanitizeLabel(firstPayloadItem?.keywordSanitized ?? null);
   const productNameSanitized = sanitizeLabel(firstPayloadItem?.productNameSanitized ?? null);
-  const currentBlocker = resolveCurrentBlocker(v106Report, v102Report, v105Report);
+  const currentBlocker = sourceItemConsistency.sourceItemConsistency
+    ? resolveCurrentBlocker(v106Report, v102Report, v105Report)
+    : "BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD";
   const rows = buildOwnerRows({
     selectedChannelKey,
     selectedItemShortId: v105Report.selectedItemShortId,
@@ -241,10 +301,13 @@ export async function buildV107OwnerReviewFirstVideoSettingsTable(
     v102Report,
     v105Report,
     v106Report,
+    sourceItemConsistency,
     currentBlocker
   });
   const ownerReviewMarkdownTable = buildMarkdownTable(rows);
-  const finalStatus = rows.length === 0 || !ownerReviewMarkdownTable
+  const finalStatus = !sourceItemConsistency.sourceItemConsistency
+    ? "BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD"
+    : rows.length === 0 || !ownerReviewMarkdownTable
     ? "BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD"
     : "SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD";
 
@@ -285,6 +348,12 @@ export async function buildV107OwnerReviewFirstVideoSettingsTable(
     v102Status: v102Report.FINAL_STATUS,
     v105Status: v105Report.FINAL_STATUS,
     v106Status: v106Report.FINAL_STATUS,
+    v102SelectedItemShortId: v102Report.selectedItemShortId,
+    v106SelectedItemShortId: v106Report.selectedItemShortId,
+    v102InputConstrainedToSelectedItem,
+    v102SelectedItemMatchesV105: sourceItemConsistency.v102SelectedItemMatchesV105,
+    v106SelectedItemMatchesV105: sourceItemConsistency.v106SelectedItemMatchesV105,
+    sourceItemConsistency: sourceItemConsistency.sourceItemConsistency,
     currentBlocker,
     ownerReviewRows: rows,
     ownerReviewMarkdownTable,
@@ -305,6 +374,7 @@ function buildOwnerRows(input: {
   v102Report: V102FirstVideoSettingsReport;
   v105Report: V105QueueToGenerateOnlyNextBatchReport;
   v106Report: V106UploadPackageEvidenceReport;
+  sourceItemConsistency: V107SourceItemConsistency;
   currentBlocker: V107CurrentBlocker;
 }): V107OwnerReviewRow[] {
   const v106 = input.v106Report;
@@ -319,6 +389,14 @@ function buildOwnerRows(input: {
     row("Source reports", "V102 status", statusFromFinalStatus(input.v102Report.FINAL_STATUS, "SUCCESS_V102_FIRST_VIDEO_SETTINGS_PREFLIGHT_READY_NO_UPLOAD_NO_COMMENT"), input.v102Report.FINAL_STATUS, input.v102Report.currentBlocker, "Use V102 to inspect first-video settings readiness only."),
     row("Source reports", "V105 status", statusFromFinalStatus(input.v105Report.FINAL_STATUS, "SUCCESS_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_PLANNED_NO_UPLOAD"), input.v105Report.FINAL_STATUS, input.v105Report.currentBlocker, "Use V105 as the selected generate-only source."),
     row("Source reports", "V106 status", statusFromFinalStatus(v106.FINAL_STATUS, "SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD"), v106.FINAL_STATUS, v106.currentBlocker, "Use V106 as upload package/evidence source only."),
+    row(
+      "Source reports",
+      "Source item consistency",
+      input.sourceItemConsistency.sourceItemConsistency ? "present" : "blocked",
+      input.sourceItemConsistency.sourceItemConsistency,
+      input.sourceItemConsistency.sourceItemConsistency ? null : "BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD",
+      "Keep V102, V105, and V106 tied to the same selected queue item."
+    ),
     row("Package", "Upload package", v106.uploadPackageFound ? "present" : "missing", v106.uploadPackageFound, v106.uploadPackageFound ? null : "BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD", v106.uploadPackageFound ? "Review package metadata before upload readiness review." : "Create or attach a matching upload package before upload readiness review."),
     row("Package", "Affiliate evidence", v106.affiliateEvidencePresent ? "present" : "missing", v106.affiliateEvidencePresent ? v106.affiliateEvidenceHashPrefix : false, v106.affiliateEvidencePresent ? null : "BLOCKED_V106_AFFILIATE_OR_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD", v106.affiliateEvidencePresent ? "Review sanitized affiliate evidence hash prefix only." : "Attach affiliate evidence and disclosure before manual upload review."),
     row("Package", "Coupang disclosure", v106.coupangDisclosurePresent ? "present" : "missing", v106.coupangDisclosurePresent, v106.coupangDisclosurePresent ? null : "BLOCKED_V106_AFFILIATE_OR_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD", v106.coupangDisclosurePresent ? "Confirm disclosure remains present in metadata/comment preview." : "Attach affiliate evidence and disclosure before manual upload review."),
@@ -377,6 +455,79 @@ function resolveCurrentBlocker(
   return v106Report.currentBlocker ?? v102Report.currentBlocker ?? v105Report.currentBlocker ?? null;
 }
 
+async function resolveQueueItemsForV107(input: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  queueItems?: ProductQueueItem[];
+  readQueueItems?: () => Promise<ProductQueueItem[]>;
+}) {
+  if (input.queueItems) {
+    return input.queueItems.filter(isProductQueueItem);
+  }
+  if (input.readQueueItems) {
+    return (await input.readQueueItems()).filter(isProductQueueItem);
+  }
+
+  try {
+    const parsed = JSON.parse(await fs.readFile(getQueuePath(input.cwd, input.env), "utf8")) as unknown;
+    return Array.isArray(parsed) ? parsed.filter(isProductQueueItem) : [];
+  } catch {
+    return [];
+  }
+}
+
+function resolveSelectedQueueItemForV107(input: {
+  queueItems: ProductQueueItem[];
+  selectedChannelKey: ChannelKey;
+  v105Report: V105QueueToGenerateOnlyNextBatchReport;
+}) {
+  const selectedItemShortId = input.v105Report.selectedItemShortId;
+  if (!selectedItemShortId) return null;
+
+  return input.queueItems.find((item) =>
+    getItemChannelKey(item) === input.selectedChannelKey &&
+    hashPrefix(item.id) === selectedItemShortId &&
+    item.queue_status === input.v105Report.selectedItemStatus &&
+    item.manual_review_status === input.v105Report.selectedManualReviewStatus
+  ) ?? null;
+}
+
+function assertSelectedItemConsistency(input: {
+  v105Report: V105QueueToGenerateOnlyNextBatchReport;
+  v102Report: V102FirstVideoSettingsReport;
+  v106Report: V106UploadPackageEvidenceReport;
+  selectedQueueItem: ProductQueueItem;
+  v102InputConstrainedToSelectedItem: boolean;
+}): V107SourceItemConsistency {
+  const selectedItemShortId = input.v105Report.selectedItemShortId;
+  const selectedQueueItemMatchesV105 = Boolean(
+    selectedItemShortId &&
+    getItemChannelKey(input.selectedQueueItem) === input.v105Report.selectedChannelKey &&
+    hashPrefix(input.selectedQueueItem.id) === selectedItemShortId &&
+    input.selectedQueueItem.queue_status === input.v105Report.selectedItemStatus &&
+    input.selectedQueueItem.manual_review_status === input.v105Report.selectedManualReviewStatus
+  );
+  const v102SelectedItemMatchesV105 = Boolean(
+    selectedItemShortId &&
+    input.v102Report.selectedItemShortId === selectedItemShortId
+  );
+  const v106SelectedItemMatchesV105 = Boolean(
+    selectedItemShortId &&
+    input.v106Report.selectedItemShortId === selectedItemShortId
+  );
+
+  return {
+    v102SelectedItemMatchesV105,
+    v106SelectedItemMatchesV105,
+    sourceItemConsistency: Boolean(
+      selectedQueueItemMatchesV105 &&
+      input.v102InputConstrainedToSelectedItem &&
+      v102SelectedItemMatchesV105 &&
+      v106SelectedItemMatchesV105
+    )
+  };
+}
+
 function baseSafeReport(input: {
   selectedChannelKey: ChannelKey;
   requestedMode: V107OwnerReviewMode;
@@ -421,6 +572,12 @@ function baseSafeReport(input: {
     v102Status: "BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD",
     v105Status: "BLOCKED_V105_NO_QUEUE_ITEM_FOR_NEXT_BATCH_NO_UPLOAD",
     v106Status: "BLOCKED_V105_NO_QUEUE_ITEM_FOR_NEXT_BATCH_NO_UPLOAD",
+    v102SelectedItemShortId: null,
+    v106SelectedItemShortId: null,
+    v102InputConstrainedToSelectedItem: false,
+    v102SelectedItemMatchesV105: false,
+    v106SelectedItemMatchesV105: false,
+    sourceItemConsistency: false,
     currentBlocker: null,
     ownerReviewRows: [],
     ownerReviewMarkdownTable: "",
@@ -492,6 +649,42 @@ function resolveChannelKey(value: unknown): ChannelKey {
 
 function resolveMode(value: unknown): V107OwnerReviewMode {
   return value === "execute" ? "execute" : "dry_run";
+}
+
+function getItemChannelKey(item: ProductQueueItem): ChannelKey {
+  return isChannelKey(item.channelKey) ? item.channelKey : "father_jobs";
+}
+
+function getQueuePath(cwd: string, env: NodeJS.ProcessEnv) {
+  const dataDir = path.resolve(cwd, env.AUTOMATION_DATA_DIR || "./data");
+  return path.join(dataDir, "queue.json");
+}
+
+function isProductQueueItem(value: unknown): value is ProductQueueItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Partial<ProductQueueItem>;
+  return (
+    typeof record.id === "string" &&
+    isChannelKey(record.channelKey) &&
+    typeof record.queue_date === "string" &&
+    typeof record.queue_rank === "number" &&
+    typeof record.upload_slot === "number" &&
+    typeof record.scheduled_at === "string" &&
+    typeof record.keyword === "string" &&
+    typeof record.theme === "string" &&
+    typeof record.product_name === "string" &&
+    typeof record.category_path === "string" &&
+    typeof record.raw_coupang_url === "string" &&
+    typeof record.selected_affiliate_url === "string" &&
+    typeof record.queue_status === "string" &&
+    typeof record.manual_review_status === "string"
+  );
+}
+
+function hashPrefix(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 10);
 }
 
 function resolveNow(value: string | Date | undefined) {

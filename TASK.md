@@ -1268,8 +1268,11 @@ Current runtime result:
 
 - selected channel default: `father_jobs`
 - selected queue item: found from V105 generate-only planning when local/mock queue data is present.
+- V102 first-video preflight input is constrained to the V105 selected queue item only; V102 must not scan the full queue and select a different manual-review row.
+- V102/V105/V106 source item consistency is reported with `v102SelectedItemShortId`, `v106SelectedItemShortId`, `v102InputConstrainedToSelectedItem`, `v102SelectedItemMatchesV105`, `v106SelectedItemMatchesV105`, and `sourceItemConsistency`.
 - owner-review table status: `SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD` when rows are generated.
 - current evidence blocker remains sourced from V106/V102, commonly `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD` until a matching upload package exists.
+- source item mismatch reports `BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
 - `V107_MODE=execute` is fail-closed with `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
 - `n8nWebhookCalled=false`
 - `uploadExecutionAllowed=false`
@@ -1289,9 +1292,11 @@ Current runtime result:
 Acceptance:
 
 - Table includes selection, queue, source report, package, YouTube settings, asset, prepared asset, current blocker, and safety rows.
+- Table includes a `Source item consistency` row tying V102, V105, and V106 to the same selected queue item.
 - Table values are sanitized labels, booleans, blocker names, or hash prefixes only.
 - Table success is owner-review readiness only, not upload readiness.
 - Missing selected queue item reports `BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`.
+- V102/V106 source mismatch against the V105 selected item reports `BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD`.
 - Missing required rows/table reports `BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD`.
 - Execute mode reports `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
 - No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.

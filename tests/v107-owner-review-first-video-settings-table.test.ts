@@ -12,6 +12,7 @@ import {
   buildV107OwnerReviewFirstVideoSettingsTable,
   type V107OwnerReviewFirstVideoSettingsTableReport
 } from "../src/automation/ownerReviewFirstVideoSettingsTable";
+import { buildV106UploadPackageEvidenceReport } from "../src/automation/uploadPackageEvidenceProbe";
 
 const RAW_AFFILIATE_URL = "https://link.coupang.com/a/v107-hidden-affiliate";
 const RAW_COUPANG_URL = "https://www.coupang.com/vp/products/v107-hidden-product";
@@ -109,6 +110,87 @@ describe("v107 owner review first video settings table no-upload", () => {
       status: "present",
       valueSanitized: true,
       blocker: null
+    });
+    expectNoSideEffects(report);
+  });
+
+  test("constrains V102 evidence to the V105 selected queue item when another manual review row sorts first", async () => {
+    const selectedByV105 = queueItem({
+      id: "queue-v107-selected-not-ready",
+      queue_rank: 2,
+      manual_review_status: "not_ready"
+    });
+    const wouldBeSelectedByV102 = queueItem({
+      id: "queue-v107-other-ready",
+      queue_rank: 1,
+      manual_review_status: "ready",
+      product_name: "wrong row product"
+    });
+    const report = await buildV107OwnerReviewFirstVideoSettingsTable({
+      queueItems: [wouldBeSelectedByV102, selectedByV105],
+      uploadPackages: [uploadPackage({ queueItemId: wouldBeSelectedByV102.id })],
+      preparedVideoAssetRefs: {
+        father_jobs: preparedVideoAssetRef()
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.selectedItemShortId).toBe(hashPrefix(selectedByV105.id));
+    expect(report.v102SelectedItemShortId).toBe(hashPrefix(selectedByV105.id));
+    expect(report.v106SelectedItemShortId).toBe(hashPrefix(selectedByV105.id));
+    expect(report.v102InputConstrainedToSelectedItem).toBe(true);
+    expect(report.v102SelectedItemMatchesV105).toBe(true);
+    expect(report.v106SelectedItemMatchesV105).toBe(true);
+    expect(report.sourceItemConsistency).toBe(true);
+    expect(report.v102Status).toBe("BLOCKED_FIRST_VIDEO_SETTINGS_NOT_READY_NO_UPLOAD");
+    expect(report.v106Status).toBe("BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD");
+    expect(report.FINAL_STATUS).toBe("SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD");
+    expect(rowByLabel(report, "Source item consistency")).toMatchObject({
+      status: "present",
+      valueSanitized: true,
+      blocker: null
+    });
+    expectNoSideEffects(report);
+  });
+
+  test("blocks when a supplied V106 report is not tied to the V105 selected queue item", async () => {
+    const selectedByV105 = queueItem({
+      id: "queue-v107-v106-selected",
+      queue_rank: 1,
+      manual_review_status: "not_ready"
+    });
+    const otherItem = queueItem({
+      id: "queue-v107-v106-other",
+      queue_rank: 2,
+      manual_review_status: "not_ready"
+    });
+    const v106Report = await buildV106UploadPackageEvidenceReport({
+      queueItems: [selectedByV105],
+      uploadPackages: [],
+      now: "2026-07-09T00:00:00.000Z"
+    });
+    const report = await buildV107OwnerReviewFirstVideoSettingsTable({
+      queueItems: [selectedByV105, otherItem],
+      uploadPackages: [],
+      v106Report: {
+        ...v106Report,
+        selectedItemShortId: hashPrefix(otherItem.id)
+      },
+      now: "2026-07-09T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD");
+    expect(report.currentBlocker).toBe("BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD");
+    expect(report.selectedItemShortId).toBe(hashPrefix(selectedByV105.id));
+    expect(report.v106SelectedItemShortId).toBe(hashPrefix(otherItem.id));
+    expect(report.v102SelectedItemMatchesV105).toBe(true);
+    expect(report.v106SelectedItemMatchesV105).toBe(false);
+    expect(report.sourceItemConsistency).toBe(false);
+    expect(rowByLabel(report, "Source item consistency")).toMatchObject({
+      status: "blocked",
+      valueSanitized: false,
+      blocker: "BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD",
+      ownerAction: "Keep V102, V105, and V106 tied to the same selected queue item."
     });
     expectNoSideEffects(report);
   });

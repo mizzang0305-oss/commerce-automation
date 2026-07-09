@@ -23,6 +23,17 @@ V107 reads these no-upload reports:
 
 The V107 table keeps each source status visible instead of converting it into upload readiness.
 
+V107 treats V105 as the selected source item authority. After V105 selects an item, V107 resolves that item from the queue by selected channel, hash prefix, queue status, and manual review status, then constrains V102 and V106 to that single item. V102 must not scan the full queue and select a different `manual_review` row.
+
+The report exposes these sanitized consistency fields:
+
+- `v102SelectedItemShortId`
+- `v106SelectedItemShortId`
+- `v102InputConstrainedToSelectedItem`
+- `v102SelectedItemMatchesV105`
+- `v106SelectedItemMatchesV105`
+- `sourceItemConsistency`
+
 ## Owner Review Rows
 
 The table includes at least these rows:
@@ -37,6 +48,7 @@ The table includes at least these rows:
 - V102 status
 - V105 status
 - V106 status
+- Source item consistency
 - Upload package
 - Affiliate evidence
 - Coupang disclosure
@@ -78,6 +90,7 @@ The report only includes sanitized labels, booleans, blocker names, and hash pre
 
 - `SUCCESS_V107_OWNER_REVIEW_TABLE_READY_NO_UPLOAD`: the owner review table was generated.
 - `BLOCKED_V107_NO_SELECTED_QUEUE_ITEM_NO_UPLOAD`: V105 could not select a queue item.
+- `BLOCKED_V107_SOURCE_ITEM_MISMATCH_NO_UPLOAD`: V102, V105, and V106 do not point to the same selected queue item.
 - `BLOCKED_V107_OWNER_REVIEW_TABLE_INCOMPLETE_NO_UPLOAD`: table generation failed or required rows are missing.
 - `BLOCKED_V107_EXECUTE_NOT_APPROVED_NO_UPLOAD`: execute mode was requested.
 
