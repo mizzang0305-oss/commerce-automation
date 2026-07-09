@@ -1113,7 +1113,7 @@ Acceptance:
 
 ### T029 - V104 Event Candidate To Queue No-Upload
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Materialize the V103 selected first event candidate into local/mock queue data so standalone V102 can see one eligible first candidate without any upload, comment, scheduler, n8n, or production DB mutation.
 
@@ -1146,12 +1146,15 @@ Acceptance:
 
 ## Current Blocker
 
-- `PR_OPEN_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD_REVIEW`
-- PR #211 is merged and V104 is on main at `5753d8a053567bac893bf053ca4337c0bdc5bec8`.
-- V105 adds a no-upload planner that reads local/mock queue items and builds a sanitized generate-only next-batch payload.
-- PR212 P2 redaction fix hardens planned payload label sanitization beyond URL-only cleanup.
-- V105 does not call the real `/api/run/next-batch` route and does not call n8n.
+- `PR_OPEN_V106_UPLOAD_PACKAGE_AFFILIATE_AND_ASSET_EVIDENCE_NO_UPLOAD_REVIEW`
+- PR #212 is merged and V105 is on main at `7292e25879793693d3d13c7f6726a9250142c8d5`.
+- V105 reads local/mock queue items and builds a sanitized generate-only next-batch payload.
+- V105 planned payload label sanitization removes URL, full channel ID, token/secret/Auth/HMAC/key-like values, and local paths before `plannedPayloadSanitized=true`.
+- V106 adds a no-upload evidence probe from the V105 selected queue item to matching upload package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence.
+- Current V106 runtime blocker: `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`.
+- V105/V106 do not call the real `/api/run/next-batch` route and do not call n8n.
 - `V105_MODE=execute` remains blocked with `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
+- `V106_MODE=execute` remains blocked with `BLOCKED_V106_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
 - Public upload remains blocked.
 - Private upload remains blocked.
 - Comment automation remains blocked.
@@ -1165,11 +1168,11 @@ Acceptance:
 
 ## Next Exact Action
 
-- Review PR for V105 queue-to-generate-only next-batch planning. After merge, proceed to `V106_UPLOAD_PACKAGE_AFFILIATE_AND_ASSET_EVIDENCE_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage.
+- Review PR for V106 upload package affiliate and asset evidence probing. After merge, proceed to `V107_OWNER_REVIEW_FIRST_VIDEO_SETTINGS_TABLE_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage.
 
 ### T030 - V105 Queue To Generate-Only Next Batch No-Upload
 
-Status: `PR_OPEN`
+Status: `DONE`
 
 Goal: Connect the V104 local/mock queue item to a sanitized generate-only next-batch planned payload without any external execution or production mutation.
 
@@ -1205,4 +1208,47 @@ Acceptance:
 - `hold`, `skipped`, `error`, `uploaded`, and `posted` rows are excluded.
 - Planned payload is sanitized and contains hash prefixes/booleans only.
 - Planned payload label fields remove URL-shaped text, full channel IDs, token/secret/Auth/HMAC/key-like values, and local paths before `plannedPayloadSanitized=true`.
+- No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.
+
+### T031 - V106 Upload Package Affiliate And Asset Evidence No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Probe whether the V105 selected queue item has matching upload package, affiliate, disclosure, video, first-frame, and prepared HTTPS asset evidence without executing upload, comment, scheduler, n8n, DB, Supabase, R2, storage, or product asset writes.
+
+Current runtime result:
+
+- selected channel default: `father_jobs`
+- selected queue item: found from V105 generate-only planning.
+- selected queue status: `manual_review`
+- selected manual review status: `not_ready`
+- upload package found: `false`
+- current blocker: `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`
+- `V106_MODE=execute` is fail-closed.
+- `n8nWebhookCalled=false`
+- `uploadExecutionAllowed=false`
+- `videosInsertCalled=false`
+- `videosInsertTotalCount=0`
+- `commentThreadsInsertCalled=false`
+- `schedulerExecutionCalled=false`
+- `DB_write=false`
+- `Supabase_write=false`
+- `R2_upload=false`
+- `storage_write=false`
+- raw URL/full ID/token/secret/Auth/HMAC/signed URL/local absolute path output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- V106 uses the V105 selected queue item as source of truth.
+- Matching upload package requires same `channelKey` and queue item id.
+- Affiliate and Coupang Partners disclosure evidence are reported as booleans/hash prefixes only.
+- Video asset, first-frame, prepared HTTPS asset, and server-accessible evidence are reported as booleans/hash prefixes only.
+- Missing upload package reports `BLOCKED_V106_UPLOAD_PACKAGE_MISSING_NO_UPLOAD`.
+- Missing affiliate/disclosure reports `BLOCKED_V106_AFFILIATE_OR_DISCLOSURE_EVIDENCE_MISSING_NO_UPLOAD`.
+- Missing video/first-frame/prepared asset evidence reports `BLOCKED_V081_VIDEO_ASSET_MISSING_NO_UPLOAD`.
+- All evidence present reports `SUCCESS_V106_UPLOAD_PACKAGE_EVIDENCE_READY_NO_UPLOAD` while keeping `SAFE_TO_UPLOAD=false`.
+- No raw affiliate/Coupang URL, signed URL, full video/channel ID, token, secret, Auth, HMAC, or local absolute path is printed.
 - No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.
