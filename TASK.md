@@ -34,7 +34,7 @@ Product discovery
 
 ## Current Source Of Truth
 
-- main HEAD after PR #207 merge: `8cbb61db4564b124c6aa5987d42fd60ec9e87a92`
+- main HEAD after PR #211 merge: `5753d8a053567bac893bf053ca4337c0bdc5bec8`
 - PR #182: V071 upstream product source binding, `MERGED`
 - PR #182 merge commit: `dbd7f5a7bb8771c2e7bacd2f5a0fa7880763cfcd`
 - PR #183: V072 public autopilot target spec, `MERGED`
@@ -82,8 +82,11 @@ Product discovery
 - PR #205 merge commit: `43c935dc346b4ca0187515dd3117cec837d319bb`
 - PR #208: V099 prepared asset evidence binding, `MERGED`
 - PR #208 merge commit: `ad86fa7d2b55fcb56e5cfba7dfb02b1aae232952`
+- PR #209: V102 first-video settings preflight, `MERGED`
+- PR #210: V103 event-based candidate scout, `MERGED`
+- PR #211: V104 event candidate to queue materialization, `MERGED`
 - Existing v057 corrected package: bound / no-upload ready for fresh private pilot approval
-- Current blocker: `PR_OPEN_V102_FIRST_VIDEO_SETTINGS_PREFLIGHT_NO_UPLOAD_REVIEW`
+- Current blocker: `PR_OPEN_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD_REVIEW`
 - `SAFE_TO_UPLOAD=false`
 - `SAFE_TO_PUBLIC_UPLOAD=false`
 - PRIVATE_UPLOAD_PILOT_APPROVAL_REQUIRED=true
@@ -100,11 +103,16 @@ Product discovery
 - V100 operating mode: `generate_only`
 - V100 ready state target: `ready_for_manual_upload`
 - V102 first-video settings preflight tool: `READY`
-- V102 current first eligible candidate: `ABSENT`
-- V102 current blocker: `BLOCKED_NO_FIRST_VIDEO_CANDIDATE_NO_UPLOAD`
+- V102 current first eligible candidate: `PRESENT_FROM_LOCAL_MOCK_QUEUE`
+- V102 current blocker: `BLOCKED_FIRST_VIDEO_SETTINGS_NOT_READY_NO_UPLOAD`
 - V102 is a no-upload/no-comment owner review preflight; it is not a first-video-ready report.
 - V102 P2 fix: quality/readiness gate uses real V073 package fields only, not fixture-only `shortsContentQuality`.
 - V102 P2 fix: fallback candidate selection is restricted to `queue_status=manual_review`; `manual_review_status` alone cannot select future scheduled, uploaded, posted, or other non-manual rows.
+- V103 event-based candidate scout: `MERGED`
+- V104 local/mock queue materializer: `MERGED`
+- V105 queue-to-generate-only next-batch planner: `PR_OPEN`
+- V105 current result: `SUCCESS_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_PLANNED_NO_UPLOAD`
+- V105 execute mode: `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`
 
 ## Status Legend
 
@@ -1134,3 +1142,63 @@ Acceptance:
 - Missing affiliate/package/asset evidence keeps the item in `manual_review` / `not_ready`.
 - V102 moves beyond no-candidate blocker after local_write.
 - Upload/comment/scheduler/n8n/storage/DB mutation paths remain disabled.
+
+## Current Blocker
+
+- `PR_OPEN_V105_QUEUE_TO_GENERATE_ONLY_NEXT_BATCH_NO_UPLOAD_REVIEW`
+- PR #211 is merged and V104 is on main at `5753d8a053567bac893bf053ca4337c0bdc5bec8`.
+- V105 adds a no-upload planner that reads local/mock queue items and builds a sanitized generate-only next-batch payload.
+- V105 does not call the real `/api/run/next-batch` route and does not call n8n.
+- `V105_MODE=execute` remains blocked with `BLOCKED_V105_EXECUTE_NOT_APPROVED_NO_UPLOAD`.
+- Public upload remains blocked.
+- Private upload remains blocked.
+- Comment automation remains blocked.
+- Scheduler execution remains blocked.
+- n8n webhook execution remains blocked.
+- DB, Supabase, R2, product_assets, and storage writes remain blocked.
+- `videos.insert=0`
+- `commentThreads.insert=false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+## Next Exact Action
+
+- Review PR for V105 queue-to-generate-only next-batch planning. After merge, proceed to `V106_UPLOAD_PACKAGE_AFFILIATE_AND_ASSET_EVIDENCE_NO_UPLOAD`. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage.
+
+### T030 - V105 Queue To Generate-Only Next Batch No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Connect the V104 local/mock queue item to a sanitized generate-only next-batch planned payload without any external execution or production mutation.
+
+Current runtime result:
+
+- selected channel default: `father_jobs`
+- default batch size: `1`
+- planned payload mode: `generate_only`
+- `manual_review` / `not_ready` remains a fallback for V104 link proof only.
+- queue item is not promoted to upload readiness.
+- `V105_MODE=execute` is fail-closed.
+- `n8nWebhookCalled=false`
+- `uploadExecuteAllowed=false`
+- `videosInsertCalled=false`
+- `videosInsertTotalCount=0`
+- `commentThreadsInsertCalled=false`
+- `schedulerExecutionCalled=false`
+- `DB_write=false`
+- `Supabase_write=false`
+- `R2_upload=false`
+- `storage_write=false`
+- raw URL/full ID/token/secret/Auth/HMAC output: `false`
+- fake success: `false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Acceptance:
+
+- Local/mock queue items can be selected by `channelKey`.
+- Due `scheduled` items are prioritized before `ready_for_manual_upload`.
+- `manual_review` / `not_ready` items are allowed only as generate-only fallback.
+- `hold`, `skipped`, `error`, `uploaded`, and `posted` rows are excluded.
+- Planned payload is sanitized and contains hash prefixes/booleans only.
+- No n8n webhook, upload, comment, scheduler, DB, Supabase, R2, product_assets, or storage mutation occurs.
