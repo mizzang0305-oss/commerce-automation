@@ -21,6 +21,8 @@ export type V099PreparedAssetEvidenceBindingResult = {
 };
 
 const ALLOWED_UPLOADABLE_PROVIDERS = new Set<PreparedVideoAssetProvider>([
+  "r2",
+  "supabase_storage",
   "external_https",
   "signed_url",
   "signed_https",

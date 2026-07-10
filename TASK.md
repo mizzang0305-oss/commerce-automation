@@ -1358,7 +1358,7 @@ Acceptance:
 
 ### T034 - V109 Product Source And Affiliate Evidence Binding No-Upload
 
-Status: `IN_PROGRESS`
+Status: `DONE`
 
 Goal: Diagnose and bind product-source, affiliate, and Coupang Partners disclosure evidence for the V107 selected queue item without upload, comment, scheduler, webhook, DB, Supabase, R2, storage, or product asset writes.
 
@@ -1397,6 +1397,47 @@ Acceptance:
 - Fixture evidence mode can advance V108 after status in memory without writing queue data.
 - No upload, comment, scheduler, n8n, DB, Supabase, R2, product_assets, or storage mutation occurs.
 
+### T035 - V110 V057 R2 Private Upload One-Shot
+
+Status: `LOCAL_VALIDATION`
+
+Goal: Close the final v057 `father_jobs` private-pilot runtime gap by preparing one canonical MP4 as an R2 HTTPS asset and injecting it into the existing V094/V092/V083/V081 server-only path.
+
+Current result:
+
+- branch: `codex/v110-v057-r2-private-upload-one-shot`
+- default command: no-upload preflight
+- preflight status: `ready_for_external_approval`
+- canonical manifest/MP4/first-frame: present
+- product-source/affiliate/disclosure evidence: present
+- V095 runtime context: ready
+- R2 configuration: ready
+- queue item/channel binding: match
+- stale manifest package id: rebound to the current V095/V097 package for the same queue item
+- R2 upload attempted: false
+- YouTube execution attempted: false
+- `videosInsertCalled=false`
+- `commentThreadsInsertCalled=false`
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Execution requires both fresh approvals in the current process:
+
+- `APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE`
+- `APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT`
+
+Acceptance:
+
+- public/unlisted visibility remains blocked
+- max items remains 1
+- comment and scheduler execution remain disabled
+- missing approval blocks before R2
+- R2 failure blocks YouTube execution
+- incomplete adapter evidence cannot report completion
+- no raw URL/full ID/local path/token/secret/Auth/HMAC output
+- no DB/Supabase/product_assets write
+- no retry without another explicit owner decision
+
 ## Next Exact Action
 
-- Review PR for V109 product source and affiliate evidence binding after validation. Do not upload, comment, call n8n, run scheduler execution, apply Supabase migrations, or write R2/DB/product_assets/storage. After merge, run `npm run automation:v109:product-source-affiliate-evidence --silent` on main and resolve the next precise evidence blocker.
+- Complete V110 focused/full no-upload validation. Then obtain explicit approval to commit, push, and open a V110 PR. After merge and main preflight PASS, obtain the two separate fresh execution approvals before one R2 preparation attempt and one YouTube private upload attempt. Public/unlisted upload, comments, scheduler, n8n, DB, Supabase, and product-assets writes remain blocked.
