@@ -8,9 +8,46 @@ import { evaluateShortsContentQuality } from "@/lib/uploads/youtube/shortsConten
 import { validateYouTubeDisclosureText } from "@/lib/uploads/youtube/youtubeDisclosureTextGuard";
 import { buildYouTubeLinkCtaMetadata } from "@/lib/uploads/youtube/youtubeLinkCtaMetadata";
 
-export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
+export type OwnerReviewedPrivateUploadEvidence = {
+  profile: "v057_corrected_reupload";
+  correctedPreviewReady: true;
+  hookFirstFrameReviewReady: true;
+  channelBindingReady: true;
+  noUploadReviewSideEffects: true;
+};
+
+type YouTubeUploadRequestBuildResult =
   | { ok: true; request: YouTubeUploadRequest }
-  | { ok: false; missing_reasons: string[] } {
+  | { ok: false; missing_reasons: string[] };
+
+export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
+  YouTubeUploadRequestBuildResult {
+  return buildYouTubeUploadRequestInternal(input, false);
+}
+
+export function buildOwnerReviewedPrivateYouTubeUploadRequest(
+  input: YouTubeUploadRequestInput,
+  evidence: OwnerReviewedPrivateUploadEvidence
+): YouTubeUploadRequestBuildResult {
+  if (
+    evidence.profile !== "v057_corrected_reupload" ||
+    evidence.correctedPreviewReady !== true ||
+    evidence.hookFirstFrameReviewReady !== true ||
+    evidence.channelBindingReady !== true ||
+    evidence.noUploadReviewSideEffects !== true ||
+    input.visibility !== "private" ||
+    normalizeExecutionIntent(input.execution_intent ?? input.upload_intent) !== "private_execute"
+  ) {
+    return { ok: false, missing_reasons: ["owner_review_evidence"] };
+  }
+
+  return buildYouTubeUploadRequestInternal(input, true);
+}
+
+function buildYouTubeUploadRequestInternal(
+  input: YouTubeUploadRequestInput,
+  ownerReviewedPrivateQualityAccepted: boolean
+): YouTubeUploadRequestBuildResult {
   const candidateId = safeTrim(input.candidate_id);
   const videoPathOrUrl = safeTrim(input.video_path_or_url);
   const assetReadiness = buildPreparedVideoAssetReadiness(input);
@@ -51,19 +88,21 @@ export function buildYouTubeUploadRequest(input: YouTubeUploadRequestInput):
   if (!visibility) {
     missingReasons.push(input.visibility === "public" ? "visibility_not_allowed" : "visibility");
   }
-  const quality = evaluateShortsContentQuality({
-    shorts_content_quality: input.shorts_content_quality,
-    description: descriptionInput || captionInput,
-    disclosure_ready: disclosureText
-      ? validateYouTubeDisclosureText({
-        description: descriptionInput,
-        caption: captionInput,
-        disclosure_text: disclosureText
-      }).length === 0
-      : false,
-    affiliate_url_present: Boolean(selectedAffiliateUrl)
-  });
-  missingReasons.push(...quality.blocked_reasons);
+  if (!ownerReviewedPrivateQualityAccepted) {
+    const quality = evaluateShortsContentQuality({
+      shorts_content_quality: input.shorts_content_quality,
+      description: descriptionInput || captionInput,
+      disclosure_ready: disclosureText
+        ? validateYouTubeDisclosureText({
+          description: descriptionInput,
+          caption: captionInput,
+          disclosure_text: disclosureText
+        }).length === 0
+        : false,
+      affiliate_url_present: Boolean(selectedAffiliateUrl)
+    });
+    missingReasons.push(...quality.blocked_reasons);
+  }
 
   if (missingReasons.length > 0) {
     return { ok: false, missing_reasons: [...new Set(missingReasons)] };
