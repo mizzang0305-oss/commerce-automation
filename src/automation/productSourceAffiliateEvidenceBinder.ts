@@ -469,9 +469,14 @@ export function isValidAffiliateEvidence(value: unknown): value is string {
   if (!trimmed) return false;
   try {
     const url = new URL(trimmed);
-    return url.protocol === "https:" && (
-      url.hostname === "link.coupang.com" ||
-      url.hostname.endsWith(".link.coupang.com")
+    const pathSegments = url.pathname.split("/").filter(Boolean);
+    const deeplinkType = pathSegments[0];
+    const deeplinkPayload = pathSegments[1]?.trim();
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "link.coupang.com" &&
+      (deeplinkType === "a" || deeplinkType === "re") &&
+      Boolean(deeplinkPayload)
     );
   } catch {
     return false;

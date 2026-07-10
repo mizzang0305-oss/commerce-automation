@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import type { ProductQueueItem } from "../src/types/automation";
 import {
   buildV109ProductSourceAffiliateEvidenceReport,
+  isValidAffiliateEvidence,
   type V109ProductSourceAffiliateEvidenceReport
 } from "../src/automation/productSourceAffiliateEvidenceBinder";
 import { buildV107OwnerReviewFirstVideoSettingsTable } from "../src/automation/ownerReviewFirstVideoSettingsTable";
@@ -121,6 +122,26 @@ describe("v109 product source and affiliate evidence binding no-upload", () => {
     expect(invalid.affiliateEvidencePresent).toBe(false);
     expectNoSideEffects(missing);
     expectNoSideEffects(invalid);
+  });
+
+  test("requires a canonical Coupang affiliate deeplink payload", async () => {
+    expect(isValidAffiliateEvidence("https://link.coupang.com/")).toBe(false);
+    expect(isValidAffiliateEvidence("https://link.coupang.com/a/")).toBe(false);
+    expect(isValidAffiliateEvidence("https://link.coupang.com/re/")).toBe(false);
+    expect(isValidAffiliateEvidence("https://sub.link.coupang.com/a/not-canonical")).toBe(false);
+    expect(isValidAffiliateEvidence("https://link.coupang.com/a/v109-valid")).toBe(true);
+    expect(isValidAffiliateEvidence("https://link.coupang.com/re/AFFSDP?lptag=AF0000000")).toBe(true);
+
+    const report = await buildV109ProductSourceAffiliateEvidenceReport({
+      queueItems: [queueItem({ selected_affiliate_url: "https://link.coupang.com/" })],
+      uploadPackages: [],
+      now: "2026-07-10T00:00:00.000Z"
+    });
+
+    expect(report.FINAL_STATUS).toBe("BLOCKED_V109_AFFILIATE_EVIDENCE_MISSING_NO_UPLOAD");
+    expect(report.affiliateEvidencePresent).toBe(false);
+    expect(report.affiliateHashPrefix).toBeNull();
+    expectNoSideEffects(report);
   });
 
   test("blocks when disclosure evidence is missing", async () => {

@@ -34,7 +34,7 @@ V109 uses the V107 selected item as the source of truth.
 Required evidence:
 
 - product source: non-empty HTTPS Coupang product URL evidence
-- affiliate: non-empty HTTPS Coupang affiliate evidence
+- affiliate: HTTPS `link.coupang.com` evidence with a canonical `/a/<payload>` or `/re/<payload>` deeplink path
 - disclosure: Coupang Partners disclosure evidence from the review/package path or explicit dry-run fixture evidence
 
 The report exposes only sanitized evidence:
