@@ -49,8 +49,8 @@ export type ServerVideoAssetRegistrar = (input: {
   prepared_video_asset?: unknown;
 }) => Promise<OneProductServerAssetRegistrationResult>;
 
-type UploadVideoInput = {
-  candidate: ProductCandidate;
+export type ServerVideoAssetUploadInput = {
+  candidateId: string;
   file_buffer: Buffer;
   file_name: string;
   mime_type: "video/mp4";
@@ -58,7 +58,7 @@ type UploadVideoInput = {
   checksum_sha256: string;
 };
 
-type UploadVideoResult =
+export type ServerVideoAssetUploadResult =
   | {
       ok: true;
       asset_ref: PreparedVideoAssetRef;
@@ -74,7 +74,7 @@ export type OneProductServerAssetRegistrationDependencies = {
   now?: () => string;
   stat?: typeof fs.stat;
   readFile?: typeof fs.readFile;
-  uploadVideo?: (input: UploadVideoInput) => Promise<UploadVideoResult>;
+  uploadVideo?: (input: ServerVideoAssetUploadInput) => Promise<ServerVideoAssetUploadResult>;
 };
 
 export function createOneProductServerAssetRegistrar(
@@ -84,7 +84,7 @@ export function createOneProductServerAssetRegistrar(
   const cwd = dependencies.cwd ?? process.cwd();
   const stat = dependencies.stat ?? fs.stat;
   const readFile = dependencies.readFile ?? fs.readFile;
-  const uploadVideo = dependencies.uploadVideo ?? uploadLocalVideoToR2;
+  const uploadVideo = dependencies.uploadVideo ?? uploadVideoBufferToR2;
   const now = dependencies.now ?? (() => new Date().toISOString());
 
   return async ({ candidate, prepared_video_asset }) => {
@@ -141,7 +141,7 @@ export function createOneProductServerAssetRegistrar(
 
     const checksum = createHash("sha256").update(fileBuffer).digest("hex");
     const upload = await uploadVideo({
-      candidate,
+      candidateId: candidate.id,
       file_buffer: fileBuffer,
       file_name: path.basename(localVideoPath),
       mime_type: "video/mp4",
@@ -280,7 +280,9 @@ async function verifyCandidateLinkedPersistence(
   }
 }
 
-async function uploadLocalVideoToR2(input: UploadVideoInput): Promise<UploadVideoResult> {
+export async function uploadVideoBufferToR2(
+  input: ServerVideoAssetUploadInput
+): Promise<ServerVideoAssetUploadResult> {
   const config = readR2Config();
   if (!config.ok) {
     return {
@@ -290,7 +292,7 @@ async function uploadLocalVideoToR2(input: UploadVideoInput): Promise<UploadVide
     };
   }
 
-  const storageKey = buildR2StorageKey(input.candidate.id, input.file_name);
+  const storageKey = buildR2StorageKey(input.candidateId, input.file_name);
   const canonicalUri = `/${encodeS3Path(config.bucket)}/${encodeS3Path(storageKey)}`;
   const endpointUrl = new URL(config.endpoint);
   const uploadUrl = `${endpointUrl.origin}${canonicalUri}`;
@@ -361,7 +363,7 @@ async function uploadLocalVideoToR2(input: UploadVideoInput): Promise<UploadVide
   return {
     ok: true,
     asset_ref: {
-      asset_id: buildProductAssetId(input.candidate.id),
+      asset_id: buildProductAssetId(input.candidateId),
       provider: "r2",
       storage_key: storageKey,
       prepared_video_asset_url: publicUrl,
