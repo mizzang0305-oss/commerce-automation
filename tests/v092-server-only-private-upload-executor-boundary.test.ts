@@ -165,6 +165,47 @@ describe("v092 server-only YouTube private upload executor boundary", () => {
     });
   });
 
+  test("server-only upload package resolver blocks missing quality without owner-review evidence", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        shortsContentQuality: undefined
+      })]
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).toMatchObject({
+      blocker: "BLOCKED_V081_METADATA_NOT_READY"
+    });
+  });
+
+  test("server-only upload package resolver accepts reviewed v057 private metadata without fixture quality", async () => {
+    const resolver = createV094ServerOnlyUploadPackageRequestResolver({
+      env: {
+        YOUTUBE_FATHER_JOBS_CHANNEL_ID: FULL_CHANNEL_ID
+      },
+      loadUploadPackages: async () => [v094ReadyUploadPackage({
+        shortsContentQuality: undefined
+      })],
+      ownerReviewedPrivatePilotEvidence: {
+        profile: "v057_corrected_reupload",
+        channelKey: "father_jobs",
+        correctedPreviewReady: true,
+        hookFirstFrameReviewReady: true,
+        channelBindingReady: true,
+        noUploadReviewSideEffects: true
+      }
+    });
+    const resolved = await resolver(v081AdapterRequest());
+
+    expect(resolved).not.toBeNull();
+    expect(resolved).not.toMatchObject({ blocker: expect.any(String) });
+    expect(resolved?.uploadRequest.visibility).toBe("private");
+    expect(resolved?.uploadRequest.execution_intent).toBe("private_execute");
+  });
+
   test("server-only upload package resolver blocks missing disclosure instead of building a fallback request", async () => {
     const resolver = createV094ServerOnlyUploadPackageRequestResolver({
       env: {

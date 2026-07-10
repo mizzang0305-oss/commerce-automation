@@ -1399,13 +1399,14 @@ Acceptance:
 
 ### T035 - V110 V057 R2 Private Upload One-Shot
 
-Status: `LOCAL_VALIDATION`
+Status: `DONE`
 
 Goal: Close the final v057 `father_jobs` private-pilot runtime gap by preparing one canonical MP4 as an R2 HTTPS asset and injecting it into the existing V094/V092/V083/V081 server-only path.
 
 Current result:
 
-- branch: `codex/v110-v057-r2-private-upload-one-shot`
+- merged PR: `#217`
+- main commit: `8be33db93bdb0344985a0a83186e2417f41b8f25`
 - default command: no-upload preflight
 - preflight status: `ready_for_external_approval`
 - canonical manifest/MP4/first-frame: present
@@ -1438,6 +1439,32 @@ Acceptance:
 - no DB/Supabase/product_assets write
 - no retry without another explicit owner decision
 
+Execution closeout:
+
+- first approved attempt: R2 prepared; YouTube blocked by stale execution context; videos.insert 0
+- second approved attempt: context refreshed and R2 prepared; YouTube blocked by missing V094 metadata quality evidence; videos.insert 0
+- no automatic retry occurred
+- no comment, public/unlisted, scheduler, n8n, DB, Supabase, or product-assets mutation occurred
+
+### T036 - V111 V057 Owner-Reviewed Private Metadata Gate
+
+Status: `LOCAL_VALIDATION`
+
+Goal: Bind the existing v056/v057 owner-reviewed corrected-preview evidence into the V094 private request builder without weakening the generic Shorts content-quality gate.
+
+Current scope:
+
+- generic `buildYouTubeUploadRequest` still requires full `shortsContentQuality`
+- owner-reviewed fallback is limited to `v057_corrected_reupload`
+- owner-reviewed fallback is limited to `private_execute`
+- selected channel must match the V094 package
+- v056 corrected-preview status must be PASS/no-upload
+- v057 hook, first-frame, channel, disclosure, mojibake, and no-side-effect validations must all pass
+- missing evidence blocks before R2 with `BLOCKED_V110_OWNER_REVIEW_EVIDENCE_MISSING`
+- no R2 or YouTube execution is allowed during V111 validation
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
 ## Next Exact Action
 
-- Complete V110 focused/full no-upload validation. Then obtain explicit approval to commit, push, and open a V110 PR. After merge and main preflight PASS, obtain the two separate fresh execution approvals before one R2 preparation attempt and one YouTube private upload attempt. Public/unlisted upload, comments, scheduler, n8n, DB, Supabase, and product-assets writes remain blocked.
+- Complete V111 focused/full no-upload validation. Then obtain explicit approval for the V111 commit/push/PR flow. After merge, refresh V095 immediately before V110 preflight and require a new external approval pair before any additional R2 or private YouTube attempt.

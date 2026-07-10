@@ -46,13 +46,21 @@ async function main() {
         ? { ok: true, assetRef: result.asset_ref }
         : { ok: false, blocker: result.blocked_reasons[0] ?? result.error_code };
     },
-    executePrivateUpload: async (preparedAsset, request): Promise<V110PrivateExecutionResult> => {
+    executePrivateUpload: async (
+      preparedAsset,
+      request,
+      ownerReviewEvidence
+    ): Promise<V110PrivateExecutionResult> => {
       const uploadRequestResolver = createV094ServerOnlyUploadPackageRequestResolver({
         cwd,
         env,
         uploadAssetProfile: env.V051_UPLOAD_ASSET_PROFILE ?? "v057_corrected_reupload",
         preparedVideoAssetRefs: {
           father_jobs: preparedAsset
+        },
+        ownerReviewedPrivatePilotEvidence: {
+          ...ownerReviewEvidence,
+          channelKey: "father_jobs"
         }
       });
       const uploadExecutor = createV092ServerOnlyYouTubePrivateUploadExecutor({

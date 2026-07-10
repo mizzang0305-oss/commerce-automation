@@ -3,6 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import type {
+  OwnerReviewedPrivateUploadEvidence
+} from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
 import {
   APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT
 } from "./v081PrivateUploadPilot";
@@ -52,6 +55,7 @@ export type V110Report = {
   productSourceEvidencePresent: boolean;
   affiliateEvidencePresent: boolean;
   disclosureEvidencePresent: boolean;
+  ownerReviewEvidenceReady: boolean;
   r2ConfigReady: boolean;
   runtimeContextReady: boolean;
   r2ApprovalAccepted: boolean;
@@ -93,7 +97,8 @@ export type V110Input = {
   }) => Promise<V110PreparedAssetResult>;
   executePrivateUpload?: (
     preparedAsset: PreparedVideoAssetRef,
-    request: V084PrivateUploadPilotInvocationRequest
+    request: V084PrivateUploadPilotInvocationRequest,
+    ownerReviewEvidence: OwnerReviewedPrivateUploadEvidence
   ) => Promise<V110PrivateExecutionResult>;
 };
 
@@ -116,6 +121,7 @@ const BLOCKED = {
   source: "BLOCKED_V110_PRODUCT_SOURCE_EVIDENCE_MISSING",
   affiliate: "BLOCKED_V110_AFFILIATE_EVIDENCE_MISSING",
   disclosure: "BLOCKED_V110_DISCLOSURE_EVIDENCE_MISSING",
+  ownerReview: "BLOCKED_V110_OWNER_REVIEW_EVIDENCE_MISSING",
   r2Config: "BLOCKED_V110_R2_CONFIG_NOT_READY",
   r2Approval: "BLOCKED_V110_FRESH_R2_APPROVAL_REQUIRED",
   uploadApproval: "BLOCKED_V110_FRESH_PRIVATE_UPLOAD_APPROVAL_REQUIRED",
@@ -135,9 +141,19 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   const manifestPath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "product-source-v057.local.json");
   const videoPath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "corrected-preview-v057.mp4");
   const firstFramePath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "first-frame-v057.jpg");
+  const v056ReviewPath = path.join(cwd, "commerce-assets", "review", "v056", "v056-corrected-preview-report.json");
+  const v057SummaryPath = path.join(cwd, "commerce-assets", "review", "v057", "v057-summary.json");
+  const v057ValidationPath = path.join(cwd, "commerce-assets", "review", "v057", "hook-overlay-validation-report.json");
+  const v057ClickabilityPath = path.join(cwd, "commerce-assets", "review", "v057", "first-frame-clickability-report.json");
   const manifest = await readManifest(manifestPath);
   const video = await readNonEmptyFile(videoPath);
   const firstFramePresent = await isNonEmptyFile(firstFramePath);
+  const ownerReviewEvidenceReady = await hasOwnerReviewedV057Evidence({
+    v056ReviewPath,
+    v057SummaryPath,
+    v057ValidationPath,
+    v057ClickabilityPath
+  });
   const runtimeContextReady = isRuntimeContextReady(request);
   const manifestQueueItemMatch = Boolean(
     manifest &&
@@ -169,6 +185,7 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     productSourceEvidencePresent ? null : BLOCKED.source,
     affiliateEvidencePresent ? null : BLOCKED.affiliate,
     disclosureEvidencePresent ? null : BLOCKED.disclosure,
+    ownerReviewEvidenceReady ? null : BLOCKED.ownerReview,
     r2ConfigReady ? null : BLOCKED.r2Config
   ]);
   const r2ApprovalAccepted = env.V110_R2_PREPARE_APPROVAL ===
@@ -188,6 +205,7 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     productSourceEvidencePresent,
     affiliateEvidencePresent,
     disclosureEvidencePresent,
+    ownerReviewEvidenceReady,
     r2ConfigReady,
     runtimeContextReady,
     r2ApprovalAccepted,
@@ -226,10 +244,14 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     };
   }
 
-  const executed = await input.executePrivateUpload(prepared.assetRef, {
-    ...request,
-    dryRun: false
-  });
+  const executed = await input.executePrivateUpload(
+    prepared.assetRef,
+    {
+      ...request,
+      dryRun: false
+    },
+    buildOwnerReviewedPrivateUploadEvidence()
+  );
   const completed = Boolean(
     executed.completed &&
     executed.videosInsertCalled &&
@@ -268,6 +290,7 @@ function buildBaseReport(input: {
   productSourceEvidencePresent: boolean;
   affiliateEvidencePresent: boolean;
   disclosureEvidencePresent: boolean;
+  ownerReviewEvidenceReady: boolean;
   r2ConfigReady: boolean;
   runtimeContextReady: boolean;
   r2ApprovalAccepted: boolean;
@@ -292,6 +315,7 @@ function buildBaseReport(input: {
     productSourceEvidencePresent: input.productSourceEvidencePresent,
     affiliateEvidencePresent: input.affiliateEvidencePresent,
     disclosureEvidencePresent: input.disclosureEvidencePresent,
+    ownerReviewEvidenceReady: input.ownerReviewEvidenceReady,
     r2ConfigReady: input.r2ConfigReady,
     runtimeContextReady: input.runtimeContextReady,
     r2ApprovalAccepted: input.r2ApprovalAccepted,
@@ -334,6 +358,7 @@ function isRuntimeContextReady(request: V084PrivateUploadPilotInvocationRequest)
     request.maxItems === 1 &&
     request.commentAutomationAllowed === false &&
     request.schedulerExecutionAllowed === false &&
+    (request.preflightBlockers?.length ?? 0) === 0 &&
     Object.values(request.readiness).every(Boolean)
   );
 }
@@ -349,6 +374,87 @@ function hasR2Config(env: NodeJS.ProcessEnv) {
 
 function pickEnv(env: NodeJS.ProcessEnv, ...keys: string[]) {
   return keys.map((key) => safeString(env[key])).find(Boolean) ?? "";
+}
+
+async function hasOwnerReviewedV057Evidence(input: {
+  v056ReviewPath: string;
+  v057SummaryPath: string;
+  v057ValidationPath: string;
+  v057ClickabilityPath: string;
+}) {
+  const [v056, v057, validation, clickability] = await Promise.all([
+    readJsonRecord(input.v056ReviewPath),
+    readJsonRecord(input.v057SummaryPath),
+    readJsonRecord(input.v057ValidationPath),
+    readJsonRecord(input.v057ClickabilityPath)
+  ]);
+  const validationChannel = findChannelRecord(validation?.channels, "father_jobs");
+  const clickabilityChannel = findChannelRecord(clickability?.channels, "father_jobs");
+
+  return Boolean(
+    v056?.final_status_preview === "SUCCESS_V056_CORRECTED_PREVIEW_READY_NO_UPLOAD" &&
+    v056.corrected_preview_ready === true &&
+    v056.safe_to_upload === false &&
+    v056.existing_video_mutated_by_automation === false &&
+    v057?.FINAL_STATUS === "SUCCESS_V057_HOOK_AND_FIRST_FRAME_PREVIEW_READY_NO_UPLOAD" &&
+    v057.CORRECTED_PREVIEW_READY === true &&
+    v057.SAFE_TO_UPLOAD === false &&
+    v057.new_upload_attempted === false &&
+    v057.fake_success === false &&
+    validation?.FINAL_STATUS === "SUCCESS_V057_HOOK_AND_FIRST_FRAME_PREVIEW_READY_NO_UPLOAD" &&
+    validation.hook_text_large_pass === true &&
+    validation.hook_text_contrast_pass === true &&
+    validation.first_frame_clickability_pass === true &&
+    validation.channel_binding_pass === true &&
+    validation.no_fake_claims_pass === true &&
+    validation.no_mojibake_pass === true &&
+    validation.disclosure_preview_pass === true &&
+    validation.upload_settings_preview_present === true &&
+    validation.no_upload_side_effects === true &&
+    validation.SAFE_TO_UPLOAD === false &&
+    validationChannel?.hook_text_large_pass === true &&
+    validationChannel.hook_text_contrast_pass === true &&
+    validationChannel.first_frame_clickability_pass === true &&
+    validationChannel.channel_binding_pass === true &&
+    validationChannel.no_fake_claims_pass === true &&
+    validationChannel.no_mojibake_pass === true &&
+    validationChannel.disclosure_preview_pass === true &&
+    validationChannel.upload_settings_preview_present === true &&
+    validationChannel.no_upload_side_effects === true &&
+    !validationChannel.blocker &&
+    clickability?.first_frame_clickability_pass === true &&
+    clickability.SAFE_TO_UPLOAD === false &&
+    clickabilityChannel?.first_frame_clickability_pass === true
+  );
+}
+
+function buildOwnerReviewedPrivateUploadEvidence(): OwnerReviewedPrivateUploadEvidence {
+  return {
+    profile: "v057_corrected_reupload",
+    correctedPreviewReady: true,
+    hookFirstFrameReviewReady: true,
+    channelBindingReady: true,
+    noUploadReviewSideEffects: true
+  };
+}
+
+async function readJsonRecord(filePath: string): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function findChannelRecord(value: unknown, channelKey: string) {
+  if (!Array.isArray(value)) return null;
+  const match = value.find((item) => isRecord(item) && item.channel_key === channelKey);
+  return isRecord(match) ? match : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function readManifest(filePath: string): Promise<V057Manifest | null> {

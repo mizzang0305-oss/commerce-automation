@@ -1,6 +1,8 @@
 import { DEFAULT_YOUTUBE_PRODUCT_DISCLOSURE_TEXT } from "@/lib/uploads/youtube/productVideoUploadPackage";
 import {
-  buildYouTubeUploadRequest
+  buildOwnerReviewedPrivateYouTubeUploadRequest,
+  buildYouTubeUploadRequest,
+  type OwnerReviewedPrivateUploadEvidence
 } from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
 import type {
   YouTubeUploadRequest
@@ -44,6 +46,9 @@ export type V094UploadPackageRequestResolverOptions = {
   uploadAssetProfile?: string | null;
   loadUploadPackages?: V094UploadPackageLoader;
   preparedVideoAssetRefs?: Partial<Record<ChannelKey, PreparedVideoAssetRef | null>>;
+  ownerReviewedPrivatePilotEvidence?: (OwnerReviewedPrivateUploadEvidence & {
+    channelKey: ChannelKey;
+  }) | null;
 };
 
 export type V094UploadPackageResolutionDiagnostics = {
@@ -157,7 +162,8 @@ async function resolveV094UploadPackageRequest(
   }
 
   const uploadRequest = buildPrivateUploadRequest(uploadPackage, {
-    preparedVideoAssetRef: options.preparedVideoAssetRefs?.[uploadPackage.channelKey] ?? null
+    preparedVideoAssetRef: options.preparedVideoAssetRefs?.[uploadPackage.channelKey] ?? null,
+    ownerReviewedPrivatePilotEvidence: options.ownerReviewedPrivatePilotEvidence ?? null
   });
   if ("blocker" in uploadRequest) {
     return uploadRequest;
@@ -197,6 +203,9 @@ function buildPrivateUploadRequest(
   uploadPackage: V073UploadPackage,
   options: {
     preparedVideoAssetRef?: PreparedVideoAssetRef | null;
+    ownerReviewedPrivatePilotEvidence?: (OwnerReviewedPrivateUploadEvidence & {
+      channelKey: ChannelKey;
+    }) | null;
   } = {}
 ): YouTubeUploadRequest | V092BlockedPrivateUploadRequestResolution {
   const preparedAssetResult = resolveV098PreparedVideoAssetBridge({
@@ -207,6 +216,7 @@ function buildPrivateUploadRequest(
     return blocked(preparedAssetResult.blocker ?? "BLOCKED_V081_VIDEO_ASSET_MISSING");
   }
 
+  const shortsContentQuality = readShortsContentQuality(uploadPackage);
   const input = {
     provider: "youtube",
     candidate_id: uploadPackage.packageId,
@@ -222,11 +232,19 @@ function buildPrivateUploadRequest(
     selected_affiliate_url: uploadPackage.deeplink.selectedAffiliateUrl ?? "",
     pinned_comment_template: uploadPackage.commentPackage.commentText,
     on_screen_cta_text: "comment link",
-    shorts_content_quality: readShortsContentQuality(uploadPackage),
+    shorts_content_quality: shortsContentQuality,
     made_for_kids: false,
     self_declared_made_for_kids: false
   } as const;
-  const built = buildYouTubeUploadRequest(input);
+  const ownerReviewEvidence = options.ownerReviewedPrivatePilotEvidence;
+  const canUseOwnerReviewedPrivatePath = Boolean(
+    !shortsContentQuality &&
+    uploadPackage.assetProfile === V057_REUPLOAD_ASSET_PROFILE &&
+    ownerReviewEvidence?.channelKey === uploadPackage.channelKey
+  );
+  const built = canUseOwnerReviewedPrivatePath && ownerReviewEvidence
+    ? buildOwnerReviewedPrivateYouTubeUploadRequest(input, ownerReviewEvidence)
+    : buildYouTubeUploadRequest(input);
 
   return built.ok
     ? built.request
@@ -298,6 +316,7 @@ function mapBuildFailureToBlocker(missingReasons: string[]): V094Blocker {
     return "BLOCKED_V081_COUPANG_DISCLOSURE_EVIDENCE_MISSING";
   }
   if (
+    reasons.has("owner_review_evidence") ||
     reasons.has("title") ||
     reasons.has("description_or_caption") ||
     reasons.has("visibility") ||

@@ -39,6 +39,7 @@ describe("v110 v057 private upload one-shot", () => {
     expect(report.blockers).toEqual([]);
     expect(report.r2ConfigReady).toBe(true);
     expect(report.runtimeContextReady).toBe(true);
+    expect(report.ownerReviewEvidenceReady).toBe(true);
     expect(report.r2UploadAttempted).toBe(false);
     expect(report.youtubeExecutionAttempted).toBe(false);
     expect(prepareAsset).not.toHaveBeenCalled();
@@ -171,6 +172,24 @@ describe("v110 v057 private upload one-shot", () => {
     expectNoUnsafeSideEffects(report);
   });
 
+  test("missing owner-review evidence blocks before R2 preparation", async () => {
+    const cwd = await fixture();
+    await rm(path.join(cwd, "commerce-assets", "review", "v057", "v057-summary.json"));
+    const prepareAsset = vi.fn();
+    const report = await runV110V057PrivateUploadOneShot({
+      cwd,
+      env: readyEnv(),
+      request: readyRequest(true),
+      prepareAsset
+    });
+
+    expect(report.status).toBe("blocked");
+    expect(report.ownerReviewEvidenceReady).toBe(false);
+    expect(report.blockers).toContain("BLOCKED_V110_OWNER_REVIEW_EVIDENCE_MISSING");
+    expect(prepareAsset).not.toHaveBeenCalled();
+    expectNoUnsafeSideEffects(report);
+  });
+
   test("stale manifest package id safely rebinds to the current V095 package for the same queue item", async () => {
     const cwd = await fixture();
     const report = await runV110V057PrivateUploadOneShot({
@@ -197,6 +216,7 @@ describe("v110 v057 private upload one-shot", () => {
       { ...readyRequest(true), visibility: "unlisted" as const },
       { ...readyRequest(true), commentAutomationAllowed: true },
       { ...readyRequest(true), schedulerExecutionAllowed: true },
+      { ...readyRequest(true), preflightBlockers: ["BLOCKED_V084_EXECUTION_CONTEXT_STALE" as const] },
       { ...readyRequest(true), readiness: { ...readyRequest(true).readiness, tokenProviderReady: false } }
     ]) {
       const report = await runV110V057PrivateUploadOneShot({ cwd, env: readyEnv(), request });
@@ -222,7 +242,8 @@ describe("v110 v057 private upload one-shot", () => {
 async function fixture() {
   const cwd = await mkdtemp(path.join(tmpdir(), "v110-"));
   roots.push(cwd);
-  const root = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs");
+  const reviewRoot = path.join(cwd, "commerce-assets", "review");
+  const root = path.join(reviewRoot, "v057", "father_jobs");
   await mkdir(root, { recursive: true });
   await writeFile(path.join(root, "corrected-preview-v057.mp4"), Buffer.from("v110-mp4"));
   await writeFile(path.join(root, "first-frame-v057.jpg"), Buffer.from("v110-frame"));
@@ -234,6 +255,44 @@ async function fixture() {
     rawCoupangUrl: RAW_COUPANG_URL,
     selectedAffiliateUrl: RAW_AFFILIATE_URL,
     coupangPartnersDisclosureText: "Coupang Partners disclosure"
+  }));
+  await mkdir(path.join(reviewRoot, "v056"), { recursive: true });
+  await writeFile(path.join(reviewRoot, "v056", "v056-corrected-preview-report.json"), JSON.stringify({
+    final_status_preview: "SUCCESS_V056_CORRECTED_PREVIEW_READY_NO_UPLOAD",
+    corrected_preview_ready: true,
+    safe_to_upload: false,
+    existing_video_mutated_by_automation: false
+  }));
+  await writeFile(path.join(reviewRoot, "v057", "v057-summary.json"), JSON.stringify({
+    FINAL_STATUS: "SUCCESS_V057_HOOK_AND_FIRST_FRAME_PREVIEW_READY_NO_UPLOAD",
+    CORRECTED_PREVIEW_READY: true,
+    SAFE_TO_UPLOAD: false,
+    new_upload_attempted: false,
+    fake_success: false
+  }));
+  const validationChannel = {
+    channel_key: "father_jobs",
+    hook_text_large_pass: true,
+    hook_text_contrast_pass: true,
+    first_frame_clickability_pass: true,
+    channel_binding_pass: true,
+    no_fake_claims_pass: true,
+    no_mojibake_pass: true,
+    disclosure_preview_pass: true,
+    upload_settings_preview_present: true,
+    no_upload_side_effects: true,
+    blocker: null
+  };
+  await writeFile(path.join(reviewRoot, "v057", "hook-overlay-validation-report.json"), JSON.stringify({
+    FINAL_STATUS: "SUCCESS_V057_HOOK_AND_FIRST_FRAME_PREVIEW_READY_NO_UPLOAD",
+    ...validationChannel,
+    SAFE_TO_UPLOAD: false,
+    channels: [validationChannel]
+  }));
+  await writeFile(path.join(reviewRoot, "v057", "first-frame-clickability-report.json"), JSON.stringify({
+    first_frame_clickability_pass: true,
+    SAFE_TO_UPLOAD: false,
+    channels: [{ channel_key: "father_jobs", first_frame_clickability_pass: true }]
   }));
   return cwd;
 }
