@@ -1503,3 +1503,46 @@ Verified local preflight result:
 - asset preparation attempted: false
 - YouTube execution attempted: false
 - next runtime step after merge: refresh V095 context, rerun V114 preflight, then request fresh approvals
+
+### T038 - V115 Exact V113 Product-Matched Asset Binding No-Upload
+
+Status: `PR_OPEN`
+
+Goal: Bind the owner-selected `father_jobs` V113 product-matched preview by exact path, size, SHA-256, first-frame, and sanitized review-summary evidence so the older V057/V112 media cannot be selected as a fallback.
+
+Current scope:
+
+- selected asset version: `v113`
+- selected file: `preview-v113.mp4`
+- product reference: `CURRENT_REAR_SEAT_MULTIFUNCTION_ORGANIZER`
+- exact video and first-frame hash evidence required
+- V113 product-copy, voice, ASR, affiliate/disclosure, and no-side-effect summary evidence required
+- V057 fallback: forbidden
+- V112 fallback: forbidden
+- server-only reader with opaque V115 storage key
+- no upload execute during implementation or validation
+- `videosInsertCalled=false`
+- `commentThreadsInsertCalled=false`
+- public/unlisted/comment/scheduler blocked
+- R2/DB/product-assets/n8n/visibility mutations: false
+- raw URL/path/full ID/token/secret/Auth/HMAC output: false
+- fake success: false
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Verified protected-asset preflight:
+
+- report version/mode: `v115` / `v113_exact_local_private_upload_one_shot`
+- selected video: `preview-v113.mp4`
+- selected SHA-256 prefix: `a98dcf4a74d7`
+- exact video/first-frame/review evidence: ready
+- V057 fallback: forbidden
+- V112 fallback: forbidden
+- asset preparation readiness: true
+- asset preparation attempted: false
+- YouTube execution attempted: false
+- current precise blocker: `BLOCKED_V110_RUNTIME_CONTEXT_NOT_READY`
+
+## Next Exact Action
+
+- Review PR #220 and require separate owner merge approval. After merge, refresh V095 runtime context and rerun the exact V113 no-upload preflight against protected local artifacts before requesting a fresh private replacement-upload approval.

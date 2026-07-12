@@ -1,3 +1,5 @@
+import "server-only";
+
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,12 +17,26 @@ import {
   type V084PrivateUploadPilotInvocationRequest
 } from "./v084PrivateUploadExecutionInvocation";
 import { APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE } from "./v114ServerLocalPreparedVideoAsset";
+import {
+  V115_EXPECTED_FIRST_FRAME_FILE_NAME,
+  V115_EXPECTED_SUMMARY_FILE_NAME,
+  V115_EXPECTED_VIDEO_FILE_NAME,
+  V115_VIDEO_ASSET_SELECTION,
+  evaluateV115ExactV113AssetEvidence,
+  type V115ExactAssetEvidenceReport
+} from "./v115ExactV113AssetContract";
+import {
+  APPROVE_V115_SERVER_LOCAL_V113_ASSET_PREPARE_ONCE
+} from "./v115ExactV113ServerLocalPreparedVideoAsset";
 
 export const APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE =
   "APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE" as const;
 
 export type V110Mode = "preflight" | "execute";
 export type V110AssetPreparationStrategy = "r2" | "server_local_file";
+export type V110VideoAssetSelection =
+  | "v057_corrected_preview"
+  | typeof V115_VIDEO_ASSET_SELECTION;
 export type V110Status = "blocked" | "ready_for_external_approval" | "private_upload_completed";
 
 export type V110PreparedAssetResult =
@@ -40,9 +56,16 @@ export type V110PrivateExecutionResult = {
 };
 
 export type V110Report = {
-  version: "v110";
-  mode: "v057_r2_private_upload_one_shot";
+  version: "v110" | "v115";
+  mode: "v057_r2_private_upload_one_shot" | "v113_exact_local_private_upload_one_shot";
   requestedMode: V110Mode;
+  videoAssetSelection: V110VideoAssetSelection;
+  selectedVideoVersion: "v057" | "v113";
+  selectedVideoFileName: "corrected-preview-v057.mp4" | typeof V115_EXPECTED_VIDEO_FILE_NAME;
+  selectedVideoSha256Prefix: string | null;
+  exactAssetEvidenceReady: boolean;
+  noV057Fallback: boolean;
+  noV112Fallback: boolean;
   status: V110Status;
   assetPreparationStrategy: V110AssetPreparationStrategy;
   assetPreparationReady: boolean;
@@ -100,6 +123,7 @@ export type V110Input = {
   env?: NodeJS.ProcessEnv;
   mode?: V110Mode;
   assetPreparationStrategy?: V110AssetPreparationStrategy;
+  videoAssetSelection?: V110VideoAssetSelection;
   request?: V084PrivateUploadPilotInvocationRequest;
   prepareAsset?: (input: {
     queueItemId: string;
@@ -138,6 +162,9 @@ const BLOCKED = {
   r2Config: "BLOCKED_V110_R2_CONFIG_NOT_READY",
   r2Approval: "BLOCKED_V110_FRESH_R2_APPROVAL_REQUIRED",
   localAssetApproval: "BLOCKED_V114_FRESH_LOCAL_ASSET_APPROVAL_REQUIRED",
+  v115LocalAssetApproval: "BLOCKED_V115_FRESH_LOCAL_ASSET_APPROVAL_REQUIRED",
+  v115ExactAsset: "BLOCKED_V115_EXACT_V113_ASSET_EVIDENCE_INCOMPLETE",
+  v115Strategy: "BLOCKED_V115_SERVER_LOCAL_ASSET_STRATEGY_REQUIRED",
   uploadApproval: "BLOCKED_V110_FRESH_PRIVATE_UPLOAD_APPROVAL_REQUIRED",
   executor: "BLOCKED_V110_EXECUTOR_NOT_INJECTED",
   r2Prepare: "BLOCKED_V110_R2_PREPARE_FAILED",
@@ -150,26 +177,55 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   const env = input.env ?? process.env;
   const requestedMode = input.mode ?? "preflight";
   const assetPreparationStrategy = input.assetPreparationStrategy ?? "r2";
+  const videoAssetSelection = input.videoAssetSelection ?? "v057_corrected_preview";
+  const useExactV113Asset = videoAssetSelection === V115_VIDEO_ASSET_SELECTION;
   const request = input.request ?? await buildV084PrivateUploadPilotInvocationRequestFromEnv({
     env,
     dryRun: requestedMode !== "execute"
   });
   const manifestPath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "product-source-v057.local.json");
-  const videoPath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "corrected-preview-v057.mp4");
-  const firstFramePath = path.join(cwd, "commerce-assets", "review", "v057", "father_jobs", "first-frame-v057.jpg");
+  const selectedAssetRoot = useExactV113Asset
+    ? path.join(cwd, "commerce-assets", "review", "v113", "father_jobs")
+    : path.join(cwd, "commerce-assets", "review", "v057", "father_jobs");
+  const videoPath = path.join(
+    selectedAssetRoot,
+    useExactV113Asset ? V115_EXPECTED_VIDEO_FILE_NAME : "corrected-preview-v057.mp4"
+  );
+  const firstFramePath = path.join(
+    selectedAssetRoot,
+    useExactV113Asset ? V115_EXPECTED_FIRST_FRAME_FILE_NAME : "first-frame-v057.jpg"
+  );
   const v056ReviewPath = path.join(cwd, "commerce-assets", "review", "v056", "v056-corrected-preview-report.json");
   const v057SummaryPath = path.join(cwd, "commerce-assets", "review", "v057", "v057-summary.json");
   const v057ValidationPath = path.join(cwd, "commerce-assets", "review", "v057", "hook-overlay-validation-report.json");
   const v057ClickabilityPath = path.join(cwd, "commerce-assets", "review", "v057", "first-frame-clickability-report.json");
   const manifest = await readManifest(manifestPath);
   const video = await readNonEmptyFile(videoPath);
-  const firstFramePresent = await isNonEmptyFile(firstFramePath);
-  const ownerReviewEvidenceReady = await hasOwnerReviewedV057Evidence({
-    v056ReviewPath,
-    v057SummaryPath,
-    v057ValidationPath,
-    v057ClickabilityPath
-  });
+  const firstFrame = await readNonEmptyFile(firstFramePath);
+  const firstFramePresent = Boolean(firstFrame);
+  const selectedVideoSha256 = video
+    ? crypto.createHash("sha256").update(video).digest("hex")
+    : null;
+  const exactV113Evidence = useExactV113Asset
+    ? evaluateV115ExactV113AssetEvidence({
+        videoPresent: Boolean(video),
+        videoSizeBytes: video?.byteLength ?? null,
+        videoSha256: selectedVideoSha256,
+        firstFramePresent,
+        firstFrameSha256: firstFrame
+          ? crypto.createHash("sha256").update(firstFrame).digest("hex")
+          : null,
+        summary: await readJsonRecord(path.join(selectedAssetRoot, V115_EXPECTED_SUMMARY_FILE_NAME))
+      })
+    : null;
+  const ownerReviewEvidenceReady = useExactV113Asset
+    ? exactV113Evidence?.ready === true
+    : await hasOwnerReviewedV057Evidence({
+        v056ReviewPath,
+        v057SummaryPath,
+        v057ValidationPath,
+        v057ClickabilityPath
+      });
   const runtimeContextReady = isRuntimeContextReady(request);
   const manifestQueueItemMatch = Boolean(
     manifest &&
@@ -192,7 +248,9 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   const affiliateEvidencePresent = Boolean(safeString(manifest?.selectedAffiliateUrl));
   const disclosureEvidencePresent = Boolean(safeString(manifest?.coupangPartnersDisclosureText));
   const r2ConfigReady = hasR2Config(env);
-  const assetPreparationReady = assetPreparationStrategy === "r2" ? r2ConfigReady : Boolean(video);
+  const assetPreparationReady = useExactV113Asset
+    ? assetPreparationStrategy === "server_local_file" && exactV113Evidence?.ready === true
+    : assetPreparationStrategy === "r2" ? r2ConfigReady : Boolean(video);
   const blockers = compact([
     manifest ? null : BLOCKED.manifest,
     video ? null : BLOCKED.video,
@@ -203,6 +261,8 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     affiliateEvidencePresent ? null : BLOCKED.affiliate,
     disclosureEvidencePresent ? null : BLOCKED.disclosure,
     ownerReviewEvidenceReady ? null : BLOCKED.ownerReview,
+    useExactV113Asset && exactV113Evidence?.ready !== true ? BLOCKED.v115ExactAsset : null,
+    useExactV113Asset && assetPreparationStrategy !== "server_local_file" ? BLOCKED.v115Strategy : null,
     assetPreparationReady ? null : (assetPreparationStrategy === "r2" ? BLOCKED.r2Config : null)
   ]);
   const r2ApprovalAccepted = env.V110_R2_PREPARE_APPROVAL ===
@@ -211,11 +271,18 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT;
   const localAssetApprovalAccepted = env.V114_LOCAL_ASSET_PREPARE_APPROVAL ===
     APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE;
+  const v115LocalAssetApprovalAccepted = env.V115_LOCAL_ASSET_PREPARE_APPROVAL ===
+    APPROVE_V115_SERVER_LOCAL_V113_ASSET_PREPARE_ONCE;
   const assetPreparationApprovalAccepted = assetPreparationStrategy === "r2"
     ? r2ApprovalAccepted
-    : localAssetApprovalAccepted;
+    : useExactV113Asset
+      ? v115LocalAssetApprovalAccepted
+      : localAssetApprovalAccepted;
   const base = buildBaseReport({
     requestedMode,
+    videoAssetSelection,
+    selectedVideoSha256,
+    exactV113Evidence,
     assetPreparationStrategy,
     assetPreparationReady,
     assetPreparationApprovalAccepted,
@@ -247,7 +314,9 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
       ? null
       : assetPreparationStrategy === "r2"
         ? BLOCKED.r2Approval
-        : BLOCKED.localAssetApproval,
+        : useExactV113Asset
+          ? BLOCKED.v115LocalAssetApproval
+          : BLOCKED.localAssetApproval,
     privateUploadApprovalAccepted ? null : BLOCKED.uploadApproval
   ]);
   if (approvalBlockers.length > 0) {
@@ -321,6 +390,9 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
 
 function buildBaseReport(input: {
   requestedMode: V110Mode;
+  videoAssetSelection: V110VideoAssetSelection;
+  selectedVideoSha256: string | null;
+  exactV113Evidence: V115ExactAssetEvidenceReport | null;
   assetPreparationStrategy: V110AssetPreparationStrategy;
   assetPreparationReady: boolean;
   assetPreparationApprovalAccepted: boolean;
@@ -342,9 +414,22 @@ function buildBaseReport(input: {
   privateUploadApprovalAccepted: boolean;
 }): V110Report {
   return {
-    version: "v110",
-    mode: "v057_r2_private_upload_one_shot",
+    version: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION ? "v115" : "v110",
+    mode: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION
+      ? "v113_exact_local_private_upload_one_shot"
+      : "v057_r2_private_upload_one_shot",
     requestedMode: input.requestedMode,
+    videoAssetSelection: input.videoAssetSelection,
+    selectedVideoVersion: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION ? "v113" : "v057",
+    selectedVideoFileName: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION
+      ? V115_EXPECTED_VIDEO_FILE_NAME
+      : "corrected-preview-v057.mp4",
+    selectedVideoSha256Prefix: input.selectedVideoSha256?.slice(0, 12) ?? null,
+    exactAssetEvidenceReady: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION
+      ? input.exactV113Evidence?.ready === true
+      : false,
+    noV057Fallback: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION,
+    noV112Fallback: input.videoAssetSelection === V115_VIDEO_ASSET_SELECTION,
     status: "blocked",
     assetPreparationStrategy: input.assetPreparationStrategy,
     assetPreparationReady: input.assetPreparationReady,
@@ -528,15 +613,6 @@ async function readNonEmptyFile(filePath: string) {
     return bytes.byteLength > 0 ? bytes : null;
   } catch {
     return null;
-  }
-}
-
-async function isNonEmptyFile(filePath: string) {
-  try {
-    const stat = await fs.stat(filePath);
-    return stat.isFile() && stat.size > 0;
-  } catch {
-    return false;
   }
 }
 

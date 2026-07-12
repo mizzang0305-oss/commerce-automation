@@ -27,24 +27,38 @@ import {
   createV114ServerLocalVideoAssetReader,
   prepareV114ServerLocalVideoAsset
 } from "../../src/uploads/youtube/v114ServerLocalPreparedVideoAsset";
+import { V115_VIDEO_ASSET_SELECTION } from "../../src/uploads/youtube/v115ExactV113AssetContract";
+import {
+  createV115ExactV113ServerLocalVideoAssetReader,
+  prepareV115ExactV113ServerLocalVideoAsset
+} from "../../src/uploads/youtube/v115ExactV113ServerLocalPreparedVideoAsset";
 
 async function main() {
   const cwd = process.env.V095_CWD || process.env.V084_CWD || process.cwd();
   const env = loadLocalEnv(cwd, process.env);
   Object.assign(process.env, env);
   const execute = process.argv.includes("--execute");
-  const useServerLocalAsset = process.argv.includes("--server-local-asset");
+  const useExactV113Asset = process.argv.includes("--exact-v113-asset");
+  const useServerLocalAsset = process.argv.includes("--server-local-asset") || useExactV113Asset;
   const report = await runV110V057PrivateUploadOneShot({
     cwd,
     env,
     mode: execute ? "execute" : "preflight",
     assetPreparationStrategy: useServerLocalAsset ? "server_local_file" : "r2",
+    videoAssetSelection: useExactV113Asset
+      ? V115_VIDEO_ASSET_SELECTION
+      : "v057_corrected_preview",
     prepareAsset: async (input) => {
       if (useServerLocalAsset) {
-        const local = await prepareV114ServerLocalVideoAsset({
-          cwd,
-          queueItemId: input.queueItemId
-        });
+        const local = useExactV113Asset
+          ? await prepareV115ExactV113ServerLocalVideoAsset({
+              cwd,
+              queueItemId: input.queueItemId
+            })
+          : await prepareV114ServerLocalVideoAsset({
+              cwd,
+              queueItemId: input.queueItemId
+            });
         return local.ok
           ? { ok: true, assetRef: local.assetRef }
           : { ok: false, blocker: local.blocker };
@@ -87,7 +101,9 @@ async function main() {
         env,
         uploadRequestResolver,
         preparedVideoAssetReader: useServerLocalAsset
-          ? createV114ServerLocalVideoAssetReader({ cwd })
+          ? useExactV113Asset
+            ? createV115ExactV113ServerLocalVideoAssetReader({ cwd })
+            : createV114ServerLocalVideoAssetReader({ cwd })
           : undefined
       });
       const factory = createV083RealPrivateUploadExecutionAdapterFactory({
@@ -150,11 +166,25 @@ function loadLocalEnv(cwd: string, baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEn
 }
 
 main().catch(() => {
+  const useExactV113Asset = process.argv.includes("--exact-v113-asset");
   process.stdout.write(`${JSON.stringify({
-    version: "v110",
-    mode: "v057_r2_private_upload_one_shot",
+    version: useExactV113Asset ? "v115" : "v110",
+    mode: useExactV113Asset
+      ? "v113_exact_local_private_upload_one_shot"
+      : "v057_r2_private_upload_one_shot",
     status: "blocked",
     blockers: ["BLOCKED_V110_SAFE_SERVER_ERROR"],
+    videoAssetSelection: useExactV113Asset
+      ? V115_VIDEO_ASSET_SELECTION
+      : "v057_corrected_preview",
+    selectedVideoVersion: useExactV113Asset ? "v113" : "v057",
+    selectedVideoFileName: useExactV113Asset
+      ? "preview-v113.mp4"
+      : "corrected-preview-v057.mp4",
+    selectedVideoSha256Prefix: null,
+    exactAssetEvidenceReady: false,
+    noV057Fallback: useExactV113Asset,
+    noV112Fallback: useExactV113Asset,
     assetPreparationStrategy: "r2",
     assetPreparationReady: false,
     assetPreparationApprovalAccepted: false,
