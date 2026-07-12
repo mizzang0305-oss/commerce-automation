@@ -41,6 +41,7 @@ export type V115ExactAssetEvidenceReport = {
   productMatched: boolean;
   voiceEvidenceReady: boolean;
   pinnedCommentPackageReady: boolean;
+  reviewPacketRedactionReady: boolean;
   ownerSelectedExactAsset: boolean;
   noV057Fallback: true;
   noV112Fallback: true;
@@ -97,10 +98,19 @@ export function evaluateV115ExactV113AssetEvidence(
     pinnedCommentPackage.commentMutationAllowed === false &&
     pinnedCommentPackage.rawUrlPrinted === false
   );
+  const reviewPacketRedactionReady = Boolean(
+    summary?.raw_urls_printed === false &&
+    summary.raw_file_paths_printed === false &&
+    summary.raw_video_ids_printed === false &&
+    summary.raw_channel_ids_printed === false &&
+    summary.secrets_printed === false &&
+    summary.transcriptPrinted === false
+  );
   const summaryEvidenceReady = Boolean(
     productMatched &&
     voiceEvidenceReady &&
     pinnedCommentPackageReady &&
+    reviewPacketRedactionReady &&
     Array.isArray(summary?.blockers) &&
     summary.blockers.length === 0 &&
     summary.uploadExecuteCalled === false &&
@@ -117,6 +127,7 @@ export function evaluateV115ExactV113AssetEvidence(
     exactVideoHashMatch ? null : "BLOCKED_V115_EXACT_V113_VIDEO_HASH_MISMATCH",
     observed.firstFramePresent ? null : "BLOCKED_V115_EXACT_V113_FIRST_FRAME_MISSING",
     exactFirstFrameHashMatch ? null : "BLOCKED_V115_EXACT_V113_FIRST_FRAME_HASH_MISMATCH",
+    reviewPacketRedactionReady ? null : "BLOCKED_V115_V113_REDACTION_EVIDENCE_INCOMPLETE",
     summaryEvidenceReady ? null : "BLOCKED_V115_V113_REVIEW_EVIDENCE_INCOMPLETE"
   ]);
 
@@ -135,6 +146,7 @@ export function evaluateV115ExactV113AssetEvidence(
     productMatched,
     voiceEvidenceReady,
     pinnedCommentPackageReady,
+    reviewPacketRedactionReady,
     ownerSelectedExactAsset: exactVideoSizeMatch && exactVideoHashMatch,
     noV057Fallback: true,
     noV112Fallback: true,

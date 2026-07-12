@@ -27,6 +27,7 @@ The V115 path requires all of the following before local preparation can become 
 - product-matched script and replacement voice evidence are ready
 - ASR similarity and product-anchor evidence pass
 - pinned-comment package contains affiliate/disclosure evidence but comment mutation remains disabled
+- source review summary explicitly records raw URL, local path, full ID, secret, and transcript output flags as false
 - summary records zero upload/comment/visibility side effects and no fake success
 
 Any missing or mismatched evidence fails closed. V057 and V112 files are never considered as fallback candidates in this path.

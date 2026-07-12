@@ -49,6 +49,7 @@ describe("V115 exact V113 product-matched asset binding", () => {
       productMatched: true,
       voiceEvidenceReady: true,
       pinnedCommentPackageReady: true,
+      reviewPacketRedactionReady: true,
       ownerSelectedExactAsset: true,
       noV057Fallback: true,
       noV112Fallback: true,
@@ -102,6 +103,58 @@ describe("V115 exact V113 product-matched asset binding", () => {
     expect(report.productMatched).toBe(false);
     expect(report.blockers).toContain("BLOCKED_V115_V113_REVIEW_EVIDENCE_INCOMPLETE");
     expectRedacted(report);
+  });
+
+  test.each([
+    "raw_urls_printed",
+    "raw_file_paths_printed",
+    "raw_video_ids_printed",
+    "raw_channel_ids_printed",
+    "secrets_printed",
+    "transcriptPrinted"
+  ])("blocks when source review redaction evidence %s is unsafe", (field) => {
+    const report = evaluateV115ExactV113AssetEvidence({
+      videoPresent: true,
+      videoSizeBytes: 123,
+      videoSha256: "a".repeat(64),
+      firstFramePresent: true,
+      firstFrameSha256: "b".repeat(64),
+      summary: {
+        ...readySummary(),
+        [field]: true
+      }
+    }, {
+      videoSizeBytes: 123,
+      videoSha256: "a".repeat(64),
+      firstFrameSha256: "b".repeat(64)
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.reviewPacketRedactionReady).toBe(false);
+    expect(report.blockers).toContain("BLOCKED_V115_V113_REDACTION_EVIDENCE_INCOMPLETE");
+    expect(report.blockers).toContain("BLOCKED_V115_V113_REVIEW_EVIDENCE_INCOMPLETE");
+    expectRedacted(report);
+  });
+
+  test("blocks when source review redaction evidence is omitted", () => {
+    const summary: Record<string, unknown> = readySummary();
+    delete summary.raw_urls_printed;
+    const report = evaluateV115ExactV113AssetEvidence({
+      videoPresent: true,
+      videoSizeBytes: 123,
+      videoSha256: "a".repeat(64),
+      firstFramePresent: true,
+      firstFrameSha256: "b".repeat(64),
+      summary
+    }, {
+      videoSizeBytes: 123,
+      videoSha256: "a".repeat(64),
+      firstFrameSha256: "b".repeat(64)
+    });
+
+    expect(report.ready).toBe(false);
+    expect(report.reviewPacketRedactionReady).toBe(false);
+    expect(report.blockers).toContain("BLOCKED_V115_V113_REDACTION_EVIDENCE_INCOMPLETE");
   });
 
   test("does not fall back to an existing V057 or V112 file when V113 is selected", async () => {
@@ -201,6 +254,12 @@ function readySummary() {
     videosInsertCalled: false,
     commentThreadsInsertCalled: false,
     visibilityChanged: false,
+    raw_urls_printed: false,
+    raw_file_paths_printed: false,
+    raw_video_ids_printed: false,
+    raw_channel_ids_printed: false,
+    secrets_printed: false,
+    transcriptPrinted: false,
     fake_success: false,
     SAFE_TO_UPLOAD: false,
     SAFE_TO_PUBLIC_UPLOAD: false
