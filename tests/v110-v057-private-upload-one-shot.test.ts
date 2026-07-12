@@ -11,6 +11,7 @@ import {
   APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE,
   runV110V057PrivateUploadOneShot
 } from "../src/uploads/youtube/v110V057PrivateUploadOneShot";
+import { APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE } from "../src/uploads/youtube/v114ServerLocalPreparedVideoAsset";
 
 const roots: string[] = [];
 const RAW_COUPANG_URL = "https://www.coupang.com/vp/products/v110-hidden";
@@ -126,6 +127,99 @@ describe("v110 v057 private upload one-shot", () => {
     expect(report.R2_upload).toBe(false);
     expect(executePrivateUpload).not.toHaveBeenCalled();
     expectNoUnsafeSideEffects(report);
+  });
+
+  test("R2 failure preserves only sanitized HTTP diagnostics", async () => {
+    const cwd = await fixture();
+    const report = await runV110V057PrivateUploadOneShot({
+      cwd,
+      mode: "execute",
+      env: approvedEnv(),
+      request: readyRequest(false),
+      prepareAsset: async () => ({
+        ok: false,
+        blocker: "r2_put_failed_403",
+        diagnostics: {
+          provider: "r2",
+          operation: "put_object",
+          request_attempted: true,
+          http_status: 403,
+          safe_error_code: "R2_ACCESS_DENIED",
+          raw_response_body_printed: false,
+          raw_request_url_printed: false,
+          auth_header_value_printed: false,
+          credentials_printed: false
+        }
+      }),
+      executePrivateUpload: vi.fn()
+    });
+
+    expect(report.r2HttpStatus).toBe(403);
+    expect(report.r2SafeErrorCode).toBe("R2_ACCESS_DENIED");
+    expect(JSON.stringify(report)).not.toMatch(/Authorization|Signature=|Credential=|raw-provider-response/i);
+    expectNoUnsafeSideEffects(report);
+  });
+
+  test("server-local strategy does not require R2 config and remains approval-gated", async () => {
+    const cwd = await fixture();
+    const env = {
+      V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT
+    };
+    const prepareAsset = vi.fn();
+    const report = await runV110V057PrivateUploadOneShot({
+      cwd,
+      mode: "execute",
+      env,
+      request: readyRequest(false),
+      assetPreparationStrategy: "server_local_file",
+      prepareAsset,
+      executePrivateUpload: vi.fn()
+    });
+
+    expect(report.assetPreparationStrategy).toBe("server_local_file");
+    expect(report.assetPreparationReady).toBe(true);
+    expect(report.r2ConfigReady).toBe(false);
+    expect(report.blockers).toContain("BLOCKED_V114_FRESH_LOCAL_ASSET_APPROVAL_REQUIRED");
+    expect(prepareAsset).not.toHaveBeenCalled();
+    expectNoUnsafeSideEffects(report);
+  });
+
+  test("approved server-local strategy prepares local evidence without R2 and delegates once to a mock", async () => {
+    const cwd = await fixture();
+    const prepareAsset = vi.fn(async () => ({ ok: true as const, assetRef: preparedAsset() }));
+    const executePrivateUpload = vi.fn(async () => ({
+      completed: true,
+      blockers: [],
+      videosInsertCalled: true,
+      videosInsertTotalCount: 1 as const,
+      commentThreadsInsertCalled: false as const,
+      uploadResultEvidencePresent: true,
+      youtubeVideoIdHashPrefix: "0123456789",
+      channelIdHashPrefix: "9876543210",
+      fakeSuccess: false as const
+    }));
+    const report = await runV110V057PrivateUploadOneShot({
+      cwd,
+      mode: "execute",
+      env: {
+        V114_LOCAL_ASSET_PREPARE_APPROVAL: APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE,
+        V084_PRIVATE_UPLOAD_APPROVAL_PHRASE: APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT
+      },
+      request: readyRequest(false),
+      assetPreparationStrategy: "server_local_file",
+      prepareAsset,
+      executePrivateUpload
+    });
+
+    expect(report.status).toBe("private_upload_completed");
+    expect(report.assetPrepared).toBe(true);
+    expect(report.localAssetReadAttempted).toBe(true);
+    expect(report.localAssetPrepared).toBe(true);
+    expect(report.r2UploadAttempted).toBe(false);
+    expect(report.R2_upload).toBe(false);
+    expect(prepareAsset).toHaveBeenCalledTimes(1);
+    expect(executePrivateUpload).toHaveBeenCalledTimes(1);
+    expectRedacted(report);
   });
 
   test("incomplete adapter evidence never reports completion", async () => {

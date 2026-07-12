@@ -14,7 +14,16 @@ type ServerYouTubeUploadAdapterOptions = {
   accessTokenProvider?: () => Promise<YouTubeUploadAccessTokenResult>;
   fetchImpl?: typeof fetch;
   env?: NodeJS.ProcessEnv;
+  preparedVideoAssetReader?: ServerPreparedVideoAssetReader;
 };
+
+export type ServerPreparedVideoAssetReadResult =
+  | { ok: true; bytes: ArrayBuffer; size: number }
+  | { ok: false; blocked_reasons: string[]; safe_error: string };
+
+export type ServerPreparedVideoAssetReader = (
+  asset: PreparedVideoAssetRef
+) => Promise<ServerPreparedVideoAssetReadResult>;
 
 export class MockYouTubeUploadAdapter implements YouTubeUploadAdapter {
   async upload(request: YouTubeUploadRequest): Promise<YouTubeUploadResult> {
@@ -38,12 +47,14 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
   private readonly accessTokenProvider?: () => Promise<YouTubeUploadAccessTokenResult>;
   private readonly fetchImpl: typeof fetch;
   private readonly env: NodeJS.ProcessEnv;
+  private readonly preparedVideoAssetReader?: ServerPreparedVideoAssetReader;
 
   constructor(options: ServerYouTubeUploadAdapterOptions = {}) {
     this.accessToken = options.accessToken;
     this.accessTokenProvider = options.accessTokenProvider;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.env = options.env ?? process.env;
+    this.preparedVideoAssetReader = options.preparedVideoAssetReader;
   }
 
   async upload(request: YouTubeUploadRequest): Promise<YouTubeUploadResult> {
@@ -197,6 +208,17 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
 
   private async readPreparedVideoAsset(asset: PreparedVideoAssetRef):
     Promise<{ ok: true; bytes: ArrayBuffer; size: number } | { ok: false; blocked_reasons: string[]; safe_error: string }> {
+    if (asset.provider === "server_local_file") {
+      if (!this.preparedVideoAssetReader) {
+        return {
+          ok: false,
+          blocked_reasons: ["server_local_asset_reader_required"],
+          safe_error: "Server-local prepared video asset reader is not configured."
+        };
+      }
+      return this.preparedVideoAssetReader(asset);
+    }
+
     const assetUrl = asset.prepared_video_asset_url || asset.signed_url;
     if (!assetUrl || !/^https:\/\//i.test(assetUrl)) {
       return {

@@ -58,15 +58,55 @@ export type ServerVideoAssetUploadInput = {
   checksum_sha256: string;
 };
 
+export type R2PutSafeErrorCode =
+  | "R2_CONFIGURATION_ERROR"
+  | "R2_ACCESS_DENIED"
+  | "R2_INVALID_ACCESS_KEY_ID"
+  | "R2_SIGNATURE_DOES_NOT_MATCH"
+  | "R2_REQUEST_TIME_TOO_SKEWED"
+  | "R2_NO_SUCH_BUCKET"
+  | "R2_NO_SUCH_KEY"
+  | "R2_INVALID_REQUEST"
+  | "R2_REQUEST_TIMEOUT"
+  | "R2_REQUEST_CONFLICT"
+  | "R2_RATE_LIMITED"
+  | "R2_INTERNAL_ERROR"
+  | "R2_SERVICE_UNAVAILABLE"
+  | "R2_PERMISSION_REJECTED"
+  | "R2_BUCKET_OR_OBJECT_NOT_FOUND"
+  | "R2_HTTP_CLIENT_ERROR"
+  | "R2_HTTP_SERVER_ERROR"
+  | "R2_NETWORK_ERROR";
+
+export type R2PutDiagnostics = {
+  provider: "r2";
+  operation: "put_object";
+  request_attempted: boolean;
+  http_status: number | null;
+  safe_error_code: R2PutSafeErrorCode | null;
+  raw_response_body_printed: false;
+  raw_request_url_printed: false;
+  auth_header_value_printed: false;
+  credentials_printed: false;
+};
+
+export type R2PutUploadDependencies = {
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  now?: () => Date;
+};
+
 export type ServerVideoAssetUploadResult =
   | {
       ok: true;
       asset_ref: PreparedVideoAssetRef;
+      diagnostics: R2PutDiagnostics;
     }
   | {
       ok: false;
       error_code: "R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED" | "SERVER_VIDEO_ASSET_UPLOAD_FAILED";
       blocked_reasons: string[];
+      diagnostics: R2PutDiagnostics;
     };
 
 export type OneProductServerAssetRegistrationDependencies = {
@@ -281,14 +321,20 @@ async function verifyCandidateLinkedPersistence(
 }
 
 export async function uploadVideoBufferToR2(
-  input: ServerVideoAssetUploadInput
+  input: ServerVideoAssetUploadInput,
+  dependencies: R2PutUploadDependencies = {}
 ): Promise<ServerVideoAssetUploadResult> {
-  const config = readR2Config();
+  const config = readR2Config(dependencies.env ?? process.env);
   if (!config.ok) {
     return {
       ok: false,
       error_code: "R2_OR_STORAGE_PROVIDER_NOT_CONFIGURED",
-      blocked_reasons: config.blocked_reasons
+      blocked_reasons: config.blocked_reasons,
+      diagnostics: buildR2PutDiagnostics({
+        requestAttempted: false,
+        httpStatus: null,
+        safeErrorCode: "R2_CONFIGURATION_ERROR"
+      })
     };
   }
 
@@ -298,7 +344,7 @@ export async function uploadVideoBufferToR2(
   const uploadUrl = `${endpointUrl.origin}${canonicalUri}`;
 
   const payloadHash = input.checksum_sha256;
-  const { amzDate, dateStamp } = createAmzDates();
+  const { amzDate, dateStamp } = createAmzDates((dependencies.now ?? (() => new Date()))());
   const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
   const canonicalHeaders = [
     `host:${endpointUrl.host}`,
@@ -328,9 +374,11 @@ export async function uploadVideoBufferToR2(
     `Signature=${signature}`
   ].join(", ");
   const requestBody = new Uint8Array(input.file_buffer);
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  let successfulHttpStatus = 200;
 
   try {
-    const response = await fetch(uploadUrl, {
+    const response = await fetchImpl(uploadUrl, {
       method: "PUT",
       headers: {
         "Authorization": authorization,
@@ -342,17 +390,32 @@ export async function uploadVideoBufferToR2(
       body: requestBody
     });
     if (!response.ok) {
+      const safeErrorCode = await resolveR2PutSafeErrorCode(response);
       return {
         ok: false,
         error_code: "SERVER_VIDEO_ASSET_UPLOAD_FAILED",
-        blocked_reasons: [`r2_put_failed_${response.status}`]
+        blocked_reasons: [
+          `r2_put_failed_${response.status}`,
+          safeErrorCode.toLowerCase()
+        ],
+        diagnostics: buildR2PutDiagnostics({
+          requestAttempted: true,
+          httpStatus: response.status,
+          safeErrorCode
+        })
       };
     }
+    successfulHttpStatus = response.status;
   } catch {
     return {
       ok: false,
       error_code: "SERVER_VIDEO_ASSET_UPLOAD_FAILED",
-      blocked_reasons: ["r2_put_failed"]
+      blocked_reasons: ["r2_put_failed", "r2_network_error"],
+      diagnostics: buildR2PutDiagnostics({
+        requestAttempted: true,
+        httpStatus: null,
+        safeErrorCode: "R2_NETWORK_ERROR"
+      })
     };
   }
 
@@ -362,6 +425,11 @@ export async function uploadVideoBufferToR2(
 
   return {
     ok: true,
+    diagnostics: buildR2PutDiagnostics({
+      requestAttempted: true,
+      httpStatus: successfulHttpStatus,
+      safeErrorCode: null
+    }),
     asset_ref: {
       asset_id: buildProductAssetId(input.candidateId),
       provider: "r2",
@@ -377,7 +445,7 @@ export async function uploadVideoBufferToR2(
   };
 }
 
-function readR2Config():
+function readR2Config(env: NodeJS.ProcessEnv):
   | {
       ok: true;
       endpoint: string;
@@ -391,12 +459,13 @@ function readR2Config():
       ok: false;
       blocked_reasons: string[];
     } {
-  const endpoint = pickEnv("R2_ENDPOINT_URL", "S3_ENDPOINT_URL");
-  const accessKeyId = pickEnv("R2_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID");
-  const secretKey = pickEnv("R2_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY");
-  const region = pickEnv("R2_REGION", "S3_REGION") || "auto";
-  const bucket = pickEnv("R2_RENDERED_VIDEOS_BUCKET", "S3_RENDERED_VIDEOS_BUCKET", "STORAGE_RENDERED_VIDEOS_BUCKET") || "rendered-videos";
+  const endpoint = pickEnv(env, "R2_ENDPOINT_URL", "S3_ENDPOINT_URL");
+  const accessKeyId = pickEnv(env, "R2_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID");
+  const secretKey = pickEnv(env, "R2_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY");
+  const region = pickEnv(env, "R2_REGION", "S3_REGION") || "auto";
+  const bucket = pickEnv(env, "R2_RENDERED_VIDEOS_BUCKET", "S3_RENDERED_VIDEOS_BUCKET", "STORAGE_RENDERED_VIDEOS_BUCKET") || "rendered-videos";
   const publicBaseUrl = pickEnv(
+    env,
     "R2_PUBLIC_BASE_URL_RENDERED_VIDEOS",
     "PUBLIC_RENDERED_VIDEOS_BASE_URL",
     "PUBLIC_STORAGE_BASE_URL"
@@ -535,14 +604,95 @@ function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
 }
 
-function pickEnv(...names: string[]) {
+function pickEnv(env: NodeJS.ProcessEnv, ...names: string[]) {
   for (const name of names) {
-    const value = process.env[name]?.trim();
+    const value = env[name]?.trim();
     if (value) {
       return value;
     }
   }
   return "";
+}
+
+const R2_PROVIDER_ERROR_CODES: Readonly<Record<string, R2PutSafeErrorCode>> = {
+  AccessDenied: "R2_ACCESS_DENIED",
+  InvalidAccessKeyId: "R2_INVALID_ACCESS_KEY_ID",
+  SignatureDoesNotMatch: "R2_SIGNATURE_DOES_NOT_MATCH",
+  RequestTimeTooSkewed: "R2_REQUEST_TIME_TOO_SKEWED",
+  NoSuchBucket: "R2_NO_SUCH_BUCKET",
+  NoSuchKey: "R2_NO_SUCH_KEY",
+  InvalidRequest: "R2_INVALID_REQUEST",
+  RequestTimeout: "R2_REQUEST_TIMEOUT",
+  SlowDown: "R2_RATE_LIMITED",
+  InternalError: "R2_INTERNAL_ERROR",
+  ServiceUnavailable: "R2_SERVICE_UNAVAILABLE"
+};
+
+async function resolveR2PutSafeErrorCode(response: Response): Promise<R2PutSafeErrorCode> {
+  const providerCode = await readBoundedR2ProviderCode(response);
+  if (providerCode && R2_PROVIDER_ERROR_CODES[providerCode]) {
+    return R2_PROVIDER_ERROR_CODES[providerCode];
+  }
+  if (response.status === 401 || response.status === 403) {
+    return "R2_PERMISSION_REJECTED";
+  }
+  if (response.status === 404) {
+    return "R2_BUCKET_OR_OBJECT_NOT_FOUND";
+  }
+  if (response.status === 409) {
+    return "R2_REQUEST_CONFLICT";
+  }
+  if (response.status === 429) {
+    return "R2_RATE_LIMITED";
+  }
+  if (response.status >= 500) {
+    return "R2_HTTP_SERVER_ERROR";
+  }
+  return "R2_HTTP_CLIENT_ERROR";
+}
+
+async function readBoundedR2ProviderCode(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Buffer[] = [];
+  let byteLength = 0;
+  const maxBytes = 8 * 1024;
+  try {
+    while (byteLength < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = maxBytes - byteLength;
+      const chunk = Buffer.from(value).subarray(0, remaining);
+      chunks.push(chunk);
+      byteLength += chunk.byteLength;
+      if (value.byteLength > remaining) break;
+    }
+  } catch {
+    return null;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  const bodyPrefix = Buffer.concat(chunks).toString("utf8");
+  const match = bodyPrefix.match(/<Code>\s*([A-Za-z][A-Za-z0-9]{0,63})\s*<\/Code>/i);
+  return match?.[1] ?? null;
+}
+
+function buildR2PutDiagnostics(input: {
+  requestAttempted: boolean;
+  httpStatus: number | null;
+  safeErrorCode: R2PutSafeErrorCode | null;
+}): R2PutDiagnostics {
+  return {
+    provider: "r2",
+    operation: "put_object",
+    request_attempted: input.requestAttempted,
+    http_status: input.httpStatus,
+    safe_error_code: input.safeErrorCode,
+    raw_response_body_printed: false,
+    raw_request_url_printed: false,
+    auth_header_value_printed: false,
+    credentials_printed: false
+  };
 }
 
 function toSafeSlug(value: string) {

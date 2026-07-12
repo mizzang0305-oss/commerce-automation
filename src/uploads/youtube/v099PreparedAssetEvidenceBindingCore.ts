@@ -21,6 +21,7 @@ export type V099PreparedAssetEvidenceBindingResult = {
 };
 
 const ALLOWED_UPLOADABLE_PROVIDERS = new Set<PreparedVideoAssetProvider>([
+  "server_local_file",
   "r2",
   "supabase_storage",
   "external_https",
@@ -37,6 +38,9 @@ export function bindV099PreparedVideoAssetEvidence(input: {
   const preparedAsset = normalizePreparedVideoAssetRef(input.preparedVideoAssetRef);
   const preparedAssetEvidencePresent = Boolean(preparedAsset);
   const preparedAssetUploadableUrlPresent = hasUploadableHttpsUrl(preparedAsset);
+  const preparedAssetServerLocalRefPresent = Boolean(
+    preparedAsset?.provider === "server_local_file" && safeTrim(preparedAsset.storage_key)
+  );
   const preparedAssetExpired = preparedAsset?.expires_at ? isExpired(preparedAsset.expires_at) : null;
   const preparedAssetHashPrefix = safeHashPrefix(preparedAsset?.checksum_sha256) ?? safeHashPrefix(input.videoAssetHashPrefix);
   const readiness = buildPreparedVideoAssetReadiness({
@@ -47,7 +51,7 @@ export function bindV099PreparedVideoAssetEvidence(input: {
     preparedAsset &&
     readiness.asset_ready &&
     preparedAsset.server_accessible &&
-    preparedAssetUploadableUrlPresent &&
+    (preparedAssetUploadableUrlPresent || preparedAssetServerLocalRefPresent) &&
     ALLOWED_UPLOADABLE_PROVIDERS.has(preparedAsset.provider) &&
     preparedAsset.mime_type === "video/mp4" &&
     safeTrim(preparedAsset.asset_id) &&
