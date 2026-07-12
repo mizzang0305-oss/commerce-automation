@@ -1,5 +1,6 @@
 export type PreparedVideoAssetProvider =
   | "local_dev"
+  | "server_local_file"
   | "r2"
   | "supabase_storage"
   | "signed_url"
@@ -119,6 +120,7 @@ function pickAssetSource(input: unknown): Record<string, unknown> | null {
 function normalizeProvider(input: unknown): PreparedVideoAssetProvider | "" {
   if (
     input === "local_dev" ||
+    input === "server_local_file" ||
     input === "r2" ||
     input === "supabase_storage" ||
     input === "signed_url" ||
@@ -133,6 +135,9 @@ function normalizeProvider(input: unknown): PreparedVideoAssetProvider | "" {
 }
 
 function hasServerReference(assetRef: PreparedVideoAssetRef) {
+  if (assetRef.provider === "server_local_file") {
+    return Boolean(assetRef.storage_key);
+  }
   if (assetRef.provider === "r2" || assetRef.provider === "supabase_storage") {
     return Boolean(assetRef.storage_key || assetRef.signed_url || assetRef.prepared_video_asset_url);
   }

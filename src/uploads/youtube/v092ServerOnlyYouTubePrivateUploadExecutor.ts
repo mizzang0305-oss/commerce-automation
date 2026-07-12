@@ -84,11 +84,12 @@ export function createV092ServerOnlyYouTubePrivateUploadExecutor(
 }
 
 function createDefaultServerUploadAdapter(
-  options: Pick<V092PrivateUploadExecutorOptions, "env" | "fetchImpl">
+  options: Pick<V092PrivateUploadExecutorOptions, "env" | "fetchImpl" | "preparedVideoAssetReader">
 ) {
   return new ServerYouTubeUploadAdapter({
     env: options.env,
     fetchImpl: options.fetchImpl,
+    preparedVideoAssetReader: options.preparedVideoAssetReader,
     accessTokenProvider: () => getYouTubeUploadAccessTokenForServerUpload({
       env: options.env,
       fetchImpl: options.fetchImpl

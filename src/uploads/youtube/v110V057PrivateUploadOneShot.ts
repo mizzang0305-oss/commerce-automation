@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
+import type { R2PutDiagnostics } from "@/lib/uploads/videoAssets/oneProductServerAssetRegistration";
 import type {
   OwnerReviewedPrivateUploadEvidence
 } from "@/lib/uploads/youtube/buildYoutubeUploadRequest";
@@ -13,16 +14,18 @@ import {
   buildV084PrivateUploadPilotInvocationRequestFromEnv,
   type V084PrivateUploadPilotInvocationRequest
 } from "./v084PrivateUploadExecutionInvocation";
+import { APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE } from "./v114ServerLocalPreparedVideoAsset";
 
 export const APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE =
   "APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE" as const;
 
 export type V110Mode = "preflight" | "execute";
+export type V110AssetPreparationStrategy = "r2" | "server_local_file";
 export type V110Status = "blocked" | "ready_for_external_approval" | "private_upload_completed";
 
 export type V110PreparedAssetResult =
-  | { ok: true; assetRef: PreparedVideoAssetRef }
-  | { ok: false; blocker: string };
+  | { ok: true; assetRef: PreparedVideoAssetRef; diagnostics?: R2PutDiagnostics }
+  | { ok: false; blocker: string; diagnostics?: R2PutDiagnostics };
 
 export type V110PrivateExecutionResult = {
   completed: boolean;
@@ -41,6 +44,11 @@ export type V110Report = {
   mode: "v057_r2_private_upload_one_shot";
   requestedMode: V110Mode;
   status: V110Status;
+  assetPreparationStrategy: V110AssetPreparationStrategy;
+  assetPreparationReady: boolean;
+  assetPreparationApprovalAccepted: boolean;
+  assetPreparationAttempted: boolean;
+  assetPrepared: boolean;
   blockers: string[];
   channelKey: "father_jobs";
   visibility: "private";
@@ -62,6 +70,10 @@ export type V110Report = {
   privateUploadApprovalAccepted: boolean;
   r2UploadAttempted: boolean;
   R2_upload: boolean;
+  r2HttpStatus: number | null;
+  r2SafeErrorCode: string | null;
+  localAssetReadAttempted: boolean;
+  localAssetPrepared: boolean;
   youtubeExecutionAttempted: boolean;
   videosInsertCalled: boolean;
   videosInsertTotalCount: 0 | 1;
@@ -87,6 +99,7 @@ export type V110Input = {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   mode?: V110Mode;
+  assetPreparationStrategy?: V110AssetPreparationStrategy;
   request?: V084PrivateUploadPilotInvocationRequest;
   prepareAsset?: (input: {
     queueItemId: string;
@@ -124,9 +137,11 @@ const BLOCKED = {
   ownerReview: "BLOCKED_V110_OWNER_REVIEW_EVIDENCE_MISSING",
   r2Config: "BLOCKED_V110_R2_CONFIG_NOT_READY",
   r2Approval: "BLOCKED_V110_FRESH_R2_APPROVAL_REQUIRED",
+  localAssetApproval: "BLOCKED_V114_FRESH_LOCAL_ASSET_APPROVAL_REQUIRED",
   uploadApproval: "BLOCKED_V110_FRESH_PRIVATE_UPLOAD_APPROVAL_REQUIRED",
   executor: "BLOCKED_V110_EXECUTOR_NOT_INJECTED",
   r2Prepare: "BLOCKED_V110_R2_PREPARE_FAILED",
+  localPrepare: "BLOCKED_V114_LOCAL_ASSET_PREPARE_FAILED",
   upload: "BLOCKED_V110_PRIVATE_UPLOAD_FAILED"
 } as const;
 
@@ -134,6 +149,7 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   const cwd = input.cwd ?? process.cwd();
   const env = input.env ?? process.env;
   const requestedMode = input.mode ?? "preflight";
+  const assetPreparationStrategy = input.assetPreparationStrategy ?? "r2";
   const request = input.request ?? await buildV084PrivateUploadPilotInvocationRequestFromEnv({
     env,
     dryRun: requestedMode !== "execute"
@@ -176,6 +192,7 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   const affiliateEvidencePresent = Boolean(safeString(manifest?.selectedAffiliateUrl));
   const disclosureEvidencePresent = Boolean(safeString(manifest?.coupangPartnersDisclosureText));
   const r2ConfigReady = hasR2Config(env);
+  const assetPreparationReady = assetPreparationStrategy === "r2" ? r2ConfigReady : Boolean(video);
   const blockers = compact([
     manifest ? null : BLOCKED.manifest,
     video ? null : BLOCKED.video,
@@ -186,14 +203,22 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     affiliateEvidencePresent ? null : BLOCKED.affiliate,
     disclosureEvidencePresent ? null : BLOCKED.disclosure,
     ownerReviewEvidenceReady ? null : BLOCKED.ownerReview,
-    r2ConfigReady ? null : BLOCKED.r2Config
+    assetPreparationReady ? null : (assetPreparationStrategy === "r2" ? BLOCKED.r2Config : null)
   ]);
   const r2ApprovalAccepted = env.V110_R2_PREPARE_APPROVAL ===
     APPROVE_V110_R2_PREPARE_V057_FATHER_JOBS_ASSET_ONCE;
   const privateUploadApprovalAccepted = env.V084_PRIVATE_UPLOAD_APPROVAL_PHRASE ===
     APPROVE_YOUTUBE_PRIVATE_UPLOAD_PILOT_1_ITEM_NO_COMMENT;
+  const localAssetApprovalAccepted = env.V114_LOCAL_ASSET_PREPARE_APPROVAL ===
+    APPROVE_V114_SERVER_LOCAL_ASSET_PREPARE_ONCE;
+  const assetPreparationApprovalAccepted = assetPreparationStrategy === "r2"
+    ? r2ApprovalAccepted
+    : localAssetApprovalAccepted;
   const base = buildBaseReport({
     requestedMode,
+    assetPreparationStrategy,
+    assetPreparationReady,
+    assetPreparationApprovalAccepted,
     blockers,
     manifestPresent: Boolean(manifest),
     videoPresent: Boolean(video),
@@ -218,7 +243,11 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   }
 
   const approvalBlockers = compact([
-    r2ApprovalAccepted ? null : BLOCKED.r2Approval,
+    assetPreparationApprovalAccepted
+      ? null
+      : assetPreparationStrategy === "r2"
+        ? BLOCKED.r2Approval
+        : BLOCKED.localAssetApproval,
     privateUploadApprovalAccepted ? null : BLOCKED.uploadApproval
   ]);
   if (approvalBlockers.length > 0) {
@@ -239,8 +268,15 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
   if (!prepared.ok) {
     return {
       ...base,
-      blockers: [BLOCKED.r2Prepare, prepared.blocker],
-      r2UploadAttempted: true
+      blockers: [
+        assetPreparationStrategy === "r2" ? BLOCKED.r2Prepare : BLOCKED.localPrepare,
+        prepared.blocker
+      ],
+      assetPreparationAttempted: true,
+      r2UploadAttempted: assetPreparationStrategy === "r2",
+      localAssetReadAttempted: assetPreparationStrategy === "server_local_file",
+      r2HttpStatus: prepared.diagnostics?.http_status ?? null,
+      r2SafeErrorCode: prepared.diagnostics?.safe_error_code ?? null
     };
   }
 
@@ -266,8 +302,14 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
     ...base,
     status: completed ? "private_upload_completed" : "blocked",
     blockers: completed ? [] : [BLOCKED.upload, ...executed.blockers],
-    r2UploadAttempted: true,
-    R2_upload: true,
+    assetPreparationAttempted: true,
+    assetPrepared: true,
+    r2UploadAttempted: assetPreparationStrategy === "r2",
+    R2_upload: assetPreparationStrategy === "r2",
+    r2HttpStatus: prepared.diagnostics?.http_status ?? null,
+    r2SafeErrorCode: prepared.diagnostics?.safe_error_code ?? null,
+    localAssetReadAttempted: assetPreparationStrategy === "server_local_file",
+    localAssetPrepared: assetPreparationStrategy === "server_local_file",
     youtubeExecutionAttempted: true,
     videosInsertCalled: executed.videosInsertCalled,
     videosInsertTotalCount: executed.videosInsertTotalCount,
@@ -279,6 +321,9 @@ export async function runV110V057PrivateUploadOneShot(input: V110Input = {}): Pr
 
 function buildBaseReport(input: {
   requestedMode: V110Mode;
+  assetPreparationStrategy: V110AssetPreparationStrategy;
+  assetPreparationReady: boolean;
+  assetPreparationApprovalAccepted: boolean;
   blockers: string[];
   manifestPresent: boolean;
   videoPresent: boolean;
@@ -301,6 +346,11 @@ function buildBaseReport(input: {
     mode: "v057_r2_private_upload_one_shot",
     requestedMode: input.requestedMode,
     status: "blocked",
+    assetPreparationStrategy: input.assetPreparationStrategy,
+    assetPreparationReady: input.assetPreparationReady,
+    assetPreparationApprovalAccepted: input.assetPreparationApprovalAccepted,
+    assetPreparationAttempted: false,
+    assetPrepared: false,
     blockers: input.blockers,
     channelKey: "father_jobs",
     visibility: "private",
@@ -322,6 +372,10 @@ function buildBaseReport(input: {
     privateUploadApprovalAccepted: input.privateUploadApprovalAccepted,
     r2UploadAttempted: false,
     R2_upload: false,
+    r2HttpStatus: null,
+    r2SafeErrorCode: null,
+    localAssetReadAttempted: false,
+    localAssetPrepared: false,
     youtubeExecutionAttempted: false,
     videosInsertCalled: false,
     videosInsertTotalCount: 0,

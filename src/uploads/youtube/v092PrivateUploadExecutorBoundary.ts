@@ -1,3 +1,4 @@
+import type { ServerPreparedVideoAssetReader } from "@/lib/uploads/youtube/youtubeUploadAdapter";
 import type { YouTubeUploadAdapter, YouTubeUploadRequest } from "@/lib/uploads/youtube/types";
 import type {
   V081PrivateUploadPilotAdapterRequest,
@@ -25,6 +26,7 @@ export type V092PrivateUploadExecutorOptions = {
   cwd?: string;
   uploadAssetProfile?: string | null;
   fetchImpl?: typeof fetch;
+  preparedVideoAssetReader?: ServerPreparedVideoAssetReader;
   now?: () => string;
 };
 

@@ -1467,4 +1467,39 @@ Current scope:
 
 ## Next Exact Action
 
-- Complete V111 focused/full no-upload validation. Then obtain explicit approval for the V111 commit/push/PR flow. After merge, refresh V095 immediately before V110 preflight and require a new external approval pair before any additional R2 or private YouTube attempt.
+- Complete V114 focused/full no-upload validation. Obtain explicit approval before commit, push, or PR creation. After merge, run the V114 server-local preflight and require a new local-asset approval plus a new private one-item approval before any execute command.
+
+### T037 - V114 R2 PUT Diagnostics And Server-Local Fallback No-Upload
+
+Status: `LOCAL_VALIDATION_PASS`
+
+Goal: Preserve only sanitized R2 PUT failure evidence and provide a server-only canonical local MP4 reader so the private pilot is not dependent on R2 object creation.
+
+Current scope:
+
+- R2 diagnostics retain HTTP status and an allowlisted safe error code only.
+- No real R2 PUT is performed during validation.
+- The server-local provider accepts only the canonical v057 `father_jobs` MP4 through an opaque storage key.
+- File size and SHA-256 evidence must match at adapter read time.
+- Generic local-dev paths, arbitrary keys, and traversal attempts remain blocked.
+- The local execute command requires a fresh local-asset approval and a fresh private one-item approval.
+- The execute command is not run during V114 implementation or validation.
+- `videosInsertCalled=false`
+- `commentThreadsInsertCalled=false`
+- public/unlisted/comment/scheduler execution remains blocked
+- R2/DB/product-assets writes: false
+- fake success: false
+- raw URL/path/ID/token/secret/Auth/HMAC output: false
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Verified local preflight result:
+
+- canonical manifest/video/first-frame: present
+- product-source/affiliate/disclosure/owner-review evidence: present
+- server-local asset preparation readiness: true
+- current precise blocker: `BLOCKED_V110_RUNTIME_CONTEXT_NOT_READY`
+- fresh approvals accepted: false
+- asset preparation attempted: false
+- YouTube execution attempted: false
+- next runtime step after merge: refresh V095 context, rerun V114 preflight, then request fresh approvals
