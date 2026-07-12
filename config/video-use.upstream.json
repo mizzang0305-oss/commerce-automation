@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/browser-use/video-use.git",
+  "commit": "92c2b34e44c205cbc2acae7f6ca7c1c219d5dd66",
+  "license": "MIT",
+  "integration": "external_tools_checkout",
+  "defaultRenderer": "legacy",
+  "liveUpload": false
+}

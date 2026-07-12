@@ -87,6 +87,9 @@
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
+    "video-use:verify": "tsx scripts/video-use/verify-upstream.ts",
+    "video-use:smoke": "node --conditions=react-server --import tsx scripts/video-use/render-smoke-test.ts",
+    "video-use:typecheck": "tsc -p tsconfig.video-use.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/video/**/*.ts",
+    "scripts/video-use/**/*.ts",
+    "tests/video-use-renderer-migration.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}

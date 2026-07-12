@@ -8,6 +8,8 @@ node_modules
 .next
 out
 coverage
+.tools/
+artifacts/video-use-comparison/
 data/*.json
 data/*.tmp
 python-worker/.venv/
