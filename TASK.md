@@ -1506,7 +1506,7 @@ Verified local preflight result:
 
 ### T038 - V115 Exact V113 Product-Matched Asset Binding No-Upload
 
-Status: `LOCAL_VALIDATION_PASS`
+Status: `PR_OPEN`
 
 Goal: Bind the owner-selected `father_jobs` V113 product-matched preview by exact path, size, SHA-256, first-frame, and sanitized review-summary evidence so the older V057/V112 media cannot be selected as a fallback.
 
@@ -1545,4 +1545,4 @@ Verified protected-asset preflight:
 
 ## Next Exact Action
 
-- Complete V115 focused/full no-upload validation. Obtain explicit approval before commit, push, or PR creation. After merge, rerun the exact V113 preflight against protected local artifacts before requesting a fresh private replacement-upload approval.
+- Review PR #220 and require separate owner merge approval. After merge, refresh V095 runtime context and rerun the exact V113 no-upload preflight against protected local artifacts before requesting a fresh private replacement-upload approval.
