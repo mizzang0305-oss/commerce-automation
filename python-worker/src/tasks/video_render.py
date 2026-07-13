@@ -24,18 +24,22 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         product_name = render_context["product_name"]
         image_urls = render_context["image_urls"]
         image_url = image_urls[0]
-        script = render_context["script"]
+        voiceover_script = render_context["voiceover_script"]
+        shot_captions = render_context["shot_captions"]
+        subtitle_text = "\n".join(shot_captions)
         disclosure_text = render_context["disclosure_text"]
         shot_durations = render_context["shot_durations"]
     else:
         image_url = str(payload.get("image_url") or payload.get("thumbnail_url") or "").strip()
         image_urls = [image_url] if image_url else []
-        script = str(payload.get("script", "")).strip()
+        voiceover_script = str(payload.get("script", "")).strip()
+        subtitle_text = voiceover_script
+        shot_captions = None
         shot_durations = None
 
     if not disclosure_text:
         raise ValueError("disclosure_text is required for video_render")
-    if not script:
+    if not voiceover_script:
         raise ValueError("script is required for video_render")
     if not image_url:
         raise ValueError("image_url or thumbnail_url is required for video_render")
@@ -56,8 +60,18 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         shot_image_paths.append(image_path)
     image_path = shot_image_paths[0]
     sequence_image_paths = shot_image_paths if len(downloaded_by_url) > 1 else None
-    audio_path = create_tts_audio(script, work_dir / "voiceover.wav")
-    srt_path = write_srt(script, output_dir / "captions.srt", shot_durations=shot_durations)
+    planned_duration = sum(shot_durations) if shot_durations else None
+    audio_path = create_tts_audio(
+        voiceover_script,
+        work_dir / "voiceover.wav",
+        duration_seconds=planned_duration,
+    )
+    srt_path = write_srt(
+        subtitle_text,
+        output_dir / "captions.srt",
+        shot_durations=shot_durations,
+        shot_captions=shot_captions,
+    )
     heartbeat()
     video_path = render_vertical_video(
         image_path,
@@ -66,8 +80,9 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         output_dir / "video.mp4",
         product_name,
         ffmpeg_exe=ffmpeg_exe,
-        subtitle_text=script,
+        subtitle_text=subtitle_text,
         shot_durations=shot_durations,
+        shot_captions=shot_captions,
         shot_image_paths=sequence_image_paths,
     )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
@@ -78,10 +93,11 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         total_duration_sec=sum(shot_durations) if shot_durations else None,
         image_sequence_used=sequence_image_paths is not None,
         unique_image_count=len(downloaded_by_url),
+        caption_voice_separated=render_plan is not None,
     )
     quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
     package_path.write_text(
-        f"{product_name}\n\n{script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n",
+        f"{product_name}\n\n{voiceover_script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n",
         encoding="utf-8",
     )
 
@@ -108,6 +124,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         raise ValueError("render_plan.disclosure_text is required")
 
     voice_lines: list[str] = []
+    shot_captions: list[str] = []
     shot_durations: list[float] = []
     image_urls: list[str] = []
     for index, shot in enumerate(shots, start=1):
@@ -124,13 +141,17 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
             raise ValueError("render_plan.shots.duration_sec must be positive")
         image_urls.append(image_url)
         caption = str(shot.get("caption") or "").strip()
-        voice_lines.append(" ".join(part for part in [caption, voice_text] if part))
+        if not caption:
+            raise ValueError("render_plan.shots.caption is required")
+        voice_lines.append(voice_text)
+        shot_captions.append(caption)
         shot_durations.append(float(duration_sec))
 
     return {
         "product_name": product_name,
         "image_urls": image_urls,
-        "script": "\n".join(voice_lines).strip(),
+        "voiceover_script": "\n".join(voice_lines).strip(),
+        "shot_captions": shot_captions,
         "disclosure_text": disclosure_text,
         "shot_durations": shot_durations,
     }

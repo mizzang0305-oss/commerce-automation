@@ -8,6 +8,7 @@
     "build:n8n-workflows": "node scripts/build-n8n-workflows.mjs",
     "check:mojibake": "node scripts/check-mojibake.mjs",
     "check:production-env": "node scripts/check-production-env.mjs --pretty",
+    "worker:v119:multiscene-dry-run": "python python-worker/scripts/dry_run_v119_worker_multiscene.py",
     "comfyui:doctor": "node scripts/comfyui-wan-local-setup-doctor.mjs",
     "comfyui:config-check": "node scripts/comfyui-wan-local-config-check.mjs",
     "comfyui:smoke:dry-run": "node scripts/comfyui-wan-local-smoke-dry-run.mjs",

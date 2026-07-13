@@ -1,8 +1,7 @@
 from pathlib import Path
 import subprocess
-import textwrap
 
-from .subtitle_generator import wrap_caption
+from .subtitle_generator import resolve_subtitle_cue_texts, wrap_caption
 
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
@@ -69,14 +68,16 @@ def build_video_filter(
     *,
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
+    shot_captions: list[str] | None = None,
     subtitle_dir: Path | None = None,
 ) -> str:
     safe_srt_path = str(srt_path).replace("\\", "/")
     base_filter = _build_base_video_filter()
-    if subtitle_text and subtitle_text.strip():
+    if shot_captions is not None or (subtitle_text and subtitle_text.strip()):
         drawtext_filters = build_drawtext_subtitle_filters(
-            subtitle_text,
+            subtitle_text or "",
             shot_durations=shot_durations,
+            shot_captions=shot_captions,
             subtitle_dir=subtitle_dir or srt_path.parent / "drawtext-subtitles",
         )
         return ",".join([base_filter, *drawtext_filters])
@@ -89,6 +90,7 @@ def build_image_sequence_filter_complex(
     image_count: int,
     subtitle_text: str | None,
     shot_durations: list[float],
+    shot_captions: list[str] | None = None,
     subtitle_dir: Path | None = None,
 ) -> str:
     _validate_image_sequence(image_count, shot_durations)
@@ -103,10 +105,11 @@ def build_image_sequence_filter_complex(
         shot_labels.append(f"[{label}]")
 
     parts.append(f"{''.join(shot_labels)}concat=n={image_count}:v=1:a=0[sequence]")
-    if subtitle_text and subtitle_text.strip():
+    if shot_captions is not None or (subtitle_text and subtitle_text.strip()):
         drawtext_filters = build_drawtext_subtitle_filters(
-            subtitle_text,
+            subtitle_text or "",
             shot_durations=shot_durations,
+            shot_captions=shot_captions,
             subtitle_dir=subtitle_dir or srt_path.parent / "drawtext-subtitles",
         )
         parts.append(f"[sequence]{','.join(drawtext_filters)}[video]")
@@ -127,6 +130,7 @@ def build_render_command(
     *,
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
+    shot_captions: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
 ) -> list[str]:
     if shot_image_paths is None:
@@ -140,7 +144,12 @@ def build_render_command(
             "-i",
             str(audio_path),
             "-vf",
-            build_video_filter(srt_path, subtitle_text=subtitle_text, shot_durations=shot_durations),
+            build_video_filter(
+                srt_path,
+                subtitle_text=subtitle_text,
+                shot_durations=shot_durations,
+                shot_captions=shot_captions,
+            ),
             "-c:v",
             "libx264",
             "-tune",
@@ -150,6 +159,8 @@ def build_render_command(
             "-shortest",
             "-pix_fmt",
             "yuv420p",
+            "-color_range",
+            "tv",
             str(target),
         ]
 
@@ -180,6 +191,7 @@ def build_render_command(
                 image_count=len(shot_image_paths),
                 subtitle_text=subtitle_text,
                 shot_durations=durations,
+                shot_captions=shot_captions,
             ),
             "-map",
             "[video]",
@@ -194,6 +206,8 @@ def build_render_command(
             "-shortest",
             "-pix_fmt",
             "yuv420p",
+            "-color_range",
+            "tv",
             str(target),
         ]
     )
@@ -202,8 +216,10 @@ def build_render_command(
 
 def _build_base_video_filter() -> str:
     return (
-        f"scale={PRODUCT_IMAGE_MAX_WIDTH}:{PRODUCT_IMAGE_MAX_HEIGHT}:force_original_aspect_ratio=decrease,"
-        f"pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:{PRODUCT_IMAGE_TOP}:color=0x0f172a"
+        f"scale={PRODUCT_IMAGE_MAX_WIDTH}:{PRODUCT_IMAGE_MAX_HEIGHT}:"
+        "force_original_aspect_ratio=decrease:out_range=tv,"
+        f"pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:{PRODUCT_IMAGE_TOP}:color=0x0f172a,"
+        "format=yuv420p"
     )
 
 
@@ -242,9 +258,10 @@ def build_drawtext_subtitle_filters(
     subtitle_text: str,
     *,
     shot_durations: list[float] | None,
+    shot_captions: list[str] | None = None,
     subtitle_dir: Path,
 ) -> list[str]:
-    cues = _build_subtitle_cues(subtitle_text, shot_durations)
+    cues = _build_subtitle_cues(subtitle_text, shot_durations, shot_captions)
     subtitle_dir.mkdir(parents=True, exist_ok=True)
     filters: list[str] = []
     for index, cue in enumerate(cues, start=1):
@@ -301,13 +318,16 @@ def build_drawtext_subtitle_filters(
     return filters
 
 
-def _build_subtitle_cues(subtitle_text: str, shot_durations: list[float] | None) -> list[dict[str, float | str]]:
-    source_lines = [line.strip() for line in subtitle_text.splitlines() if line.strip()]
+def _build_subtitle_cues(
+    subtitle_text: str,
+    shot_durations: list[float] | None,
+    shot_captions: list[str] | None = None,
+) -> list[dict[str, float | str]]:
+    lines = resolve_subtitle_cue_texts(subtitle_text, shot_durations, shot_captions)
     if shot_durations:
-        lines = source_lines[: len(shot_durations)]
-        durations = [float(duration) for duration in shot_durations[: len(lines)]]
+        durations = [float(duration) for duration in shot_durations]
     else:
-        lines = [line.strip() for line in textwrap.wrap(subtitle_text, width=32) if line.strip()][:20]
+        lines = lines[:20]
         durations = [1.0 for _ in lines]
     if not lines:
         return []
@@ -379,6 +399,7 @@ def build_render_quality_metadata(
     total_duration_sec: float | None,
     image_sequence_used: bool = False,
     unique_image_count: int | None = None,
+    caption_voice_separated: bool = False,
 ) -> dict[str, str]:
     metadata = {
         "render_layout_version": RENDER_LAYOUT_VERSION,
@@ -387,6 +408,7 @@ def build_render_quality_metadata(
         "hook_box_style": "bold_upper_high_contrast",
         "render_plan_used": str(render_plan_used).lower(),
         "image_sequence_used": str(image_sequence_used).lower(),
+        "caption_voice_separated": str(caption_voice_separated).lower(),
         "shot_count": str(shot_count),
     }
     if unique_image_count is not None:
@@ -406,6 +428,7 @@ def render_vertical_video(
     *,
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
+    shot_captions: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
 ) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -417,6 +440,7 @@ def render_vertical_video(
         ffmpeg_exe,
         subtitle_text=subtitle_text,
         shot_durations=shot_durations,
+        shot_captions=shot_captions,
         shot_image_paths=shot_image_paths,
     )
     subprocess.run(command, check=True, capture_output=True, text=True)

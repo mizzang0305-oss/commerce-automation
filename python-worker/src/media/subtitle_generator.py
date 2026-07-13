@@ -22,14 +22,36 @@ def wrap_caption(text: str, max_chars: int = 24, max_lines: int = 2) -> list[str
     return clipped
 
 
-def write_srt(text: str, target: Path, shot_durations: list[float] | None = None) -> Path:
+def resolve_subtitle_cue_texts(
+    text: str,
+    shot_durations: list[float] | None,
+    shot_captions: list[str] | None = None,
+) -> list[str]:
+    if shot_captions is not None:
+        if not shot_durations:
+            raise ValueError("shot durations are required for shot captions")
+        if len(shot_captions) != len(shot_durations):
+            raise ValueError("shot caption count must match shot duration count")
+        lines = [" ".join(str(caption).split()) for caption in shot_captions]
+        if not lines or any(not line for line in lines):
+            raise ValueError("shot captions must be non-empty")
+        return lines
+
     source_lines = [line.strip() for line in text.splitlines() if line.strip()]
     if shot_durations:
-        if not source_lines:
-            raise ValueError("subtitle text is required")
-        lines = source_lines[: len(shot_durations)]
-    else:
-        lines = [line.strip() for line in textwrap.wrap(text, width=32) if line.strip()]
+        if len(source_lines) != len(shot_durations):
+            raise ValueError("subtitle cue count must match shot duration count")
+        return source_lines
+    return [line.strip() for line in textwrap.wrap(text, width=32) if line.strip()]
+
+
+def write_srt(
+    text: str,
+    target: Path,
+    shot_durations: list[float] | None = None,
+    shot_captions: list[str] | None = None,
+) -> Path:
+    lines = resolve_subtitle_cue_texts(text, shot_durations, shot_captions)
 
     if not lines:
         raise ValueError("subtitle text is required")
@@ -37,7 +59,8 @@ def write_srt(text: str, target: Path, shot_durations: list[float] | None = None
     blocks = []
 
     elapsed = 0.0
-    for index, line in enumerate(lines[:20], start=1):
+    cue_lines = lines if shot_durations else lines[:20]
+    for index, line in enumerate(cue_lines, start=1):
         if shot_durations:
             duration = shot_durations[index - 1]
             if isinstance(duration, bool) or not isinstance(duration, (int, float)) or duration <= 0:
