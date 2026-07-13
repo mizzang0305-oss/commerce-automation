@@ -15,12 +15,24 @@ PRODUCT_IMAGE_MAX_HEIGHT = 1100
 SUBTITLE_FONT_SIZE = 10
 SUBTITLE_MARGIN_V = 220
 SUBTITLE_STYLE = "compact_safe_area"
-RENDER_LAYOUT_VERSION = "v3-subtitle-polish"
+TYPOGRAPHY_STYLE = "legacy_commerce_hook_box_v1"
+RENDER_LAYOUT_VERSION = "v4-legacy-commerce-typography"
 DRAWTEXT_SUBTITLE_FONT_SIZE = 44
 DRAWTEXT_SUBTITLE_Y = "h-240-text_h"
 DRAWTEXT_BOX_COLOR = "black@0.42"
 DRAWTEXT_BOX_BORDER = 24
 DRAWTEXT_LINE_STEP = 58
+HOOK_FONT_SIZE = 82
+HOOK_MAX_CHARS = 12
+HOOK_TEXT_Y = 168
+HOOK_LINE_STEP = 96
+HOOK_BOX_X = 64
+HOOK_BOX_Y = 118
+HOOK_BOX_WIDTH = 952
+HOOK_BOX_HEIGHT = 270
+HOOK_BOX_COLOR = "black@0.78"
+HOOK_ACCENT_COLOR = "0xfacc15@1"
+HOOK_ACCENT_HEIGHT = 10
 
 LAYOUT_PRESETS = {
     "hook": {
@@ -100,27 +112,56 @@ def build_drawtext_subtitle_filters(
     subtitle_dir.mkdir(parents=True, exist_ok=True)
     filters: list[str] = []
     for index, cue in enumerate(cues, start=1):
+        is_hook = index == 1
+        enable = f"between(t,{cue['start']:.3f},{cue['end']:.3f})"
+        if is_hook:
+            filters.extend(
+                [
+                    "drawbox="
+                    f"x={HOOK_BOX_X}:y={HOOK_BOX_Y}:w={HOOK_BOX_WIDTH}:h={HOOK_BOX_HEIGHT}:"
+                    f"color={HOOK_BOX_COLOR}:t=fill:enable='{enable}'",
+                    "drawbox="
+                    f"x={HOOK_BOX_X}:y={HOOK_BOX_Y}:w={HOOK_BOX_WIDTH}:h={HOOK_ACCENT_HEIGHT}:"
+                    f"color={HOOK_ACCENT_COLOR}:t=fill:enable='{enable}'",
+                    "drawbox="
+                    f"x={HOOK_BOX_X}:y={HOOK_BOX_Y + HOOK_BOX_HEIGHT - HOOK_ACCENT_HEIGHT}:"
+                    f"w={HOOK_BOX_WIDTH}:h={HOOK_ACCENT_HEIGHT}:"
+                    f"color={HOOK_ACCENT_COLOR}:t=fill:enable='{enable}'",
+                ]
+            )
         lines = str(cue["text"]).splitlines() or [str(cue["text"])]
         for line_index, line in enumerate(lines, start=1):
             text_path = subtitle_dir / f"subtitle-cue-{index:03d}-line-{line_index:02d}.txt"
             text_path.write_text(line, encoding="utf-8")
             textfile = _escape_filter_path(text_path)
-            font_clause = _drawtext_font_clause()
-            y_offset = (len(lines) - line_index) * DRAWTEXT_LINE_STEP
-            y_expr = DRAWTEXT_SUBTITLE_Y if y_offset == 0 else f"{DRAWTEXT_SUBTITLE_Y}-{y_offset}"
-            filters.append(
-                "drawtext="
-                f"{font_clause}"
-                f"textfile='{textfile}':"
-                "fontcolor=white:"
-                f"fontsize={DRAWTEXT_SUBTITLE_FONT_SIZE}:"
-                "x=(w-text_w)/2:"
-                f"y={y_expr}:"
-                "box=1:"
-                f"boxcolor={DRAWTEXT_BOX_COLOR}:"
-                f"boxborderw={DRAWTEXT_BOX_BORDER}:"
-                f"enable='between(t,{cue['start']:.3f},{cue['end']:.3f})'"
-            )
+            if is_hook:
+                filters.append(
+                    "drawtext="
+                    f"{_drawtext_font_clause(bold=True)}"
+                    f"textfile='{textfile}':"
+                    "fontcolor=white:"
+                    f"fontsize={HOOK_FONT_SIZE}:"
+                    "x=(w-text_w)/2:"
+                    f"y={HOOK_TEXT_Y + ((line_index - 1) * HOOK_LINE_STEP)}:"
+                    "borderw=2:bordercolor=black:"
+                    f"enable='{enable}'"
+                )
+            else:
+                y_offset = (len(lines) - line_index) * DRAWTEXT_LINE_STEP
+                y_expr = DRAWTEXT_SUBTITLE_Y if y_offset == 0 else f"{DRAWTEXT_SUBTITLE_Y}-{y_offset}"
+                filters.append(
+                    "drawtext="
+                    f"{_drawtext_font_clause()}"
+                    f"textfile='{textfile}':"
+                    "fontcolor=white:"
+                    f"fontsize={DRAWTEXT_SUBTITLE_FONT_SIZE}:"
+                    "x=(w-text_w)/2:"
+                    f"y={y_expr}:"
+                    "box=1:"
+                    f"boxcolor={DRAWTEXT_BOX_COLOR}:"
+                    f"boxborderw={DRAWTEXT_BOX_BORDER}:"
+                    f"enable='{enable}'"
+                )
     return filters
 
 
@@ -140,14 +181,26 @@ def _build_subtitle_cues(subtitle_text: str, shot_durations: list[float] | None)
     for line, duration in zip(lines, durations):
         if duration <= 0:
             raise ValueError("subtitle cue duration must be positive")
-        wrapped = "\n".join(wrap_caption(line))
+        is_hook = len(cues) == 0
+        wrapped = "\n".join(
+            wrap_caption(
+                line,
+                max_chars=HOOK_MAX_CHARS if is_hook else 16,
+                max_lines=2,
+            )
+        )
         cues.append({"text": wrapped, "start": elapsed, "end": elapsed + duration})
         elapsed += duration
     return cues
 
 
-def _drawtext_font_clause() -> str:
-    for font_path in ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/arial.ttf"]:
+def _drawtext_font_clause(*, bold: bool = False) -> str:
+    font_paths = (
+        ["C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf"]
+        if bold
+        else ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/arial.ttf"]
+    )
+    for font_path in font_paths:
         if Path(font_path).exists():
             return f"fontfile='{_escape_filter_path(Path(font_path))}':"
     return ""
@@ -192,6 +245,8 @@ def build_render_quality_metadata(
     metadata = {
         "render_layout_version": RENDER_LAYOUT_VERSION,
         "subtitle_style": SUBTITLE_STYLE,
+        "typography_style": TYPOGRAPHY_STYLE,
+        "hook_box_style": "bold_upper_high_contrast",
         "render_plan_used": str(render_plan_used).lower(),
         "shot_count": str(shot_count),
     }

@@ -7,8 +7,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.media.subtitle_generator import wrap_caption, write_srt
 from src.media.thumbnail_generator import create_thumbnail, load_font, wrap_title
 from src.media.video_renderer import (
+    HOOK_FONT_SIZE,
+    TYPOGRAPHY_STYLE,
     VIDEO_HEIGHT,
     VIDEO_WIDTH,
+    build_render_quality_metadata,
     build_shot_layout_config,
     build_video_filter,
 )
@@ -26,6 +29,23 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertIn("scale=936:1100", filter_graph)
         self.assertIn("pad=1080:1920", filter_graph)
         self.assertIn("drawtext=", filter_graph)
+        self.assertIn("fontsize=44", filter_graph)
+        self.assertIn("y=h-240-text_h", filter_graph)
+
+    def test_first_cue_uses_existing_commerce_bold_hook_box_style(self):
+        filter_graph = build_video_filter(
+            Path("temp/job/captions.srt"),
+            subtitle_text="차 안 수납, 이거부터 보세요\n컵홀더부터 티슈 수납까지",
+            shot_durations=[3, 5],
+        )
+
+        self.assertIn("drawbox=x=64:y=118:w=952:h=270:color=black@0.78:t=fill", filter_graph)
+        self.assertIn("drawbox=x=64:y=118:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
+        self.assertIn("drawbox=x=64:y=378:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
+        self.assertIn("malgunbd.ttf", filter_graph)
+        self.assertIn(f"fontsize={HOOK_FONT_SIZE}", filter_graph)
+        self.assertIn("y=168", filter_graph)
+        self.assertIn("enable='between(t,0.000,3.000)'", filter_graph)
         self.assertIn("fontsize=44", filter_graph)
         self.assertIn("y=h-240-text_h", filter_graph)
 
@@ -64,6 +84,34 @@ class VideoRendererLayoutTest(unittest.TestCase):
         lines = [path.read_text(encoding="utf-8") for path in line_files]
         self.assertLessEqual(len(lines), 2)
         self.assertTrue(all(len(line) <= 24 for line in lines))
+
+    def test_hook_copy_wraps_to_two_short_safe_lines(self):
+        target = Path("temp/test-hook-filter/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        build_video_filter(
+            target,
+            subtitle_text="차량 뒷좌석 수납을 한 번에 정리하고 싶다면 먼저 확인하세요",
+            shot_durations=[4],
+            subtitle_dir=subtitle_dir,
+        )
+
+        line_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        self.assertLessEqual(len(line_files), 2)
+        self.assertTrue(all(len(path.read_text(encoding="utf-8")) <= 12 for path in line_files))
+
+    def test_render_metadata_records_typography_only_adoption(self):
+        metadata = build_render_quality_metadata(
+            render_plan_used=True,
+            shot_count=6,
+            total_duration_sec=23,
+        )
+
+        self.assertEqual(metadata["typography_style"], TYPOGRAPHY_STYLE)
+        self.assertEqual(metadata["hook_box_style"], "bold_upper_high_contrast")
 
     def test_wrap_title_limits_long_product_names(self):
         lines = wrap_title(
