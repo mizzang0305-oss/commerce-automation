@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -33,11 +34,12 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertIn("y=h-240-text_h", filter_graph)
 
     def test_first_cue_uses_existing_commerce_bold_hook_box_style(self):
-        filter_graph = build_video_filter(
-            Path("temp/job/captions.srt"),
-            subtitle_text="차 안 수납, 이거부터 보세요\n컵홀더부터 티슈 수납까지",
-            shot_durations=[3, 5],
-        )
+        with patch("src.media.video_renderer.Path.exists", return_value=True):
+            filter_graph = build_video_filter(
+                Path("temp/job/captions.srt"),
+                subtitle_text="차 안 수납, 이거부터 보세요\n컵홀더부터 티슈 수납까지",
+                shot_durations=[3, 5],
+            )
 
         self.assertIn("drawbox=x=64:y=118:w=952:h=270:color=black@0.78:t=fill", filter_graph)
         self.assertIn("drawbox=x=64:y=118:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
