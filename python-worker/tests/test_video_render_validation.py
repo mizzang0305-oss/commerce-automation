@@ -102,8 +102,10 @@ class VideoRenderValidationTest(unittest.TestCase):
             run_video_render(job, None, storage, Mock())
 
         package_text = package_path.read_text(encoding="utf-8")
-        self.assertIn("render_layout_version: v3-subtitle-polish", package_text)
+        self.assertIn("render_layout_version: v4-legacy-commerce-typography", package_text)
         self.assertIn("subtitle_style: compact_safe_area", package_text)
+        self.assertIn("typography_style: legacy_commerce_hook_box_v1", package_text)
+        self.assertIn("hook_box_style: bold_upper_high_contrast", package_text)
         self.assertIn("render_plan_used: true", package_text)
         self.assertIn("shot_count: 2", package_text)
 
