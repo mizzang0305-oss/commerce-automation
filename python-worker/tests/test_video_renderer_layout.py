@@ -12,7 +12,9 @@ from src.media.video_renderer import (
     TYPOGRAPHY_STYLE,
     VIDEO_HEIGHT,
     VIDEO_WIDTH,
+    build_image_sequence_filter_complex,
     build_render_quality_metadata,
+    build_render_command,
     build_shot_layout_config,
     build_video_filter,
 )
@@ -110,10 +112,60 @@ class VideoRendererLayoutTest(unittest.TestCase):
             render_plan_used=True,
             shot_count=6,
             total_duration_sec=23,
+            image_sequence_used=True,
+            unique_image_count=4,
         )
 
         self.assertEqual(metadata["typography_style"], TYPOGRAPHY_STYLE)
         self.assertEqual(metadata["hook_box_style"], "bold_upper_high_contrast")
+        self.assertEqual(metadata["image_sequence_used"], "true")
+        self.assertEqual(metadata["unique_image_count"], "4")
+
+    def test_multi_image_render_command_uses_timed_concat_sequence(self):
+        command = build_render_command(
+            Path("temp/shot-001.jpg"),
+            Path("temp/voiceover.wav"),
+            Path("temp/captions.srt"),
+            Path("outputs/video.mp4"),
+            "ffmpeg",
+            subtitle_text="첫 장면 훅\n두 번째 장면 설명",
+            shot_durations=[3, 5],
+            shot_image_paths=[Path("temp/shot-001.jpg"), Path("temp/shot-002.jpg")],
+        )
+
+        self.assertEqual(command.count("-i"), 3)
+        self.assertNotIn("-vf", command)
+        self.assertIn("-filter_complex", command)
+        filter_graph = command[command.index("-filter_complex") + 1]
+        self.assertIn("[0:v]scale=936:1100", filter_graph)
+        self.assertIn("[1:v]scale=936:1100", filter_graph)
+        self.assertIn("[shot0][shot1]concat=n=2:v=1:a=0[sequence]", filter_graph)
+        self.assertIn("[sequence]drawbox=", filter_graph)
+        self.assertEqual(command[command.index("-map") + 1], "[video]")
+        self.assertIn("2:a:0", command)
+
+    def test_multi_image_filter_rejects_duration_count_mismatch(self):
+        with self.assertRaisesRegex(ValueError, "shot image count must match shot duration count"):
+            build_image_sequence_filter_complex(
+                Path("temp/captions.srt"),
+                image_count=2,
+                subtitle_text="첫 장면 훅",
+                shot_durations=[3],
+            )
+
+    def test_single_image_render_command_keeps_legacy_vf_path(self):
+        command = build_render_command(
+            Path("temp/product.jpg"),
+            Path("temp/voiceover.wav"),
+            Path("temp/captions.srt"),
+            Path("outputs/video.mp4"),
+            "ffmpeg",
+            subtitle_text="기존 단일 이미지 경로",
+        )
+
+        self.assertEqual(command.count("-i"), 2)
+        self.assertIn("-vf", command)
+        self.assertNotIn("-filter_complex", command)
 
     def test_wrap_title_limits_long_product_names(self):
         lines = wrap_title(
