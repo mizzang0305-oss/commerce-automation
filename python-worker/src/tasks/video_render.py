@@ -22,12 +22,14 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     if render_plan is not None:
         render_context = _context_from_render_plan(render_plan, product_name, disclosure_text)
         product_name = render_context["product_name"]
-        image_url = render_context["image_url"]
+        image_urls = render_context["image_urls"]
+        image_url = image_urls[0]
         script = render_context["script"]
         disclosure_text = render_context["disclosure_text"]
         shot_durations = render_context["shot_durations"]
     else:
         image_url = str(payload.get("image_url") or payload.get("thumbnail_url") or "").strip()
+        image_urls = [image_url] if image_url else []
         script = str(payload.get("script", "")).strip()
         shot_durations = None
 
@@ -42,8 +44,18 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
 
     work_dir = clean_dir(Path("temp") / job["id"])
     output_dir = clean_dir(Path("outputs") / job["id"])
-    image_path = download_image(image_url, work_dir / "product.jpg")
-    heartbeat()
+    downloaded_by_url: dict[str, Path] = {}
+    shot_image_paths: list[Path] = []
+    for index, shot_image_url in enumerate(image_urls, start=1):
+        image_path = downloaded_by_url.get(shot_image_url)
+        if image_path is None:
+            target_name = "product.jpg" if len(image_urls) == 1 else f"shot-{index:03d}.jpg"
+            image_path = download_image(shot_image_url, work_dir / target_name)
+            downloaded_by_url[shot_image_url] = image_path
+            heartbeat()
+        shot_image_paths.append(image_path)
+    image_path = shot_image_paths[0]
+    sequence_image_paths = shot_image_paths if len(downloaded_by_url) > 1 else None
     audio_path = create_tts_audio(script, work_dir / "voiceover.wav")
     srt_path = write_srt(script, output_dir / "captions.srt", shot_durations=shot_durations)
     heartbeat()
@@ -56,6 +68,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         ffmpeg_exe=ffmpeg_exe,
         subtitle_text=script,
         shot_durations=shot_durations,
+        shot_image_paths=sequence_image_paths,
     )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
     package_path = output_dir / "upload_package.txt"
@@ -63,6 +76,8 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         render_plan_used=render_plan is not None,
         shot_count=len(shot_durations or []),
         total_duration_sec=sum(shot_durations) if shot_durations else None,
+        image_sequence_used=sequence_image_paths is not None,
+        unique_image_count=len(downloaded_by_url),
     )
     quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
     package_path.write_text(
@@ -94,7 +109,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
 
     voice_lines: list[str] = []
     shot_durations: list[float] = []
-    first_image_url = ""
+    image_urls: list[str] = []
     for index, shot in enumerate(shots, start=1):
         if not isinstance(shot, dict):
             raise ValueError("render_plan.shots must contain objects")
@@ -107,15 +122,14 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
             raise ValueError("render_plan.shots.voice_text is required")
         if isinstance(duration_sec, bool) or not isinstance(duration_sec, (int, float)) or duration_sec <= 0:
             raise ValueError("render_plan.shots.duration_sec must be positive")
-        if not first_image_url:
-            first_image_url = image_url
+        image_urls.append(image_url)
         caption = str(shot.get("caption") or "").strip()
         voice_lines.append(" ".join(part for part in [caption, voice_text] if part))
         shot_durations.append(float(duration_sec))
 
     return {
         "product_name": product_name,
-        "image_url": first_image_url,
+        "image_urls": image_urls,
         "script": "\n".join(voice_lines).strip(),
         "disclosure_text": disclosure_text,
         "shot_durations": shot_durations,

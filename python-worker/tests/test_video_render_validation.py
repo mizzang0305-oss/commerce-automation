@@ -64,15 +64,23 @@ class VideoRenderValidationTest(unittest.TestCase):
         job = {"id": "job-render-plan", "payload": payload}
 
         with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
-            patch("src.tasks.video_render.download_image", return_value=Path("temp/job-render-plan/product.jpg")) as download_image, \
+            patch("src.tasks.video_render.download_image", side_effect=_download_to_target) as download_image, \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan/voiceover.wav")) as tts, \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan/captions.srt")) as srt, \
             patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan/video.mp4")) as render, \
-            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan/thumbnail.jpg")), \
+            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan/thumbnail.jpg")) as thumbnail, \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
             result = run_video_render(job, None, storage, Mock())
 
-        self.assertEqual(download_image.call_args.args[0], "https://image.example/shot-hook.jpg")
+        self.assertEqual(download_image.call_count, 2)
+        self.assertEqual(
+            [call.args[0] for call in download_image.call_args_list],
+            ["https://image.example/shot-hook.jpg", "https://image.example/shot-detail.jpg"],
+        )
+        self.assertEqual(
+            [call.args[1] for call in download_image.call_args_list],
+            [Path("temp/job-render-plan/shot-001.jpg"), Path("temp/job-render-plan/shot-002.jpg")],
+        )
         self.assertIn("Hook voice text", tts.call_args.args[0])
         self.assertIn("Detail voice text", tts.call_args.args[0])
         self.assertNotIn("legacy script should not drive render plan mode", tts.call_args.args[0])
@@ -82,7 +90,31 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertEqual(render.call_args.args[4], "Render plan product")
         self.assertEqual(render.call_args.kwargs["subtitle_text"], tts.call_args.args[0])
         self.assertEqual(render.call_args.kwargs["shot_durations"], [3, 5])
+        self.assertEqual(
+            render.call_args.kwargs["shot_image_paths"],
+            [Path("temp/job-render-plan/shot-001.jpg"), Path("temp/job-render-plan/shot-002.jpg")],
+        )
+        self.assertEqual(thumbnail.call_args.args[0], Path("temp/job-render-plan/shot-001.jpg"))
         self.assertIn("video_url", result)
+
+    def test_render_plan_deduplicates_repeated_image_downloads(self):
+        storage = Mock()
+        storage.upload.side_effect = lambda bucket, path, key: f"https://storage.example/{key}"
+        render_plan = _valid_render_plan()
+        render_plan["shots"][1]["image_url"] = render_plan["shots"][0]["image_url"]
+        job = {"id": "job-render-plan-dedup", "payload": _valid_payload() | {"render_plan": render_plan}}
+
+        with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
+            patch("src.tasks.video_render.download_image", side_effect=_download_to_target) as download_image, \
+            patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan-dedup/voiceover.wav")), \
+            patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan-dedup/captions.srt")), \
+            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan-dedup/video.mp4")) as render, \
+            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan-dedup/thumbnail.jpg")), \
+            patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
+            run_video_render(job, None, storage, Mock())
+
+        download_image.assert_called_once()
+        self.assertIsNone(render.call_args.kwargs["shot_image_paths"])
 
     def test_upload_package_includes_visual_quality_metadata(self):
         storage = Mock()
@@ -93,7 +125,7 @@ class VideoRenderValidationTest(unittest.TestCase):
         package_path.unlink(missing_ok=True)
 
         with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
-            patch("src.tasks.video_render.download_image", return_value=Path("temp/job-render-quality-metadata/product.jpg")), \
+            patch("src.tasks.video_render.download_image", side_effect=_download_to_target), \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-quality-metadata/voiceover.wav")), \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-quality-metadata/captions.srt")), \
             patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-quality-metadata/video.mp4")), \
@@ -107,6 +139,8 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertIn("typography_style: legacy_commerce_hook_box_v1", package_text)
         self.assertIn("hook_box_style: bold_upper_high_contrast", package_text)
         self.assertIn("render_plan_used: true", package_text)
+        self.assertIn("image_sequence_used: true", package_text)
+        self.assertIn("unique_image_count: 2", package_text)
         self.assertIn("shot_count: 2", package_text)
 
     def test_malformed_render_plan_fails_before_ffmpeg_check(self):
@@ -206,6 +240,10 @@ def _valid_render_plan() -> dict:
 def _clean_dir_for_test(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _download_to_target(_url: str, target: Path) -> Path:
+    return target
 
 
 if __name__ == "__main__":
