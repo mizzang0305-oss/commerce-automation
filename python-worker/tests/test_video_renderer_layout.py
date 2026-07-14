@@ -1,12 +1,14 @@
 from pathlib import Path
 import sys
 import unittest
+import wave
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.media.subtitle_generator import wrap_caption, write_srt
 from src.media.thumbnail_generator import create_thumbnail, load_font, wrap_title
+from src.media.tts_generator import create_tts_audio
 from src.media.video_renderer import (
     HOOK_FONT_SIZE,
     TYPOGRAPHY_STYLE,
@@ -31,6 +33,8 @@ class VideoRendererLayoutTest(unittest.TestCase):
         )
         self.assertIn("scale=936:1100", filter_graph)
         self.assertIn("pad=1080:1920", filter_graph)
+        self.assertIn("out_range=tv", filter_graph)
+        self.assertIn("format=yuv420p", filter_graph)
         self.assertIn("drawtext=", filter_graph)
         self.assertIn("fontsize=44", filter_graph)
         self.assertIn("y=h-240-text_h", filter_graph)
@@ -114,12 +118,14 @@ class VideoRendererLayoutTest(unittest.TestCase):
             total_duration_sec=23,
             image_sequence_used=True,
             unique_image_count=4,
+            caption_voice_separated=True,
         )
 
         self.assertEqual(metadata["typography_style"], TYPOGRAPHY_STYLE)
         self.assertEqual(metadata["hook_box_style"], "bold_upper_high_contrast")
         self.assertEqual(metadata["image_sequence_used"], "true")
         self.assertEqual(metadata["unique_image_count"], "4")
+        self.assertEqual(metadata["caption_voice_separated"], "true")
 
     def test_multi_image_render_command_uses_timed_concat_sequence(self):
         command = build_render_command(
@@ -143,6 +149,7 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertIn("[sequence]drawbox=", filter_graph)
         self.assertEqual(command[command.index("-map") + 1], "[video]")
         self.assertIn("2:a:0", command)
+        self.assertEqual(command[command.index("-color_range") + 1], "tv")
 
     def test_multi_image_filter_rejects_duration_count_mismatch(self):
         with self.assertRaisesRegex(ValueError, "shot image count must match shot duration count"):
@@ -225,6 +232,42 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertIn("00:00:00,000 --> 00:00:02,500", text)
         self.assertIn("00:00:02,500 --> 00:00:06,500", text)
         self.assertIn("00:00:06,500 --> 00:00:10,000", text)
+
+    def test_shot_captions_preserve_multiline_scene_boundaries(self):
+        target = Path("temp/test-shot-caption-boundaries/captions.srt")
+        target.unlink(missing_ok=True)
+
+        write_srt(
+            "ignored joined subtitle text",
+            target,
+            shot_durations=[2, 3],
+            shot_captions=["First hook\ncontinues here", "Second scene"],
+        )
+        text = target.read_text(encoding="utf-8")
+
+        self.assertEqual(text.count(" --> "), 2)
+        self.assertIn("00:00:00,000 --> 00:00:02,000", text)
+        self.assertIn("00:00:02,000 --> 00:00:05,000", text)
+        self.assertIn("First hook continues", text)
+
+    def test_shot_caption_count_mismatch_is_blocked(self):
+        with self.assertRaisesRegex(ValueError, "shot caption count must match shot duration count"):
+            write_srt(
+                "ignored",
+                Path("temp/test-shot-caption-mismatch/captions.srt"),
+                shot_durations=[2, 3],
+                shot_captions=["Only one caption"],
+            )
+
+    def test_tts_audio_can_match_planned_render_duration(self):
+        target = Path("temp/test-planned-audio-duration/voiceover.wav")
+        target.unlink(missing_ok=True)
+
+        create_tts_audio("Scene voiceover", target, duration_seconds=5.5)
+
+        with wave.open(str(target), "rb") as audio:
+            duration = audio.getnframes() / audio.getframerate()
+        self.assertAlmostEqual(duration, 5.5, places=2)
 
     def test_thumbnail_creation_uses_font_fallback_and_writes_output(self):
         source = Path("temp/test-thumbnail/source.jpg")

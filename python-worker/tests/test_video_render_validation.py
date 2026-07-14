@@ -81,15 +81,18 @@ class VideoRenderValidationTest(unittest.TestCase):
             [call.args[1] for call in download_image.call_args_list],
             [Path("temp/job-render-plan/shot-001.jpg"), Path("temp/job-render-plan/shot-002.jpg")],
         )
-        self.assertIn("Hook voice text", tts.call_args.args[0])
-        self.assertIn("Detail voice text", tts.call_args.args[0])
+        self.assertEqual(tts.call_args.args[0], "Hook voice text\nDetail voice text")
         self.assertNotIn("legacy script should not drive render plan mode", tts.call_args.args[0])
-        self.assertEqual(tts.call_args.args[0], srt.call_args.args[0])
+        self.assertNotIn("Hook caption", tts.call_args.args[0])
+        self.assertEqual(tts.call_args.kwargs["duration_seconds"], 8)
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
+        self.assertEqual(srt.call_args.args[0], "Hook caption\nsecond line\nDetail caption")
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
+        self.assertEqual(srt.call_args.kwargs["shot_captions"], ["Hook caption\nsecond line", "Detail caption"])
         self.assertEqual(render.call_args.args[4], "Render plan product")
-        self.assertEqual(render.call_args.kwargs["subtitle_text"], tts.call_args.args[0])
+        self.assertEqual(render.call_args.kwargs["subtitle_text"], srt.call_args.args[0])
         self.assertEqual(render.call_args.kwargs["shot_durations"], [3, 5])
+        self.assertEqual(render.call_args.kwargs["shot_captions"], srt.call_args.kwargs["shot_captions"])
         self.assertEqual(
             render.call_args.kwargs["shot_image_paths"],
             [Path("temp/job-render-plan/shot-001.jpg"), Path("temp/job-render-plan/shot-002.jpg")],
@@ -140,6 +143,7 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertIn("hook_box_style: bold_upper_high_contrast", package_text)
         self.assertIn("render_plan_used: true", package_text)
         self.assertIn("image_sequence_used: true", package_text)
+        self.assertIn("caption_voice_separated: true", package_text)
         self.assertIn("unique_image_count: 2", package_text)
         self.assertIn("shot_count: 2", package_text)
 
@@ -172,6 +176,21 @@ class VideoRenderValidationTest(unittest.TestCase):
             side_effect=AssertionError("ffmpeg should not be checked before render_plan validation"),
         ) as ffmpeg_check:
             with self.assertRaisesRegex(ValueError, "render_plan.shots.duration_sec must be positive"):
+                run_video_render(job, None, None, Mock())
+
+        ffmpeg_check.assert_not_called()
+
+    def test_render_plan_rejects_missing_caption_before_ffmpeg_check(self):
+        render_plan = _valid_render_plan()
+        render_plan["shots"][0]["caption"] = "  "
+        payload = _valid_payload() | {"render_plan": render_plan}
+        job = {"id": "job-bad-render-plan-caption", "payload": payload}
+
+        with patch(
+            "src.tasks.video_render.require_ffmpeg_for_video_render",
+            side_effect=AssertionError("ffmpeg should not be checked before render_plan validation"),
+        ) as ffmpeg_check:
+            with self.assertRaisesRegex(ValueError, "render_plan.shots.caption is required"):
                 run_video_render(job, None, None, Mock())
 
         ffmpeg_check.assert_not_called()
@@ -213,7 +232,7 @@ def _valid_render_plan() -> dict:
                 "layout": "title_card",
                 "image_role": "product",
                 "image_url": "https://image.example/shot-hook.jpg",
-                "caption": "Hook caption",
+                "caption": "Hook caption\nsecond line",
                 "voice_text": "Hook voice text",
                 "safe_area": "top_title",
             },
