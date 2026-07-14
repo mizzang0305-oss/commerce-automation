@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
@@ -74,31 +75,37 @@ class TtsGeneratorTest(unittest.TestCase):
             root = Path(temp_dir)
             command = root / "voice.cmd"
             command.write_text("@echo off", encoding="utf-8")
-            target = root / "voice.wav"
+            target = Path("voice.wav")
+            original_cwd = Path.cwd()
 
             def fake_run(args, **_kwargs):
                 if "--output" in args:
                     output = Path(args[args.index("--output") + 1])
+                    self.assertTrue(output.is_absolute())
                     write_wav(output, 2.0)
                 else:
                     write_wav(Path(args[-1]), 1.0)
                 return type("Completed", (), {"returncode": 0})()
 
-            with patch("src.media.tts_generator.subprocess.run", side_effect=fake_run) as run:
-                result = create_tts_audio(
-                    "실제 한국어 음성 테스트",
-                    target,
-                    duration_seconds=1.0,
-                    provider="local_command",
-                    provider_approved=True,
-                    command=str(command),
-                )
+            try:
+                os.chdir(root)
+                with patch("src.media.tts_generator.subprocess.run", side_effect=fake_run) as run:
+                    result = create_tts_audio(
+                        "실제 한국어 음성 테스트",
+                        target,
+                        duration_seconds=1.0,
+                        provider="local_command",
+                        provider_approved=True,
+                        command=str(command),
+                    )
+            finally:
+                os.chdir(original_cwd)
 
-            self.assertEqual(result, target)
+            self.assertEqual(result, (root / target).resolve())
             self.assertEqual(run.call_count, 2)
-            self.assertFalse(target.with_name("voice.script.txt").exists())
-            self.assertFalse(target.with_name("voice.raw.wav").exists())
-            with wave.open(str(target), "rb") as wav:
+            self.assertFalse((root / "voice.script.txt").exists())
+            self.assertFalse((root / "voice.raw.wav").exists())
+            with wave.open(str(root / target), "rb") as wav:
                 self.assertAlmostEqual(wav.getnframes() / wav.getframerate(), 1.0, places=2)
 
     def test_local_provider_rejects_silent_output(self):

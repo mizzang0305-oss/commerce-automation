@@ -63,6 +63,7 @@ def create_tts_audio(
     if not command_path.is_absolute() or not command_path.is_file():
         raise RuntimeError(BLOCKED_COMMAND)
 
+    target = target.resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     script_path = target.with_name(f"{target.stem}.script.txt")
     raw_path = target.with_name(f"{target.stem}.raw.wav")
