@@ -112,6 +112,26 @@ If `ffmpeg` is missing, startup can still succeed, but `video_render` jobs fail 
 
 Failures raise safe worker errors and use the normal fail/retry path. The worker must not upload placeholder artifacts, complete `video_render`, or mark a queue item `video_ready` after image download failure.
 
+## Korean TTS Provider
+
+Production `video_render` uses only the explicitly approved local Korean voice command:
+
+```text
+<command> --script <voiceover-script.txt> --output <voiceover.wav> --language ko --format wav
+```
+
+Required environment settings are `KOREAN_VOICE_PROVIDER=local_command`,
+`KOREAN_VOICE_PROVIDER_APPROVED=true`, `KOREAN_VOICE_LANGUAGE=ko`, and an
+absolute existing `KOREAN_VOICE_COMMAND`. Windows SAPI and paid/cloud provider
+markers are rejected. Command output is captured rather than logged, validated
+as non-silent PCM WAV, and normalized to the render-plan duration with FFmpeg.
+Provider failure follows the normal worker fail/retry path and must not persist
+rendered artifacts or move the queue item to `video_ready`.
+
+The placeholder WAV path remains available only to explicit local/unit dry-run
+configurations. `load_config()` defaults missing production voice configuration
+to `disabled`, which fails closed for `video_render`.
+
 Rendered videos and thumbnails target a 1080x1920 vertical format. The ffmpeg filter scales and pads product imagery into the vertical frame, uses a dark safe background, burns generated subtitles with readable outline styling, and the thumbnail generator wraps long product names so text stays inside the output.
 
 Render quality v2 keeps the same Python/ffmpeg renderer and does not add ViMax or an external video API. Current quality controls are:

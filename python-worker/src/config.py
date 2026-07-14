@@ -20,6 +20,13 @@ class WorkerConfig:
     s3_secret_access_key: str
     s3_region: str
     r2_public_base_urls: dict[str, str]
+    korean_voice_provider: str = "placeholder"
+    korean_voice_provider_approved: bool = False
+    korean_voice_language: str = "ko"
+    korean_voice_command: str = ""
+    korean_voice_reject_windows_sapi: bool = True
+    korean_voice_speed: float = 1.14
+    korean_voice_timeout_seconds: int = 600
 
 
 def first_env(*names: str, default: str = "") -> str:
@@ -28,6 +35,13 @@ def first_env(*names: str, default: str = "") -> str:
         if value:
             return value
     return default
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y"}
 
 
 def load_config() -> WorkerConfig:
@@ -60,4 +74,11 @@ def load_config() -> WorkerConfig:
             "subtitles": os.getenv("R2_PUBLIC_BASE_URL_SUBTITLES", "").strip().rstrip("/"),
             "upload-packages": os.getenv("R2_PUBLIC_BASE_URL_UPLOAD_PACKAGES", "").strip().rstrip("/"),
         },
+        korean_voice_provider=os.getenv("KOREAN_VOICE_PROVIDER", "disabled").strip().lower(),
+        korean_voice_provider_approved=env_bool("KOREAN_VOICE_PROVIDER_APPROVED"),
+        korean_voice_language=os.getenv("KOREAN_VOICE_LANGUAGE", "ko").strip().lower(),
+        korean_voice_command=os.getenv("KOREAN_VOICE_COMMAND", "").strip().strip('"').strip("'"),
+        korean_voice_reject_windows_sapi=env_bool("KOREAN_VOICE_REJECT_WINDOWS_SAPI", default=True),
+        korean_voice_speed=float(os.getenv("KOREAN_VOICE_SPEED", "1.14")),
+        korean_voice_timeout_seconds=int(os.getenv("KOREAN_VOICE_TIMEOUT_SECONDS", "600")),
     )
