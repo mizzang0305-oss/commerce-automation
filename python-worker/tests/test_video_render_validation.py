@@ -117,7 +117,36 @@ class VideoRenderValidationTest(unittest.TestCase):
             run_video_render(job, None, storage, Mock())
 
         download_image.assert_called_once()
-        self.assertIsNone(render.call_args.kwargs["shot_image_paths"])
+        self.assertEqual(
+            render.call_args.kwargs["shot_image_paths"],
+            [
+                Path("temp/job-render-plan-dedup/shot-001.jpg"),
+                Path("temp/job-render-plan-dedup/shot-001.jpg"),
+            ],
+        )
+
+    def test_repeated_image_render_plan_reports_sequence_metadata(self):
+        storage = Mock()
+        storage.upload.side_effect = lambda bucket, path, key: f"https://storage.example/{key}"
+        render_plan = _valid_render_plan()
+        render_plan["shots"][1]["image_url"] = render_plan["shots"][0]["image_url"]
+        job = {"id": "job-render-plan-dedup-metadata", "payload": _valid_payload() | {"render_plan": render_plan}}
+        package_path = Path("outputs/job-render-plan-dedup-metadata/upload_package.txt")
+        package_path.unlink(missing_ok=True)
+
+        with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
+            patch("src.tasks.video_render.download_image", side_effect=_download_to_target), \
+            patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan-dedup-metadata/voiceover.wav")), \
+            patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan-dedup-metadata/captions.srt")), \
+            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan-dedup-metadata/video.mp4")), \
+            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan-dedup-metadata/thumbnail.jpg")), \
+            patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
+            run_video_render(job, None, storage, Mock())
+
+        package_text = package_path.read_text(encoding="utf-8")
+        self.assertIn("image_sequence_used: true", package_text)
+        self.assertIn("unique_image_count: 1", package_text)
+        self.assertIn("shot_count: 2", package_text)
 
     def test_upload_package_includes_visual_quality_metadata(self):
         storage = Mock()

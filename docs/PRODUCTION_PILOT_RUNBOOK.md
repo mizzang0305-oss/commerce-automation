@@ -189,7 +189,35 @@ cd C:\Users\LOVE\MyProjects\commerce-automation\python-worker
 .\.venv\Scripts\python worker.py
 ```
 
-For first pilot, keep an operator-visible PowerShell window. Windows Task Scheduler or NSSM can be evaluated after the manual pilot passes.
+For the first pilot, keep an operator-visible PowerShell window. After that pilot passes and the owner separately approves persistent startup, install the current-user Task Scheduler package:
+
+```powershell
+$runtime = Join-Path $env:LOCALAPPDATA "Minz\commerce-automation-worker"
+.\python-worker\scripts\install_windows_autostart.ps1 `
+  -WorkerRoot "C:\path\to\commerce-automation\python-worker" `
+  -PythonExe "C:\path\to\commerce-automation\python-worker\.venv\Scripts\python.exe" `
+  -RuntimeDir $runtime `
+  -WebAppBaseUrl "https://<vercel-domain>" `
+  -EnvFile "C:\path\to\commerce-automation\.env.local","C:\path\to\commerce-automation\python-worker\.env" `
+  -StartNow
+```
+
+The task runs only for the current interactive Windows user, starts at logon, allows one instance, and retries a failed worker once per minute. The installed launcher writes only sanitized PID/head/storage evidence and appends worker logs under the runtime directory. Credentials remain in the specified local env files and are not copied into the repository or Task Scheduler arguments.
+
+Verify without printing secrets:
+
+```powershell
+Get-ScheduledTask -TaskName "Minz-Commerce-Automation-Worker" |
+  Select-Object TaskName, State
+Get-Content (Join-Path $runtime "worker.pid.json")
+```
+
+Rollback:
+
+```powershell
+Stop-ScheduledTask -TaskName "Minz-Commerce-Automation-Worker"
+Unregister-ScheduledTask -TaskName "Minz-Commerce-Automation-Worker" -Confirm:$false
+```
 
 ## 6. Production Smoke Sequence
 
