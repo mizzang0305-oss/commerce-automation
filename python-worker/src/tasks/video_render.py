@@ -59,7 +59,11 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
             heartbeat()
         shot_image_paths.append(image_path)
     image_path = shot_image_paths[0]
-    sequence_image_paths = shot_image_paths if len(downloaded_by_url) > 1 else None
+    # Preserve the render-plan timeline even when multiple shots reuse the same
+    # downloaded image. Download de-duplication is an I/O concern; collapsing
+    # the shot list here falls back to the legacy single-image renderer and
+    # loses its explicit 30 fps / per-shot duration contract.
+    sequence_image_paths = shot_image_paths if len(shot_image_paths) > 1 else None
     planned_duration = sum(shot_durations) if shot_durations else None
     audio_path = create_tts_audio(
         voiceover_script,
