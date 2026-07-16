@@ -49,6 +49,25 @@ class WindowsPersistentWorkerLauncherTest(unittest.TestCase):
         self.assertIn("STORAGE_BACKEND must be r2", blockers)
         self.assertIn("KOREAN_VOICE_PROVIDER must be local_command", blockers)
 
+    def test_installer_persists_logon_and_repeating_recovery_triggers(self):
+        installer = (
+            Path(__file__).resolve().parents[1]
+            / "scripts"
+            / "install_windows_autostart.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("[ValidateRange(1, 255)]", installer)
+        self.assertIn("[int]$RestartCount = 3", installer)
+        self.assertNotIn("-RestartCount 999", installer)
+        self.assertIn("$logonTrigger = New-ScheduledTaskTrigger -AtLogOn", installer)
+        self.assertIn("$recoveryTrigger = New-ScheduledTaskTrigger", installer)
+        self.assertIn("-RepetitionInterval $recoveryInterval", installer)
+        self.assertIn("-RepetitionDuration $recoveryDuration", installer)
+        self.assertIn("-Trigger @($logonTrigger, $recoveryTrigger)", installer)
+        self.assertIn("-MultipleInstances IgnoreNew", installer)
+        self.assertIn("-StartWhenAvailable", installer)
+        self.assertIn("-Hidden", installer)
+
 
 if __name__ == "__main__":
     unittest.main()
