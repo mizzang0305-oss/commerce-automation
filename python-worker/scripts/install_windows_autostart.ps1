@@ -17,6 +17,15 @@ param(
 
     [string]$TaskName = "Minz-Commerce-Automation-Worker",
 
+    [ValidateRange(1, 60)]
+    [int]$RecoveryIntervalMinutes = 1,
+
+    [ValidateRange(1, 3650)]
+    [int]$RecoveryDurationDays = 3650,
+
+    [ValidateRange(1, 255)]
+    [int]$RestartCount = 3,
+
     [switch]$StartNow
 )
 
@@ -57,14 +66,23 @@ foreach ($path in $resolvedEnvFiles) {
 }
 
 $action = New-ScheduledTaskAction -Execute $resolvedPythonExe -Argument ($arguments -join " ") -WorkingDirectory $resolvedWorkerRoot
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$recoveryInterval = New-TimeSpan -Minutes $RecoveryIntervalMinutes
+$recoveryDuration = New-TimeSpan -Days $RecoveryDurationDays
+$recoveryTrigger = New-ScheduledTaskTrigger `
+    -Once `
+    -At ((Get-Date).Add($recoveryInterval)) `
+    -RepetitionInterval $recoveryInterval `
+    -RepetitionDuration $recoveryDuration
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -Hidden `
     -MultipleInstances IgnoreNew `
-    -RestartCount 999 `
-    -RestartInterval (New-TimeSpan -Minutes 1)
+    -RestartCount $RestartCount `
+    -RestartInterval $recoveryInterval `
+    -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
     -LogonType Interactive `
@@ -74,7 +92,7 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register current-user worker auto-start 
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
-        -Trigger $trigger `
+        -Trigger @($logonTrigger, $recoveryTrigger) `
         -Settings $settings `
         -Principal $principal `
         -Description "Persistent commerce-automation Worker; secrets stay in local env files." `
@@ -91,5 +109,8 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register current-user worker auto-start 
     WorkerRoot = $resolvedWorkerRoot
     RuntimeDir = $resolvedRuntimeDir
     EnvFileCount = $resolvedEnvFiles.Count
+    RecoveryIntervalMinutes = $RecoveryIntervalMinutes
+    RecoveryDurationDays = $RecoveryDurationDays
+    RestartCount = $RestartCount
     SecretsPrinted = $false
 }

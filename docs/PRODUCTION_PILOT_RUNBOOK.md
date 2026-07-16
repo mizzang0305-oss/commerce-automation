@@ -202,7 +202,14 @@ $runtime = Join-Path $env:LOCALAPPDATA "Minz\commerce-automation-worker"
   -StartNow
 ```
 
-The task runs only for the current interactive Windows user, starts at logon, allows one instance, and retries a failed worker once per minute. The installed launcher writes only sanitized PID/head/storage evidence and appends worker logs under the runtime directory. Credentials remain in the specified local env files and are not copied into the repository or Task Scheduler arguments.
+The task runs only for the current interactive Windows user and uses two triggers:
+
+- an `AtLogOn` trigger for normal Windows sign-in startup;
+- a repeating one-minute recovery trigger for process termination or a missed logon start.
+
+`MultipleInstances=IgnoreNew` prevents the recovery trigger from creating duplicate Workers while the existing process is healthy. Task Scheduler `RestartOnFailure` remains a secondary guard with a schema-valid default count of `3`; the repeating trigger is the durable recovery path for externally terminated Python processes. The task is hidden, starts when a scheduled trigger was missed, and has no execution time limit.
+
+The installed launcher writes only sanitized PID/head/storage evidence and appends worker logs under the runtime directory. Credentials remain in the specified local env files and are not copied into the repository or Task Scheduler arguments.
 
 Verify without printing secrets:
 
@@ -211,6 +218,16 @@ Get-ScheduledTask -TaskName "Minz-Commerce-Automation-Worker" |
   Select-Object TaskName, State
 Get-Content (Join-Path $runtime "worker.pid.json")
 ```
+
+Verify both triggers and recovery settings:
+
+```powershell
+[xml]$taskXml = Export-ScheduledTask -TaskName "Minz-Commerce-Automation-Worker"
+$taskXml.Task.Triggers
+$taskXml.Task.Settings.RestartOnFailure
+```
+
+An intentional crash test must be run only while the production active-job count is zero. Stop the exact PID recorded in `worker.pid.json`, then confirm a new PID and the expected merged Git head appear after the next recovery interval.
 
 Rollback:
 
