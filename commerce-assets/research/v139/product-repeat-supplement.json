@@ -1,0 +1,85 @@
+{
+  "version": "v139",
+  "assets": {
+    "v112-rear-organizer-hero": {
+      "image": "review/v112/father_jobs/generated-scenes/01-v112-product-hero.png",
+      "sha256_prefix": "1a6e6a699a21",
+      "category_label": "vehicle"
+    }
+  },
+  "samples": [
+    {
+      "sample_id": "vehicle-v112-single-source-repeat-pass",
+      "category": "vehicle",
+      "format_name": "product_reference_repeat",
+      "owner_label": "pass",
+      "expected_scene_category_pass": true,
+      "expected_binding_pass": true,
+      "expected_format_profile_pass": true,
+      "binding_evidence": {
+        "selected_product_matches_target": true,
+        "script_matches_product": true,
+        "manifest_purpose_matches_product": true,
+        "scene_source_authorized": true,
+        "exact_product_identity_verified": true
+      },
+      "source_assertions": [
+        {
+          "file": "review/v112/father_jobs/v112-preview-summary.json",
+          "field": "status",
+          "equals": "preview_ready_for_owner_review"
+        },
+        {
+          "file": "review/v112/father_jobs/v112-preview-summary.json",
+          "field": "productReference",
+          "equals": "CURRENT_REAR_SEAT_MULTIFUNCTION_ORGANIZER"
+        },
+        {
+          "file": "review/v112/father_jobs/v112-preview-summary.json",
+          "field": "productReferenceLocked",
+          "equals": true
+        },
+        {
+          "file": "review/v112/father_jobs/v112-preview-summary.json",
+          "field": "blockers",
+          "equals": []
+        },
+        {
+          "file": "review/v112/father_jobs/v112-preview-summary.json",
+          "field": "uploadExecuteCalled",
+          "equals": false
+        }
+      ],
+      "scene_sequence": [
+        "v112-rear-organizer-hero",
+        "v112-rear-organizer-hero",
+        "v112-rear-organizer-hero",
+        "v112-rear-organizer-hero",
+        "v112-rear-organizer-hero"
+      ]
+    },
+    {
+      "sample_id": "vehicle-controlled-four-source-identity-drift-block",
+      "category": "vehicle",
+      "format_name": "product_reference_repeat",
+      "owner_label": "block",
+      "expected_scene_category_pass": true,
+      "expected_binding_pass": false,
+      "expected_format_profile_pass": false,
+      "binding_evidence": {
+        "selected_product_matches_target": true,
+        "script_matches_product": true,
+        "manifest_purpose_matches_product": true,
+        "scene_source_authorized": true,
+        "exact_product_identity_verified": false
+      },
+      "scene_sequence": [
+        "v112-rear-organizer-hero",
+        "v46-car-1",
+        "v46-car-2",
+        "v46-car-3",
+        "v112-rear-organizer-hero"
+      ]
+    }
+  ]
+}

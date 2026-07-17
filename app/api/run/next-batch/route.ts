@@ -13,6 +13,7 @@ import { createAutomationRun } from "@/lib/server/runLog";
 import { buildStoryboardRenderPlan } from "@/lib/video/storyboardTemplatePlanner";
 import { getEffectiveRenderPlan } from "@/lib/video/renderPlanOverride";
 import { countKstDailyVideoRenderJobs } from "@/lib/workerDailyLimit";
+import { buildWorkerVisualBinding } from "@/lib/server/workerVisualBinding";
 
 export const dynamic = "force-dynamic";
 
@@ -249,14 +250,39 @@ export async function POST(request?: Request) {
     }
 
     const renderPlan = buildStoryboardRenderPlan(item, content);
-    const effectiveRenderPlan = renderPlan.ok
-      ? getEffectiveRenderPlan(renderPlan.render_plan, content?.render_plan_override)
-      : null;
+    if (!renderPlan.ok) {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: `render_plan is not ready: ${renderPlan.missing_reasons.join(",")}`
+      });
+      continue;
+    }
+    const effectiveRenderPlan = getEffectiveRenderPlan(renderPlan.render_plan, content?.render_plan_override);
     if (effectiveRenderPlan && !effectiveRenderPlan.ok) {
       guardedItems += 1;
       await repository.updateQueueItemById(item.id, {
         queue_status: "manual_review",
         error_message: `render_plan override is invalid: ${effectiveRenderPlan.message}`
+      });
+      continue;
+    }
+
+    const visualBinding = buildWorkerVisualBinding({
+      queueId: item.id,
+      productName: item.product_name,
+      affiliateUrl: item.selected_affiliate_url,
+      categoryPath: item.category_path,
+      theme: item.theme,
+      keyword: item.keyword,
+      renderPlan: effectiveRenderPlan.render_plan,
+      secret: process.env.WORKER_VISUAL_BINDING_SECRET
+    });
+    if (!visualBinding.ok) {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: visualBinding.message
       });
       continue;
     }
@@ -285,7 +311,9 @@ export async function POST(request?: Request) {
             description: content?.youtube_description ?? "",
             hashtags: content?.hashtags ?? ""
           },
-          ...(effectiveRenderPlan?.ok ? { render_plan: effectiveRenderPlan.render_plan } : {})
+          render_plan: effectiveRenderPlan.render_plan,
+          server_product_category: visualBinding.binding.target_category,
+          server_visual_binding: visualBinding.binding
         }
       })
     );

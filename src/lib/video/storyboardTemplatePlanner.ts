@@ -95,6 +95,20 @@ export function buildStoryboardRenderPlan(
       metadata: { source: "template", sequence: 3 }
     },
     {
+      shot_id: "identity_confirm",
+      duration_sec: 4,
+      layout: "detail_check",
+      image_role: "product",
+      image_url: imageUrl,
+      caption: clipText(`${productName} product reference`, 58),
+      voice_text: clipText(
+        scriptLines[3] || `Confirm that the product image and selected option match ${productName}.`,
+        180
+      ),
+      safe_area: "center_focus",
+      metadata: { source: "template", sequence: 4 }
+    },
+    {
       shot_id: "manual_cta",
       duration_sec: 4,
       layout: "manual_upload_cta",
@@ -102,11 +116,11 @@ export function buildStoryboardRenderPlan(
       image_url: imageUrl,
       caption: "Check the product page before purchase",
       voice_text: clipText(
-        `${scriptLines[3] || "Review the latest product page before purchase."} ${safeContent.disclosure_text.trim()}`,
+        `${scriptLines[4] || "Review the latest product page before purchase."} ${safeContent.disclosure_text.trim()}`,
         220
       ),
       safe_area: "bottom_caption",
-      metadata: { source: "template", sequence: 4 }
+      metadata: { source: "template", sequence: 5 }
     }
   ];
 

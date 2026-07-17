@@ -1,0 +1,12 @@
+{
+  "candidate_id": "candidate-3c7b01b64249a5bd",
+  "scenario": "v134-real-usage-approved",
+  "scenes": [
+    { "scene_id": "scene-01", "image_path": "v134-pass/scene-01.png", "provenance": "stock_real_usage", "usage_label_present": true },
+    { "scene_id": "scene-02", "image_path": "v134-pass/scene-02.png", "provenance": "stock_real_usage", "usage_label_present": true },
+    { "scene_id": "scene-03", "image_path": "v134-pass/scene-03.png", "provenance": "exact_product_image", "usage_label_present": false },
+    { "scene_id": "scene-04", "image_path": "v134-pass/scene-04.png", "provenance": "stock_real_usage", "usage_label_present": true },
+    { "scene_id": "scene-05", "image_path": "v134-pass/scene-05.png", "provenance": "exact_product_image", "usage_label_present": false },
+    { "scene_id": "scene-06", "image_path": "v134-pass/scene-06.png", "provenance": "exact_product_image", "usage_label_present": false }
+  ]
+}

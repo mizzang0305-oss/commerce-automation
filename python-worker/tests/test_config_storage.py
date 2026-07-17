@@ -12,6 +12,17 @@ from src.config import load_config
 
 
 class WorkerConfigStorageTest(unittest.TestCase):
+    def test_worker_visual_binding_secret_is_loaded_without_logging(self):
+        env = {
+            "WORKER_API_SECRET": "worker-secret",
+            "WORKER_VISUAL_BINDING_SECRET": "visual-binding-secret-0123456789abcdef",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config()
+
+        self.assertEqual(config.worker_visual_binding_secret, env["WORKER_VISUAL_BINDING_SECRET"])
+
     def test_supabase_storage_env_aliases_are_supported(self):
         env = {
             "WORKER_API_SECRET": "worker-secret",

@@ -29,11 +29,12 @@ describe("storyboard render plan template planner", () => {
         worker_jobs_created: false
       }
     });
-    expect(result.render_plan.shots).toHaveLength(4);
+    expect(result.render_plan.shots).toHaveLength(5);
     expect(result.render_plan.shots.map((shot) => shot.shot_id)).toEqual([
       "hook",
       "product_focus",
       "check_points",
+      "identity_confirm",
       "manual_cta"
     ]);
     expect(result.render_plan.shots.every((shot) => shot.image_url === "https://image.example.com/product.jpg")).toBe(

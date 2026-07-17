@@ -200,6 +200,7 @@ describe("next batch worker dispatch", () => {
   beforeEach(() => {
     resetMockRepositoryForTests();
     process.env.WORKER_API_SECRET = "worker-secret";
+    process.env.WORKER_VISUAL_BINDING_SECRET = "worker-visual-binding-test-secret-0001";
     delete process.env.N8N_NEXT_BATCH_WEBHOOK_URL;
     delete process.env.N8N_WEBHOOK_SECRET;
   });
@@ -254,6 +255,14 @@ describe("next batch worker dispatch", () => {
       selected_affiliate_url: expect.stringContaining("https://link.coupang.com"),
       disclosure_text: expect.stringContaining("쿠팡 파트너스"),
       script: expect.stringContaining("worker smoke"),
+      server_product_category: expect.any(String),
+      server_visual_binding: expect.objectContaining({
+        version: "1",
+        issuer: "commerce-web-next-batch",
+        format_name: "product_reference_repeat",
+        manifest_purpose: "worker_video_render",
+        signature: expect.stringMatching(/^[a-f0-9]{64}$/)
+      }),
       render_plan: {
         version: "1",
         source: "storyboard_template",
@@ -350,6 +359,23 @@ describe("next batch worker dispatch", () => {
     expect((await readJson(response)).created_jobs).toBe(0);
     expect(updated?.queue_status).toBe("manual_review");
     expect(updated?.error_message).toContain("render_plan override");
+    expect(await repository.getWorkerJobs()).toHaveLength(0);
+  });
+
+  test("fails closed before job creation when visual binding secret is missing", async () => {
+    delete process.env.WORKER_VISUAL_BINDING_SECRET;
+    const repository = getAutomationRepository();
+    await repository.updateSettings({ is_paused: false, batch_size: 1 });
+    const item = (await repository.getQueue({ status: "scheduled", limit: 1 }))[0];
+    await makeItemRenderable(item.id);
+
+    const response = await nextBatch();
+    const updated = await repository.getQueueItem(item.id);
+
+    expect(response.status).toBe(200);
+    expect((await readJson(response)).created_jobs).toBe(0);
+    expect(updated?.queue_status).toBe("manual_review");
+    expect(updated?.error_message).toContain("visual binding secret");
     expect(await repository.getWorkerJobs()).toHaveLength(0);
   });
 

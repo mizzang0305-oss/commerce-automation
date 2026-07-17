@@ -13,17 +13,56 @@ from src.media.image_downloader import ImageDownloadError
 
 
 class VideoRenderValidationTest(unittest.TestCase):
+    def setUp(self):
+        self.binding_patch = patch(
+            "src.tasks.video_render.verify_server_visual_binding",
+            return_value={
+                "binding_verified": True,
+                "format_name": "product_reference_repeat",
+                "target_category": "test",
+                "scene_count": 2,
+            },
+        )
+        self.gate_patch = patch(
+            "src.tasks.video_render.evaluate_runtime_format_profile",
+            return_value={
+                "gate_version": "v140",
+                "gate_pass": True,
+                "format_name": "product_reference_repeat",
+                "blockers": [],
+                "scene_count": 2,
+                "exact_file_hash_count": 2,
+                "perceptual_cluster_count": 2,
+                "largest_cluster_ratio": 0.5,
+                "raw_paths_in_report": False,
+                "external_api_called": False,
+                "upload_attempted": False,
+            },
+        )
+        self.binding_patch.start()
+        self.gate_patch.start()
+        self.addCleanup(self.binding_patch.stop)
+        self.addCleanup(self.gate_patch.stop)
+
     def test_missing_payload_fields_are_rejected_before_ffmpeg_check(self):
+        missing_affiliate = _valid_payload() | {"selected_affiliate_url": "  "}
+        missing_disclosure = _valid_payload()
+        missing_disclosure["disclosure_text"] = ""
+        missing_disclosure["render_plan"]["disclosure_text"] = ""
+        missing_script = _valid_payload()
+        missing_script["render_plan"]["shots"][0]["voice_text"] = ""
+        missing_image = _valid_payload()
+        missing_image["render_plan"]["shots"][0]["image_url"] = ""
         cases = [
-            ("selected_affiliate_url", "selected_affiliate_url is required"),
-            ("disclosure_text", "disclosure_text is required"),
-            ("script", "script is required"),
-            ("image_url", "image_url or thumbnail_url is required"),
+            ("selected_affiliate_url", missing_affiliate, "selected_affiliate_url is required"),
+            ("disclosure_text", missing_disclosure, "render_plan.disclosure_text is required"),
+            ("script", missing_script, "render_plan.shots.voice_text is required"),
+            ("image_url", missing_image, "render_plan.shots.image_url is required"),
         ]
 
-        for field, message in cases:
+        for field, payload, message in cases:
             with self.subTest(field=field):
-                job = {"id": f"job-missing-{field}", "payload": _valid_payload() | {field: "  "}}
+                job = {"id": f"job-missing-{field}", "payload": payload}
                 with patch(
                     "src.tasks.video_render.require_ffmpeg_for_video_render",
                     side_effect=AssertionError("ffmpeg should not be checked before payload validation"),
@@ -33,25 +72,16 @@ class VideoRenderValidationTest(unittest.TestCase):
 
                 ffmpeg_check.assert_not_called()
 
-    def test_thumbnail_url_can_satisfy_image_payload(self):
-        storage = Mock()
-        storage.upload.side_effect = lambda bucket, path, key: f"https://storage.example/{key}"
-        payload = _valid_payload() | {"image_url": "", "thumbnail_url": "https://image.example/thumb.jpg"}
-        job = {"id": "job-thumbnail-fallback", "payload": payload}
-
-        with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg") as ffmpeg_check, \
-            patch("src.tasks.video_render.download_image", return_value=Path("temp/job-thumbnail-fallback/product.jpg")) as download_image, \
-            patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-thumbnail-fallback/voiceover.wav")), \
-            patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-thumbnail-fallback/captions.srt")), \
-            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-thumbnail-fallback/video.mp4")), \
-            patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-thumbnail-fallback/thumbnail.jpg")), \
-            patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
-            result = run_video_render(job, None, storage, Mock())
-
-        ffmpeg_check.assert_called_once()
-        download_image.assert_called_once()
-        self.assertEqual(download_image.call_args.args[0], "https://image.example/thumb.jpg")
-        self.assertIn("video_url", result)
+    def test_render_plan_is_required_before_ffmpeg_check(self):
+        payload = _valid_payload()
+        payload.pop("render_plan")
+        with patch(
+            "src.tasks.video_render.require_ffmpeg_for_video_render",
+            side_effect=AssertionError("ffmpeg must not run for an unsigned legacy payload"),
+        ) as ffmpeg_check:
+            with self.assertRaisesRegex(ValueError, "render_plan is required for server-bound video_render"):
+                run_video_render({"id": "job-no-render-plan", "payload": payload}, None, None, Mock())
+        ffmpeg_check.assert_not_called()
 
     def test_valid_render_plan_supplies_shot_image_and_voice_text(self):
         storage = Mock()
@@ -147,6 +177,8 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertIn("image_sequence_used: true", package_text)
         self.assertIn("unique_image_count: 1", package_text)
         self.assertIn("shot_count: 2", package_text)
+        self.assertIn("visual_binding_verified: true", package_text)
+        self.assertIn("pre_render_visual_gate_pass: true", package_text)
 
     def test_upload_package_includes_visual_quality_metadata(self):
         storage = Mock()
@@ -236,6 +268,29 @@ class VideoRenderValidationTest(unittest.TestCase):
 
         storage.upload.assert_not_called()
 
+    def test_visual_gate_block_stops_before_tts_render_and_upload(self):
+        storage = Mock()
+        job = {"id": "job-visual-block", "payload": _valid_payload()}
+        with patch("src.tasks.video_render.require_ffmpeg_for_video_render", return_value="ffmpeg"), \
+            patch("src.tasks.video_render.download_image", side_effect=_download_to_target), \
+            patch(
+                "src.tasks.video_render.evaluate_runtime_format_profile",
+                return_value={
+                    "gate_version": "v140",
+                    "gate_pass": False,
+                    "format_name": "product_reference_repeat",
+                    "blockers": ["SCENE_COUNT_BELOW_MINIMUM"],
+                },
+            ), \
+            patch("src.tasks.video_render.create_tts_audio") as tts, \
+            patch("src.tasks.video_render.render_vertical_video") as render, \
+            patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
+            with self.assertRaisesRegex(ValueError, "pre_render_visual_gate_blocked"):
+                run_video_render(job, None, storage, Mock())
+        tts.assert_not_called()
+        render.assert_not_called()
+        storage.upload.assert_not_called()
+
 
 def _valid_payload() -> dict:
     return {
@@ -243,6 +298,7 @@ def _valid_payload() -> dict:
         "image_url": "https://image.example/product.jpg",
         "script": "영상 대본입니다.",
         "selected_affiliate_url": "https://link.coupang.com/a/test",
+        "render_plan": _valid_render_plan(),
         "disclosure_text": "이 콘텐츠는 제휴 링크를 포함합니다.",
     }
 

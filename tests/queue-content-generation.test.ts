@@ -22,11 +22,13 @@ function generateRequest(body: Record<string, unknown> = {}) {
 const originalProvider = process.env.CONTENT_AI_PROVIDER;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 const originalGeminiKey = process.env.GEMINI_API_KEY;
+const originalVisualBindingSecret = process.env.WORKER_VISUAL_BINDING_SECRET;
 
 describe("queue content generation api", () => {
   beforeEach(() => {
     resetMockRepositoryForTests();
     process.env.WORKER_API_SECRET = "worker-secret";
+    process.env.WORKER_VISUAL_BINDING_SECRET = "worker-visual-binding-test-secret-0001";
     delete process.env.CONTENT_AI_PROVIDER;
     delete process.env.OPENAI_API_KEY;
     delete process.env.GEMINI_API_KEY;
@@ -36,6 +38,7 @@ describe("queue content generation api", () => {
     restoreEnv("CONTENT_AI_PROVIDER", originalProvider);
     restoreEnv("OPENAI_API_KEY", originalOpenAiKey);
     restoreEnv("GEMINI_API_KEY", originalGeminiKey);
+    restoreEnv("WORKER_VISUAL_BINDING_SECRET", originalVisualBindingSecret);
   });
 
   test("blocks content generation when affiliate url is missing", async () => {

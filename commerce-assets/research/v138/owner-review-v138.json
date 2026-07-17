@@ -1,0 +1,71 @@
+{
+  "version": "v138",
+  "authorization": "OWNER_AUTHORIZED_V138_LOCAL_RESEARCH_LABELING",
+  "scope": "local_research_only_no_upload_authority",
+  "reviewed_by": "codex_visual_review_under_owner_authorization",
+  "review_rules": [
+    "scene category must match the target category",
+    "selected product, script, manifest purpose, and scene source must agree",
+    "real_usage_storyboard requires perceptually distinct problem, usage, and result scenes",
+    "product_reference_repeat may reuse one to three exact identity-locked sources",
+    "controlled negatives are research-only and cannot be promoted as product candidates"
+  ],
+  "samples": {
+    "vehicle-v046-story-pass": {
+      "category": "vehicle",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "pass",
+      "basis": "six visually reviewed vehicle problem-product-use-result scenes"
+    },
+    "vehicle-v047-binding-block": {
+      "category": "vehicle",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "block",
+      "basis": "category-correct pixels but owner decision records selected-product script and manifest-purpose contamination"
+    },
+    "vehicle-controlled-repeat-story-block": {
+      "category": "vehicle",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "block",
+      "basis": "controlled single-source repetition does not satisfy storyboard diversity"
+    },
+    "cable-v046-story-pass": {
+      "category": "cable_management",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "pass",
+      "basis": "six visually reviewed cable problem-product-use-result scenes"
+    },
+    "cable-v047-binding-block": {
+      "category": "cable_management",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "block",
+      "basis": "category-correct pixels but owner decision records selected-product script and manifest-purpose contamination"
+    },
+    "food-controlled-repeat-story-block": {
+      "category": "food",
+      "format_name": "real_usage_storyboard",
+      "owner_label": "block",
+      "basis": "approved repeat-format sources intentionally declared as storyboard for a format-negative control"
+    },
+    "food-v116-repeat-pass": {
+      "category": "food",
+      "format_name": "product_reference_repeat",
+      "owner_label": "pass",
+      "basis": "explicit owner-review waiver and completed V116 evidence for two identity-locked food sources"
+    },
+    "food-controlled-wrong-category-repeat-block": {
+      "category": "food",
+      "format_name": "product_reference_repeat",
+      "owner_label": "block",
+      "basis": "controlled vehicle sources cannot satisfy a food product-reference package"
+    },
+    "cable-controlled-nonidentity-repeat-block": {
+      "category": "cable_management",
+      "format_name": "product_reference_repeat",
+      "owner_label": "block",
+      "basis": "six context images are not an identity-locked one-to-three-source repeat package"
+    }
+  },
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

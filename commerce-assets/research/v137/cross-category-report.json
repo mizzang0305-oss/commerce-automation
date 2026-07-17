@@ -1,0 +1,125 @@
+{
+  "version": "v137",
+  "status": "BLOCKED_CROSS_CATEGORY_PIXEL_GENERALIZATION",
+  "processing_duration_ms": 1467.28,
+  "semantic_precheck_processing_duration_ms": 0.0113,
+  "semantic_precheck_block_count": 0,
+  "validation": {
+    "validation_version": "v137",
+    "baseline_category": "laundry",
+    "sample_count": 3,
+    "owner_labeled_scene_count": 21,
+    "non_baseline_category_count": 3,
+    "non_baseline_categories": [
+      "cable_management",
+      "food",
+      "vehicle"
+    ],
+    "category_owner_label_sets": {
+      "cable_management": [
+        "block"
+      ],
+      "food": [
+        "pass"
+      ],
+      "vehicle": [
+        "block"
+      ]
+    },
+    "category_balance_ready": false,
+    "pixel_gate_evaluation": {
+      "accuracy": 0.0,
+      "balanced_accuracy": 0.0,
+      "pass_recall": 0.0,
+      "block_recall": 0.0,
+      "true_pass_count": 0,
+      "true_block_count": 0,
+      "false_block_count": 1,
+      "unsafe_false_pass_count": 2
+    },
+    "semantic_gate_evaluation": {
+      "accuracy": 0.3333,
+      "balanced_accuracy": 0.5,
+      "pass_recall": 1.0,
+      "block_recall": 0.0,
+      "true_pass_count": 1,
+      "true_block_count": 0,
+      "false_block_count": 0,
+      "unsafe_false_pass_count": 2
+    },
+    "combined_gate_evaluation": {
+      "accuracy": 0.0,
+      "balanced_accuracy": 0.0,
+      "pass_recall": 0.0,
+      "block_recall": 0.0,
+      "true_pass_count": 0,
+      "true_block_count": 0,
+      "false_block_count": 1,
+      "unsafe_false_pass_count": 2
+    },
+    "samples": [
+      {
+        "sample_id": "vehicle-v047-contaminated",
+        "expected_category": "vehicle",
+        "owner_label": "block",
+        "scene_count": 8,
+        "owner_labeled_scene_count": 8,
+        "pixel_gate_label": "pass",
+        "semantic_gate_label": "pass",
+        "combined_gate_label": "pass",
+        "semantic_mismatch_count": 0,
+        "semantic_mismatch_scene_ids": [],
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.25,
+        "average_pair_similarity": 0.5699
+      },
+      {
+        "sample_id": "cable-v047-contaminated",
+        "expected_category": "cable_management",
+        "owner_label": "block",
+        "scene_count": 8,
+        "owner_labeled_scene_count": 8,
+        "pixel_gate_label": "pass",
+        "semantic_gate_label": "pass",
+        "combined_gate_label": "pass",
+        "semantic_mismatch_count": 0,
+        "semantic_mismatch_scene_ids": [],
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.25,
+        "average_pair_similarity": 0.5904
+      },
+      {
+        "sample_id": "food-v116-approved",
+        "expected_category": "food",
+        "owner_label": "pass",
+        "scene_count": 5,
+        "owner_labeled_scene_count": 5,
+        "pixel_gate_label": "block",
+        "semantic_gate_label": "pass",
+        "combined_gate_label": "block",
+        "semantic_mismatch_count": 0,
+        "semantic_mismatch_scene_ids": [],
+        "perceptual_cluster_count": 2,
+        "largest_cluster_ratio": 0.6,
+        "average_pair_similarity": 0.7305
+      }
+    ],
+    "pixel_gate_cross_category_ready": false,
+    "semantic_guard_ready": false,
+    "recommended_execution_order": [
+      "scene_category_binding",
+      "script_product_manifest_binding",
+      "format_profile_selection",
+      "pixel_diversity_gate"
+    ],
+    "raw_paths_in_report": false,
+    "external_api_called": false,
+    "upload_attempted": false
+  },
+  "decision": "ADD_FULL_BINDING_GUARD_AND_CALIBRATE_FORMAT_SPECIFIC_PIXEL_PROFILES",
+  "tts_attempted": false,
+  "final_render_attempted": false,
+  "upload_attempted": false,
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

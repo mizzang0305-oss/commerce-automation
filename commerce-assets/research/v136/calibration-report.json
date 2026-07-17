@@ -1,0 +1,190 @@
+{
+  "version": "v136",
+  "status": "PASS_VISUAL_GATE_CALIBRATION",
+  "processing_duration_ms": 2521.31,
+  "calibration": {
+    "calibration_version": "v136",
+    "sample_count": 6,
+    "pass_sample_count": 3,
+    "block_sample_count": 3,
+    "candidate_config_count": 42,
+    "selected_config": {
+      "similarity_threshold": 0.88,
+      "maximum_largest_cluster_ratio": 0.5,
+      "minimum_perceptual_cluster_count": 3
+    },
+    "robustness": {
+      "perfect_config_count": 34,
+      "perfect_similarity_threshold_range": [
+        0.82,
+        0.94
+      ],
+      "perfect_maximum_cluster_ratio_range": [
+        0.4,
+        0.6
+      ],
+      "perfect_minimum_cluster_counts": [
+        3,
+        4
+      ],
+      "block_ratio_margin_from_selected_threshold": 0.25,
+      "pass_ratio_margin_from_selected_threshold": 0.3333
+    },
+    "full_corpus_evaluation": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "pass_recall": 1.0,
+      "block_recall": 1.0,
+      "safety_weighted_score": 1.0,
+      "true_pass_count": 3,
+      "true_block_count": 3,
+      "false_block_count": 0,
+      "unsafe_false_pass_count": 0
+    },
+    "leave_one_out": {
+      "fold_count": 6,
+      "correct_count": 6,
+      "accuracy": 1.0,
+      "predictions": [
+        {
+          "sample_id": "block-v133",
+          "expected_label": "block",
+          "predicted_label": "block",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        },
+        {
+          "sample_id": "block-v014",
+          "expected_label": "block",
+          "predicted_label": "block",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        },
+        {
+          "sample_id": "block-v028",
+          "expected_label": "block",
+          "predicted_label": "block",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        },
+        {
+          "sample_id": "pass-v134",
+          "expected_label": "pass",
+          "predicted_label": "pass",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        },
+        {
+          "sample_id": "pass-v029",
+          "expected_label": "pass",
+          "predicted_label": "pass",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        },
+        {
+          "sample_id": "pass-v035",
+          "expected_label": "pass",
+          "predicted_label": "pass",
+          "correct": true,
+          "selected_config": {
+            "similarity_threshold": 0.88,
+            "maximum_largest_cluster_ratio": 0.5,
+            "minimum_perceptual_cluster_count": 3
+          }
+        }
+      ]
+    },
+    "samples": [
+      {
+        "sample_id": "block-v133",
+        "expected_label": "block",
+        "predicted_label": "block",
+        "correct": true,
+        "scene_count": 8,
+        "perceptual_cluster_count": 1,
+        "largest_cluster_ratio": 1.0,
+        "average_pair_similarity": 0.9421
+      },
+      {
+        "sample_id": "block-v014",
+        "expected_label": "block",
+        "predicted_label": "block",
+        "correct": true,
+        "scene_count": 8,
+        "perceptual_cluster_count": 2,
+        "largest_cluster_ratio": 0.875,
+        "average_pair_similarity": 0.8556
+      },
+      {
+        "sample_id": "block-v028",
+        "expected_label": "block",
+        "predicted_label": "block",
+        "correct": true,
+        "scene_count": 8,
+        "perceptual_cluster_count": 3,
+        "largest_cluster_ratio": 0.75,
+        "average_pair_similarity": 0.9035
+      },
+      {
+        "sample_id": "pass-v134",
+        "expected_label": "pass",
+        "predicted_label": "pass",
+        "correct": true,
+        "scene_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.1667,
+        "average_pair_similarity": 0.5924
+      },
+      {
+        "sample_id": "pass-v029",
+        "expected_label": "pass",
+        "predicted_label": "pass",
+        "correct": true,
+        "scene_count": 8,
+        "perceptual_cluster_count": 8,
+        "largest_cluster_ratio": 0.125,
+        "average_pair_similarity": 0.5413
+      },
+      {
+        "sample_id": "pass-v035",
+        "expected_label": "pass",
+        "predicted_label": "pass",
+        "correct": true,
+        "scene_count": 8,
+        "perceptual_cluster_count": 8,
+        "largest_cluster_ratio": 0.125,
+        "average_pair_similarity": 0.5279
+      }
+    ],
+    "stage_1_pixel_gate_ready": true,
+    "stage_2_provenance_gate_still_required": true,
+    "raw_paths_in_report": false,
+    "external_api_called": false,
+    "upload_attempted": false
+  },
+  "tts_attempted": false,
+  "final_render_attempted": false,
+  "upload_attempted": false,
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

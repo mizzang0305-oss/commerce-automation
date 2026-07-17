@@ -16,11 +16,11 @@ describe("render plan preview summary", () => {
     const summary = summarizeRenderPlanPreview(plan.render_plan, item, content);
 
     expect(summary.mode).toBe("render_plan");
-    expect(summary.shot_count).toBe(4);
-    expect(summary.total_duration_sec).toBe(18);
+    expect(summary.shot_count).toBe(5);
+    expect(summary.total_duration_sec).toBe(22);
     expect(summary.ready).toBe(true);
     expect(summary.gaps).toEqual([]);
-    expect(summary.rows).toHaveLength(4);
+    expect(summary.rows).toHaveLength(5);
     expect(summary.rows[0]).toMatchObject({
       shot_id: "hook",
       shot_index: 1,
@@ -68,7 +68,7 @@ describe("render plan preview summary", () => {
     const summary = summarizeRenderPlanPreview(plan.render_plan, item, content);
 
     expect(summary.override_present).toBe(true);
-    expect(summary.total_duration_sec).toBe(19);
+    expect(summary.total_duration_sec).toBe(23);
     expect(summary.rows[0]).toMatchObject({
       shot_id: "hook",
       caption: "Operator preview hook",

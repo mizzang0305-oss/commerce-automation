@@ -1,0 +1,64 @@
+{
+  "version": "v135",
+  "candidate_id": "candidate-3c7b01b64249a5bd",
+  "scenario": "v133-repeated-product-photo",
+  "status": "BLOCKED_PRE_RENDER_VISUAL_EVIDENCE",
+  "processing_duration_ms": 454.13,
+  "gate": {
+    "gate_version": "v135",
+    "gate_pass": false,
+    "blockers": [
+      "VISUAL_CLUSTER_COUNT_BELOW_MINIMUM",
+      "REPEATED_VISUAL_CLUSTER",
+      "VERIFIED_USAGE_SCENE_COUNT_BELOW_MINIMUM",
+      "USAGE_EXAMPLE_LABEL_COUNT_BELOW_MINIMUM",
+      "EXACT_PRODUCT_SCENE_MISSING",
+      "UNVERIFIED_SCENE_PROVENANCE"
+    ],
+    "scene_count": 8,
+    "readable_scene_count": 8,
+    "exact_file_hash_count": 8,
+    "perceptual_cluster_count": 1,
+    "perceptual_cluster_sizes": [
+      8
+    ],
+    "largest_cluster_scene_count": 8,
+    "largest_cluster_ratio": 1.0,
+    "average_pair_similarity": 0.9421,
+    "maximum_pair_similarity": 0.9766,
+    "verified_usage_scene_count": 0,
+    "usage_label_count": 0,
+    "exact_product_scene_count": 0,
+    "exact_product_scene_ratio": 0.0,
+    "unverified_provenance_scene_count": 8,
+    "dimensions_consistent": true,
+    "portrait_scene_count": 8,
+    "thresholds": {
+      "minimum_scene_count": 5,
+      "minimum_perceptual_cluster_count": 3,
+      "minimum_verified_usage_scene_count": 2,
+      "minimum_usage_label_count": 2,
+      "maximum_largest_cluster_ratio": 0.5,
+      "maximum_exact_product_scene_ratio": 0.5,
+      "perceptual_similarity_threshold": 0.88
+    },
+    "scene_ids": [
+      "scene-01",
+      "scene-02",
+      "scene-03",
+      "scene-04",
+      "scene-05",
+      "scene-06",
+      "scene-07",
+      "scene-08"
+    ],
+    "raw_paths_in_report": false,
+    "external_api_called": false,
+    "upload_attempted": false
+  },
+  "final_render_attempted": false,
+  "tts_attempted": false,
+  "upload_attempted": false,
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}
