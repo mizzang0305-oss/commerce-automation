@@ -1,0 +1,11 @@
+{
+  "version": "v136",
+  "samples": [
+    { "sample_id": "block-v133", "label": "block", "scene_directory": "corpus/block-v133" },
+    { "sample_id": "block-v014", "label": "block", "scene_directory": "corpus/block-v014" },
+    { "sample_id": "block-v028", "label": "block", "scene_directory": "corpus/block-v028" },
+    { "sample_id": "pass-v134", "label": "pass", "scene_directory": "corpus/pass-v134" },
+    { "sample_id": "pass-v029", "label": "pass", "scene_directory": "corpus/pass-v029" },
+    { "sample_id": "pass-v035", "label": "pass", "scene_directory": "corpus/pass-v035" }
+  ]
+}

@@ -8,6 +8,8 @@ from ..media.subtitle_generator import write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
 from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
+from ..media.format_aware_visual_calibration import evaluate_runtime_format_profile
+from ..media.worker_visual_binding import verify_server_visual_binding
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
@@ -18,24 +20,18 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     render_plan = payload.get("render_plan")
     if not affiliate_url:
         raise ValueError("selected_affiliate_url is required for video_render")
+    if render_plan is None:
+        raise ValueError("render_plan is required for server-bound video_render")
 
-    if render_plan is not None:
-        render_context = _context_from_render_plan(render_plan, product_name, disclosure_text)
-        product_name = render_context["product_name"]
-        image_urls = render_context["image_urls"]
-        image_url = image_urls[0]
-        voiceover_script = render_context["voiceover_script"]
-        shot_captions = render_context["shot_captions"]
-        subtitle_text = "\n".join(shot_captions)
-        disclosure_text = render_context["disclosure_text"]
-        shot_durations = render_context["shot_durations"]
-    else:
-        image_url = str(payload.get("image_url") or payload.get("thumbnail_url") or "").strip()
-        image_urls = [image_url] if image_url else []
-        voiceover_script = str(payload.get("script", "")).strip()
-        subtitle_text = voiceover_script
-        shot_captions = None
-        shot_durations = None
+    render_context = _context_from_render_plan(render_plan, product_name, disclosure_text)
+    product_name = render_context["product_name"]
+    image_urls = render_context["image_urls"]
+    image_url = image_urls[0]
+    voiceover_script = render_context["voiceover_script"]
+    shot_captions = render_context["shot_captions"]
+    subtitle_text = "\n".join(shot_captions)
+    disclosure_text = render_context["disclosure_text"]
+    shot_durations = render_context["shot_durations"]
 
     if not disclosure_text:
         raise ValueError("disclosure_text is required for video_render")
@@ -43,6 +39,13 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         raise ValueError("script is required for video_render")
     if not image_url:
         raise ValueError("image_url or thumbnail_url is required for video_render")
+
+    verified_binding = verify_server_visual_binding(
+        job,
+        payload,
+        render_plan,
+        getattr(config, "worker_visual_binding_secret", ""),
+    )
 
     ffmpeg_exe = require_ffmpeg_for_video_render()
 
@@ -64,6 +67,14 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     # the shot list here falls back to the legacy single-image renderer and
     # loses its explicit 30 fps / per-shot duration contract.
     sequence_image_paths = shot_image_paths if len(shot_image_paths) > 1 else None
+    visual_gate = evaluate_runtime_format_profile(
+        verified_binding["format_name"],
+        shot_image_paths,
+    )
+    if not visual_gate["gate_pass"]:
+        raise ValueError(
+            "pre_render_visual_gate_blocked:" + ",".join(visual_gate["blockers"])
+        )
     planned_duration = sum(shot_durations) if shot_durations else None
     audio_path = create_tts_audio(
         voiceover_script,
@@ -108,8 +119,14 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         caption_voice_separated=render_plan is not None,
     )
     quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
+    visual_metadata_text = "\n".join([
+        "visual_binding_verified: true",
+        f"pre_render_visual_gate_version: {visual_gate['gate_version']}",
+        f"pre_render_visual_gate_pass: {str(visual_gate['gate_pass']).lower()}",
+        f"pre_render_visual_format: {visual_gate['format_name']}",
+    ])
     package_path.write_text(
-        f"{product_name}\n\n{voiceover_script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n",
+        f"{product_name}\n\n{voiceover_script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n{visual_metadata_text}\n",
         encoding="utf-8",
     )
 
@@ -119,6 +136,10 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         "thumbnail_url": storage.upload("thumbnail", thumbnail_path, f"{key_prefix}/thumbnail.jpg"),
         "srt_url": storage.upload("subtitle", srt_path, f"{key_prefix}/captions.srt"),
         "upload_package_url": storage.upload("upload_package", package_path, f"{key_prefix}/upload_package.txt"),
+        "visual_gate": {
+            **visual_gate,
+            "binding_verified": True,
+        },
     }
 
 

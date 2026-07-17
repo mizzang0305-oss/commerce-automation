@@ -1,0 +1,60 @@
+{
+  "version": "v135",
+  "candidate_id": "candidate-3c7b01b64249a5bd",
+  "scenario": "v134-real-usage-approved",
+  "status": "PASS_PRE_RENDER_VISUAL_EVIDENCE",
+  "processing_duration_ms": 423.62,
+  "gate": {
+    "gate_version": "v135",
+    "gate_pass": true,
+    "blockers": [],
+    "scene_count": 6,
+    "readable_scene_count": 6,
+    "exact_file_hash_count": 6,
+    "perceptual_cluster_count": 6,
+    "perceptual_cluster_sizes": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "largest_cluster_scene_count": 1,
+    "largest_cluster_ratio": 0.1667,
+    "average_pair_similarity": 0.5924,
+    "maximum_pair_similarity": 0.6602,
+    "verified_usage_scene_count": 3,
+    "usage_label_count": 3,
+    "exact_product_scene_count": 3,
+    "exact_product_scene_ratio": 0.5,
+    "unverified_provenance_scene_count": 0,
+    "dimensions_consistent": true,
+    "portrait_scene_count": 6,
+    "thresholds": {
+      "minimum_scene_count": 5,
+      "minimum_perceptual_cluster_count": 3,
+      "minimum_verified_usage_scene_count": 2,
+      "minimum_usage_label_count": 2,
+      "maximum_largest_cluster_ratio": 0.5,
+      "maximum_exact_product_scene_ratio": 0.5,
+      "perceptual_similarity_threshold": 0.88
+    },
+    "scene_ids": [
+      "scene-01",
+      "scene-02",
+      "scene-03",
+      "scene-04",
+      "scene-05",
+      "scene-06"
+    ],
+    "raw_paths_in_report": false,
+    "external_api_called": false,
+    "upload_attempted": false
+  },
+  "final_render_attempted": false,
+  "tts_attempted": false,
+  "upload_attempted": false,
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

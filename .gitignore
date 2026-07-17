@@ -8,6 +8,11 @@ node_modules
 .next
 out
 coverage
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+/outputs/
+/temp/
 data/*.json
 data/*.tmp
 python-worker/.venv/
@@ -20,5 +25,11 @@ python-worker/logs/**
 commerce-assets/generated-motion/
 commerce-assets/autopilot/
 commerce-assets/review/
+# Local visual-gate image corpus is intentionally not committed. Keep only
+# sanitized JSON manifests/reports needed for code review and calibration lineage.
+/commerce-assets/research/**
+!/commerce-assets/research/**/
+!/commerce-assets/research/**/*.json
+/commerce-assets/research/v138/format-aware-report-v138-recheck.json
 *.log
 npm-debug.log*

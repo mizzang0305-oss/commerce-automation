@@ -34,11 +34,12 @@ describe("queue detail render plan preview", () => {
 
     expect(screen.getByText("Render plan preview")).toBeInTheDocument();
     expect(screen.getByText("render_plan_attached=true")).toBeInTheDocument();
-    expect(screen.getByText("shots=4")).toBeInTheDocument();
-    expect(screen.getByText("duration=18s")).toBeInTheDocument();
+    expect(screen.getByText("shots=5")).toBeInTheDocument();
+    expect(screen.getByText("duration=22s")).toBeInTheDocument();
     expect(screen.getAllByText("hook").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("product_focus").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("check_points").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("identity_confirm").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("manual_cta").length).toBeGreaterThanOrEqual(1);
   });
 

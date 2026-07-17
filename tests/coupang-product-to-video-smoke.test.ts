@@ -22,6 +22,7 @@ describe("Coupang product-to-video smoke workflow", () => {
   beforeEach(() => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("ENABLE_DEV_TOOLS", "true");
+    vi.stubEnv("WORKER_VISUAL_BINDING_SECRET", "worker-visual-binding-test-secret-0001");
     resetMockRepositoryForTests();
   });
 
@@ -153,9 +154,9 @@ describe("Coupang product-to-video smoke workflow", () => {
       created_jobs: 1,
       status: {
         render_plan_attached: true,
-        render_plan_shot_count: 4,
+        render_plan_shot_count: 5,
         render_plan_override_present: false,
-        effective_render_plan_shot_count: 4
+        effective_render_plan_shot_count: 5
       }
     });
     expect(jobs).toEqual([

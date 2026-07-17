@@ -1,0 +1,383 @@
+{
+  "version": "v139",
+  "status": "PASS_FORMAT_AWARE_VISUAL_CALIBRATION_PROMOTION_EVIDENCE_READY",
+  "processing_duration_ms": 4706.44,
+  "calibration": {
+    "calibration_version": "v138",
+    "sample_count": 11,
+    "category_count": 3,
+    "categories": [
+      "cable_management",
+      "food",
+      "vehicle"
+    ],
+    "category_owner_label_sets": {
+      "cable_management": [
+        "block",
+        "pass"
+      ],
+      "food": [
+        "block",
+        "pass"
+      ],
+      "vehicle": [
+        "block",
+        "pass"
+      ]
+    },
+    "category_balance_ready": true,
+    "overall_owner_decision_metrics": {
+      "accuracy": 1.0,
+      "true_pass_count": 4,
+      "true_block_count": 7,
+      "false_block_count": 0,
+      "unsafe_false_pass_count": 0
+    },
+    "formats": {
+      "real_usage_storyboard": {
+        "sample_count": 6,
+        "categories": [
+          "cable_management",
+          "food",
+          "vehicle"
+        ],
+        "owner_pass_count": 2,
+        "owner_block_count": 4,
+        "expected_profile_pass_count": 4,
+        "expected_profile_block_count": 2,
+        "owner_decision_metrics": {
+          "accuracy": 1.0,
+          "true_pass_count": 2,
+          "true_block_count": 4,
+          "false_block_count": 0,
+          "unsafe_false_pass_count": 0
+        },
+        "format_profile_metrics": {
+          "accuracy": 1.0,
+          "true_pass_count": 4,
+          "true_block_count": 2,
+          "false_block_count": 0,
+          "unsafe_false_pass_count": 0
+        },
+        "profile_rule_calibrated": true,
+        "promotion_ready": true,
+        "profile": {
+          "minimum_scene_count": 5,
+          "minimum_perceptual_cluster_count": 3,
+          "maximum_largest_cluster_ratio": 0.5,
+          "perceptual_similarity_threshold": 0.88
+        }
+      },
+      "product_reference_repeat": {
+        "sample_count": 5,
+        "categories": [
+          "cable_management",
+          "food",
+          "vehicle"
+        ],
+        "owner_pass_count": 2,
+        "owner_block_count": 3,
+        "expected_profile_pass_count": 3,
+        "expected_profile_block_count": 2,
+        "owner_decision_metrics": {
+          "accuracy": 1.0,
+          "true_pass_count": 2,
+          "true_block_count": 3,
+          "false_block_count": 0,
+          "unsafe_false_pass_count": 0
+        },
+        "format_profile_metrics": {
+          "accuracy": 1.0,
+          "true_pass_count": 3,
+          "true_block_count": 2,
+          "false_block_count": 0,
+          "unsafe_false_pass_count": 0
+        },
+        "profile_rule_calibrated": true,
+        "promotion_ready": true,
+        "profile": {
+          "minimum_scene_count": 5,
+          "minimum_exact_source_count": 1,
+          "maximum_exact_source_count": 3,
+          "pixel_diversity_minimum_not_applied": true,
+          "exact_product_identity_binding_required": true
+        }
+      }
+    },
+    "samples": [
+      {
+        "sample_id": "vehicle-v046-story-pass",
+        "category": "vehicle",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "pass",
+        "scene_count": 6,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "pass",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.1667,
+        "average_pair_similarity": 0.5393
+      },
+      {
+        "sample_id": "vehicle-v047-binding-block",
+        "category": "vehicle",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "block",
+        "scene_count": 8,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": false,
+        "actual_binding_pass": false,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [
+          "manifest_purpose_matches_product",
+          "script_matches_product",
+          "selected_product_matches_target"
+        ],
+        "exact_file_hash_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.25,
+        "average_pair_similarity": 0.5699
+      },
+      {
+        "sample_id": "vehicle-controlled-repeat-story-block",
+        "category": "vehicle",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "block",
+        "scene_count": 6,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": false,
+        "actual_format_profile_pass": false,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 1,
+        "perceptual_cluster_count": 1,
+        "largest_cluster_ratio": 1.0,
+        "average_pair_similarity": 1.0
+      },
+      {
+        "sample_id": "cable-v046-story-pass",
+        "category": "cable_management",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "pass",
+        "scene_count": 6,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "pass",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.1667,
+        "average_pair_similarity": 0.557
+      },
+      {
+        "sample_id": "cable-v047-binding-block",
+        "category": "cable_management",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "block",
+        "scene_count": 8,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": false,
+        "actual_binding_pass": false,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [
+          "manifest_purpose_matches_product",
+          "script_matches_product",
+          "selected_product_matches_target"
+        ],
+        "exact_file_hash_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.25,
+        "average_pair_similarity": 0.5904
+      },
+      {
+        "sample_id": "food-controlled-repeat-story-block",
+        "category": "food",
+        "format_name": "real_usage_storyboard",
+        "owner_label": "block",
+        "scene_count": 6,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": false,
+        "actual_format_profile_pass": false,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 2,
+        "perceptual_cluster_count": 2,
+        "largest_cluster_ratio": 0.5,
+        "average_pair_similarity": 0.7305
+      },
+      {
+        "sample_id": "food-v116-repeat-pass",
+        "category": "food",
+        "format_name": "product_reference_repeat",
+        "owner_label": "pass",
+        "scene_count": 5,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "pass",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 2,
+        "perceptual_cluster_count": 2,
+        "largest_cluster_ratio": 0.6,
+        "average_pair_similarity": 0.7305
+      },
+      {
+        "sample_id": "food-controlled-wrong-category-repeat-block",
+        "category": "food",
+        "format_name": "product_reference_repeat",
+        "owner_label": "block",
+        "scene_count": 5,
+        "expected_scene_category_pass": false,
+        "actual_scene_category_pass": false,
+        "expected_binding_pass": false,
+        "actual_binding_pass": false,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 5,
+        "scene_category_mismatch_ids": [
+          "food-controlled-wrong-category-repeat-block-01",
+          "food-controlled-wrong-category-repeat-block-02",
+          "food-controlled-wrong-category-repeat-block-03",
+          "food-controlled-wrong-category-repeat-block-04",
+          "food-controlled-wrong-category-repeat-block-05"
+        ],
+        "binding_failures": [
+          "exact_product_identity_verified",
+          "manifest_purpose_matches_product",
+          "scene_source_authorized",
+          "selected_product_matches_target"
+        ],
+        "exact_file_hash_count": 2,
+        "perceptual_cluster_count": 2,
+        "largest_cluster_ratio": 0.6,
+        "average_pair_similarity": 0.7539
+      },
+      {
+        "sample_id": "cable-controlled-nonidentity-repeat-block",
+        "category": "cable_management",
+        "format_name": "product_reference_repeat",
+        "owner_label": "block",
+        "scene_count": 6,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": false,
+        "actual_binding_pass": false,
+        "expected_format_profile_pass": false,
+        "actual_format_profile_pass": false,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [
+          "exact_product_identity_verified"
+        ],
+        "exact_file_hash_count": 6,
+        "perceptual_cluster_count": 6,
+        "largest_cluster_ratio": 0.1667,
+        "average_pair_similarity": 0.557
+      },
+      {
+        "sample_id": "vehicle-v112-single-source-repeat-pass",
+        "category": "vehicle",
+        "format_name": "product_reference_repeat",
+        "owner_label": "pass",
+        "scene_count": 5,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": true,
+        "actual_binding_pass": true,
+        "expected_format_profile_pass": true,
+        "actual_format_profile_pass": true,
+        "combined_label": "pass",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [],
+        "exact_file_hash_count": 1,
+        "perceptual_cluster_count": 1,
+        "largest_cluster_ratio": 1.0,
+        "average_pair_similarity": 1.0
+      },
+      {
+        "sample_id": "vehicle-controlled-four-source-identity-drift-block",
+        "category": "vehicle",
+        "format_name": "product_reference_repeat",
+        "owner_label": "block",
+        "scene_count": 5,
+        "expected_scene_category_pass": true,
+        "actual_scene_category_pass": true,
+        "expected_binding_pass": false,
+        "actual_binding_pass": false,
+        "expected_format_profile_pass": false,
+        "actual_format_profile_pass": false,
+        "combined_label": "block",
+        "scene_category_mismatch_count": 0,
+        "scene_category_mismatch_ids": [],
+        "binding_failures": [
+          "exact_product_identity_verified"
+        ],
+        "exact_file_hash_count": 4,
+        "perceptual_cluster_count": 4,
+        "largest_cluster_ratio": 0.4,
+        "average_pair_similarity": 0.5766
+      }
+    ],
+    "all_format_profiles_promotion_ready": true,
+    "integration_review_ready": true,
+    "safe_to_integrate": false,
+    "required_gate_order": [
+      "scene_category_binding",
+      "script_product_manifest_binding",
+      "format_profile_selection",
+      "format_specific_pixel_gate"
+    ],
+    "raw_paths_in_report": false,
+    "external_api_called": false,
+    "upload_attempted": false
+  },
+  "decision": "FORMAT_AWARE_GATE_PROMOTION_EVIDENCE_READY_SEPARATE_INTEGRATION_REVIEW_REQUIRED",
+  "owner_review_scope": "local_research_only_no_upload_authority",
+  "tts_attempted": false,
+  "final_render_attempted": false,
+  "upload_attempted": false,
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

@@ -1,0 +1,27 @@
+{
+  "version": "v139",
+  "authorization": "OWNER_AUTHORIZED_V139_LOCAL_RESEARCH_LABELING",
+  "scope": "local_research_only_no_upload_authority",
+  "reviewed_by": "codex_visual_review_under_owner_authorization",
+  "review_rules": [
+    "the pass sample must repeat one exact identity-locked non-food product source",
+    "the paired block must stay in the same category while breaking exact product identity",
+    "research labels do not authorize integration, rendering, upload, comment, or visibility changes"
+  ],
+  "samples": {
+    "vehicle-v112-single-source-repeat-pass": {
+      "category": "vehicle",
+      "format_name": "product_reference_repeat",
+      "owner_label": "pass",
+      "basis": "five scenes repeat the exact V112 rear-seat organizer hero whose preview evidence records a locked current product reference"
+    },
+    "vehicle-controlled-four-source-identity-drift-block": {
+      "category": "vehicle",
+      "format_name": "product_reference_repeat",
+      "owner_label": "block",
+      "basis": "same-category control mixes the V112 rear-seat organizer with three V046 center-console organizer sources, breaking exact product identity and the one-to-three-source profile"
+    }
+  },
+  "SAFE_TO_UPLOAD": false,
+  "SAFE_TO_PUBLIC_UPLOAD": false
+}

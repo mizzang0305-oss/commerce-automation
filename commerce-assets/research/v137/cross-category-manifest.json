@@ -1,0 +1,85 @@
+{
+  "version": "v137",
+  "samples": [
+    {
+      "sample_id": "vehicle-v047-contaminated",
+      "expected_category": "vehicle",
+      "owner_label": "block",
+      "owner_evidence": [
+        {
+          "file": "review/v047/human-review-decision.json",
+          "field": "human_review_status",
+          "equals": "FAIL_LOCAL_HUMAN_REVIEW"
+        },
+        {
+          "file": "review/v047/human-review-decision.json",
+          "field": "fail_reasons",
+          "operator": "contains",
+          "equals": "FATHER_JOBS_USED_LAUNDRY_PURPOSES"
+        }
+      ],
+      "scenes": [
+        { "scene_id": "vehicle-01", "image": "review/v047/father_jobs/generated-scenes/01-rain-window-problem.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-02", "image": "review/v047/father_jobs/generated-scenes/02-wet-laundry-slow-dry.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-03", "image": "review/v047/father_jobs/generated-scenes/03-small-room-space-problem.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-04", "image": "review/v047/father_jobs/generated-scenes/04-product-solution-reveal.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-05", "image": "review/v047/father_jobs/generated-scenes/05-laundry-use-case-human-hands.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-06", "image": "review/v047/father_jobs/generated-scenes/06-organized-indoor-drying-result.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-07", "image": "review/v047/father_jobs/generated-scenes/07-before-after-room-laundry.png", "owner_category_label": "vehicle" },
+        { "scene_id": "vehicle-08", "image": "review/v047/father_jobs/generated-scenes/08-folded-storage-cta.png", "owner_category_label": "vehicle" }
+      ]
+    },
+    {
+      "sample_id": "cable-v047-contaminated",
+      "expected_category": "cable_management",
+      "owner_label": "block",
+      "owner_evidence": [
+        {
+          "file": "review/v047/human-review-decision.json",
+          "field": "human_review_status",
+          "equals": "FAIL_LOCAL_HUMAN_REVIEW"
+        },
+        {
+          "file": "review/v047/human-review-decision.json",
+          "field": "fail_reasons",
+          "operator": "contains",
+          "equals": "LETS_BUY_USED_LAUNDRY_PURPOSES"
+        }
+      ],
+      "scenes": [
+        { "scene_id": "cable-01", "image": "review/v047/lets_buy/generated-scenes/01-rain-window-problem.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-02", "image": "review/v047/lets_buy/generated-scenes/02-wet-laundry-slow-dry.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-03", "image": "review/v047/lets_buy/generated-scenes/03-small-room-space-problem.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-04", "image": "review/v047/lets_buy/generated-scenes/04-product-solution-reveal.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-05", "image": "review/v047/lets_buy/generated-scenes/05-laundry-use-case-human-hands.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-06", "image": "review/v047/lets_buy/generated-scenes/06-organized-indoor-drying-result.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-07", "image": "review/v047/lets_buy/generated-scenes/07-before-after-room-laundry.png", "owner_category_label": "cable_management" },
+        { "scene_id": "cable-08", "image": "review/v047/lets_buy/generated-scenes/08-folded-storage-cta.png", "owner_category_label": "cable_management" }
+      ]
+    },
+    {
+      "sample_id": "food-v116-approved",
+      "expected_category": "food",
+      "owner_label": "pass",
+      "owner_evidence": [
+        {
+          "file": "review/v116/father_jobs/v116-preview-summary.json",
+          "field": "ownerReviewWaivedByExplicitApproval",
+          "equals": true
+        },
+        {
+          "file": "review/v116/father_jobs/upload-result-v116.local.json",
+          "field": "status",
+          "equals": "public_upload_completed"
+        }
+      ],
+      "scenes": [
+        { "scene_id": "food-01", "image": "review/v116/father_jobs/generated-hero-v116.png", "owner_category_label": "food" },
+        { "scene_id": "food-02", "image": "review/v116/father_jobs/product-reference-v116.png", "owner_category_label": "food" },
+        { "scene_id": "food-03", "image": "review/v116/father_jobs/generated-hero-v116.png", "owner_category_label": "food" },
+        { "scene_id": "food-04", "image": "review/v116/father_jobs/product-reference-v116.png", "owner_category_label": "food" },
+        { "scene_id": "food-05", "image": "review/v116/father_jobs/generated-hero-v116.png", "owner_category_label": "food" }
+      ]
+    }
+  ]
+}

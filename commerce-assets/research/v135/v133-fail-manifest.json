@@ -1,0 +1,14 @@
+{
+  "candidate_id": "candidate-3c7b01b64249a5bd",
+  "scenario": "v133-repeated-product-photo",
+  "scenes": [
+    { "scene_id": "scene-01", "image_path": "v133-fail/scene-01-hook.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-02", "image_path": "v133-fail/scene-02-problem.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-03", "image_path": "v133-fail/scene-03-product-intro.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-04", "image_path": "v133-fail/scene-04-space-saving.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-05", "image_path": "v133-fail/scene-05-use-case.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-06", "image_path": "v133-fail/scene-06-why-buy.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-07", "image_path": "v133-fail/scene-07-checklist.png", "provenance": "generated_unverified", "usage_label_present": false },
+    { "scene_id": "scene-08", "image_path": "v133-fail/scene-08-cta.png", "provenance": "generated_unverified", "usage_label_present": false }
+  ]
+}
