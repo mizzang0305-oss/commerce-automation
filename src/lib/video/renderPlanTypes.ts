@@ -39,6 +39,15 @@ export type RenderPlan = {
   source: "storyboard_template";
   shots: RenderPlanShot[];
   disclosure_text: string;
+  creative_policy: {
+    real_usage_scene_present: boolean;
+    usage_source_role: "exact_product_use" | "generic_usage_example" | "product_reference_still";
+    usage_label_present: boolean;
+    exact_product_identity_claim: boolean;
+    exact_product_identity_verified: boolean;
+    actor_nationality_claim: string | null;
+    actor_nationality_verified: boolean;
+  };
   render_target: {
     width: 1080;
     height: 1920;
