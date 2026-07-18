@@ -6,6 +6,7 @@ export type V143UsageSourceRole =
 export type V143CreativePolicyBlocker =
   | "V143_HOOK_READABILITY_REQUIRED"
   | "V143_REAL_USAGE_SCENE_REQUIRED"
+  | "V143_REAL_USAGE_SOURCE_REQUIRED"
   | "V143_USAGE_SOURCE_ROLE_REQUIRED"
   | "V143_USAGE_LABEL_REQUIRED"
   | "V143_EXACT_PRODUCT_IDENTITY_VERIFICATION_REQUIRED"
@@ -71,6 +72,9 @@ export function evaluateV143ReusableCreativePolicy(
   if (!hookReadable) blockers.push("V143_HOOK_READABILITY_REQUIRED");
   if (!evidence.real_usage_scene_present) blockers.push("V143_REAL_USAGE_SCENE_REQUIRED");
   if (!usageSourceRole) blockers.push("V143_USAGE_SOURCE_ROLE_REQUIRED");
+  if (usageSourceRole === "product_reference_still") {
+    blockers.push("V143_REAL_USAGE_SOURCE_REQUIRED");
+  }
   if (evidence.real_usage_scene_present && !evidence.usage_label_present) {
     blockers.push("V143_USAGE_LABEL_REQUIRED");
   }

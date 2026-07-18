@@ -77,6 +77,15 @@ describe("V143 reusable creative policy", () => {
     );
   });
 
+  test("blocks a product reference still from satisfying real-usage evidence", () => {
+    const result = evaluateV143ReusableCreativePolicy(
+      validEvidence({ usage_source_role: "product_reference_still" })
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.blockers).toContain("V143_REAL_USAGE_SOURCE_REQUIRED");
+  });
+
   test("blocks a generic usage clip that is presented as exact product use", () => {
     const result = evaluateV143ReusableCreativePolicy(
       validEvidence({ exact_product_identity_claim: true })
