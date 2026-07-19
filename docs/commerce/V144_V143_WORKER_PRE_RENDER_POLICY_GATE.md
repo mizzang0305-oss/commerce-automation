@@ -10,6 +10,8 @@ The server-generated `render_plan` now carries a conservative `creative_policy` 
 
 After HMAC verification, the Python Worker combines the signed evidence with actual renderer and TTS settings and evaluates the V143 contract before FFmpeg discovery, image download, TTS, render, or storage upload.
 
+The approved local TTS path also requires the exact `brisk_confident_sales` delivery style at Worker startup and immediately before provider execution. The Worker passes that value to the local provider through `KOREAN_VOICE_DELIVERY_STYLE`; a missing or different value blocks before the subprocess runs.
+
 ## Fail-closed current state
 
 The current storyboard uses a repeated product reference still, an 82 px hook, and a default 1.14 TTS speed with no approved merchant delivery style. Those facts must not be upgraded into real-usage evidence. The Worker therefore blocks the current template with explicit V143 blockers until separate reviewed work supplies truthful real-usage evidence, a compliant hook, and an approved Korean merchant TTS contract.

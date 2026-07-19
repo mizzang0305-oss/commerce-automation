@@ -116,7 +116,12 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan/video.mp4")) as render, \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan/thumbnail.jpg")) as thumbnail, \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
-            result = run_video_render(job, None, storage, Mock())
+            result = run_video_render(
+                job,
+                SimpleNamespace(korean_voice_delivery_style="brisk_confident_sales"),
+                storage,
+                Mock(),
+            )
 
         self.assertEqual(download_image.call_count, 2)
         self.assertEqual(
@@ -131,6 +136,10 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertNotIn("legacy script should not drive render plan mode", tts.call_args.args[0])
         self.assertNotIn("Hook caption", tts.call_args.args[0])
         self.assertEqual(tts.call_args.kwargs["duration_seconds"], 8)
+        self.assertEqual(
+            tts.call_args.kwargs["delivery_style"],
+            "brisk_confident_sales",
+        )
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
         self.assertEqual(srt.call_args.args[0], "Hook caption\nsecond line\nDetail caption")
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])

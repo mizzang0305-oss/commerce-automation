@@ -95,6 +95,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         language=getattr(config, "korean_voice_language", "ko"),
         command=getattr(config, "korean_voice_command", ""),
         reject_windows_sapi=getattr(config, "korean_voice_reject_windows_sapi", True),
+        delivery_style=getattr(config, "korean_voice_delivery_style", ""),
         speed=getattr(config, "korean_voice_speed", 1.14),
         timeout_seconds=getattr(config, "korean_voice_timeout_seconds", 600),
         ffmpeg_exe=ffmpeg_exe,
