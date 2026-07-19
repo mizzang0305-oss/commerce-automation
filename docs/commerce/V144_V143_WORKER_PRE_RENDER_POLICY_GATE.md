@@ -10,7 +10,7 @@ The server-generated `render_plan` now carries a conservative `creative_policy` 
 
 After HMAC verification, the Python Worker combines the signed evidence with actual renderer and TTS settings and evaluates the V143 contract before FFmpeg discovery, image download, TTS, render, or storage upload.
 
-The approved local TTS path also requires the exact `brisk_confident_sales` delivery style at Worker startup and immediately before provider execution. The Worker passes that value to the local provider through `KOREAN_VOICE_DELIVERY_STYLE`; a missing or different value blocks before the subprocess runs.
+The approved local TTS path also requires the `local_command` provider and the exact `brisk_confident_sales` delivery style at Worker startup and immediately before provider execution. A `placeholder` provider cannot satisfy the merchant-TTS gate even if approval, language, speed, and delivery-style flags are set. The Worker passes the delivery style to the local provider through `KOREAN_VOICE_DELIVERY_STYLE`; a missing or different value blocks before the subprocess runs.
 
 ## Fail-closed current state
 

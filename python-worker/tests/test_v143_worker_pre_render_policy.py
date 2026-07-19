@@ -42,6 +42,7 @@ class V143CreativePolicyTest(unittest.TestCase):
             }
         )
         config = SimpleNamespace(
+            korean_voice_provider="local_command",
             korean_voice_provider_approved=True,
             korean_voice_language="ko-KR",
             korean_voice_speed=1.25,
@@ -60,6 +61,38 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertFalse(result["raw_evidence_in_report"])
         self.assertFalse(result["external_api_called"])
         self.assertFalse(result["upload_attempted"])
+
+    def test_placeholder_provider_cannot_pass_merchant_tts_gate(self):
+        config = SimpleNamespace(
+            korean_voice_provider="placeholder",
+            korean_voice_provider_approved=True,
+            korean_voice_language="ko-KR",
+            korean_voice_speed=1.25,
+            korean_voice_delivery_style="brisk_confident_sales",
+        )
+
+        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
+            result = evaluate_v143_worker_pre_render_policy(
+                _render_plan(
+                    {
+                        "real_usage_scene_present": True,
+                        "usage_source_role": "generic_usage_example",
+                        "usage_label_present": True,
+                        "exact_product_identity_claim": False,
+                        "exact_product_identity_verified": False,
+                        "actor_nationality_claim": None,
+                        "actor_nationality_verified": False,
+                    }
+                ),
+                {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                config,
+            )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(
+            result["blockers"],
+            ["V143_APPROVED_KOREAN_MERCHANT_TTS_REQUIRED"],
+        )
 
     def test_current_product_still_contract_fails_closed(self):
         config = SimpleNamespace(
@@ -138,6 +171,7 @@ def _valid_evidence() -> dict:
         "actor_nationality_claim": None,
         "actor_nationality_verified": False,
         "product_identity_binding_verified": True,
+        "tts_provider": "local_command",
         "tts_provider_approved": True,
         "tts_language": "ko-KR",
         "tts_speed_multiplier": 1.25,

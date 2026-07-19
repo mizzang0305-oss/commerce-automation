@@ -95,7 +95,8 @@ def evaluate_v143_creative_policy(evidence: dict[str, object]) -> dict[str, obje
         blockers.append("V143_PRODUCT_IDENTITY_BINDING_REQUIRED")
 
     approved_korean_merchant_tts = (
-        evidence.get("tts_provider_approved") is True
+        str(evidence.get("tts_provider") or "").strip().lower() == "local_command"
+        and evidence.get("tts_provider_approved") is True
         and str(evidence.get("tts_language") or "").strip().lower().startswith("ko")
         and str(evidence.get("tts_delivery_style") or "").strip()
         == REQUIRED_TTS_DELIVERY
@@ -175,6 +176,7 @@ def evaluate_v143_worker_pre_render_policy(
         ),
         **plan_evidence,
         "product_identity_binding_verified": verified_binding.get("binding_verified") is True,
+        "tts_provider": getattr(config, "korean_voice_provider", ""),
         "tts_provider_approved": getattr(config, "korean_voice_provider_approved", False),
         "tts_language": getattr(config, "korean_voice_language", ""),
         "tts_speed_multiplier": getattr(config, "korean_voice_speed", 1.14),
