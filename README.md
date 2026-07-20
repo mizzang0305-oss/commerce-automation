@@ -174,6 +174,8 @@ In production they return `404` by default. Set `ENABLE_DEV_TOOLS=true` only for
 
 ## Collector Foundation
 
+The local Crawlee + Activepieces/Windmill contract-only PoC is documented in [docs/commerce/CRAWLEE_ACTIVEPIECES_WINDMILL_POC.md](docs/commerce/CRAWLEE_ACTIVEPIECES_WINDMILL_POC.md). It keeps collection host-allowlisted, persists append-only JSONL staging/review/drafts, and does not call webhooks, notifications, queues, workers, or publishers.
+
 Collectors only create `product_candidates`; they do not create worker jobs or mark products ready for upload. The first supported path is a guarded CSV import endpoint:
 
 - `POST /api/collectors/import-csv`

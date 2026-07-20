@@ -39,8 +39,17 @@ MoviePy and Crawlee are not part of the default worker install. Collector work m
 - `toss_link_importer.py`: loads CSV/XLSX link tables into product candidate records.
 - `musinsa_public_collector.py`: placeholder for public-page collection only.
 - `coupang_api_collector.py`: safe no-op until official Coupang API credentials are configured.
+- `crawlee_public_product_collector.py`: explicit-host Crawlee/BeautifulSoup collector that respects robots.txt, disables redirects and blocked-page retries, does not enqueue discovered links, and appends normalized product records to JSONL staging.
 
 Collectors should only produce candidates. They must not create `video_render` jobs, mark queue items ready, bypass login/CAPTCHA/bot controls, or copy protected review text.
+
+Install the optional public-page collector dependencies only in an isolated collector environment:
+
+```powershell
+python -m pip install -r requirements-collector.txt
+```
+
+The caller must provide a non-empty host allowlist and declare either `public_page` or `owned_channel` as the authorization basis. Pass the final canonical product URL because redirects are not followed. Fixture parsing and tests do not make network requests.
 
 ## ffmpeg
 
