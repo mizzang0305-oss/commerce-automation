@@ -56,6 +56,8 @@ Safety rules:
 - discovered links are not enqueued;
 - robots.txt is respected;
 - retry-on-blocked is disabled;
+- price text with multiple currency amounts is treated as missing instead of guessing a list or sale price;
+- spaced, punctuated, zero-quantity, and common English negative stock labels are normalized before positive stock matching;
 - no login, CAPTCHA bypass, proxy evasion, review-text copying, or protected endpoint access.
 
 ## 4) Review rules
@@ -104,6 +106,8 @@ npm run automation:commerce-poc:jsonl -- --input=data/input/products.jsonl --all
 ```
 
 The command only reads local JSONL and writes local staging/review/draft JSONL. It does not call Activepieces, Windmill, Novu, Supabase, R2, SNS, or shopping platforms.
+
+The local run ID is a deterministic hash of the input JSONL, normalized allowed host, and orchestrator target. Retrying the same command reuses the same batch. Existing review/draft timestamps are reused when the stable record content matches, while changed input under the same batch fails closed.
 
 ## 7) Notification adapter
 

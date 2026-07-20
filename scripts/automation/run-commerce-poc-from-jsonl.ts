@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { runCommerceAutomationPoc } from "../../src/lib/orchestration/commercePocPipeline";
+import {
+  buildCommercePocRunId,
+  runCommerceAutomationPoc
+} from "../../src/lib/orchestration/commercePocPipeline";
 
 async function main() {
   const args = new Map(
@@ -20,9 +23,14 @@ async function main() {
     throw new Error("--target must be activepieces or windmill");
   }
 
+  const inputContent = await readFile(resolve(inputPath), "utf8");
   const now = new Date().toISOString();
-  const runId = `commerce-poc-${Date.now()}`;
-  const products = (await readFile(resolve(inputPath), "utf8"))
+  const runId = buildCommercePocRunId({
+    inputContent,
+    allowedHost,
+    target: requestedTarget
+  });
+  const products = inputContent
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line) as unknown);

@@ -200,26 +200,37 @@ def _select_image(soup: object, selector: str, source_url: str) -> str:
 
 def _parse_price(value: str) -> int | None:
     number_pattern = r"(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)"
-    currency_match = re.search(
+    currency_matches = list(re.finditer(
         rf"(?:₩|KRW)\s*(?P<prefix>{number_pattern})|(?P<suffix>{number_pattern})\s*원",
         value,
         re.IGNORECASE,
-    )
-    if currency_match:
-        amount = currency_match.group("prefix") or currency_match.group("suffix")
+    ))
+    if len(currency_matches) > 1:
+        return None
+    if currency_matches:
+        amount = currency_matches[0].group("prefix") or currency_matches[0].group("suffix")
     else:
-        match = re.search(number_pattern, value)
-        if not match:
+        matches = re.findall(number_pattern, value)
+        if len(matches) != 1:
             return None
-        amount = match.group(0)
+        amount = matches[0]
     if not amount:
         return None
     return int(amount.replace(",", ""))
 
 
 def _stock_status(value: str) -> StockStatus:
-    normalized = re.sub(r"\s+", "", value.casefold())
-    if any(term in normalized for term in ("품절", "soldout", "outofstock", "재고없음")):
+    normalized = re.sub(r"[\s:：·\-_/]+", "", value.casefold())
+    if any(term in normalized for term in (
+        "품절",
+        "soldout",
+        "outofstock",
+        "재고없음",
+        "재고0개",
+        "재고0",
+        "notavailable",
+        "unavailable",
+    )):
         return "out_of_stock"
     if any(term in normalized for term in ("재고", "구매가능", "instock", "available")):
         return "in_stock"

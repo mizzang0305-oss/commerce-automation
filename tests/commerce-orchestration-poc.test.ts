@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { buildCommerceContentDrafts } from "@/lib/orchestration/commerceDraft";
-import { runCommerceAutomationPoc } from "@/lib/orchestration/commercePocPipeline";
+import {
+  buildCommercePocRunId,
+  runCommerceAutomationPoc
+} from "@/lib/orchestration/commercePocPipeline";
 import {
   commerceOrchestratorPayloadSchema,
   type CollectedProduct,
-  type CollectorSourcePolicy,
-  type ReviewedProduct
+  type CollectorSourcePolicy
 } from "@/lib/orchestration/commercePocSchemas";
 import { reviewCollectedProducts } from "@/lib/orchestration/commerceReview";
 import { JsonlCommercePocStore } from "@/lib/orchestration/jsonlCommercePocStore";
@@ -21,6 +23,8 @@ import { evaluatePublishApproval } from "@/lib/orchestration/publishApprovalGate
 
 const temporaryDirectories: string[] = [];
 const NOW = "2026-07-20T10:00:00.000Z";
+const LATER_NOW = "2026-07-20T10:01:00.000Z";
+const LATEST_NOW = "2026-07-20T10:02:00.000Z";
 const POLICY: CollectorSourcePolicy = {
   allowed_hosts: ["shop.example"],
   authorization_basis: "public_page",
@@ -219,10 +223,10 @@ describe("commerce orchestration PoC", () => {
     expect(issueCodes(second.reviews[0])).toContain("DUPLICATE_PRODUCT");
   });
 
-  test("retries the same batch after a partial staging write without self-duplicate poisoning", async () => {
+  test("retries the same batch after review persistence without timestamp poisoning", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "commerce-poc-"));
     temporaryDirectories.push(dataDir);
-    const store = new FailOnceReviewStore(dataDir);
+    const store = new FailOnceDraftStore(dataDir);
     const input = {
       batchId: "batch-retry",
       requestId: "request-retry",
@@ -233,15 +237,37 @@ describe("commerce orchestration PoC", () => {
       store
     };
 
-    await expect(runCommerceAutomationPoc(input)).rejects.toThrow("INJECTED_REVIEW_WRITE_FAILURE");
+    await expect(runCommerceAutomationPoc(input)).rejects.toThrow("INJECTED_DRAFT_WRITE_FAILURE");
 
-    const retried = await runCommerceAutomationPoc(input);
+    const retried = await runCommerceAutomationPoc({ ...input, now: LATER_NOW });
+    const retriedAgain = await runCommerceAutomationPoc({ ...input, now: LATEST_NOW });
 
     expect(retried.drafts).toHaveLength(1);
     expect(issueCodes(retried.reviews[0])).not.toContain("DUPLICATE_PRODUCT");
+    expect(retried.reviews[0].reviewed_at).toBe(NOW);
+    expect(retried.drafts[0].created_at).toBe(LATER_NOW);
+    expect(retriedAgain.reviews).toEqual(retried.reviews);
+    expect(retriedAgain.drafts).toEqual(retried.drafts);
     expect(await jsonlCount(join(dataDir, "staging-products.jsonl"))).toBe(1);
     expect(await jsonlCount(join(dataDir, "review-results.jsonl"))).toBe(1);
     expect(await jsonlCount(join(dataDir, "content-drafts.jsonl"))).toBe(1);
+  });
+
+  test("builds a stable run id for the same local input and source contract", () => {
+    const input = {
+      inputContent: `${JSON.stringify(productFixture())}\n`,
+      allowedHost: "SHOP.EXAMPLE ",
+      target: "activepieces" as const
+    };
+
+    expect(buildCommercePocRunId(input)).toBe(buildCommercePocRunId({
+      ...input,
+      allowedHost: "shop.example"
+    }));
+    expect(buildCommercePocRunId(input)).not.toBe(buildCommercePocRunId({
+      ...input,
+      target: "windmill"
+    }));
   });
 
   test("uses a blocked notification adapter until Novu or another adapter is configured", async () => {
@@ -284,14 +310,14 @@ async function jsonlCount(path: string) {
   return (await readFile(path, "utf8")).trim().split(/\r?\n/).filter(Boolean).length;
 }
 
-class FailOnceReviewStore extends JsonlCommercePocStore {
+class FailOnceDraftStore extends JsonlCommercePocStore {
   private shouldFail = true;
 
-  override appendReviews(batchId: string, records: ReviewedProduct[]) {
+  override appendDrafts(batchId: string, records: Parameters<JsonlCommercePocStore["appendDrafts"]>[1]) {
     if (this.shouldFail) {
       this.shouldFail = false;
-      return Promise.reject(new Error("INJECTED_REVIEW_WRITE_FAILURE"));
+      return Promise.reject(new Error("INJECTED_DRAFT_WRITE_FAILURE"));
     }
-    return super.appendReviews(batchId, records);
+    return super.appendDrafts(batchId, records);
   }
 }

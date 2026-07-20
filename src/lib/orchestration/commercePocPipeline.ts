@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   collectedProductSchema,
   type CollectorSourcePolicy,
@@ -22,11 +23,11 @@ export async function runCommerceAutomationPoc(input: {
   const knownProducts = await store.readCollected(input.batchId);
   await store.appendCollected(input.batchId, products);
 
-  const reviews = reviewCollectedProducts(products, input.sourcePolicy, input.now, knownProducts);
-  await store.appendReviews(input.batchId, reviews);
+  const candidateReviews = reviewCollectedProducts(products, input.sourcePolicy, input.now, knownProducts);
+  const reviews = await store.appendReviews(input.batchId, candidateReviews);
 
-  const drafts = buildCommerceContentDrafts(reviews, input.now);
-  await store.appendDrafts(input.batchId, drafts);
+  const candidateDrafts = buildCommerceContentDrafts(reviews, input.now);
+  const drafts = await store.appendDrafts(input.batchId, candidateDrafts);
 
   const orchestrator_payload = buildCommerceOrchestratorPayload({
     target: input.target,
@@ -48,4 +49,19 @@ export async function runCommerceAutomationPoc(input: {
     SAFE_TO_UPLOAD: false,
     SAFE_TO_PUBLIC_UPLOAD: false
   } as const;
+}
+
+export function buildCommercePocRunId(input: {
+  inputContent: string;
+  allowedHost: string;
+  target: OrchestratorTarget;
+}) {
+  const digest = createHash("sha256")
+    .update(input.target)
+    .update("\0")
+    .update(input.allowedHost.trim().toLowerCase())
+    .update("\0")
+    .update(input.inputContent)
+    .digest("hex");
+  return `commerce-poc-${digest.slice(0, 24)}`;
 }
