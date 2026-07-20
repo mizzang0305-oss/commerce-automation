@@ -7,7 +7,8 @@ import { runCommerceAutomationPoc } from "@/lib/orchestration/commercePocPipelin
 import {
   commerceOrchestratorPayloadSchema,
   type CollectedProduct,
-  type CollectorSourcePolicy
+  type CollectorSourcePolicy,
+  type ReviewedProduct
 } from "@/lib/orchestration/commercePocSchemas";
 import { reviewCollectedProducts } from "@/lib/orchestration/commerceReview";
 import { JsonlCommercePocStore } from "@/lib/orchestration/jsonlCommercePocStore";
@@ -218,6 +219,31 @@ describe("commerce orchestration PoC", () => {
     expect(issueCodes(second.reviews[0])).toContain("DUPLICATE_PRODUCT");
   });
 
+  test("retries the same batch after a partial staging write without self-duplicate poisoning", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "commerce-poc-"));
+    temporaryDirectories.push(dataDir);
+    const store = new FailOnceReviewStore(dataDir);
+    const input = {
+      batchId: "batch-retry",
+      requestId: "request-retry",
+      target: "activepieces" as const,
+      now: NOW,
+      products: [productFixture()],
+      sourcePolicy: POLICY,
+      store
+    };
+
+    await expect(runCommerceAutomationPoc(input)).rejects.toThrow("INJECTED_REVIEW_WRITE_FAILURE");
+
+    const retried = await runCommerceAutomationPoc(input);
+
+    expect(retried.drafts).toHaveLength(1);
+    expect(issueCodes(retried.reviews[0])).not.toContain("DUPLICATE_PRODUCT");
+    expect(await jsonlCount(join(dataDir, "staging-products.jsonl"))).toBe(1);
+    expect(await jsonlCount(join(dataDir, "review-results.jsonl"))).toBe(1);
+    expect(await jsonlCount(join(dataDir, "content-drafts.jsonl"))).toBe(1);
+  });
+
   test("uses a blocked notification adapter until Novu or another adapter is configured", async () => {
     const adapter = new BlockedCommerceNotificationAdapter();
     await expect(adapter.send({
@@ -256,4 +282,16 @@ function issueCodes(review: ReturnType<typeof reviewCollectedProducts>[number]) 
 
 async function jsonlCount(path: string) {
   return (await readFile(path, "utf8")).trim().split(/\r?\n/).filter(Boolean).length;
+}
+
+class FailOnceReviewStore extends JsonlCommercePocStore {
+  private shouldFail = true;
+
+  override appendReviews(batchId: string, records: ReviewedProduct[]) {
+    if (this.shouldFail) {
+      this.shouldFail = false;
+      return Promise.reject(new Error("INJECTED_REVIEW_WRITE_FAILURE"));
+    }
+    return super.appendReviews(batchId, records);
+  }
 }

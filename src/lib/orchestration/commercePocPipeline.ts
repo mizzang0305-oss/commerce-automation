@@ -19,7 +19,7 @@ export async function runCommerceAutomationPoc(input: {
 }) {
   const products = input.products.map((product) => collectedProductSchema.parse(product));
   const store = input.store ?? new JsonlCommercePocStore();
-  const knownProducts = await store.readCollected();
+  const knownProducts = await store.readCollected(input.batchId);
   await store.appendCollected(input.batchId, products);
 
   const reviews = reviewCollectedProducts(products, input.sourcePolicy, input.now, knownProducts);

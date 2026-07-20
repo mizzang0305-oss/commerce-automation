@@ -82,6 +82,42 @@ class CollectorFoundationTest(unittest.TestCase):
         self.assertIn('"raw_hash"', saved[0])
         self.assertNotIn('"publish"', saved[0])
 
+    def test_crawlee_collector_parses_only_the_first_price_amount(self):
+        record = collect_product_from_html(
+            """
+            <main>
+              <h1 class="name">할인 상품</h1>
+              <p class="price">10% 할인 12,900원</p>
+              <img class="image" src="/product.jpg" />
+              <p class="stock">재고 있음</p>
+            </main>
+            """,
+            "https://shop.example/products/discounted",
+            PublicProductSelectors(".name", ".price", ".image", ".stock"),
+            CollectorAccessPolicy(("shop.example",), "public_page"),
+            collected_at="2026-07-20T10:00:00Z",
+        )
+
+        self.assertEqual(record.price, 12900)
+
+    def test_crawlee_collector_recognizes_spaced_korean_out_of_stock_text(self):
+        record = collect_product_from_html(
+            """
+            <main>
+              <h1 class="name">품절 상품</h1>
+              <p class="price">12,900원</p>
+              <img class="image" src="/product.jpg" />
+              <p class="stock">재고 없음</p>
+            </main>
+            """,
+            "https://shop.example/products/sold-out",
+            PublicProductSelectors(".name", ".price", ".image", ".stock"),
+            CollectorAccessPolicy(("shop.example",), "public_page"),
+            collected_at="2026-07-20T10:00:00Z",
+        )
+
+        self.assertEqual(record.stock_status, "out_of_stock")
+
     def test_crawlee_collector_rejects_unapproved_hosts(self):
         fixture = Path(__file__).parent / "fixtures" / "public_product_page.html"
         with self.assertRaisesRegex(ValueError, "not allowed"):

@@ -14,13 +14,15 @@ export class JsonlCommercePocStore {
     return this.append("staging-products.jsonl", batchId, records);
   }
 
-  async readCollected(): Promise<CollectedProduct[]> {
+  async readCollected(excludeBatchId?: string): Promise<CollectedProduct[]> {
     try {
       const content = await readFile(join(this.dataDir, "staging-products.jsonl"), "utf8");
       return content
         .split(/\r?\n/)
         .filter(Boolean)
-        .map((line) => collectedProductSchema.parse(JSON.parse(line).record));
+        .map((line) => JSON.parse(line) as { batch_id: string; record: unknown })
+        .filter((entry) => entry.batch_id !== excludeBatchId)
+        .map((entry) => collectedProductSchema.parse(entry.record));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return [];
@@ -42,7 +44,32 @@ export class JsonlCommercePocStore {
       return;
     }
     await mkdir(this.dataDir, { recursive: true });
+    const path = join(this.dataDir, fileName);
+    const existingRecords = await this.readBatchRecords(path, batchId);
+    if (existingRecords.length > 0) {
+      if (JSON.stringify(existingRecords) === JSON.stringify(records)) {
+        return;
+      }
+      throw new Error(`BATCH_ID_REUSED_WITH_DIFFERENT_RECORDS:${batchId}`);
+    }
     const lines = records.map((record) => JSON.stringify({ batch_id: batchId, record })).join("\n");
-    await appendFile(join(this.dataDir, fileName), `${lines}\n`, "utf8");
+    await appendFile(path, `${lines}\n`, "utf8");
+  }
+
+  private async readBatchRecords(path: string, batchId: string): Promise<unknown[]> {
+    try {
+      const content = await readFile(path, "utf8");
+      return content
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { batch_id: string; record: unknown })
+        .filter((entry) => entry.batch_id === batchId)
+        .map((entry) => entry.record);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
   }
 }
