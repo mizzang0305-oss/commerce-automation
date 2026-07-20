@@ -84,6 +84,8 @@
     "review:v041": "tsx scripts/uploads/generate-v041-manual-image-drop-review-packets.ts",
     "import:v041:image-pack": "tsx scripts/uploads/import-v041-image-pack.ts",
     "review:v041:from-pack": "npm run import:v041:image-pack && npm run review:v041",
+    "review:v043": "tsx scripts/uploads/generate-v043-automatic-real-image-review-packets.ts",
+    "image-provider:check": "tsx scripts/uploads/check-v043-real-image-provider.ts",
     "autopilot:hourly": "tsx scripts/autopilot/hourly-runner.ts",
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
