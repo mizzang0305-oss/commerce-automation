@@ -35,12 +35,14 @@ describe("server-authoritative Worker visual binding", () => {
     expect(JSON.stringify(result.binding)).not.toContain(SECRET);
   });
 
-  test("changes the signature when a bound script, image, or creative policy changes", () => {
+  test("changes the signature when a bound script, image, usage label, or creative policy changes", () => {
     const base = buildFixture(renderPlanFixture());
     const scriptSpoof = renderPlanFixture();
     scriptSpoof.shots[0].voice_text = "Spoofed script";
     const imageSpoof = renderPlanFixture();
     imageSpoof.shots[0].image_url = "https://evil.invalid/spoof.jpg";
+    const usageLabelSpoof = renderPlanFixture();
+    usageLabelSpoof.shots[0].usage_label = "Unbound label";
     const policySpoof = renderPlanFixture();
     policySpoof.creative_policy = {
       ...policySpoof.creative_policy!,
@@ -50,14 +52,16 @@ describe("server-authoritative Worker visual binding", () => {
 
     const changedScript = buildFixture(scriptSpoof);
     const changedImage = buildFixture(imageSpoof);
+    const changedUsageLabel = buildFixture(usageLabelSpoof);
     const changedPolicy = buildFixture(policySpoof);
 
-    expect(base.ok && changedScript.ok && changedImage.ok && changedPolicy.ok).toBe(true);
-    if (!base.ok || !changedScript.ok || !changedImage.ok || !changedPolicy.ok) {
+    expect(base.ok && changedScript.ok && changedImage.ok && changedUsageLabel.ok && changedPolicy.ok).toBe(true);
+    if (!base.ok || !changedScript.ok || !changedImage.ok || !changedUsageLabel.ok || !changedPolicy.ok) {
       throw new Error("fixture binding failed");
     }
     expect(changedScript.binding.signature).not.toBe(base.binding.signature);
     expect(changedImage.binding.signature).not.toBe(base.binding.signature);
+    expect(changedUsageLabel.binding.signature).not.toBe(base.binding.signature);
     expect(changedPolicy.binding.signature).not.toBe(base.binding.signature);
   });
 

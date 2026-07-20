@@ -4,7 +4,7 @@ from ..storage_client import StorageClient
 from ..utils.files import clean_dir
 from ..media.image_downloader import download_image
 from ..media.ffmpeg_check import require_ffmpeg_for_video_render
-from ..media.subtitle_generator import write_srt
+from ..media.subtitle_generator import compose_usage_labeled_caption, write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
 from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
@@ -191,7 +191,9 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         if not caption:
             raise ValueError("render_plan.shots.caption is required")
         voice_lines.append(voice_text)
-        shot_captions.append(caption)
+        shot_captions.append(
+            compose_usage_labeled_caption(caption, shot.get("usage_label"))
+        )
         shot_durations.append(float(duration_sec))
 
     return {

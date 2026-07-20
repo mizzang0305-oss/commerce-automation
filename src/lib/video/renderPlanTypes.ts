@@ -23,6 +23,7 @@ export type RenderPlanShot = {
   layout: RenderShotLayout;
   image_role: RenderShotImageRole;
   image_url: string;
+  usage_label?: string;
   caption: string;
   voice_text: string;
   safe_area: RenderShotSafeArea;

@@ -141,9 +141,15 @@ class VideoRenderValidationTest(unittest.TestCase):
             "brisk_confident_sales",
         )
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
-        self.assertEqual(srt.call_args.args[0], "Hook caption\nsecond line\nDetail caption")
+        self.assertEqual(
+            srt.call_args.args[0],
+            "[Usage example] Hook caption second line\nDetail caption",
+        )
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
-        self.assertEqual(srt.call_args.kwargs["shot_captions"], ["Hook caption\nsecond line", "Detail caption"])
+        self.assertEqual(
+            srt.call_args.kwargs["shot_captions"],
+            ["[Usage example] Hook caption second line", "Detail caption"],
+        )
         self.assertEqual(render.call_args.args[4], "Render plan product")
         self.assertEqual(render.call_args.kwargs["subtitle_text"], srt.call_args.args[0])
         self.assertEqual(render.call_args.kwargs["shot_durations"], [3, 5])
@@ -369,6 +375,7 @@ def _valid_render_plan() -> dict:
                 "layout": "title_card",
                 "image_role": "product",
                 "image_url": "https://image.example/shot-hook.jpg",
+                "usage_label": "Usage example",
                 "caption": "Hook caption\nsecond line",
                 "voice_text": "Hook voice text",
                 "safe_area": "top_title",

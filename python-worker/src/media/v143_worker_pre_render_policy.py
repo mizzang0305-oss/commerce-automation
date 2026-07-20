@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from .subtitle_generator import wrap_caption
+from .subtitle_generator import compose_usage_labeled_caption, wrap_caption
 from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
@@ -160,8 +160,19 @@ def evaluate_v143_worker_pre_render_policy(
 
     shots = render_plan.get("shots")
     first_shot = shots[0] if isinstance(shots, list) and shots and isinstance(shots[0], dict) else {}
+    first_caption = compose_usage_labeled_caption(
+        first_shot.get("caption"),
+        first_shot.get("usage_label"),
+    )
+    renderable_usage_label_present = bool(
+        isinstance(shots, list)
+        and any(
+            isinstance(shot, dict) and str(shot.get("usage_label") or "").strip()
+            for shot in shots
+        )
+    )
     hook_lines = wrap_caption(
-        str(first_shot.get("caption") or ""),
+        first_caption,
         max_chars=HOOK_MAX_CHARS,
         max_lines=MAX_HOOK_LINES,
     )
@@ -169,12 +180,16 @@ def evaluate_v143_worker_pre_render_policy(
         "hook_font_px": HOOK_FONT_SIZE,
         "hook_max_lines": len(hook_lines),
         "hook_visible_within_seconds": (
-            0.0 if str(first_shot.get("shot_id") or "").strip() == "hook" else math.inf
+            0.0 if first_shot else math.inf
         ),
         "hook_high_contrast": (
             HOOK_BOX_COLOR == "black@0.78" and HOOK_ACCENT_COLOR == "0xfacc15@1"
         ),
         **plan_evidence,
+        "usage_label_present": (
+            plan_evidence.get("usage_label_present") is True
+            and renderable_usage_label_present
+        ),
         "product_identity_binding_verified": verified_binding.get("binding_verified") is True,
         "tts_provider": getattr(config, "korean_voice_provider", ""),
         "tts_provider_approved": getattr(config, "korean_voice_provider_approved", False),

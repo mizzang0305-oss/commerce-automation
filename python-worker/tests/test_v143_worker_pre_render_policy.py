@@ -62,6 +62,53 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertFalse(result["external_api_called"])
         self.assertFalse(result["upload_attempted"])
 
+    def test_signed_usage_label_flag_without_renderable_label_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0].pop("usage_label")
+
+        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
+            result = evaluate_v143_worker_pre_render_policy(
+                render_plan,
+                {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                _valid_config(),
+            )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
+    def test_first_rendered_shot_is_hook_even_when_id_is_intro(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["shot_id"] = "intro"
+
+        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
+            result = evaluate_v143_worker_pre_render_policy(
+                render_plan,
+                {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                _valid_config(),
+            )
+
+        self.assertTrue(result["gate_pass"])
+
     def test_placeholder_provider_cannot_pass_merchant_tts_gate(self):
         config = SimpleNamespace(
             korean_voice_provider="placeholder",
@@ -181,11 +228,22 @@ def _valid_evidence() -> dict:
     }
 
 
+def _valid_config() -> SimpleNamespace:
+    return SimpleNamespace(
+        korean_voice_provider="local_command",
+        korean_voice_provider_approved=True,
+        korean_voice_language="ko-KR",
+        korean_voice_speed=1.25,
+        korean_voice_delivery_style="brisk_confident_sales",
+    )
+
+
 def _render_plan(creative_policy: dict | None) -> dict:
     plan = {
         "shots": [
             {
                 "shot_id": "hook",
+                "usage_label": "Usage example",
                 "caption": "Readable hook",
                 "duration_sec": 3,
             }
