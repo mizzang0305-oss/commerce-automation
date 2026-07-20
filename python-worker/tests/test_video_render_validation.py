@@ -39,10 +39,26 @@ class VideoRenderValidationTest(unittest.TestCase):
                 "upload_attempted": False,
             },
         )
+        self.v143_gate_patch = patch(
+            "src.tasks.video_render.evaluate_v143_worker_pre_render_policy",
+            return_value={
+                "gate_version": "v143",
+                "gate_pass": True,
+                "blockers": [],
+                "binding_verified": True,
+                "raw_evidence_in_report": False,
+                "external_api_called": False,
+                "upload_attempted": False,
+                "SAFE_TO_UPLOAD": False,
+                "SAFE_TO_PUBLIC_UPLOAD": False,
+            },
+        )
         self.binding_patch.start()
         self.gate_patch.start()
+        self.v143_gate_patch.start()
         self.addCleanup(self.binding_patch.stop)
         self.addCleanup(self.gate_patch.stop)
+        self.addCleanup(self.v143_gate_patch.stop)
 
     def test_missing_payload_fields_are_rejected_before_ffmpeg_check(self):
         missing_affiliate = _valid_payload() | {"selected_affiliate_url": "  "}
@@ -100,7 +116,12 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan/video.mp4")) as render, \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan/thumbnail.jpg")) as thumbnail, \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
-            result = run_video_render(job, None, storage, Mock())
+            result = run_video_render(
+                job,
+                SimpleNamespace(korean_voice_delivery_style="brisk_confident_sales"),
+                storage,
+                Mock(),
+            )
 
         self.assertEqual(download_image.call_count, 2)
         self.assertEqual(
@@ -115,10 +136,20 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertNotIn("legacy script should not drive render plan mode", tts.call_args.args[0])
         self.assertNotIn("Hook caption", tts.call_args.args[0])
         self.assertEqual(tts.call_args.kwargs["duration_seconds"], 8)
+        self.assertEqual(
+            tts.call_args.kwargs["delivery_style"],
+            "brisk_confident_sales",
+        )
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
-        self.assertEqual(srt.call_args.args[0], "Hook caption\nsecond line\nDetail caption")
+        self.assertEqual(
+            srt.call_args.args[0],
+            "[Usage example] Hook caption second line\nDetail caption",
+        )
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
-        self.assertEqual(srt.call_args.kwargs["shot_captions"], ["Hook caption\nsecond line", "Detail caption"])
+        self.assertEqual(
+            srt.call_args.kwargs["shot_captions"],
+            ["[Usage example] Hook caption second line", "Detail caption"],
+        )
         self.assertEqual(render.call_args.args[4], "Render plan product")
         self.assertEqual(render.call_args.kwargs["subtitle_text"], srt.call_args.args[0])
         self.assertEqual(render.call_args.kwargs["shot_durations"], [3, 5])
@@ -179,6 +210,7 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertIn("shot_count: 2", package_text)
         self.assertIn("visual_binding_verified: true", package_text)
         self.assertIn("pre_render_visual_gate_pass: true", package_text)
+        self.assertIn("v143_creative_policy_gate_pass: true", package_text)
 
     def test_upload_package_includes_visual_quality_metadata(self):
         storage = Mock()
@@ -291,6 +323,32 @@ class VideoRenderValidationTest(unittest.TestCase):
         render.assert_not_called()
         storage.upload.assert_not_called()
 
+    def test_v143_gate_block_stops_before_ffmpeg_download_tts_render_and_upload(self):
+        storage = Mock()
+        job = {"id": "job-v143-block", "payload": _valid_payload()}
+        with patch(
+            "src.tasks.video_render.evaluate_v143_worker_pre_render_policy",
+            return_value={
+                "gate_version": "v143",
+                "gate_pass": False,
+                "blockers": ["V143_REAL_USAGE_SOURCE_REQUIRED"],
+                "SAFE_TO_UPLOAD": False,
+                "SAFE_TO_PUBLIC_UPLOAD": False,
+            },
+        ), patch("src.tasks.video_render.require_ffmpeg_for_video_render") as ffmpeg_check, patch(
+            "src.tasks.video_render.download_image"
+        ) as download, patch("src.tasks.video_render.create_tts_audio") as tts, patch(
+            "src.tasks.video_render.render_vertical_video"
+        ) as render:
+            with self.assertRaisesRegex(ValueError, "v143_creative_policy_blocked"):
+                run_video_render(job, None, storage, Mock())
+
+        ffmpeg_check.assert_not_called()
+        download.assert_not_called()
+        tts.assert_not_called()
+        render.assert_not_called()
+        storage.upload.assert_not_called()
+
 
 def _valid_payload() -> dict:
     return {
@@ -317,6 +375,7 @@ def _valid_render_plan() -> dict:
                 "layout": "title_card",
                 "image_role": "product",
                 "image_url": "https://image.example/shot-hook.jpg",
+                "usage_label": "Usage example",
                 "caption": "Hook caption\nsecond line",
                 "voice_text": "Hook voice text",
                 "safe_area": "top_title",

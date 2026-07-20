@@ -9,11 +9,13 @@ import wave
 BLOCKED_NOT_CONFIGURED = "BLOCKED_KOREAN_VOICE_PROVIDER_NOT_CONFIGURED"
 BLOCKED_NOT_APPROVED = "VOICE_PROVIDER_NOT_APPROVED"
 BLOCKED_NOT_KOREAN = "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE"
+BLOCKED_DELIVERY_STYLE = "KOREAN_VOICE_DELIVERY_STYLE_NOT_APPROVED"
 BLOCKED_SAPI = "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE"
 BLOCKED_PAID_OR_CLOUD = "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
 BLOCKED_COMMAND = "BLOCKED_KOREAN_VOICE_COMMAND_INVALID"
 BLOCKED_GENERATION = "BLOCKED_KOREAN_VOICE_GENERATION_FAILED"
 BLOCKED_AUDIO = "BLOCKED_KOREAN_VOICE_AUDIO_INVALID"
+REQUIRED_DELIVERY_STYLE = "brisk_confident_sales"
 
 
 def create_tts_audio(
@@ -26,6 +28,7 @@ def create_tts_audio(
     language: str = "ko",
     command: str = "",
     reject_windows_sapi: bool = True,
+    delivery_style: str = "",
     speed: float = 1.14,
     timeout_seconds: int = 600,
     ffmpeg_exe: str = "ffmpeg",
@@ -52,6 +55,9 @@ def create_tts_audio(
         raise RuntimeError(BLOCKED_NOT_APPROVED)
     if not language.strip().lower().startswith("ko"):
         raise RuntimeError(BLOCKED_NOT_KOREAN)
+    normalized_delivery_style = delivery_style.strip()
+    if normalized_delivery_style != REQUIRED_DELIVERY_STYLE:
+        raise RuntimeError(BLOCKED_DELIVERY_STYLE)
 
     combined = f"{normalized_provider} {command}".lower()
     if reject_windows_sapi and any(marker in combined for marker in ("windows sapi", "local_sapi", "sapi_voice", "system.speech")):
@@ -74,6 +80,7 @@ def create_tts_audio(
             script_path,
             raw_path,
             language.strip().lower(),
+            normalized_delivery_style,
             float(speed),
             timeout_seconds,
         )
@@ -114,6 +121,7 @@ def _run_local_command(
     script_path: Path,
     output_path: Path,
     language: str,
+    delivery_style: str,
     speed: float,
     timeout_seconds: int,
 ) -> None:
@@ -128,6 +136,7 @@ def _run_local_command(
     else:
         command_line = [str(command_path), *args]
     env = os.environ.copy()
+    env["KOREAN_VOICE_DELIVERY_STYLE"] = delivery_style
     env["MELOTTS_SPEED"] = f"{speed:.3f}"
     try:
         completed = subprocess.run(

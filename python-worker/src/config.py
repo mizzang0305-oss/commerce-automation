@@ -26,6 +26,7 @@ class WorkerConfig:
     korean_voice_command: str = ""
     korean_voice_reject_windows_sapi: bool = True
     korean_voice_speed: float = 1.14
+    korean_voice_delivery_style: str = ""
     korean_voice_timeout_seconds: int = 600
     worker_visual_binding_secret: str = ""
 
@@ -81,6 +82,7 @@ def load_config() -> WorkerConfig:
         korean_voice_command=os.getenv("KOREAN_VOICE_COMMAND", "").strip().strip('"').strip("'"),
         korean_voice_reject_windows_sapi=env_bool("KOREAN_VOICE_REJECT_WINDOWS_SAPI", default=True),
         korean_voice_speed=float(os.getenv("KOREAN_VOICE_SPEED", "1.14")),
+        korean_voice_delivery_style=os.getenv("KOREAN_VOICE_DELIVERY_STYLE", "").strip(),
         korean_voice_timeout_seconds=int(os.getenv("KOREAN_VOICE_TIMEOUT_SECONDS", "600")),
         worker_visual_binding_secret=os.getenv("WORKER_VISUAL_BINDING_SECRET", "").strip(),
     )

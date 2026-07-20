@@ -37,6 +37,7 @@ class WindowsPersistentWorkerLauncherTest(unittest.TestCase):
             "KOREAN_VOICE_PROVIDER": "local_command",
             "KOREAN_VOICE_PROVIDER_APPROVED": "true",
             "KOREAN_VOICE_COMMAND": "provider command",
+            "KOREAN_VOICE_DELIVERY_STYLE": "brisk_confident_sales",
         }
 
         self.assertEqual(validate_production_worker_env(env), [])
@@ -48,6 +49,10 @@ class WindowsPersistentWorkerLauncherTest(unittest.TestCase):
         self.assertIn("WORKER_API_SECRET is required", blockers)
         self.assertIn("STORAGE_BACKEND must be r2", blockers)
         self.assertIn("KOREAN_VOICE_PROVIDER must be local_command", blockers)
+        self.assertIn(
+            "KOREAN_VOICE_DELIVERY_STYLE must be brisk_confident_sales",
+            blockers,
+        )
 
     def test_installer_persists_logon_and_repeating_recovery_triggers(self):
         installer = (

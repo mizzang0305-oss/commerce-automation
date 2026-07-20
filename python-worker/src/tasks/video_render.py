@@ -4,12 +4,13 @@ from ..storage_client import StorageClient
 from ..utils.files import clean_dir
 from ..media.image_downloader import download_image
 from ..media.ffmpeg_check import require_ffmpeg_for_video_render
-from ..media.subtitle_generator import write_srt
+from ..media.subtitle_generator import compose_usage_labeled_caption, write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
 from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
 from ..media.format_aware_visual_calibration import evaluate_runtime_format_profile
 from ..media.worker_visual_binding import verify_server_visual_binding
+from ..media.v143_worker_pre_render_policy import evaluate_v143_worker_pre_render_policy
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
@@ -46,6 +47,15 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         render_plan,
         getattr(config, "worker_visual_binding_secret", ""),
     )
+    v143_policy_gate = evaluate_v143_worker_pre_render_policy(
+        render_plan,
+        verified_binding,
+        config,
+    )
+    if not v143_policy_gate["gate_pass"]:
+        raise ValueError(
+            "v143_creative_policy_blocked:" + ",".join(v143_policy_gate["blockers"])
+        )
 
     ffmpeg_exe = require_ffmpeg_for_video_render()
 
@@ -85,6 +95,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         language=getattr(config, "korean_voice_language", "ko"),
         command=getattr(config, "korean_voice_command", ""),
         reject_windows_sapi=getattr(config, "korean_voice_reject_windows_sapi", True),
+        delivery_style=getattr(config, "korean_voice_delivery_style", ""),
         speed=getattr(config, "korean_voice_speed", 1.14),
         timeout_seconds=getattr(config, "korean_voice_timeout_seconds", 600),
         ffmpeg_exe=ffmpeg_exe,
@@ -121,6 +132,8 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
     visual_metadata_text = "\n".join([
         "visual_binding_verified: true",
+        f"v143_creative_policy_gate_version: {v143_policy_gate['gate_version']}",
+        f"v143_creative_policy_gate_pass: {str(v143_policy_gate['gate_pass']).lower()}",
         f"pre_render_visual_gate_version: {visual_gate['gate_version']}",
         f"pre_render_visual_gate_pass: {str(visual_gate['gate_pass']).lower()}",
         f"pre_render_visual_format: {visual_gate['format_name']}",
@@ -140,6 +153,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
             **visual_gate,
             "binding_verified": True,
         },
+        "creative_policy_gate": v143_policy_gate,
     }
 
 
@@ -177,7 +191,9 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         if not caption:
             raise ValueError("render_plan.shots.caption is required")
         voice_lines.append(voice_text)
-        shot_captions.append(caption)
+        shot_captions.append(
+            compose_usage_labeled_caption(caption, shot.get("usage_label"))
+        )
         shot_durations.append(float(duration_sec))
 
     return {

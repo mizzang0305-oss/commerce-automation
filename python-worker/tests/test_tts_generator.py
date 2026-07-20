@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.media.tts_generator import (
     BLOCKED_AUDIO,
+    BLOCKED_DELIVERY_STYLE,
     BLOCKED_NOT_APPROVED,
     BLOCKED_NOT_KOREAN,
     BLOCKED_PAID_OR_CLOUD,
@@ -54,6 +55,25 @@ class TtsGeneratorTest(unittest.TestCase):
                     command=str(command),
                 )
 
+    def test_local_provider_requires_exact_delivery_style_before_subprocess(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            command = Path(temp_dir) / "voice.cmd"
+            command.write_text("@echo off", encoding="utf-8")
+            target = Path(temp_dir) / "voice.wav"
+            for delivery_style in ("", "calm_narration"):
+                with self.subTest(delivery_style=delivery_style):
+                    with patch("src.media.tts_generator.subprocess.run") as run:
+                        with self.assertRaisesRegex(RuntimeError, BLOCKED_DELIVERY_STYLE):
+                            create_tts_audio(
+                                "테스트",
+                                target,
+                                provider="local_command",
+                                provider_approved=True,
+                                command=str(command),
+                                delivery_style=delivery_style,
+                            )
+                    run.assert_not_called()
+
     def test_local_provider_rejects_sapi_and_paid_cloud_markers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "voice.wav"
@@ -61,13 +81,23 @@ class TtsGeneratorTest(unittest.TestCase):
             sapi.write_text("@echo off", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, BLOCKED_SAPI):
                 create_tts_audio(
-                    "테스트", target, provider="local_command", provider_approved=True, command=str(sapi)
+                    "테스트",
+                    target,
+                    provider="local_command",
+                    provider_approved=True,
+                    command=str(sapi),
+                    delivery_style="brisk_confident_sales",
                 )
             paid = Path(temp_dir) / "cloud-voice.cmd"
             paid.write_text("@echo off", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, BLOCKED_PAID_OR_CLOUD):
                 create_tts_audio(
-                    "테스트", target, provider="local_command", provider_approved=True, command=str(paid)
+                    "테스트",
+                    target,
+                    provider="local_command",
+                    provider_approved=True,
+                    command=str(paid),
+                    delivery_style="brisk_confident_sales",
                 )
 
     def test_local_provider_generates_and_normalizes_non_silent_wav(self):
@@ -82,6 +112,11 @@ class TtsGeneratorTest(unittest.TestCase):
                 if "--output" in args:
                     output = Path(args[args.index("--output") + 1])
                     self.assertTrue(output.is_absolute())
+                    self.assertEqual(
+                        _kwargs["env"]["KOREAN_VOICE_DELIVERY_STYLE"],
+                        "brisk_confident_sales",
+                    )
+                    self.assertEqual(_kwargs["env"]["MELOTTS_SPEED"], "1.250")
                     write_wav(output, 2.0)
                 else:
                     write_wav(Path(args[-1]), 1.0)
@@ -97,6 +132,8 @@ class TtsGeneratorTest(unittest.TestCase):
                         provider="local_command",
                         provider_approved=True,
                         command=str(command),
+                        delivery_style="brisk_confident_sales",
+                        speed=1.25,
                     )
             finally:
                 os.chdir(original_cwd)
@@ -128,6 +165,7 @@ class TtsGeneratorTest(unittest.TestCase):
                         provider="local_command",
                         provider_approved=True,
                         command=str(command),
+                        delivery_style="brisk_confident_sales",
                     )
 
 
