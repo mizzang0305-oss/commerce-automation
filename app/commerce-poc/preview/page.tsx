@@ -17,12 +17,13 @@ export default async function CommercePocPreviewPage() {
   const products = await readLocalProductPool();
   const scheduledProductPools = await readScheduledProductPools();
   const plan = buildCommerceAutoPreviewPlan({ products });
-  const dailySlots = COMMERCE_DAILY_KST_SLOTS.map((slot) =>
-    buildScheduledEventProductPreview({
+  const dailySlots = await Promise.all(COMMERCE_DAILY_KST_SLOTS.map(async (slot) => ({
+    ...buildScheduledEventProductPreview({
       slotId: slot.id,
       products: scheduledProductPools.get(slot.id) ?? []
-    })
-  );
+    }),
+    draft_video_preview_url: await readScheduledDraftVideoPreviewUrl(slot.id)
+  })));
 
   return (
     <div className="space-y-5">
@@ -42,6 +43,18 @@ export default async function CommercePocPreviewPage() {
       <CommercePocLocalPreview plan={plan} dailySlots={dailySlots} />
     </div>
   );
+}
+
+async function readScheduledDraftVideoPreviewUrl(slotId: (typeof COMMERCE_DAILY_KST_SLOTS)[number]["id"]) {
+  const videoPath = path.join(process.cwd(), "data", "commerce-poc", "video-drafts", slotId, "preview.mp4");
+  try {
+    const fileStat = await stat(videoPath);
+    return fileStat.isFile() && fileStat.size > 0 && fileStat.size <= 100 * 1024 * 1024
+      ? `/api/commerce-poc/video-drafts/${slotId}`
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readScheduledProductPools() {

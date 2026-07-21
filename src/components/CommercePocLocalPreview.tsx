@@ -5,6 +5,10 @@ import { useState } from "react";
 import type { ScheduledEventProductPreviewItem } from "@/lib/coupang/scheduledEventProductProvider";
 import type { CommerceAutoPreviewPlan } from "@/lib/orchestration/commercePocPreview";
 
+type DailySlotPreview = ScheduledEventProductPreviewItem & {
+  draft_video_preview_url?: string | null;
+};
+
 const stockLabels = {
   in_stock: "판매 중",
   out_of_stock: "품절",
@@ -23,10 +27,11 @@ export function CommercePocLocalPreview({
   dailySlots = []
 }: {
   plan: CommerceAutoPreviewPlan;
-  dailySlots?: ScheduledEventProductPreviewItem[];
+  dailySlots?: DailySlotPreview[];
 }) {
   const [remoteImagesEnabled, setRemoteImagesEnabled] = useState(false);
   const selection = plan.selected_product;
+  const videoDraftCount = dailySlots.filter((item) => item.draft_video_preview_url).length;
 
   return (
     <div className="space-y-5">
@@ -44,7 +49,9 @@ export function CommercePocLocalPreview({
             <h2 className="mt-1 text-lg font-bold text-slate-950">출근·점심·퇴근·취침 전 시간대별 상품</h2>
           </div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
-            상품 검색 연결 · 영상/플랫폼 게시 미연결
+            {videoDraftCount > 0
+              ? `로컬 영상 초안 ${videoDraftCount}/4 · 플랫폼 게시 미연결`
+              : "상품 검색 연결 · 영상/플랫폼 게시 미연결"}
           </span>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -59,6 +66,20 @@ export function CommercePocLocalPreview({
                   <p className="mt-2 text-lg font-black text-teal-800">
                     {item.product.price === null ? "가격 미확인" : `${item.product.price.toLocaleString("ko-KR")}원`}
                   </p>
+                  {item.draft_video_preview_url ? (
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      aria-label={`${item.slot.label} 로컬 영상 초안`}
+                      className="mt-3 aspect-[9/16] w-full rounded-lg bg-black object-contain"
+                      src={item.draft_video_preview_url}
+                    />
+                  ) : (
+                    <p className="mt-3 rounded-lg bg-slate-100 p-2 text-xs font-semibold text-slate-600">
+                      로컬 영상 초안 미생성
+                    </p>
+                  )}
                   <a
                     href={item.product.source_url}
                     target="_blank"

@@ -51,6 +51,8 @@ New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $logPath = Join-Path $logDir "local-scheduler-utf8.log"
 $stdoutPath = Join-Path $logDir ("provider-plan-" + $SlotId + ".stdout.tmp")
 $stderrPath = Join-Path $logDir ("provider-plan-" + $SlotId + ".stderr.tmp")
+$draftStdoutPath = Join-Path $logDir ("video-draft-" + $SlotId + ".stdout.tmp")
+$draftStderrPath = Join-Path $logDir ("video-draft-" + $SlotId + ".stderr.tmp")
 Push-Location $repoRoot
 try {
   $startedAt = (Get-Date).ToString("o")
@@ -71,6 +73,21 @@ try {
     @(Get-Content -LiteralPath $stderrPath -Encoding UTF8 -ErrorAction SilentlyContinue)
   )
   $exitCode = $process.ExitCode
+  if ($exitCode -eq 0 -and $EnableLiveSearch) {
+    $draftProcess = Start-Process -FilePath $npm -ArgumentList @(
+      "run",
+      "automation:commerce-poc:render-video-draft",
+      "--",
+      "--slot-id=$SlotId",
+      "--render=APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER"
+    ) -WorkingDirectory $repoRoot -Wait -WindowStyle Hidden -RedirectStandardOutput $draftStdoutPath -RedirectStandardError $draftStderrPath -PassThru
+    $commandOutput += @(
+      "video_draft_stage=started",
+      @(Get-Content -LiteralPath $draftStdoutPath -Encoding UTF8 -ErrorAction SilentlyContinue),
+      @(Get-Content -LiteralPath $draftStderrPath -Encoding UTF8 -ErrorAction SilentlyContinue)
+    )
+    $exitCode = $draftProcess.ExitCode
+  }
   $logLines = @(
     "started_at=" + $startedAt,
     "slot_id=" + $SlotId,

@@ -146,6 +146,33 @@ describe("commerce PoC automatic Korea event preview", () => {
     expect(screen.getByText("상품 검색 연결 · 영상/플랫폼 게시 미연결")).toBeInTheDocument();
   });
 
+  test("renders a local draft video player without claiming platform readiness", () => {
+    const plan = buildCommerceAutoPreviewPlan({
+      today: "2026-07-22",
+      products: [validProduct],
+      generatedAt: "2026-07-22T00:00:00.000Z"
+    });
+    const dailySlot = buildScheduledEventProductPreview({
+      slotId: "morning_commute",
+      now: "2026-07-22T00:00:00.000Z",
+      products: [validProduct]
+    });
+
+    render(<CommercePocLocalPreview
+      plan={plan}
+      dailySlots={[{
+        ...dailySlot,
+        draft_video_preview_url: "/api/commerce-poc/video-drafts/morning_commute"
+      }]}
+    />);
+
+    expect(screen.getByText("로컬 영상 초안 1/4 · 플랫폼 게시 미연결")).toBeInTheDocument();
+    expect(screen.getByLabelText("아침 출근 로컬 영상 초안")).toHaveAttribute(
+      "src",
+      "/api/commerce-poc/video-drafts/morning_commute"
+    );
+  });
+
   test("fails closed when the local product pool has no event-matched product", () => {
     const plan = buildCommerceAutoPreviewPlan({
       today: "2026-07-21",
