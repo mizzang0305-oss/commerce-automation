@@ -135,6 +135,30 @@ Draft queue entries contain only identifiers, target, review state, and approval
 
 This is an invocation seam, not an operating-system service. Windows Task Scheduler, a process supervisor, Activepieces, or Windmill may call the command later only under a separate configuration approval. The repository does not install or modify any host scheduler.
 
+### Local product file preview
+
+Run the local Next.js app and open `http://127.0.0.1:3000/commerce-poc/preview` to inspect a JSONL file before scheduling it. The browser accepts one local `.jsonl`, `.ndjson`, or `.json` file up to 5 MB and 200 non-empty rows. It validates every row with the collected-product schema and requires HTTPS image/source URLs.
+
+The selected file is read in browser memory only. There is no upload request, API route, server persistence, database/R2 write, queue creation, Worker job, webhook, notification, or publish action. Remote product images are not loaded until the operator explicitly enables them; that browser request uses `referrerPolicy=no-referrer`. Invalid row content is not echoed into validation messages.
+
+### Windows hourly invocation
+
+Before installing the host task, verify real cross-process contention:
+
+```powershell
+npm run automation:commerce-poc:smoke-contention
+```
+
+The smoke starts two separate Node.js processes against one temporary scheduler store. One process holds the global lock while the second must fail with `LOCAL_SCHEDULER_ALREADY_RUNNING`; the temporary directory is removed afterward.
+
+After separate host-configuration approval, install the current-user hourly task:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/automation/install-local-commerce-scheduler-task.ps1 -IntervalMinutes 60 -StartNow
+```
+
+The task invokes `data/commerce-poc/activepieces-input.jsonl` every 60 minutes through Windows `schtasks.exe`, uses the verified Task Scheduler `IgnoreNew` policy, writes UTF-8 logs only under ignored `data/commerce-poc/task-logs/local-scheduler-utf8.log`, and retains the same no-upload contract. To stay below the Windows task action length limit for isolated worktrees, the installer creates a short current-user junction at `%USERPROFILE%\.codex\runtime\commerce-poc-pr231`; it must resolve to the exact current worktree or installation fails closed. A pre-existing task with the same name must point to the exact runner or installation fails closed. The scheduler's global filesystem lock is the second overlap guard. The runner rejects input paths outside `data/commerce-poc` and does not accept credential or endpoint arguments.
+
 ## 8) Notification adapter
 
 `CommerceNotificationAdapter` is the extension point for Novu or the existing notification structure. The default `BlockedCommerceNotificationAdapter` always returns `NOTIFICATION_ADAPTER_NOT_CONFIGURED` and performs no network request.
