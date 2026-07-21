@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ScheduledEventProductPreviewItem } from "@/lib/coupang/scheduledEventProductProvider";
 import type { CommerceAutoPreviewPlan } from "@/lib/orchestration/commercePocPreview";
 
 const stockLabels = {
@@ -17,7 +18,13 @@ const sourceLabels = {
   manual_seed: "운영자 보강"
 } as const;
 
-export function CommercePocLocalPreview({ plan }: { plan: CommerceAutoPreviewPlan }) {
+export function CommercePocLocalPreview({
+  plan,
+  dailySlots = []
+}: {
+  plan: CommerceAutoPreviewPlan;
+  dailySlots?: ScheduledEventProductPreviewItem[];
+}) {
   const [remoteImagesEnabled, setRemoteImagesEnabled] = useState(false);
   const selection = plan.selected_product;
 
@@ -28,6 +35,47 @@ export function CommercePocLocalPreview({ plan }: { plan: CommerceAutoPreviewPla
         <Metric label="탐색 종료일" value={plan.event_window.endDate} />
         <Metric label="30일 내 일정" value={`${plan.events.length}건`} />
         <Metric label="상품 자료 자동 검토" value={`${plan.products_considered}건`} />
+      </section>
+
+      <section className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">하루 4회 게시 후보 미리보기</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-950">출근·점심·퇴근·취침 전 시간대별 상품</h2>
+          </div>
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
+            상품 검색 연결 · 영상/플랫폼 게시 미연결
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {dailySlots.map((item) => (
+            <article key={item.slot.id} className="flex flex-col rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-black text-indigo-800">{item.slot.local_time} · {item.slot.label}</p>
+              <p className="mt-2 text-xs font-bold text-slate-500">{item.event?.name ?? "일정 없음"}</p>
+              <p className="mt-1 text-xs text-slate-500">검색어: {item.primary_keyword ?? "없음"}</p>
+              {item.product ? (
+                <>
+                  <h3 className="mt-3 line-clamp-3 font-bold text-slate-950">{item.product.product_name}</h3>
+                  <p className="mt-2 text-lg font-black text-teal-800">
+                    {item.product.price === null ? "가격 미확인" : `${item.product.price.toLocaleString("ko-KR")}원`}
+                  </p>
+                  <a
+                    href={item.product.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-auto pt-4 text-sm font-bold text-teal-700 underline underline-offset-4"
+                  >
+                    원본 상품 확인
+                  </a>
+                </>
+              ) : (
+                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                  해당 시간대의 로컬 검색 결과가 없습니다.
+                </p>
+              )}
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-xl border border-teal-200 bg-teal-50 p-5">

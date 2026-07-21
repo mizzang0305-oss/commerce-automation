@@ -2,6 +2,8 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { CommercePocLocalPreview } from "@/components/CommercePocLocalPreview";
+import { buildScheduledEventProductPreview } from "@/lib/coupang/scheduledEventProductProvider";
+import { COMMERCE_DAILY_KST_SLOTS } from "@/lib/orchestration/commerceDailyCadence";
 import {
   buildCommerceAutoPreviewPlan,
   COMMERCE_PREVIEW_MAX_FILE_BYTES,
@@ -13,7 +15,14 @@ export const dynamic = "force-dynamic";
 
 export default async function CommercePocPreviewPage() {
   const products = await readLocalProductPool();
+  const scheduledProductPools = await readScheduledProductPools();
   const plan = buildCommerceAutoPreviewPlan({ products });
+  const dailySlots = COMMERCE_DAILY_KST_SLOTS.map((slot) =>
+    buildScheduledEventProductPreview({
+      slotId: slot.id,
+      products: scheduledProductPools.get(slot.id) ?? []
+    })
+  );
 
   return (
     <div className="space-y-5">
@@ -26,13 +35,31 @@ export default async function CommercePocPreviewPage() {
       </div>
 
       <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-        사용자가 상품 JSONL을 고르는 화면이 아닙니다. 이 화면은 내부 로컬 수집 자료를 자동 검토하며, 새 상품 외부 수집·DB/R2·queue·worker job·플랫폼 게시를 실행하지 않습니다.
-        상품 선정 결과는 owner review 전까지 게시 권한이 없습니다.
+        사용자가 상품 JSONL을 고르는 화면이 아닙니다. 승인된 로컬 스케줄러가 시간대별로 저장한 실제 상품 검색 결과를 자동 검토합니다.
+        이 화면 자체는 외부 검색·DB/R2·queue·worker job·플랫폼 게시를 실행하지 않으며, 상품 선정 결과는 owner review 전까지 게시 권한이 없습니다.
       </section>
 
-      <CommercePocLocalPreview plan={plan} />
+      <CommercePocLocalPreview plan={plan} dailySlots={dailySlots} />
     </div>
   );
+}
+
+async function readScheduledProductPools() {
+  const directory = path.join(process.cwd(), "data", "commerce-poc");
+  const pools = new Map<(typeof COMMERCE_DAILY_KST_SLOTS)[number]["id"], CollectedProduct[]>();
+  for (const slot of COMMERCE_DAILY_KST_SLOTS) {
+    const filePath = path.join(directory, `provider-products-${slot.id}.jsonl`);
+    try {
+      const fileStat = await stat(filePath);
+      if (!fileStat.isFile() || fileStat.size > COMMERCE_PREVIEW_MAX_FILE_BYTES) {
+        continue;
+      }
+      pools.set(slot.id, parseCommerceProductPreview(await readFile(filePath, "utf8")).products);
+    } catch {
+      // A missing slot file is rendered as an explicit local-data blocker.
+    }
+  }
+  return pools;
 }
 
 async function readLocalProductPool(): Promise<CollectedProduct[]> {

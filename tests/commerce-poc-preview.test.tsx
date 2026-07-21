@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
 import { CommercePocLocalPreview } from "../src/components/CommercePocLocalPreview";
+import { buildScheduledEventProductPreview } from "../src/lib/coupang/scheduledEventProductProvider";
+import { COMMERCE_DAILY_KST_SLOTS } from "../src/lib/orchestration/commerceDailyCadence";
 import {
   buildCommerceAutoPreviewPlan,
   parseCommerceProductPreview
@@ -114,6 +116,34 @@ describe("commerce PoC automatic Korea event preview", () => {
     );
     expect(screen.getByText("외부 업로드: 없음")).toBeInTheDocument();
     expect(screen.getByText("owner review: 필수")).toBeInTheDocument();
+  });
+
+  test("renders four scheduled product candidates from the slot-specific pools", () => {
+    const plan = buildCommerceAutoPreviewPlan({
+      today: "2026-07-22",
+      products: [validProduct],
+      generatedAt: "2026-07-22T00:00:00.000Z"
+    });
+    const dailySlots = COMMERCE_DAILY_KST_SLOTS.map((slot, index) =>
+      buildScheduledEventProductPreview({
+        slotId: slot.id,
+        now: "2026-07-22T00:00:00.000Z",
+        products: [{
+          ...validProduct,
+          product_name: `${slot.label} 추천 상품`,
+          raw_hash: String(index + 2).repeat(64)
+        }]
+      })
+    );
+
+    render(<CommercePocLocalPreview plan={plan} dailySlots={dailySlots} />);
+
+    expect(screen.getByText("하루 4회 게시 후보 미리보기")).toBeInTheDocument();
+    for (const slot of COMMERCE_DAILY_KST_SLOTS) {
+      expect(screen.getByText(`${slot.local_time} · ${slot.label}`)).toBeInTheDocument();
+      expect(screen.getByText(`${slot.label} 추천 상품`)).toBeInTheDocument();
+    }
+    expect(screen.getByText("상품 검색 연결 · 영상/플랫폼 게시 미연결")).toBeInTheDocument();
   });
 
   test("fails closed when the local product pool has no event-matched product", () => {

@@ -135,13 +135,13 @@ Draft queue entries contain only identifiers, target, review state, and approval
 
 This is an invocation seam, not an operating-system service. Windows Task Scheduler, a process supervisor, Activepieces, or Windmill may call the command later only under a separate configuration approval. The repository does not install or modify any host scheduler.
 
-### Local product file preview
+### Automatic Korea 30-day event/product preview
 
-Run the local Next.js app and open `http://127.0.0.1:3000/commerce-poc/preview` to inspect a JSONL file before scheduling it. The browser accepts one local `.jsonl`, `.ndjson`, or `.json` file up to 5 MB and 200 non-empty rows. It validates every row with the collected-product schema and requires HTTPS image/source URLs.
+Run the local Next.js app and open `http://127.0.0.1:3000/commerce-poc/preview`. The route builds a rolling Asia/Seoul 30-day window for Korean holidays, observances, seasonal rules, Sambok, and school-vacation periods, then ranks the reviewed local product pool against the event terms. It shows the selected event, match reason, product, price, stock, seller, image, and original source for owner review.
 
-The selected file is read in browser memory only. There is no upload request, API route, server persistence, database/R2 write, queue creation, Worker job, webhook, notification, or publish action. Remote product images are not loaded until the operator explicitly enables them; that browser request uses `referrerPolicy=no-referrer`. Invalid row content is not echoed into validation messages.
+There is no browser file upload, API route, database/R2 write, queue creation, Worker job, webhook, notification, or publish action. Remote product images are not loaded until the operator explicitly enables them; that browser request uses `referrerPolicy=no-referrer`.
 
-### Windows hourly invocation
+### Four daily Korea product-search slots
 
 Before installing the host task, verify real cross-process contention:
 
@@ -151,13 +151,27 @@ npm run automation:commerce-poc:smoke-contention
 
 The smoke starts two separate Node.js processes against one temporary scheduler store. One process holds the global lock while the second must fail with `LOCAL_SCHEDULER_ALREADY_RUNNING`; the temporary directory is removed afterward.
 
-After separate host-configuration approval, install the current-user hourly task:
+Plan-only installation does not read credentials or call a provider:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/automation/install-local-commerce-scheduler-task.ps1 -IntervalMinutes 60 -StartNow
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/automation/install-local-commerce-scheduler-task.ps1
 ```
 
-The task invokes `data/commerce-poc/activepieces-input.jsonl` every 60 minutes through Windows `schtasks.exe`, uses the verified Task Scheduler `IgnoreNew` policy, writes UTF-8 logs only under ignored `data/commerce-poc/task-logs/local-scheduler-utf8.log`, and retains the same no-upload contract. To stay below the Windows task action length limit for isolated worktrees, the installer creates a short current-user junction at `%USERPROFILE%\.codex\runtime\commerce-poc-pr231`; it must resolve to the exact current worktree or installation fails closed. A pre-existing task with the same name must point to the exact runner or installation fails closed. The scheduler's global filesystem lock is the second overlap guard. The runner rejects input paths outside `data/commerce-poc` and does not accept credential or endpoint arguments.
+After explicit credential-use and live-search approval, enable the provider without copying secret values into the task definition:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/automation/install-local-commerce-scheduler-task.ps1 `
+  -CredentialEnvFile C:\path\outside-the-worktree\.env.local `
+  -EnableLiveSearch
+```
+
+The tasks run at `07:30`, `12:20`, `18:30`, and `22:30` in the machine's Asia/Seoul local time. Each invocation derives the current Korea 30-day event window, selects a distinct event and search keyword, performs one bounded Coupang Partners search with no automatic retry, and writes up to ten candidates to `data/commerce-poc/provider-products-<slot>.jsonl`. A path-only pointer to the approved env file is stored next to the guarded runtime junction. The runner imports only the recognized Coupang provider keys; unrelated env values and credential values are never written to task arguments, logs, or JSONL.
+
+The local preview reads the four slot-specific pools and selects product ranks `0`, `1`, `2`, and `3`, falling back to the first result only when a pool is shorter. This prevents the same top search result from being shown for every time window while keeping owner review mandatory.
+
+This connection ends at product discovery and preview. It does not create a video, DB/R2 row, queue/worker job, or platform upload. The existing production-quality video gate requires reviewed multi-scene assets and a server-accessible MP4; TikTok Direct Post and a new-product public YouTube path are not connected by this task. Never substitute an unrelated older video artifact.
+
+The runner writes UTF-8 output only under ignored `data/commerce-poc/task-logs/`. To stay below the Windows task action length limit for isolated worktrees, the installer creates a guarded short current-user junction at `%USERPROFILE%\.codex\r\c231`; it must resolve to the exact current worktree or installation fails closed. Existing managed hourly-task arguments are recognized only for migration to the four named daily tasks. Any unrelated task-name collision fails closed.
 
 ## 8) Notification adapter
 
