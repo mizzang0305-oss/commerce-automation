@@ -1,12 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useRef, useState } from "react";
-import {
-  COMMERCE_PREVIEW_MAX_FILE_BYTES,
-  parseCommerceProductPreview,
-  type CommerceProductPreviewResult
-} from "@/lib/orchestration/commercePocPreview";
+import { useState } from "react";
+import type { CommerceAutoPreviewPlan } from "@/lib/orchestration/commercePocPreview";
 
 const stockLabels = {
   in_stock: "판매 중",
@@ -14,189 +10,180 @@ const stockLabels = {
   unknown: "재고 미확인"
 } as const;
 
-const emptyResult: CommerceProductPreviewResult = {
-  products: [],
-  errors: [],
-  total_rows: 0
-};
+const sourceLabels = {
+  static_calendar: "달력 기준",
+  seasonal_rule: "한국 계절 규칙",
+  web_search: "공개 행사 자료",
+  manual_seed: "운영자 보강"
+} as const;
 
-export function CommercePocLocalPreview() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [result, setResult] = useState(emptyResult);
-  const [fileError, setFileError] = useState<string | null>(null);
+export function CommercePocLocalPreview({ plan }: { plan: CommerceAutoPreviewPlan }) {
   const [remoteImagesEnabled, setRemoteImagesEnabled] = useState(false);
-  const [reading, setReading] = useState(false);
-
-  async function handleFile(file: File | undefined) {
-    setFileError(null);
-    setRemoteImagesEnabled(false);
-    setResult(emptyResult);
-    setFileName(file?.name ?? null);
-    if (!file) {
-      return;
-    }
-    if (file.size > COMMERCE_PREVIEW_MAX_FILE_BYTES) {
-      setFileError("5MB 이하 파일만 미리볼 수 있습니다.");
-      return;
-    }
-
-    setReading(true);
-    try {
-      setResult(parseCommerceProductPreview(await file.text()));
-    } catch {
-      setFileError("파일을 읽을 수 없습니다. 로컬 JSONL 파일인지 확인하세요.");
-    } finally {
-      setReading(false);
-    }
-  }
-
-  function reset() {
-    if (inputRef.current) {
-      inputRef.current.value = "";
-    }
-    setFileName(null);
-    setResult(emptyResult);
-    setFileError(null);
-    setRemoteImagesEnabled(false);
-  }
+  const selection = plan.selected_product;
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <label htmlFor="commerce-preview-file" className="block text-sm font-bold text-slate-950">
-              상품 JSONL 파일
-            </label>
-            <p className="mt-1 text-sm text-slate-500">
-              최대 5MB, 200개 상품까지 읽습니다. 파일 내용은 브라우저 메모리를 벗어나지 않습니다.
+      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="한국 기준일" value={plan.event_window.startDate} />
+        <Metric label="탐색 종료일" value={plan.event_window.endDate} />
+        <Metric label="30일 내 일정" value={`${plan.events.length}건`} />
+        <Metric label="상품 자료 자동 검토" value={`${plan.products_considered}건`} />
+      </section>
+
+      <section className="rounded-xl border border-teal-200 bg-teal-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-wide text-teal-700">자동 선정 결과</p>
+        {plan.selected_event ? (
+          <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-teal-950">{plan.selected_event.name}</h2>
+              <p className="mt-1 text-sm font-semibold text-teal-900">
+                {dateLabel(plan.selected_event.start_date, plan.selected_event.end_date)} · {sourceLabels[plan.selected_event.source]}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {plan.product_search_terms.map((term) => (
+                  <span key={term} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-teal-800 shadow-sm">
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <p className="max-w-md text-sm text-teal-900">
+              실행일마다 이 30일 창을 다시 계산합니다. 방학 일정은 학교별 차이가 있어 계절 기준 후보로 표시하고 owner review에서 최종 확인합니다.
             </p>
-            <input
-              ref={inputRef}
-              id="commerce-preview-file"
-              type="file"
-              accept=".jsonl,.ndjson,.json,application/json,application/x-ndjson"
-              className="mt-3 block w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:font-bold file:text-white"
-              onChange={(event) => void handleFile(event.currentTarget.files?.[0])}
-            />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {result.products.length > 0 ? (
-              <button
-                type="button"
-                className={remoteImagesEnabled
-                  ? "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900"
-                  : "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"}
-                onClick={() => setRemoteImagesEnabled((enabled) => !enabled)}
-              >
-                {remoteImagesEnabled ? "원격 이미지 미리보기 끄기" : "원격 이미지 미리보기 켜기"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:opacity-50"
-              disabled={!fileName && !fileError}
-              onClick={reset}
-            >
-              초기화
-            </button>
+        ) : (
+          <p className="mt-2 text-sm font-semibold text-teal-900">30일 창에서 사용할 일정을 찾지 못했습니다.</p>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">한국 30일 일정</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-950">행사·기념일·방학 시작/종료</h2>
           </div>
+          <span className="text-xs font-semibold text-slate-500">Asia/Seoul · 매 실행 시 재계산</span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {plan.events.slice(0, 12).map((event) => (
+            <article key={`${event.event_id}-${event.start_date}`} className="rounded-lg border border-slate-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-bold text-slate-950">{event.name}</h3>
+                <span className={event.active_now
+                  ? "shrink-0 rounded-full bg-teal-100 px-2 py-1 text-xs font-bold text-teal-800"
+                  : "shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600"}
+                >
+                  {event.active_now ? "진행 중" : `${event.days_until_start}일 전`}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">{dateLabel(event.start_date, event.end_date)}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{sourceLabels[event.source]}</p>
+            </article>
+          ))}
         </div>
       </section>
 
-      <div aria-live="polite">
-        {reading ? <p className="rounded-lg bg-sky-50 p-4 text-sm font-semibold text-sky-800">파일을 읽는 중입니다.</p> : null}
-        {fileError ? <p className="rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-800">{fileError}</p> : null}
-      </div>
-
-      {fileName && !reading && !fileError ? (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">선택 파일</p>
-              <p className="mt-1 break-all text-sm font-bold text-slate-950">{fileName}</p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-bold">
-              <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-800">정상 {result.products.length}</span>
-              <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-800">오류 {result.errors.length}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">전체 {result.total_rows}</span>
-            </div>
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">상품 자동 선택</p>
+            <h2 className="mt-1 text-lg font-bold text-slate-950">일정 적합도 기반 owner review 후보</h2>
           </div>
-
-          {result.errors.length > 0 ? (
-            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4">
-              <h2 className="text-sm font-bold text-rose-950">검증 오류</h2>
-              <ul className="mt-2 space-y-1 text-sm text-rose-800">
-                {result.errors.map((error, index) => (
-                  <li key={`${error.line ?? "file"}-${error.code}-${index}`}>
-                    {error.line ? `${error.line}행: ` : "파일: "}{error.message} <code>{error.code}</code>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {selection ? (
+            <button
+              type="button"
+              className={remoteImagesEnabled
+                ? "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900"
+                : "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"}
+              onClick={() => setRemoteImagesEnabled((enabled) => !enabled)}
+            >
+              {remoteImagesEnabled ? "원격 이미지 미리보기 끄기" : "원격 이미지 미리보기 켜기"}
+            </button>
           ) : null}
-        </section>
-      ) : null}
+        </div>
 
-      {result.products.length > 0 ? (
-        <section>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-slate-950">상품 미리보기</h2>
-            <span className="text-xs font-bold text-slate-500">
-              원격 이미지 로드: {remoteImagesEnabled ? "사용자 승인됨" : "차단됨"}
-            </span>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {result.products.map((product, index) => (
-              <article key={`${product.raw_hash}-${index}`} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex aspect-[16/10] items-center justify-center bg-slate-100">
-                  {remoteImagesEnabled ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.product_name}
-                      className="h-full w-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="px-5 text-center">
-                      <p className="text-sm font-bold text-slate-500">원격 이미지 로드 꺼짐</p>
-                      <p className="mt-2 line-clamp-2 break-all text-xs text-slate-400">{product.image_url}</p>
-                    </div>
-                  )}
+        {selection ? (
+          <article className="grid overflow-hidden rounded-xl border border-slate-200 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="flex min-h-64 items-center justify-center bg-slate-100">
+              {remoteImagesEnabled ? (
+                <img
+                  src={selection.product.image_url}
+                  alt={selection.product.product_name}
+                  className="h-full max-h-96 w-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="px-5 text-center">
+                  <p className="text-sm font-bold text-slate-500">원격 이미지 로드 꺼짐</p>
+                  <p className="mt-2 text-xs text-slate-400">버튼을 눌러 owner review용 이미지를 확인할 수 있습니다.</p>
                 </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-bold text-slate-950">{product.product_name}</h3>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
-                      {stockLabels[product.stock_status]}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xl font-black text-teal-800">
-                    {product.price === null ? "가격 미확인" : `${product.price.toLocaleString("ko-KR")}원`}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-600">{product.seller}</p>
-                  <a
-                    href={product.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-4 inline-flex text-sm font-bold text-teal-700 underline underline-offset-4"
-                  >
-                    원본 자료 열기
-                  </a>
-                </div>
-              </article>
-            ))}
+              )}
+            </div>
+            <div className="p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h3 className="text-xl font-black text-slate-950">{selection.product.product_name}</h3>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                  {stockLabels[selection.product.stock_status]}
+                </span>
+              </div>
+              <p className="mt-3 text-2xl font-black text-teal-800">
+                {selection.product.price === null ? "가격 미확인" : `${selection.product.price.toLocaleString("ko-KR")}원`}
+              </p>
+              <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                <Detail label="연결 일정" value={selection.event_name} />
+                <Detail label="일정 적합도" value={`${selection.relevance_score}점`} />
+                <Detail label="일치 키워드" value={selection.matched_terms.join(", ")} />
+                <Detail label="판매처" value={selection.product.seller} />
+              </dl>
+              <a
+                href={selection.product.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-flex text-sm font-bold text-teal-700 underline underline-offset-4"
+              >
+                원본 공개 페이지 확인
+              </a>
+            </div>
+          </article>
+        ) : (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-bold">아직 자동 선택할 실제 상품 자료가 없습니다.</p>
+            <p className="mt-1">
+              일정과 검색 키워드는 자동 생성됐습니다. 다음 수집 실행에서 이 키워드로 실제 상품을 가져오면 같은 화면에서 자동으로 순위를 매깁니다.
+            </p>
+            <p className="mt-2 font-semibold">상태: {plan.current_blocker}</p>
           </div>
-        </section>
-      ) : null}
+        )}
+      </section>
 
       <section className="grid gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm font-semibold text-teal-950 sm:grid-cols-2 lg:grid-cols-4">
         <p>외부 업로드: 없음</p>
-        <p>서버 저장: 없음</p>
         <p>DB / R2 write: 없음</p>
-        <p>게시 승인: 별도 필요</p>
+        <p>queue / worker job: 없음</p>
+        <p>owner review: 필수</p>
       </section>
     </div>
   );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-bold text-slate-500">{label}</dt>
+      <dd className="mt-1 font-semibold text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function dateLabel(start: string, end: string) {
+  return start === end ? start : `${start} ~ ${end}`;
 }
