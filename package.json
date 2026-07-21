@@ -69,6 +69,7 @@
     "automation:v108:first-video-upload-package-materializer": "tsx scripts/automation/run-v108-first-video-upload-package-materializer.ts",
     "automation:v109:product-source-affiliate-evidence": "tsx scripts/automation/run-v109-product-source-affiliate-evidence.ts",
     "automation:commerce-poc:jsonl": "tsx scripts/automation/run-commerce-poc-from-jsonl.ts",
+    "automation:commerce-poc:schedule": "tsx scripts/automation/run-local-commerce-scheduler.ts",
     "upload:v110:private-pilot-one-shot": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts",
     "upload:v114:local-private-pilot:preflight": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts --server-local-asset",
     "upload:v114:local-private-pilot:execute": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts --server-local-asset --execute",

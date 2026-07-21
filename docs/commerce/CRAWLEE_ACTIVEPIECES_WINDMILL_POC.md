@@ -109,11 +109,37 @@ The command only reads local JSONL and writes local staging/review/draft JSONL. 
 
 The local run ID is a deterministic hash of the input JSONL, normalized allowed host, and orchestrator target. Retrying the same command reuses the same batch. Existing review/draft timestamps are reused when the stable record content matches, while changed input under the same batch fails closed.
 
-## 7) Notification adapter
+## 7) Local scheduler, retry log, and draft queue
+
+The local-only scheduler wraps the existing deterministic JSONL command without adding a daemon, webhook, database, or external orchestrator dependency:
+
+```powershell
+npm run automation:commerce-poc:schedule -- --input=data/commerce-poc/activepieces-input.jsonl --allowed-host=shop.example --target=activepieces
+```
+
+Optional arguments are `--scheduled-at=<ISO datetime>`, `--max-attempts=1..5`, and `--retry-delay-ms=0..86400000`. A future `scheduled-at` value records `scheduled` and exits without running the pipeline. A due item records append-only transitions in `data/commerce-poc/scheduler-status.jsonl`. Local failures move to `retry_wait` and retry only up to the configured bound. An interrupted `running` state is also counted as a failed attempt before recovery. Only a successful local run can add idempotent entries to `data/commerce-poc/draft-queue.jsonl`.
+
+The scheduler holds one local filesystem lock across state inspection, pipeline execution, and draft enqueue. A concurrent caller fails closed with `LOCAL_SCHEDULER_ALREADY_RUNNING`; it does not execute or enqueue. A lock owned by a process that no longer exists is reclaimed on the next invocation. Because the JSONL status and draft files are shared, the lock is intentionally global rather than per schedule.
+
+`retry_wait` represents a failed attempt and returns `ok=false`; the CLI exits nonzero so a caller cannot mistake it for completed work. The persisted `next_run_at` still prevents an early invocation from executing before the delay expires.
+
+After a schedule exhausts `max-attempts`, it remains terminal until the owner explicitly supplies the exact local retry approval:
+
+```powershell
+npm run automation:commerce-poc:schedule -- --input=data/commerce-poc/activepieces-input.jsonl --allowed-host=shop.example --target=activepieces --retry-failed=APPROVE_LOCAL_FAILED_SCHEDULE_RETRY
+```
+
+The approval is accepted only when the current schedule state is `failed`. It appends an audited `operator_action=retry_failed`, increments `retry_generation`, resets the per-generation attempt counter, and is consumed once. It does not authorize crawl, webhook, notification, database, queue, worker, or upload actions.
+
+Draft queue entries contain only identifiers, target, review state, and approval flags. They always use `state=draft_pending_review`, `approval_required=true`, and `publish_allowed=false`. Failure logs store the fixed code `LOCAL_EXECUTION_FAILED` instead of raw exception text. Every scheduler status explicitly records external call, webhook, notification, platform upload, database, product queue, and worker job side effects as false.
+
+This is an invocation seam, not an operating-system service. Windows Task Scheduler, a process supervisor, Activepieces, or Windmill may call the command later only under a separate configuration approval. The repository does not install or modify any host scheduler.
+
+## 8) Notification adapter
 
 `CommerceNotificationAdapter` is the extension point for Novu or the existing notification structure. The default `BlockedCommerceNotificationAdapter` always returns `NOTIFICATION_ADAPTER_NOT_CONFIGURED` and performs no network request.
 
-## 8) Proposed future environment variables and keys
+## 9) Proposed future environment variables and keys
 
 No API key is required for fixture tests or contract-only execution.
 
@@ -128,7 +154,7 @@ No API key is required for fixture tests or contract-only execution.
 
 Never expose these as `NEXT_PUBLIC_*`, store them in JSONL, or send them in webhook bodies.
 
-## 9) Deployment sequence
+## 10) Deployment sequence
 
 1. Owner approves source hosts, authorization basis, forbidden words, and exaggeration policy.
 2. Install `requirements-collector.txt` in an isolated non-production collector runtime.
@@ -140,6 +166,6 @@ Never expose these as `NEXT_PUBLIC_*`, store them in JSONL, or send them in webh
 8. Add authenticated single-use approval records and audit logs.
 9. Connect one sandbox/private platform adapter only after a separate execution approval.
 
-## 10) Rollback
+## 11) Rollback
 
 Remove the PoC modules, tests, script, fixture, and documentation. Delete local ignored `data/commerce-poc/` artifacts if the owner requests it. No production database, webhook, notification, queue, upload, or deployment rollback is required because this PoC performs none of those actions.
