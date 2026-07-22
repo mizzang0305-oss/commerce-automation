@@ -18,7 +18,14 @@ python-worker/temp/**
 python-worker/logs/**
 !python-worker/logs/.gitkeep
 commerce-assets/generated-motion/
+commerce-assets/generated-audio/
+commerce-assets/generated-scenes/
+commerce-assets/generated-videos/
+commerce-assets/output/
+commerce-assets/product-images/
+commerce-assets/source-library/
 commerce-assets/autopilot/
 commerce-assets/review/
 *.log
+*.tsbuildinfo
 npm-debug.log*

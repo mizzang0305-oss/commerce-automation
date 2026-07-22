@@ -1467,4 +1467,88 @@ Current scope:
 
 ## Next Exact Action
 
-- Complete V111 focused/full no-upload validation. Then obtain explicit approval for the V111 commit/push/PR flow. After merge, refresh V095 immediately before V110 preflight and require a new external approval pair before any additional R2 or private YouTube attempt.
+- Run and visually inspect the corrected V112 image-skill local preview for `CURRENT_REAR_SEAT_MULTIFUNCTION_ORGANIZER`. Keep the mismatched v057 upload private. Commit/push/PR, replacement upload, visibility change, and comments all require separate owner approval.
+
+### T037 - V112 Image-Skill Visual Quality Preview No-Upload
+
+Status: `READY_FOR_OWNER_REVIEW`
+
+Goal: Correct the `father_jobs` visual product binding to the authoritative Coupang rear-seat multifunction organizer while preserving the original voice, duration, channel, and disclosure bindings.
+
+Scope:
+
+- six new image-skill scenes based on the authoritative Coupang product reference
+- six-scene 9:16 visual timeline
+- product hero as the first frame
+- smaller hook overlay limited to the first scene
+- original v057 audio preserved
+- local preview artifacts only under `commerce-assets/review/v112/father_jobs/`
+- no upload, visibility, comment, scheduler, n8n, R2, DB, Supabase, or product-assets mutation
+- generated media must remain untracked
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Local result:
+
+- preview status: `preview_ready_for_owner_review`
+- output: 1080x1920, 22.709 seconds, original audio preserved
+- scene mix: 6 newly generated image-skill scenes for the correct rear-seat organizer
+- hook overlay: reduced and limited to the first scene
+- generated media: local protected artifacts only, untracked
+- upload/comment/visibility/R2/DB/product-assets side effects: 0
+- previous front-console V112 preview: invalid due to product mismatch and must not be uploaded
+- original v057 audio: timing reference only; product-copy/audio review required before replacement upload
+- replacement upload blocker: `BLOCKED_V112_AUDIO_COPY_REVIEW_REQUIRED`
+
+### T038 - V113 Product-Matched Script and Voice Preview No-Upload
+
+Status: `READY_FOR_OWNER_REVIEW`
+
+Goal: Replace the V112 timing-reference audio with Korean product copy and voice evidence for the authoritative rear-seat multifunction organizer without uploading or changing visibility.
+
+Scope:
+
+- six product-matched Korean script segments aligned with the V112 scene order
+- explicit rejection of old front-console, gear-shift, and console-gap copy
+- configured approved local Korean voice provider only
+- energetic sales-presenter delivery at `1.14` speed without unsupported claims
+- final CTA: `제품 정보는 고정 댓글 링크에서 확인하세요`
+- CTA copy only; no comment create/update/pin/delete action in V113
+- complete local pinned-comment draft with product link, Coupang Partners commission disclosure, and installation caution
+- raw affiliate URL stays inside the protected local text artifact and is excluded from reports
+- actual comment creation and pinning remain separate owner-approved/manual actions
+- local ASR transcript similarity and product-anchor checks
+- corrected V112 video reused as the visual source
+- local preview artifacts only under `commerce-assets/review/v113/father_jobs/`
+- no upload, visibility, comment, scheduler, n8n, R2, DB, Supabase, storage, or product-assets mutation
+- generated media must remain untracked
+- `SAFE_TO_UPLOAD=false`
+- `SAFE_TO_PUBLIC_UPLOAD=false`
+
+Current blocker after a technically valid preview:
+
+- `BLOCKED_V113_OWNER_VOICE_REVIEW_REQUIRED`
+- `BLOCKED_V113_PINNED_COMMENT_ACTION_NOT_APPROVED`
+
+Local result:
+
+- status: `preview_ready_for_owner_review`
+- source visual: corrected V112 rear-seat organizer preview
+- voice provider: approved local command; paid/cloud voice not used
+- voice style: energetic sales presenter, `1.14` speed multiplier
+- voice duration: 21.391 seconds
+- output: 1080x1920, 22.709 seconds, H.264 + mono AAC
+- local ASR: executed
+- transcript similarity: 0.966
+- recognized product anchors: 7; required threshold: 5
+- forbidden old-product terms: 0
+- pinned-comment CTA present: true
+- pinned-comment package ready: true; disclosure and bound affiliate link present
+- comment created or pinned: false; manual create/pin required
+- audio level probe: mean -18.3 dB, peak -2.1 dB
+- upload/comment/visibility/R2/DB/product-assets side effects: 0
+- generated media: local protected artifacts only, untracked
+
+## Next Exact Action
+
+- Review the V113 local preview and Draft PR. Keep all external upload, visibility, and comment actions blocked pending separate owner decisions.

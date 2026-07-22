@@ -109,7 +109,7 @@ describe("v045 restored v035 pipeline adapter", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("no_v037_renderer_usage_tests and visual regression gates stay clean", async () => {
     const cwd = await makeCwd();

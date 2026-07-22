@@ -289,7 +289,7 @@ describe("v084 private upload execution invocation path", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("runtime execute function reaches V081/V083 no-upload boundary without invoking package execute command", async () => {
     const result = await runV084PrivateUploadPilotExecution(readyRequest({

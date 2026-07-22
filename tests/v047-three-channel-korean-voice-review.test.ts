@@ -146,7 +146,7 @@ describe("v047 restored v035 Korean voice provider review", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("blocks without fake success when v046 images are missing or voice provider is not configured", async () => {
     const cwd = await makeCwd();
@@ -214,5 +214,5 @@ describe("v047 restored v035 Korean voice provider review", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 });

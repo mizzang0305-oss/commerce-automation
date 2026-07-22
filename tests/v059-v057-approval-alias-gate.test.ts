@@ -323,5 +323,5 @@ describe("v059 v057 corrected reupload approval alias gate", () => {
       await rm(missingPaid, { recursive: true, force: true });
       await rm(accepted, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 });

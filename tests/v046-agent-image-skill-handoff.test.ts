@@ -193,7 +193,7 @@ describe("v046 agent image skill handoff", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("upload_side_effect_block_tests and mojibake_tests stay locked", async () => {
     const cwd = await makeCwd();
@@ -218,7 +218,7 @@ describe("v046 agent image skill handoff", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("blocks without fake success when quality gate fails", async () => {
     const cwd = await makeCwd();

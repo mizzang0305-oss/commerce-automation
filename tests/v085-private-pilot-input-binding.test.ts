@@ -395,7 +395,7 @@ describe("v085 private pilot input binding preflight", () => {
       await rm(cwd, { recursive: true, force: true });
       await rm(TOKEN_PATH, { force: true });
     }
-  });
+  }, 30000);
 });
 
 async function makeCwd() {

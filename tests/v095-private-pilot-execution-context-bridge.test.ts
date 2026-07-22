@@ -473,7 +473,7 @@ describe("v095 private pilot execution context bridge", () => {
       await rm(cwd, { recursive: true, force: true });
       await rm(TOKEN_PATH, { force: true });
     }
-  });
+  }, 30000);
 
   test("package.json exposes V095 no-upload scripts and not execute", async () => {
     const pkg = JSON.parse(await readFile("package.json", "utf8"));

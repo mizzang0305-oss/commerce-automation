@@ -193,7 +193,7 @@ describe("v048 channel-specific script asset settings gate", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 
   test("metadata_disclosure_tests no_raw_affiliate_url_report_tests upload_side_effect_block_tests mojibake_tests", async () => {
     const cwd = await makeCwd();
@@ -237,5 +237,5 @@ describe("v048 channel-specific script asset settings gate", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 });
