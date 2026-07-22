@@ -11,7 +11,8 @@ import type { CommerceDailySlotId } from "@/lib/orchestration/commerceDailyCaden
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 2;
-const DRAFT_DURATION_SECONDS = 12;
+const DRAFT_DURATION_SECONDS = 20;
+const DRAFT_SCENE_COUNT = 4;
 const DISCLOSURE_TEXT = "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
 
 export const SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL = "APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER";
@@ -39,6 +40,10 @@ export type ScheduledProductVideoDraftPlan = {
   quality: {
     status: "draft_preview_only";
     duration_seconds: typeof DRAFT_DURATION_SECONDS;
+    scene_count: typeof DRAFT_SCENE_COUNT;
+    motion_present: true;
+    caption_safe_area_layout: true;
+    disclosure_present: true;
     single_product_image_only: true;
     voiceover_present: false;
     real_usage_scenes_present: false;
@@ -148,6 +153,10 @@ export function buildScheduledProductVideoDraftPlan(input: {
     quality: {
       status: "draft_preview_only",
       duration_seconds: DRAFT_DURATION_SECONDS,
+      scene_count: DRAFT_SCENE_COUNT,
+      motion_present: true,
+      caption_safe_area_layout: true,
+      disclosure_present: true,
       single_product_image_only: true,
       voiceover_present: false,
       real_usage_scenes_present: false,
@@ -203,17 +212,26 @@ export async function renderScheduledProductVideoDraft(input: {
     const imagePath = path.join(outputDirectory, `product-image.${extensionForMimeType(image.mimeType)}`);
     const hookPath = path.join(outputDirectory, "hook.txt");
     const productPath = path.join(outputDirectory, "product.txt");
+    const reviewPath = path.join(outputDirectory, "review.txt");
+    const cautionPath = path.join(outputDirectory, "caution.txt");
     const ctaPath = path.join(outputDirectory, "cta.txt");
+    const disclosurePath = path.join(outputDirectory, "disclosure.txt");
     await writeFile(imagePath, image.buffer);
     await writeFile(hookPath, wrapKoreanText(input.plan.copy.hook, 18, 2), "utf8");
     await writeFile(productPath, wrapKoreanText(input.plan.copy.product_intro, 18, 3), "utf8");
+    await writeFile(reviewPath, wrapKoreanText(input.plan.copy.review_point, 19, 3), "utf8");
+    await writeFile(cautionPath, wrapKoreanText(input.plan.copy.caution, 20, 3), "utf8");
     await writeFile(ctaPath, wrapKoreanText(input.plan.copy.cta, 20, 2), "utf8");
+    await writeFile(disclosurePath, wrapKoreanText(input.plan.copy.disclosure_text, 32, 2), "utf8");
     ffmpegExecuted = true;
     await run("ffmpeg", buildScheduledProductVideoDraftFfmpegArgs({
       imagePath,
       hookPath,
       productPath,
+      reviewPath,
+      cautionPath,
       ctaPath,
+      disclosurePath,
       outputVideoPath
     }), {
       timeout: 120000,
@@ -339,18 +357,27 @@ export function buildScheduledProductVideoDraftFfmpegArgs(input: {
   imagePath: string;
   hookPath: string;
   productPath: string;
+  reviewPath: string;
+  cautionPath: string;
   ctaPath: string;
+  disclosurePath: string;
   outputVideoPath: string;
 }) {
   const filter = [
     "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=32,eq=brightness=-0.28[bg]",
-    "[0:v]scale=900:980:force_original_aspect_ratio=decrease,pad=900:980:(ow-iw)/2:(oh-ih)/2:color=white@0.04[product]",
-    "[bg][product]overlay=90:430[base]",
-    "[base]drawbox=x=50:y=110:w=980:h=250:color=black@0.68:t=fill[top]",
-    `[top]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.hookPath)}':expansion=none:fontcolor=white:fontsize=58:line_spacing=10:x=90:y=155[hook]`,
-    "[hook]drawbox=x=50:y=1410:w=980:h=390:color=black@0.72:t=fill[bottom]",
-    `[bottom]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.productPath)}':expansion=none:fontcolor=white:fontsize=45:line_spacing=8:x=90:y=1460[producttext]`,
-    `[producttext]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.ctaPath)}':expansion=none:fontcolor=0x99f6e4:fontsize=34:line_spacing=6:x=90:y=1665,fade=t=in:st=0:d=0.4,fade=t=out:st=11:d=1[out]`
+    "[0:v]scale=900:980:force_original_aspect_ratio=decrease,pad=900:980:(ow-iw)/2:(oh-ih)/2:color=white@0.04,zoompan=z='min(zoom+0.00025,1.05)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=900x980:fps=30[product]",
+    "[bg][product]overlay=90:360[base]",
+    "[base]drawbox=x=50:y=110:w=980:h=230:color=black@0.72:t=fill:enable='between(t,0,4.9)'[hookbox]",
+    `[hookbox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.hookPath)}':expansion=none:fontcolor=white:fontsize=58:line_spacing=10:x=90:y=150:enable='between(t,0,4.9)'[hook]`,
+    "[hook]drawbox=x=50:y=1380:w=980:h=350:color=black@0.76:t=fill:enable='between(t,5,9.9)'[productbox]",
+    `[productbox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.productPath)}':expansion=none:fontcolor=white:fontsize=46:line_spacing=8:x=90:y=1440:enable='between(t,5,9.9)'[producttext]`,
+    "[producttext]drawbox=x=50:y=1380:w=980:h=350:color=black@0.76:t=fill:enable='between(t,10,14.9)'[reviewbox]",
+    `[reviewbox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.reviewPath)}':expansion=none:fontcolor=white:fontsize=44:line_spacing=8:x=90:y=1440:enable='between(t,10,14.9)'[reviewtext]`,
+    "[reviewtext]drawbox=x=50:y=1330:w=980:h=440:color=black@0.78:t=fill:enable='between(t,15,19.9)'[ctabox]",
+    `[ctabox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.cautionPath)}':expansion=none:fontcolor=white:fontsize=40:line_spacing=8:x=90:y=1385:enable='between(t,15,19.9)'[cautiontext]`,
+    `[cautiontext]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.ctaPath)}':expansion=none:fontcolor=0x99f6e4:fontsize=34:line_spacing=6:x=90:y=1625:enable='between(t,15,19.9)'[ctatext]`,
+    "[ctatext]drawbox=x=30:y=1800:w=1020:h=100:color=black@0.82:t=fill[disclosurebox]",
+    `[disclosurebox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.disclosurePath)}':expansion=none:fontcolor=white:fontsize=24:line_spacing=3:x=55:y=1818[out]`
   ].join(";");
   return [
     "-y",

@@ -40,6 +40,11 @@ describe("scheduled product video draft", () => {
       primary_keyword: "문구 세트",
       quality: {
         status: "draft_preview_only",
+        duration_seconds: 20,
+        scene_count: 4,
+        motion_present: true,
+        caption_safe_area_layout: true,
+        disclosure_present: true,
         single_product_image_only: true,
         voiceover_present: false,
         real_usage_scenes_present: false,
@@ -188,8 +193,12 @@ describe("scheduled product video draft", () => {
     const ffmpegArgs = execFileAsync.mock.calls[0]?.[1] ?? [];
     expect(ffmpegArgs.join(" ")).toContain("preview.mp4");
     expect(ffmpegArgs.join(" ")).not.toContain("https://");
-    expect(ffmpegArgs.join(" ").match(/expansion=none/g)).toHaveLength(3);
+    expect(ffmpegArgs.join(" ")).toContain("zoompan");
+    expect(ffmpegArgs.join(" ")).toContain("between(t,15,19.9)");
+    expect(ffmpegArgs.join(" ").match(/expansion=none/g)).toHaveLength(6);
+    expect(ffmpegArgs).toContain("20");
     const manifestWrite = writeFile.mock.calls.find((call) => String(call[0]).endsWith("manifest.json"));
     expect(String(manifestWrite?.[1])).toContain('"external_upload": false');
+    expect(String(manifestWrite?.[1])).toContain('"scene_count": 4');
   });
 });
