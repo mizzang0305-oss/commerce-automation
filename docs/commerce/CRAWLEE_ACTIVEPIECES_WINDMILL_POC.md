@@ -207,3 +207,24 @@ Never expose these as `NEXT_PUBLIC_*`, store them in JSONL, or send them in webh
 ## 11) Rollback
 
 Remove the PoC modules, tests, script, fixture, and documentation. Delete local ignored `data/commerce-poc/` artifacts if the owner requests it. No production database, webhook, notification, queue, upload, or deployment rollback is required because this PoC performs none of those actions.
+## Four-slot local Korean voiceover
+
+The scheduled product-video stage now requires both exact local approvals:
+
+```text
+--render=APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER
+--voiceover=APPROVE_SCHEDULED_PRODUCT_VOICEOVER_RENDER
+```
+
+The current-user Task Scheduler runner resolves the repo-outside wrapper at
+`%USERPROFILE%\.codex\tools\commerce-melotts\wrapper\commerce-melotts.cmd`, sets only the
+non-secret `local_command` readiness values in the child process, and rejects a missing command.
+The renderer writes a bounded Korean script, generates `voiceover.wav`, normalizes it to -16 LUFS,
+muxes it into the 20-second MP4, and stores only checksums and safe provider metadata in the ignored
+manifest. Windows SAPI and paid/cloud voice providers remain rejected. No upload is attempted by this
+stage.
+
+After each successful scheduled render, the host runner invokes the repo-outside local faster-whisper
+`small` CPU/int8 validator for that slot. A new render removes stale WAV, MP4, manifest, transcript,
+and ASR probe files before generation. The task returns nonzero if TTS, mux, or ASR fails, so an older
+artifact cannot be reported as the new slot result.

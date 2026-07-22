@@ -162,12 +162,15 @@ describe("commerce PoC automatic Korea event preview", () => {
       plan={plan}
       dailySlots={[{
         ...dailySlot,
-        draft_video_preview_url: "/api/commerce-poc/video-drafts/morning_commute"
+        draft_video_preview_url: "/api/commerce-poc/video-drafts/morning_commute",
+        voiceover_ready: true,
+        asr_pass: true
       }]}
     />);
 
-    expect(screen.getByText("로컬 영상 초안 1/4 · 플랫폼 게시 미연결")).toBeInTheDocument();
-    expect(screen.getByLabelText("아침 출근 로컬 영상 초안")).toHaveAttribute(
+    expect(screen.getByText("영상 1/4 · 한국어 음성 1/4 · ASR 1/4")).toBeInTheDocument();
+    expect(screen.getByText("한국어 음성 완료 · ASR 통과")).toBeInTheDocument();
+    expect(screen.getByLabelText("아침 출근 한국어 음성 영상 초안")).toHaveAttribute(
       "src",
       "/api/commerce-poc/video-drafts/morning_commute"
     );

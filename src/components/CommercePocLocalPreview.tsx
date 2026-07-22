@@ -7,6 +7,8 @@ import type { CommerceAutoPreviewPlan } from "@/lib/orchestration/commercePocPre
 
 type DailySlotPreview = ScheduledEventProductPreviewItem & {
   draft_video_preview_url?: string | null;
+  voiceover_ready?: boolean;
+  asr_pass?: boolean;
 };
 
 const stockLabels = {
@@ -32,6 +34,8 @@ export function CommercePocLocalPreview({
   const [remoteImagesEnabled, setRemoteImagesEnabled] = useState(false);
   const selection = plan.selected_product;
   const videoDraftCount = dailySlots.filter((item) => item.draft_video_preview_url).length;
+  const voicedDraftCount = dailySlots.filter((item) => item.voiceover_ready).length;
+  const asrPassCount = dailySlots.filter((item) => item.asr_pass).length;
 
   return (
     <div className="space-y-5">
@@ -50,7 +54,7 @@ export function CommercePocLocalPreview({
           </div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
             {videoDraftCount > 0
-              ? `로컬 영상 초안 ${videoDraftCount}/4 · 플랫폼 게시 미연결`
+              ? `영상 ${videoDraftCount}/4 · 한국어 음성 ${voicedDraftCount}/4 · ASR ${asrPassCount}/4`
               : "상품 검색 연결 · 영상/플랫폼 게시 미연결"}
           </span>
         </div>
@@ -67,14 +71,19 @@ export function CommercePocLocalPreview({
                     {item.product.price === null ? "가격 미확인" : `${item.product.price.toLocaleString("ko-KR")}원`}
                   </p>
                   {item.draft_video_preview_url ? (
-                    <video
-                      controls
-                      playsInline
-                      preload="metadata"
-                      aria-label={`${item.slot.label} 로컬 영상 초안`}
-                      className="mt-3 aspect-[9/16] w-full rounded-lg bg-black object-contain"
-                      src={item.draft_video_preview_url}
-                    />
+                    <>
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        aria-label={`${item.slot.label} 한국어 음성 영상 초안`}
+                        className="mt-3 aspect-[9/16] w-full rounded-lg bg-black object-contain"
+                        src={item.draft_video_preview_url}
+                      />
+                      <p className="mt-2 text-xs font-bold text-teal-700">
+                        한국어 음성 {item.voiceover_ready ? "완료" : "미확인"} · ASR {item.asr_pass ? "통과" : "미확인"}
+                      </p>
+                    </>
                   ) : (
                     <p className="mt-3 rounded-lg bg-slate-100 p-2 text-xs font-semibold text-slate-600">
                       로컬 영상 초안 미생성

@@ -54,7 +54,10 @@ $slots = @(
 foreach ($slot in $slots) {
   $slotTaskName = $TaskName + $slot.suffix
   $liveSearchArgument = if ($EnableLiveSearch) { " -EnableLiveSearch" } else { "" }
-  $taskCommand = "`"$powershellPath`" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runnerPath`" -SlotId $($slot.id)$liveSearchArgument"
+  # Use PowerShell's unique -WindowStyle abbreviation so the scheduled window
+  # stays hidden without pushing the final fail-closed live-search flag beyond
+  # Task Scheduler's command-length boundary.
+  $taskCommand = "`"$powershellPath`" -NoProfile -NonInteractive -W Hidden -ExecutionPolicy Bypass -File `"$runnerPath`" -SlotId $($slot.id)$liveSearchArgument"
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = "SilentlyContinue"
   $existingXmlText = @(& schtasks.exe /Query /TN $slotTaskName /XML 2>$null)

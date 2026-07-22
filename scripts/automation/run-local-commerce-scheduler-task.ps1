@@ -53,6 +53,8 @@ $stdoutPath = Join-Path $logDir ("provider-plan-" + $SlotId + ".stdout.tmp")
 $stderrPath = Join-Path $logDir ("provider-plan-" + $SlotId + ".stderr.tmp")
 $draftStdoutPath = Join-Path $logDir ("video-draft-" + $SlotId + ".stdout.tmp")
 $draftStderrPath = Join-Path $logDir ("video-draft-" + $SlotId + ".stderr.tmp")
+$asrStdoutPath = Join-Path $logDir ("video-asr-" + $SlotId + ".stdout.tmp")
+$asrStderrPath = Join-Path $logDir ("video-asr-" + $SlotId + ".stderr.tmp")
 Push-Location $repoRoot
 try {
   $startedAt = (Get-Date).ToString("o")
@@ -74,12 +76,26 @@ try {
   )
   $exitCode = $process.ExitCode
   if ($exitCode -eq 0 -and $EnableLiveSearch) {
+    $voiceCommand = [Environment]::GetEnvironmentVariable("KOREAN_VOICE_COMMAND", "Process")
+    if (-not $voiceCommand) {
+      $voiceCommand = Join-Path $env:USERPROFILE ".codex\tools\commerce-melotts\wrapper\commerce-melotts.cmd"
+    }
+    if (-not (Test-Path -LiteralPath $voiceCommand -PathType Leaf)) {
+      throw "LOCAL_KOREAN_VOICE_COMMAND_MISSING"
+    }
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_PROVIDER", "local_command", "Process")
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_PROVIDER_APPROVED", "true", "Process")
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_COMMAND", $voiceCommand, "Process")
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_LANGUAGE", "ko", "Process")
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_OUTPUT_FORMAT", "wav", "Process")
+    [Environment]::SetEnvironmentVariable("KOREAN_VOICE_REJECT_WINDOWS_SAPI", "true", "Process")
     $draftProcess = Start-Process -FilePath $npm -ArgumentList @(
       "run",
       "automation:commerce-poc:render-video-draft",
       "--",
       "--slot-id=$SlotId",
-      "--render=APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER"
+      "--render=APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER",
+      "--voiceover=APPROVE_SCHEDULED_PRODUCT_VOICEOVER_RENDER"
     ) -WorkingDirectory $repoRoot -Wait -WindowStyle Hidden -RedirectStandardOutput $draftStdoutPath -RedirectStandardError $draftStderrPath -PassThru
     $commandOutput += @(
       "video_draft_stage=started",
@@ -87,6 +103,30 @@ try {
       @(Get-Content -LiteralPath $draftStderrPath -Encoding UTF8 -ErrorAction SilentlyContinue)
     )
     $exitCode = $draftProcess.ExitCode
+    if ($exitCode -eq 0) {
+      $asrRoot = Join-Path $env:USERPROFILE ".codex\tools\commerce-asr"
+      $asrPython = Join-Path $asrRoot ".venv\Scripts\python.exe"
+      $asrScript = Join-Path $asrRoot "wrapper\validate_commerce_audio.py"
+      if (-not (Test-Path -LiteralPath $asrPython -PathType Leaf) -or
+          -not (Test-Path -LiteralPath $asrScript -PathType Leaf)) {
+        throw "LOCAL_KOREAN_ASR_COMMAND_MISSING"
+      }
+      $asrProcess = Start-Process -FilePath $asrPython -ArgumentList @(
+        $asrScript,
+        "--draft-root",
+        (Join-Path $allowedDataRoot "video-drafts"),
+        "--model",
+        "small",
+        "--slot",
+        $SlotId
+      ) -WorkingDirectory $repoRoot -Wait -WindowStyle Hidden -RedirectStandardOutput $asrStdoutPath -RedirectStandardError $asrStderrPath -PassThru
+      $commandOutput += @(
+        "video_asr_stage=started",
+        @(Get-Content -LiteralPath $asrStdoutPath -Encoding UTF8 -ErrorAction SilentlyContinue),
+        @(Get-Content -LiteralPath $asrStderrPath -Encoding UTF8 -ErrorAction SilentlyContinue)
+      )
+      $exitCode = $asrProcess.ExitCode
+    }
   }
   $logLines = @(
     "started_at=" + $startedAt,

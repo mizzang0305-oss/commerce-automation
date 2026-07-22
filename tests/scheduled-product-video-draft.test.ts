@@ -2,9 +2,11 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   buildScheduledProductVideoDraftPlan,
+  buildScheduledProductVoiceoverScript,
   downloadScheduledProductImage,
   renderScheduledProductVideoDraft,
   SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL,
+  SCHEDULED_PRODUCT_VOICEOVER_APPROVAL,
   validateScheduledProductImageUrl
 } from "@/lib/coupang/scheduledProductVideoDraft";
 
@@ -62,6 +64,8 @@ describe("scheduled product video draft", () => {
     expect(plan.copy.review_point).toContain("문구 구성과 수량");
     expect(JSON.stringify(plan.copy)).not.toContain("주방 조리도구");
     expect(plan.copy.youtube_description).toContain("쿠팡파트너스 활동의 일환");
+    expect(buildScheduledProductVoiceoverScript(plan)).toContain(plan.product.product_name);
+    expect(buildScheduledProductVoiceoverScript(plan)).toContain("원본 페이지에서 확인하세요");
     expect(plan.quality.blockers).toEqual(expect.arrayContaining([
       "DRAFT_SINGLE_IMAGE_VIDEO",
       "VOICEOVER_REQUIRED",
@@ -80,6 +84,9 @@ describe("scheduled product video draft", () => {
     expect(plan.product.product_name).toBe(products[2].product_name);
     expect(plan.event_name).toBe("여름휴가·물놀이 시즌");
     expect(plan.copy.review_point).toContain("의자 구성·수량·옵션");
+    const voiceover = buildScheduledProductVoiceoverScript(plan);
+    expect(voiceover).toContain("플러스");
+    expect(voiceover).not.toMatch(/[+·-]/);
   });
 
   test("blocks image hosts outside the explicit Coupang allowlist", () => {
@@ -152,6 +159,38 @@ describe("scheduled product video draft", () => {
     expect(execFileAsync).not.toHaveBeenCalled();
   });
 
+  test("fails closed before image download when the approved local Korean voice provider is absent", async () => {
+    const plan = buildScheduledProductVideoDraftPlan({
+      slotId: "before_bed",
+      products,
+      now: "2026-07-22T00:00:00.000Z"
+    });
+    const fetchImpl = vi.fn<typeof fetch>();
+    const execFileAsync = vi.fn();
+    const result = await renderScheduledProductVideoDraft({
+      plan,
+      approval: SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL,
+      voiceoverApproval: SCHEDULED_PRODUCT_VOICEOVER_APPROVAL,
+      env: {
+        KOREAN_VOICE_PROVIDER: "local_command",
+        KOREAN_VOICE_PROVIDER_APPROVED: "true",
+        KOREAN_VOICE_COMMAND: "powershell System.Speech local_sapi"
+      },
+      dependencies: { fetchImpl, execFileAsync }
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      blocker: "KOREAN_VOICE_PROVIDER_NOT_READY",
+      voiceover_generated: false,
+      audio_muxed: false,
+      image_downloaded: false,
+      ffmpeg_executed: false
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(execFileAsync).not.toHaveBeenCalled();
+  });
+
   test("renders an approved local MP4 draft without any upload side effect", async () => {
     const plan = buildScheduledProductVideoDraftPlan({
       slotId: "lunch_break",
@@ -164,17 +203,30 @@ describe("scheduled product video draft", () => {
     }));
     const execFileAsync = vi.fn(async () => ({ stdout: "", stderr: "" }));
     const writeFile = vi.fn(async () => undefined);
+    const rm = vi.fn(async () => undefined);
     const result = await renderScheduledProductVideoDraft({
       plan,
       approval: SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL,
+      voiceoverApproval: SCHEDULED_PRODUCT_VOICEOVER_APPROVAL,
+      env: {
+        KOREAN_VOICE_PROVIDER: "local_command",
+        KOREAN_VOICE_PROVIDER_APPROVED: "true",
+        KOREAN_VOICE_COMMAND: "C:\\tools\\commerce-melotts.cmd",
+        KOREAN_VOICE_LANGUAGE: "ko",
+        KOREAN_VOICE_OUTPUT_FORMAT: "wav"
+      },
       dependencies: {
         cwd: "C:\\repo",
         fetchImpl,
         execFileAsync,
         mkdir: vi.fn(async () => undefined),
+        rm,
         writeFile,
-        readFile: vi.fn(async () => Buffer.from("video")) as never,
-        stat: vi.fn(async () => ({ isFile: () => true, size: 4096 })) as never
+        readFile: vi.fn(async (filePath) => Buffer.from(String(filePath).endsWith(".wav") ? "audio" : "video")) as never,
+        stat: vi.fn(async (filePath) => ({
+          isFile: () => true,
+          size: String(filePath).endsWith(".wav") ? 2048 : 4096
+        })) as never
       }
     });
 
@@ -182,23 +234,44 @@ describe("scheduled product video draft", () => {
       ok: true,
       blocker: null,
       video_generated: true,
+      voiceover_generated: true,
+      audio_muxed: true,
       image_downloaded: true,
       ffmpeg_executed: true,
       publish_attempted: false,
       SAFE_TO_UPLOAD: false,
       SAFE_TO_PUBLIC_UPLOAD: false
     });
-    expect(execFileAsync).toHaveBeenCalledTimes(1);
-    expect(execFileAsync.mock.calls[0]?.[0]).toBe("ffmpeg");
-    const ffmpegArgs = execFileAsync.mock.calls[0]?.[1] ?? [];
+    expect(execFileAsync).toHaveBeenCalledTimes(2);
+    expect(rm).toHaveBeenCalledTimes(5);
+    expect(rm.mock.calls.some((call) => String(call[0]).endsWith("asr-probe.json"))).toBe(true);
+    expect(execFileAsync.mock.calls[0]?.[0]).toBe("cmd.exe");
+    expect(execFileAsync.mock.calls[0]?.[1]).toEqual(expect.arrayContaining([
+      "C:\\tools\\commerce-melotts.cmd",
+      "--language",
+      "ko",
+      "--format",
+      "wav",
+      "--speed",
+      "1.25"
+    ]));
+    expect(execFileAsync.mock.calls[1]?.[0]).toBe("ffmpeg");
+    const ffmpegArgs = execFileAsync.mock.calls[1]?.[1] ?? [];
     expect(ffmpegArgs.join(" ")).toContain("preview.mp4");
     expect(ffmpegArgs.join(" ")).not.toContain("https://");
     expect(ffmpegArgs.join(" ")).toContain("zoompan");
     expect(ffmpegArgs.join(" ")).toContain("between(t,15,19.9)");
+    expect(ffmpegArgs.join(" ")).toContain("voiceover.wav");
+    expect(ffmpegArgs.join(" ")).toContain("loudnorm=I=-16:TP=-1.5:LRA=11");
+    expect(ffmpegArgs.join(" ")).toContain("aresample=48000");
+    expect(ffmpegArgs.join(" ")).not.toContain("anullsrc");
     expect(ffmpegArgs.join(" ").match(/expansion=none/g)).toHaveLength(6);
     expect(ffmpegArgs).toContain("20");
     const manifestWrite = writeFile.mock.calls.find((call) => String(call[0]).endsWith("manifest.json"));
     expect(String(manifestWrite?.[1])).toContain('"external_upload": false');
     expect(String(manifestWrite?.[1])).toContain('"scene_count": 4');
+    expect(String(manifestWrite?.[1])).toContain('"voiceover_present": true');
+    expect(String(manifestWrite?.[1])).toContain('"audio_muxed": true');
+    expect(String(manifestWrite?.[1])).not.toContain('"VOICEOVER_REQUIRED"');
   });
 });

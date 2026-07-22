@@ -29,7 +29,8 @@ async function main() {
   });
   const result = await renderScheduledProductVideoDraft({
     plan,
-    approval: args.get("render")
+    approval: args.get("render"),
+    voiceoverApproval: args.get("voiceover")
   });
   console.log(JSON.stringify({
     ok: result.ok,
@@ -39,12 +40,16 @@ async function main() {
     event_name: plan.event_name,
     product_hash_prefix: plan.product.raw_hash.slice(0, 12),
     video_generated: result.video_generated,
+    voiceover_generated: result.voiceover_generated,
+    audio_muxed: result.audio_muxed,
     image_downloaded: result.image_downloaded,
     ffmpeg_executed: result.ffmpeg_executed,
     local_video_path_present: Boolean(result.local_video_path),
     manifest_path_present: Boolean(result.manifest_path),
     quality_status: plan.quality.status,
-    quality_blockers: plan.quality.blockers,
+    quality_blockers: result.voiceover_generated
+      ? plan.quality.blockers.filter((blocker) => blocker !== "VOICEOVER_REQUIRED")
+      : plan.quality.blockers,
     publish_attempted: false,
     SAFE_TO_UPLOAD: false,
     SAFE_TO_PUBLIC_UPLOAD: false

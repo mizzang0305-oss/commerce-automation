@@ -13,9 +13,12 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 2;
 const DRAFT_DURATION_SECONDS = 20;
 const DRAFT_SCENE_COUNT = 4;
+const VOICEOVER_SPEED_MULTIPLIER = 1.25;
+const VOICEOVER_TIMEOUT_MS = 5 * 60 * 1000;
 const DISCLOSURE_TEXT = "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
 
 export const SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL = "APPROVE_SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER";
+export const SCHEDULED_PRODUCT_VOICEOVER_APPROVAL = "APPROVE_SCHEDULED_PRODUCT_VOICEOVER_RENDER";
 
 export type ScheduledProductVideoDraftPlan = {
   mode: "scheduled_product_video_draft";
@@ -72,11 +75,20 @@ export type ScheduledProductVideoDraftPlan = {
 
 export type ScheduledProductVideoDraftRenderResult = {
   ok: boolean;
-  blocker: "SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL_REQUIRED" | "SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER_FAILED" | null;
+  blocker:
+    | "SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL_REQUIRED"
+    | "SCHEDULED_PRODUCT_VOICEOVER_APPROVAL_REQUIRED"
+    | "KOREAN_VOICE_PROVIDER_NOT_READY"
+    | "SCHEDULED_PRODUCT_VOICEOVER_RENDER_FAILED"
+    | "SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER_FAILED"
+    | null;
   plan: ScheduledProductVideoDraftPlan;
   local_video_path: string | null;
+  local_voiceover_path: string | null;
   manifest_path: string | null;
   video_generated: boolean;
+  voiceover_generated: boolean;
+  audio_muxed: boolean;
   image_downloaded: boolean;
   ffmpeg_executed: boolean;
   publish_attempted: false;
@@ -87,7 +99,7 @@ export type ScheduledProductVideoDraftRenderResult = {
 type ExecFileAsync = (
   file: string,
   args: string[],
-  options: { timeout: number; windowsHide: boolean; maxBuffer: number }
+  options: { timeout: number; windowsHide: boolean; maxBuffer: number; env?: NodeJS.ProcessEnv }
 ) => Promise<{ stdout: string; stderr: string }>;
 
 type RenderDependencies = {
@@ -98,6 +110,7 @@ type RenderDependencies = {
   writeFile?: typeof fs.writeFile;
   readFile?: typeof fs.readFile;
   stat?: typeof fs.stat;
+  rm?: typeof fs.rm;
 };
 
 export function buildScheduledProductVideoDraftPlan(input: {
@@ -187,10 +200,19 @@ export function buildScheduledProductVideoDraftPlan(input: {
 export async function renderScheduledProductVideoDraft(input: {
   plan: ScheduledProductVideoDraftPlan;
   approval?: string;
+  voiceoverApproval?: string;
+  env?: NodeJS.ProcessEnv;
   dependencies?: RenderDependencies;
 }): Promise<ScheduledProductVideoDraftRenderResult> {
   if (input.approval !== SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL) {
     return blockedResult("SCHEDULED_PRODUCT_VIDEO_DRAFT_APPROVAL_REQUIRED", input.plan);
+  }
+  if (input.voiceoverApproval !== SCHEDULED_PRODUCT_VOICEOVER_APPROVAL) {
+    return blockedResult("SCHEDULED_PRODUCT_VOICEOVER_APPROVAL_REQUIRED", input.plan);
+  }
+  const voiceProvider = resolveScheduledProductVoiceProvider(input.env ?? process.env);
+  if (!voiceProvider) {
+    return blockedResult("KOREAN_VOICE_PROVIDER_NOT_READY", input.plan);
   }
   const dependencies = input.dependencies ?? {};
   const cwd = dependencies.cwd ?? process.cwd();
@@ -198,15 +220,45 @@ export async function renderScheduledProductVideoDraft(input: {
   const writeFile = dependencies.writeFile ?? fs.writeFile;
   const readFile = dependencies.readFile ?? fs.readFile;
   const stat = dependencies.stat ?? fs.stat;
+  const rm = dependencies.rm ?? fs.rm;
   const run = dependencies.execFileAsync ?? execFileAsync;
   const outputDirectory = path.join(cwd, "data", "commerce-poc", "video-drafts", input.plan.slot_id);
   const outputVideoPath = path.join(outputDirectory, "preview.mp4");
+  const voiceoverScriptPath = path.join(outputDirectory, "voiceover-script.txt");
+  const voiceoverAudioPath = path.join(outputDirectory, "voiceover.wav");
   const manifestPath = path.join(outputDirectory, "manifest.json");
+  let voiceoverGenerated = false;
   let imageDownloaded = false;
   let ffmpegExecuted = false;
 
   try {
     await mkdir(outputDirectory, { recursive: true });
+    await Promise.all([
+      rm(voiceoverAudioPath, { force: true }),
+      rm(outputVideoPath, { force: true }),
+      rm(manifestPath, { force: true }),
+      rm(path.join(outputDirectory, "asr-probe.json"), { force: true }),
+      rm(path.join(outputDirectory, "asr-transcript.txt"), { force: true })
+    ]);
+    const voiceoverScript = buildScheduledProductVoiceoverScript(input.plan);
+    await writeFile(voiceoverScriptPath, `${voiceoverScript}\n`, "utf8");
+    await runLocalVoiceCommand(voiceProvider.command, [
+      "--script",
+      voiceoverScriptPath,
+      "--output",
+      voiceoverAudioPath,
+      "--language",
+      voiceProvider.language,
+      "--format",
+      "wav",
+      "--speed",
+      String(VOICEOVER_SPEED_MULTIPLIER)
+    ], run);
+    const voiceoverStat = await stat(voiceoverAudioPath);
+    if (!voiceoverStat.isFile() || voiceoverStat.size <= 44) {
+      throw new Error("SCHEDULED_PRODUCT_VOICEOVER_OUTPUT_EMPTY");
+    }
+    voiceoverGenerated = true;
     const image = await downloadScheduledProductImage(input.plan.product.image_url, dependencies.fetchImpl ?? fetch);
     imageDownloaded = true;
     const imagePath = path.join(outputDirectory, `product-image.${extensionForMimeType(image.mimeType)}`);
@@ -232,6 +284,7 @@ export async function renderScheduledProductVideoDraft(input: {
       cautionPath,
       ctaPath,
       disclosurePath,
+      voiceoverAudioPath,
       outputVideoPath
     }), {
       timeout: 120000,
@@ -244,14 +297,29 @@ export async function renderScheduledProductVideoDraft(input: {
     }
     await writeFile(manifestPath, JSON.stringify({
       ...input.plan,
+      quality: {
+        ...input.plan.quality,
+        voiceover_present: true,
+        blockers: input.plan.quality.blockers.filter((blocker) => blocker !== "VOICEOVER_REQUIRED")
+      },
       product: {
         product_name: input.plan.product.product_name,
         price: input.plan.product.price,
         seller: input.plan.product.seller,
         raw_hash: input.plan.product.raw_hash
       },
+      voiceover: {
+        generated: true,
+        provider: "local_command_melotts",
+        language: voiceProvider.language,
+        speed_multiplier: VOICEOVER_SPEED_MULTIPLIER,
+        script_checksum_sha256: createHash("sha256").update(voiceoverScript).digest("hex"),
+        audio_size_bytes: voiceoverStat.size,
+        audio_checksum_sha256: createHash("sha256").update(await readFile(voiceoverAudioPath)).digest("hex")
+      },
       render: {
         video_generated: true,
+        audio_muxed: true,
         mime_type: "video/mp4",
         size_bytes: videoStat.size,
         checksum_sha256: createHash("sha256").update(await readFile(outputVideoPath)).digest("hex"),
@@ -264,8 +332,11 @@ export async function renderScheduledProductVideoDraft(input: {
       blocker: null,
       plan: input.plan,
       local_video_path: outputVideoPath,
+      local_voiceover_path: voiceoverAudioPath,
       manifest_path: manifestPath,
       video_generated: true,
+      voiceover_generated: true,
+      audio_muxed: true,
       image_downloaded: true,
       ffmpeg_executed: true,
       publish_attempted: false,
@@ -274,7 +345,13 @@ export async function renderScheduledProductVideoDraft(input: {
     };
   } catch {
     return {
-      ...blockedResult("SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER_FAILED", input.plan),
+      ...blockedResult(
+        voiceoverGenerated
+          ? "SCHEDULED_PRODUCT_VIDEO_DRAFT_RENDER_FAILED"
+          : "SCHEDULED_PRODUCT_VOICEOVER_RENDER_FAILED",
+        input.plan
+      ),
+      voiceover_generated: voiceoverGenerated,
       image_downloaded: imageDownloaded,
       ffmpeg_executed: ffmpegExecuted
     };
@@ -361,6 +438,7 @@ export function buildScheduledProductVideoDraftFfmpegArgs(input: {
   cautionPath: string;
   ctaPath: string;
   disclosurePath: string;
+  voiceoverAudioPath: string;
   outputVideoPath: string;
 }) {
   const filter = [
@@ -377,7 +455,8 @@ export function buildScheduledProductVideoDraftFfmpegArgs(input: {
     `[ctabox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgunbd.ttf")}':textfile='${escapeFilterPath(input.cautionPath)}':expansion=none:fontcolor=white:fontsize=40:line_spacing=8:x=90:y=1385:enable='between(t,15,19.9)'[cautiontext]`,
     `[cautiontext]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.ctaPath)}':expansion=none:fontcolor=0x99f6e4:fontsize=34:line_spacing=6:x=90:y=1625:enable='between(t,15,19.9)'[ctatext]`,
     "[ctatext]drawbox=x=30:y=1800:w=1020:h=100:color=black@0.82:t=fill[disclosurebox]",
-    `[disclosurebox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.disclosurePath)}':expansion=none:fontcolor=white:fontsize=24:line_spacing=3:x=55:y=1818[out]`
+    `[disclosurebox]drawtext=fontfile='${escapeFilterPath("C:/Windows/Fonts/malgun.ttf")}':textfile='${escapeFilterPath(input.disclosurePath)}':expansion=none:fontcolor=white:fontsize=24:line_spacing=3:x=55:y=1818[out]`,
+    `[1:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,apad=pad_dur=${DRAFT_DURATION_SECONDS},atrim=duration=${DRAFT_DURATION_SECONDS}[aout]`
   ].join(";");
   return [
     "-y",
@@ -390,16 +469,14 @@ export function buildScheduledProductVideoDraftFfmpegArgs(input: {
     "30",
     "-i",
     input.imagePath,
-    "-f",
-    "lavfi",
     "-i",
-    "anullsrc=channel_layout=stereo:sample_rate=48000",
+    input.voiceoverAudioPath,
     "-filter_complex",
     filter,
     "-map",
     "[out]",
     "-map",
-    "1:a",
+    "[aout]",
     "-t",
     String(DRAFT_DURATION_SECONDS),
     "-c:v",
@@ -419,6 +496,54 @@ export function buildScheduledProductVideoDraftFfmpegArgs(input: {
   ];
 }
 
+export function buildScheduledProductVoiceoverScript(plan: ScheduledProductVideoDraftPlan) {
+  return normalizeScheduledProductVoiceText([
+    plan.copy.hook,
+    `오늘 확인할 상품은 ${shorten(plan.copy.product_intro, 44)}입니다.`,
+    plan.copy.review_point,
+    "구성과 가격은 원본 페이지에서 확인하세요."
+  ].join(" "));
+}
+
+function normalizeScheduledProductVoiceText(value: string) {
+  return value
+    .replace(/\+/g, " 플러스 ")
+    .replace(/[·•]/g, ", ")
+    .replace(/[^\p{Script=Hangul}\p{Script=Latin}\p{Number}\s,.?!]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveScheduledProductVoiceProvider(env: NodeJS.ProcessEnv) {
+  const command = env.KOREAN_VOICE_COMMAND?.trim().replace(/^(["'])(.*)\1$/, "$2");
+  const language = (env.KOREAN_VOICE_LANGUAGE ?? "ko").trim().toLowerCase();
+  const format = (env.KOREAN_VOICE_OUTPUT_FORMAT ?? "wav").trim().toLowerCase();
+  if (
+    env.KOREAN_VOICE_PROVIDER !== "local_command" ||
+    env.KOREAN_VOICE_PROVIDER_APPROVED !== "true" ||
+    !command ||
+    !["ko", "kr"].includes(language) ||
+    format !== "wav" ||
+    /windows\s+sapi|local_sapi|sapi_voice|system\.speech/i.test(command)
+  ) {
+    return null;
+  }
+  return { command, language: "ko" } as const;
+}
+
+async function runLocalVoiceCommand(command: string, args: string[], run: ExecFileAsync) {
+  const options = {
+    timeout: VOICEOVER_TIMEOUT_MS,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024 * 8
+  };
+  const extension = path.extname(command).toLowerCase();
+  if (extension === ".cmd" || extension === ".bat") {
+    return run("cmd.exe", ["/d", "/s", "/c", command, ...args], options);
+  }
+  return run(command, args, options);
+}
+
 function blockedResult(
   blocker: Exclude<ScheduledProductVideoDraftRenderResult["blocker"], null>,
   plan: ScheduledProductVideoDraftPlan
@@ -428,8 +553,11 @@ function blockedResult(
     blocker,
     plan,
     local_video_path: null,
+    local_voiceover_path: null,
     manifest_path: null,
     video_generated: false,
+    voiceover_generated: false,
+    audio_muxed: false,
     image_downloaded: false,
     ffmpeg_executed: false,
     publish_attempted: false,

@@ -13,17 +13,28 @@ import type { CollectedProduct } from "@/lib/orchestration/commercePocSchemas";
 
 export const dynamic = "force-dynamic";
 
+type LocalDraftReviewJson = {
+  voiceover?: { generated?: boolean };
+  render?: { audio_muxed?: boolean };
+  pass?: boolean;
+};
+
 export default async function CommercePocPreviewPage() {
   const products = await readLocalProductPool();
   const scheduledProductPools = await readScheduledProductPools();
   const plan = buildCommerceAutoPreviewPlan({ products });
-  const dailySlots = await Promise.all(COMMERCE_DAILY_KST_SLOTS.map(async (slot) => ({
-    ...buildScheduledEventProductPreview({
+  const dailySlots = await Promise.all(COMMERCE_DAILY_KST_SLOTS.map(async (slot) => {
+    const draftState = await readScheduledDraftReviewState(slot.id);
+    return {
+      ...buildScheduledEventProductPreview({
       slotId: slot.id,
       products: scheduledProductPools.get(slot.id) ?? []
-    }),
-    draft_video_preview_url: await readScheduledDraftVideoPreviewUrl(slot.id)
-  })));
+      }),
+      draft_video_preview_url: draftState.videoUrl,
+      voiceover_ready: draftState.voiceoverReady,
+      asr_pass: draftState.asrPass
+    };
+  }));
 
   return (
     <div className="space-y-5">
@@ -45,13 +56,29 @@ export default async function CommercePocPreviewPage() {
   );
 }
 
-async function readScheduledDraftVideoPreviewUrl(slotId: (typeof COMMERCE_DAILY_KST_SLOTS)[number]["id"]) {
-  const videoPath = path.join(process.cwd(), "data", "commerce-poc", "video-drafts", slotId, "preview.mp4");
+async function readScheduledDraftReviewState(slotId: (typeof COMMERCE_DAILY_KST_SLOTS)[number]["id"]) {
+  const root = path.join(process.cwd(), "data", "commerce-poc", "video-drafts", slotId);
+  const videoPath = path.join(root, "preview.mp4");
+  let videoUrl: string | null = null;
   try {
     const fileStat = await stat(videoPath);
-    return fileStat.isFile() && fileStat.size > 0 && fileStat.size <= 100 * 1024 * 1024
-      ? `/api/commerce-poc/video-drafts/${slotId}`
-      : null;
+    videoUrl = fileStat.isFile() && fileStat.size > 0 && fileStat.size <= 100 * 1024 * 1024
+      ? `/api/commerce-poc/video-drafts/${slotId}` : null;
+  } catch {}
+  const manifest = await readBoundedLocalJson(path.join(root, "manifest.json"), 256 * 1024);
+  const asrProbe = await readBoundedLocalJson(path.join(root, "asr-probe.json"), 64 * 1024);
+  return {
+    videoUrl,
+    voiceoverReady: manifest?.voiceover?.generated === true && manifest?.render?.audio_muxed === true,
+    asrPass: asrProbe?.pass === true
+  };
+}
+
+async function readBoundedLocalJson(filePath: string, maxBytes: number): Promise<LocalDraftReviewJson | null> {
+  try {
+    const fileStat = await stat(filePath);
+    if (!fileStat.isFile() || fileStat.size <= 0 || fileStat.size > maxBytes) return null;
+    return JSON.parse(await readFile(filePath, "utf8")) as LocalDraftReviewJson;
   } catch {
     return null;
   }
