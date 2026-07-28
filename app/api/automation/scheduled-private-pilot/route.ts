@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runScheduledQueueIntegration } from "@/lib/coupang/scheduledQueueIntegration";
 import {
@@ -9,12 +8,13 @@ import {
   type CommerceDailySlotId
 } from "@/lib/orchestration/commerceDailyCadence";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
+import { isServerBearerAuthorized } from "@/lib/server/serverSecretAuth";
 
 export const dynamic = "force-dynamic";
 const USAGE_SCENE_BLOCKER = "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH";
 
 export async function POST(request: Request) {
-  if (!isAuthorized(request, process.env.SCHEDULED_PRIVATE_PILOT_API_SECRET)) {
+  if (!isServerBearerAuthorized(request, process.env.SCHEDULED_PRIVATE_PILOT_API_SECRET)) {
     return NextResponse.json(safeBlocked("SCHEDULED_PRIVATE_PILOT_AUTH_REQUIRED"), { status: 401 });
   }
   const body = await request.json().catch(() => ({})) as { slot_id?: unknown };
@@ -68,13 +68,6 @@ export async function POST(request: Request) {
     },
     { status: result.ok && workerDispatch.ok ? 200 : 409 }
   );
-}
-
-function isAuthorized(request: Request, configuredSecret: string | undefined) {
-  const expected = configuredSecret?.trim() ?? "";
-  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (expected.length < 32 || provided.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(provided, "utf8"), Buffer.from(expected, "utf8"));
 }
 
 function isSlotId(value: unknown): value is CommerceDailySlotId {

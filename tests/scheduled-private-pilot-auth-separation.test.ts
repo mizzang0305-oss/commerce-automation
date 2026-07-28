@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { POST as createApproval } from "../app/api/automation/scheduled-private-pilot/approvals/route";
+import { POST as runScheduledPilot } from "../app/api/automation/scheduled-private-pilot/route";
 import { POST as executeUpload } from "../app/api/automation/scheduled-private-pilot/upload/route";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -40,6 +41,22 @@ describe("scheduled discovery, owner approval, and upload executor auth separati
       blocker: "CALLER_ASSERTED_APPROVAL_OR_ASSET_FORBIDDEN"
     });
   });
+
+  test("same character count with a different UTF-8 byte count returns 401", async () => {
+    const configuredSecret = "ascii-secret-012345678901234567890123";
+    const nonAsciiSecret = "가".repeat(configuredSecret.length);
+    vi.stubEnv("SCHEDULED_PRIVATE_PILOT_API_SECRET", configuredSecret);
+    vi.stubEnv("PRIVATE_PILOT_OWNER_APPROVAL_SECRET", configuredSecret);
+    vi.stubEnv("PRIVATE_PILOT_UPLOAD_EXECUTOR_SECRET", configuredSecret);
+
+    const responses = await Promise.all([
+      runScheduledPilot(requestWithAuthorizationValue(nonAsciiSecret)),
+      createApproval(requestWithAuthorizationValue(nonAsciiSecret)),
+      executeUpload(requestWithAuthorizationValue(nonAsciiSecret))
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 401]);
+  });
 });
 
 function request(secret: string, body: Record<string, unknown>) {
@@ -51,4 +68,14 @@ function request(secret: string, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body)
   });
+}
+
+function requestWithAuthorizationValue(secret: string) {
+  return {
+    headers: {
+      get: (name: string) => name.toLowerCase() === "authorization"
+        ? `Bearer ${secret}`
+        : null
+    }
+  } as Request;
 }
