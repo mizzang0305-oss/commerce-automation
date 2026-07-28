@@ -1,5 +1,8 @@
+from functools import lru_cache
 from pathlib import Path
 import subprocess
+
+from PIL import ImageFont
 
 from .subtitle_generator import resolve_subtitle_cue_texts, wrap_caption
 
@@ -33,6 +36,8 @@ HOOK_BOX_HEIGHT = 360
 HOOK_BOX_COLOR = "black@0.78"
 HOOK_ACCENT_COLOR = "0xfacc15@1"
 HOOK_ACCENT_HEIGHT = 10
+HOOK_TEXT_HORIZONTAL_PADDING = 32
+HOOK_TEXT_MAX_WIDTH = HOOK_BOX_WIDTH - (HOOK_TEXT_HORIZONTAL_PADDING * 2)
 USAGE_LABEL_FONT_SIZE = 36
 USAGE_LABEL_MAX_CHARS = 24
 USAGE_LABEL_MAX_LINES = 2
@@ -394,11 +399,9 @@ def _build_subtitle_cues(
             raise ValueError("subtitle cue duration must be positive")
         is_hook = len(cues) == 0
         wrapped = "\n".join(
-            wrap_caption(
-                line,
-                max_chars=HOOK_MAX_CHARS if is_hook else 16,
-                max_lines=2,
-            )
+            wrap_hook_caption(line)
+            if is_hook
+            else wrap_caption(line, max_chars=16, max_lines=2)
         )
         cues.append(
             {
@@ -412,15 +415,101 @@ def _build_subtitle_cues(
     return cues
 
 
-def _drawtext_font_clause(*, bold: bool = False) -> str:
+def wrap_hook_caption(source: str) -> list[str]:
+    normalized = " ".join(str(source or "").split())
+    if not normalized or _load_hook_font() is None:
+        return []
+
+    character_wrapped = wrap_caption(
+        normalized,
+        max_chars=HOOK_MAX_CHARS,
+        max_lines=max(1, len(normalized)),
+    )
+    pixel_wrapped: list[str] = []
+    for candidate_line in character_wrapped:
+        pixel_wrapped.extend(_split_hook_line_by_pixel_width(candidate_line))
+
+    if len(pixel_wrapped) <= 2:
+        return pixel_wrapped
+    clipped = pixel_wrapped[:2]
+    clipped[-1] = _ellipsize_hook_line(clipped[-1])
+    return clipped
+
+
+@lru_cache(maxsize=512)
+def measure_hook_line_width(line: str) -> float:
+    font = _load_hook_font()
+    if font is None:
+        return float("inf")
+    return float(font.getlength(str(line)))
+
+
+def _split_hook_line_by_pixel_width(line: str) -> list[str]:
+    if not line:
+        return []
+    if measure_hook_line_width(line) <= HOOK_TEXT_MAX_WIDTH:
+        return [line]
+
+    lines: list[str] = []
+    current = ""
+    for character in line:
+        candidate = f"{current}{character}"
+        if not current or measure_hook_line_width(candidate) <= HOOK_TEXT_MAX_WIDTH:
+            current = candidate
+            continue
+        lines.append(current.rstrip())
+        current = character.lstrip()
+    if current:
+        lines.append(current.rstrip())
+    return [wrapped_line for wrapped_line in lines if wrapped_line]
+
+
+def _ellipsize_hook_line(line: str) -> str:
+    prefix = line.rstrip(" .")
+    while prefix and measure_hook_line_width(f"{prefix}...") > HOOK_TEXT_MAX_WIDTH:
+        prefix = prefix[:-1].rstrip()
+    return f"{prefix}..." if prefix else "..."
+
+
+@lru_cache(maxsize=1)
+def _load_hook_font():
+    font_path = _resolve_drawtext_font_path(bold=True)
+    if font_path is None:
+        return None
+    try:
+        return ImageFont.truetype(str(font_path), size=HOOK_FONT_SIZE)
+    except OSError:
+        return None
+
+
+@lru_cache(maxsize=2)
+def _resolve_drawtext_font_path(*, bold: bool = False) -> Path | None:
     font_paths = (
-        ["C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf"]
+        [
+            "C:/Windows/Fonts/malgunbd.ttf",
+            "C:/Windows/Fonts/malgun.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ]
         if bold
-        else ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/arial.ttf"]
+        else [
+            "C:/Windows/Fonts/malgun.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
     )
     for font_path in font_paths:
-        if Path(font_path).exists():
-            return f"fontfile='{_escape_filter_path(Path(font_path))}':"
+        candidate = Path(font_path)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _drawtext_font_clause(*, bold: bool = False) -> str:
+    font_path = _resolve_drawtext_font_path(bold=bold)
+    if font_path is not None:
+        return f"fontfile='{_escape_filter_path(font_path)}':"
     return ""
 
 

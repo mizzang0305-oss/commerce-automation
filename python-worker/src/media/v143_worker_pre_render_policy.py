@@ -8,9 +8,9 @@ from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
     HOOK_FONT_SIZE,
-    HOOK_MAX_CHARS,
     USAGE_LABEL_MAX_CHARS,
     USAGE_LABEL_MAX_LINES,
+    wrap_hook_caption,
 )
 
 
@@ -164,11 +164,7 @@ def evaluate_v143_worker_pre_render_policy(
     first_shot = shots[0] if isinstance(shots, list) and shots and isinstance(shots[0], dict) else {}
     first_caption = " ".join(str(first_shot.get("caption") or "").split())
     renderable_usage_label_present = _usage_label_survives_renderer(shots)
-    hook_lines = wrap_caption(
-        first_caption,
-        max_chars=HOOK_MAX_CHARS,
-        max_lines=MAX_HOOK_LINES,
-    )
+    hook_lines = wrap_hook_caption(first_caption)
     hook_caption_survives_renderer = _full_text_survives_wrapping(
         first_caption,
         hook_lines,
@@ -233,10 +229,12 @@ def _usage_label_survives_renderer(shots: object) -> bool:
 def _full_text_survives_wrapping(source: str, rendered_lines: list[str]) -> bool:
     normalized_source = " ".join(str(source or "").split())
     normalized_rendered = " ".join(" ".join(rendered_lines).split())
+    compact_source = "".join(normalized_source.split())
+    compact_rendered = "".join(normalized_rendered.split())
     return bool(
         normalized_source
         and "..." not in normalized_rendered
-        and normalized_rendered == normalized_source
+        and compact_rendered == compact_source
     )
 
 

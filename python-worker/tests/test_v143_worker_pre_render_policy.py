@@ -163,6 +163,7 @@ class V143CreativePolicyTest(unittest.TestCase):
         for caption in (
             "This hook caption is far too long to survive in the two line hook area",
             "Readable hook text followed by content that forces an ellipsis",
+            "WWWWWWWWWWWWWWWWWWWWWWWW",
         ):
             with self.subTest(caption=caption):
                 render_plan = _render_plan(
@@ -186,6 +187,29 @@ class V143CreativePolicyTest(unittest.TestCase):
 
                 self.assertFalse(result["gate_pass"])
                 self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
+
+    def test_wide_glyph_hook_that_fits_two_rendered_lines_passes(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["caption"] = "WWWWWWWWWWWW"
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
 
     def test_first_rendered_shot_is_hook_regardless_of_shot_id(self):
         for shot_id in ("intro", "scene-1"):

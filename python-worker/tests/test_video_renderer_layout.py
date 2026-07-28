@@ -11,6 +11,7 @@ from src.media.thumbnail_generator import create_thumbnail, load_font, wrap_titl
 from src.media.tts_generator import create_tts_audio
 from src.media.video_renderer import (
     HOOK_FONT_SIZE,
+    HOOK_TEXT_MAX_WIDTH,
     TYPOGRAPHY_STYLE,
     VIDEO_HEIGHT,
     VIDEO_WIDTH,
@@ -19,6 +20,7 @@ from src.media.video_renderer import (
     build_render_command,
     build_shot_layout_config,
     build_video_filter,
+    measure_hook_line_width,
 )
 
 
@@ -167,6 +169,36 @@ class VideoRendererLayoutTest(unittest.TestCase):
         line_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
         self.assertLessEqual(len(line_files), 2)
         self.assertTrue(all(len(path.read_text(encoding="utf-8")) <= 12 for path in line_files))
+
+    def test_wide_glyph_hook_wraps_by_rendered_pixel_width_without_loss(self):
+        target = Path("temp/test-wide-hook-filter/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        source = "WWWWWWWWWWWW"
+        build_video_filter(
+            target,
+            subtitle_text=source,
+            shot_durations=[4],
+            shot_captions=[source],
+            shot_usage_labels=["Usage example"],
+            subtitle_dir=subtitle_dir,
+        )
+
+        rendered_lines = [
+            path.read_text(encoding="utf-8")
+            for path in sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        ]
+        self.assertEqual("".join(rendered_lines), source)
+        self.assertLessEqual(len(rendered_lines), 2)
+        self.assertTrue(
+            all(
+                measure_hook_line_width(line) <= HOOK_TEXT_MAX_WIDTH
+                for line in rendered_lines
+            )
+        )
 
     def test_render_metadata_records_typography_only_adoption(self):
         metadata = build_render_quality_metadata(
