@@ -23,7 +23,9 @@ import type {
   MutableMockAutomationRepository,
   ProductAssetPersistenceCapabilities,
   QueueFilters,
-  QueueSummary
+  QueueSummary,
+  ScheduledQueueBundleInput,
+  ScheduledQueueBundleResult
 } from "@/lib/repositories/types";
 import {
   createDefaultSettings,
@@ -45,6 +47,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { buildWorkerResultQa } from "@/lib/repositories/workerResultQa";
 import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 type JsonMap = Record<string, unknown>;
@@ -260,18 +263,20 @@ export function buildSupabaseAssetRowsForWorkerJob(job: WorkerJob, options: { in
     ["upload_package", "upload-packages", getResultUrl(job.result, "upload_package_url")]
   ];
 
+  const qa = buildWorkerResultQa(job.result);
   return assets
     .filter(([assetType, , url]) => Boolean(url) && (options.includeVideo || assetType !== "video"))
     .map(([assetType, bucket, url]) => ({
       id: `asset-${job.id}-${assetType}`,
       product_queue_id: job.product_queue_id,
+      product_candidate_id: job.product_candidate_id || null,
       worker_job_id: job.id,
       asset_type: assetType,
       bucket,
       url,
-      render_qa_metadata: {},
-      qa_status: "pending",
-      qa_note: "",
+      render_qa_metadata: qa.metadata,
+      qa_status: qa.status,
+      qa_note: qa.note,
       created_at: nowIso(),
       updated_at: nowIso()
     }));
@@ -295,6 +300,8 @@ export function mapSupabaseProductQueueRow(row: Record<string, unknown>): Produc
   return {
     id: emptyString(row.id),
     channelKey: channelKeyOrDefault(row.channel_key ?? row.channelKey),
+    schedule_key: emptyString(row.schedule_key) || undefined,
+    product_key: emptyString(row.product_key) || undefined,
     queue_date: emptyString(row.queue_date),
     queue_rank: numberOrDefault(row.queue_rank, 0),
     upload_slot: numberOrDefault(row.upload_slot, 0),
@@ -1111,6 +1118,33 @@ export class SupabaseAutomationRepository implements MutableMockAutomationReposi
       promoted_queue_id: promotion.queue_item.id
     });
     return clone(promotion);
+  }
+
+  async createScheduledQueueBundle(
+    input: ScheduledQueueBundleInput
+  ): Promise<ScheduledQueueBundleResult> {
+    const { data, error } = await this.client.rpc("create_scheduled_queue_bundle", {
+      p_schedule_key: input.schedule_key,
+      p_product_key: input.product_key,
+      p_candidate: input.candidate,
+      p_queue_item: {
+        ...input.queue_item,
+        schedule_key: input.schedule_key,
+        product_key: input.product_key
+      },
+      p_content: input.content
+    });
+    throwIfSupabaseError(error, "createScheduledQueueBundle");
+    const result = ensureRecord(data);
+    return result.created === true
+      ? { created: true }
+      : {
+          created: false,
+          blocker:
+            result.blocker === "SCHEDULE_KEY_ALREADY_PROMOTED"
+              ? "SCHEDULE_KEY_ALREADY_PROMOTED"
+              : "PRODUCT_KEY_ALREADY_PROMOTED"
+        };
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {

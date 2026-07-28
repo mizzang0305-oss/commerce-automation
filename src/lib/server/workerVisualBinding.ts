@@ -7,6 +7,7 @@ export type WorkerVisualBinding = {
   version: "1";
   issuer: "commerce-web-next-batch";
   queue_id: string;
+  product_candidate_id_sha256?: string;
   product_name_sha256: string;
   affiliate_url_sha256: string;
   script_sha256: string;
@@ -27,6 +28,7 @@ const MINIMUM_SECRET_LENGTH = 32;
 
 export function buildWorkerVisualBinding(input: {
   queueId: string;
+  productCandidateId?: string;
   productName: string;
   affiliateUrl: string;
   categoryPath: string;
@@ -54,10 +56,12 @@ export function buildWorkerVisualBinding(input: {
 
   const imageUrls = shots.map((shot) => shot.image_url.trim());
   const formatName = inferWorkerVisualFormat(imageUrls);
+  const productCandidateId = input.productCandidateId?.trim() ?? "";
   const unsigned = {
     version: "1" as const,
     issuer: "commerce-web-next-batch" as const,
     queue_id: input.queueId.trim(),
+    ...(productCandidateId ? { product_candidate_id_sha256: sha256(productCandidateId) } : {}),
     product_name_sha256: sha256(input.productName.trim()),
     affiliate_url_sha256: sha256(input.affiliateUrl.trim()),
     script_sha256: sha256(shots.map((shot) => shot.voice_text.trim()).join("\n")),

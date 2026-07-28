@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import type { YouTubeUploadAdapter, YouTubeUploadRequest, YouTubeUploadResult } from "@/lib/uploads/youtube/types";
 import type { PreparedVideoAssetRef } from "@/lib/uploads/youtube/uploadAssetContract";
 import type { YouTubeUploadAccessTokenResult } from "@/lib/uploads/youtube/youtubeTokenProviderContract";
@@ -118,8 +119,23 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
         reauth_required: false
       });
     }
+    const verifiedVideoAsset = verifyPreparedVideoAssetBytes(assetReadiness.asset_ref, videoAsset);
+    if (!verifiedVideoAsset.ok) {
+      return blockedYouTubeUploadResult(
+        request.visibility,
+        verifiedVideoAsset.safe_error,
+        verifiedVideoAsset.blocked_reasons,
+        false,
+        {
+          token_refresh_attempted: token.token_refresh_attempted ?? false,
+          token_refresh_succeeded: token.token_refresh_succeeded ?? false,
+          resumable_session_attempted: false,
+          reauth_required: false
+        }
+      );
+    }
 
-    const session = await this.startResumableSession(request, token.accessToken, videoAsset.size);
+    const session = await this.startResumableSession(request, token.accessToken, verifiedVideoAsset.size);
     if (!session.ok) {
       return blockedYouTubeUploadResult(request.visibility, session.safe_error, session.blocked_reasons, true, {
         token_refresh_attempted: token.token_refresh_attempted ?? false,
@@ -128,7 +144,7 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       });
     }
 
-    const upload = await this.uploadVideoBytes(session.uploadUrl, token.accessToken, videoAsset);
+    const upload = await this.uploadVideoBytes(session.uploadUrl, token.accessToken, verifiedVideoAsset);
     if (!upload.ok) {
       return blockedYouTubeUploadResult(request.visibility, upload.safe_error, upload.blocked_reasons, true, {
         token_refresh_attempted: token.token_refresh_attempted ?? false,
@@ -341,6 +357,40 @@ export class ServerYouTubeUploadAdapter implements YouTubeUploadAdapter {
       youtube_video_id: payload.id.trim()
     };
   }
+}
+
+function verifyPreparedVideoAssetBytes(
+  asset: PreparedVideoAssetRef,
+  read: { bytes: ArrayBuffer; size: number }
+): { ok: true; bytes: ArrayBuffer; size: number } | { ok: false; blocked_reasons: string[]; safe_error: string } {
+  if (asset.size_bytes && read.size !== asset.size_bytes) {
+    return {
+      ok: false,
+      blocked_reasons: ["server_asset_size_mismatch"],
+      safe_error: "Prepared video asset size does not match the approved asset metadata."
+    };
+  }
+
+  const expectedChecksum = asset.checksum_sha256?.trim().toLowerCase() ?? "";
+  if (expectedChecksum) {
+    if (!/^[a-f0-9]{64}$/.test(expectedChecksum)) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_checksum_invalid"],
+        safe_error: "Prepared video asset checksum metadata is invalid."
+      };
+    }
+    const actualChecksum = createHash("sha256").update(Buffer.from(read.bytes)).digest("hex");
+    if (actualChecksum !== expectedChecksum) {
+      return {
+        ok: false,
+        blocked_reasons: ["server_asset_checksum_mismatch"],
+        safe_error: "Prepared video asset bytes do not match the approved checksum."
+      };
+    }
+  }
+
+  return { ok: true, bytes: read.bytes, size: read.size };
 }
 
 type UploadableVideoFile = {

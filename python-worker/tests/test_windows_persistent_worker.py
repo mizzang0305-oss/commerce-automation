@@ -38,6 +38,11 @@ class WindowsPersistentWorkerLauncherTest(unittest.TestCase):
             "KOREAN_VOICE_PROVIDER_APPROVED": "true",
             "KOREAN_VOICE_COMMAND": "provider command",
             "KOREAN_VOICE_DELIVERY_STYLE": "brisk_confident_sales",
+            "KOREAN_VOICE_SPEED": "1.25",
+            "KOREAN_ASR_PROVIDER": "faster_whisper_local_command",
+            "KOREAN_ASR_PROVIDER_APPROVED": "true",
+            "KOREAN_ASR_PYTHON_EXECUTABLE": "python executable",
+            "KOREAN_ASR_VALIDATOR_SCRIPT": "validator script",
         }
 
         self.assertEqual(validate_production_worker_env(env), [])
@@ -53,6 +58,8 @@ class WindowsPersistentWorkerLauncherTest(unittest.TestCase):
             "KOREAN_VOICE_DELIVERY_STYLE must be brisk_confident_sales",
             blockers,
         )
+        self.assertIn("KOREAN_VOICE_SPEED must be between 1.2 and 1.3", blockers)
+        self.assertIn("KOREAN_ASR_PROVIDER must be faster_whisper_local_command", blockers)
 
     def test_installer_persists_logon_and_repeating_recovery_triggers(self):
         installer = (

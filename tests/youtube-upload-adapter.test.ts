@@ -16,6 +16,8 @@ import {
 } from "@/lib/uploads/youtube";
 import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
+const preparedVideoSha256 = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
+
 const validRequestBody = {
   candidate_id: "candidate-youtube-upload-001",
   product_name: "Desk organizer set",
@@ -27,7 +29,8 @@ const validRequestBody = {
     signed_url: "https://assets.example.test/candidate-youtube-upload-001.mp4",
     prepared_video_asset_url: "https://assets.example.test/candidate-youtube-upload-001.mp4",
     mime_type: "video/mp4",
-    size_bytes: 1024,
+    size_bytes: 3,
+    checksum_sha256: preparedVideoSha256,
     server_accessible: true
   },
   title: "Desk organizer set quick review",

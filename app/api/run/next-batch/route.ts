@@ -22,6 +22,7 @@ export async function POST(request?: Request) {
   const settings = await repository.getSettings();
   const requestId = `next_batch-${Date.now()}`;
   const channelKey = request ? await getRequestedChannelKey(request) : null;
+  const requestedQueueId = request ? await getRequestedQueueId(request) : "";
 
   if (channelKey) {
     const channelSettings = toChannelAutomationSettings(channelKey, settings);
@@ -198,6 +199,7 @@ export async function POST(request?: Request) {
 
   const now = new Date();
   const dueItems = (await repository.getQueue({ status: "scheduled" }))
+    .filter((item) => !requestedQueueId || item.id === requestedQueueId)
     .filter((item) => new Date(item.scheduled_at).getTime() <= now.getTime())
     .filter((item) => !["hold", "skipped", "error", "manual_review"].includes(item.queue_status))
     .sort((a, b) => a.queue_rank - b.queue_rank)
@@ -232,6 +234,7 @@ export async function POST(request?: Request) {
   }
 
   const jobs: WorkerJob[] = [];
+  const productCandidates = await repository.getProductCandidates();
   let guardedItems = 0;
   for (const item of dueItems) {
     if (jobs.length >= remainingDailyCapacity) {
@@ -239,6 +242,15 @@ export async function POST(request?: Request) {
     }
 
     const content = await repository.getGeneratedContentByQueueItem(item.id);
+    const productCandidate = productCandidates.find((candidate) => candidate.promoted_queue_id === item.id);
+    if (!productCandidate && item.theme === "coupang_partners_product_search") {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: "Authoritative ProductCandidate binding is required before worker job creation."
+      });
+      continue;
+    }
     const itemGuard = validateRenderableItem(item, content);
     if (!itemGuard.ok) {
       guardedItems += 1;
@@ -267,9 +279,25 @@ export async function POST(request?: Request) {
       });
       continue;
     }
+    if (
+      item.theme === "coupang_partners_product_search" &&
+      (
+        !effectiveRenderPlan.render_plan.creative_policy.real_usage_scene_present ||
+        effectiveRenderPlan.render_plan.creative_policy.usage_source_role === "product_reference_still" ||
+        !effectiveRenderPlan.render_plan.creative_policy.usage_label_present
+      )
+    ) {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH"
+      });
+      continue;
+    }
 
     const visualBinding = buildWorkerVisualBinding({
       queueId: item.id,
+      productCandidateId: productCandidate?.id,
       productName: item.product_name,
       affiliateUrl: item.selected_affiliate_url,
       categoryPath: item.category_path,
@@ -295,11 +323,12 @@ export async function POST(request?: Request) {
       await repository.createWorkerJob({
         job_type: "video_render",
         product_queue_id: item.id,
-        product_candidate_id: "",
+        product_candidate_id: productCandidate?.id ?? "",
         priority: 1000 - item.queue_rank,
         max_retries: 3,
         payload: {
           product_queue_id: item.id,
+          product_candidate_id: productCandidate?.id ?? "",
           product_name: item.product_name,
           image_url: item.thumbnail_url,
           thumbnail_url: item.thumbnail_url,
@@ -370,6 +399,15 @@ async function getRequestedChannelKey(request: Request) {
     return isChannelAutomationKey(bodyValue) ? bodyValue : null;
   } catch {
     return null;
+  }
+}
+
+async function getRequestedQueueId(request: Request) {
+  try {
+    const body = (await request.clone().json()) as { queue_id?: unknown };
+    return typeof body.queue_id === "string" ? body.queue_id.trim() : "";
+  } catch {
+    return "";
   }
 }
 

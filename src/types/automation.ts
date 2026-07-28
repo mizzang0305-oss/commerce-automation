@@ -110,6 +110,8 @@ export type ChannelAutomationSettings = {
 export type ProductQueueItem = {
   id: string;
   channelKey?: ChannelAutomationKey;
+  schedule_key?: string;
+  product_key?: string;
   queue_date: string;
   queue_rank: number;
   upload_slot: number;

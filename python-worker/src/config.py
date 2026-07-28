@@ -25,10 +25,17 @@ class WorkerConfig:
     korean_voice_language: str = "ko"
     korean_voice_command: str = ""
     korean_voice_reject_windows_sapi: bool = True
-    korean_voice_speed: float = 1.14
+    korean_voice_speed: float = 1.25
     korean_voice_delivery_style: str = ""
     korean_voice_timeout_seconds: int = 600
     worker_visual_binding_secret: str = ""
+    korean_asr_provider: str = "disabled"
+    korean_asr_provider_approved: bool = False
+    korean_asr_python_executable: str = ""
+    korean_asr_validator_script: str = ""
+    korean_asr_model: str = "small"
+    korean_asr_similarity_threshold: float = 0.82
+    korean_asr_timeout_seconds: int = 900
 
 
 def first_env(*names: str, default: str = "") -> str:
@@ -81,8 +88,15 @@ def load_config() -> WorkerConfig:
         korean_voice_language=os.getenv("KOREAN_VOICE_LANGUAGE", "ko").strip().lower(),
         korean_voice_command=os.getenv("KOREAN_VOICE_COMMAND", "").strip().strip('"').strip("'"),
         korean_voice_reject_windows_sapi=env_bool("KOREAN_VOICE_REJECT_WINDOWS_SAPI", default=True),
-        korean_voice_speed=float(os.getenv("KOREAN_VOICE_SPEED", "1.14")),
+        korean_voice_speed=float(os.getenv("KOREAN_VOICE_SPEED", "1.25")),
         korean_voice_delivery_style=os.getenv("KOREAN_VOICE_DELIVERY_STYLE", "").strip(),
         korean_voice_timeout_seconds=int(os.getenv("KOREAN_VOICE_TIMEOUT_SECONDS", "600")),
         worker_visual_binding_secret=os.getenv("WORKER_VISUAL_BINDING_SECRET", "").strip(),
+        korean_asr_provider=os.getenv("KOREAN_ASR_PROVIDER", "disabled").strip().lower(),
+        korean_asr_provider_approved=env_bool("KOREAN_ASR_PROVIDER_APPROVED"),
+        korean_asr_python_executable=os.getenv("KOREAN_ASR_PYTHON_EXECUTABLE", "").strip().strip('"').strip("'"),
+        korean_asr_validator_script=os.getenv("KOREAN_ASR_VALIDATOR_SCRIPT", "").strip().strip('"').strip("'"),
+        korean_asr_model=os.getenv("KOREAN_ASR_MODEL", "small").strip(),
+        korean_asr_similarity_threshold=float(os.getenv("KOREAN_ASR_SIMILARITY_THRESHOLD", "0.82")),
+        korean_asr_timeout_seconds=int(os.getenv("KOREAN_ASR_TIMEOUT_SECONDS", "900")),
     )

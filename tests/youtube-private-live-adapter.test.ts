@@ -7,6 +7,7 @@ import {
 import { PASSING_SHORTS_CONTENT_QUALITY } from "./fixtures/youtubeShortsContentQuality";
 
 const secretNeedles = /refresh-secret-value|access-secret-value|client-secret|Authorization: Bearer/i;
+const preparedVideoSha256 = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
 
 const preparedVideoAsset = {
   asset_id: "asset-youtube-private-live-001",
@@ -14,7 +15,8 @@ const preparedVideoAsset = {
   signed_url: "https://assets.example.test/youtube-private-live-001.mp4",
   prepared_video_asset_url: "https://assets.example.test/youtube-private-live-001.mp4",
   mime_type: "video/mp4",
-  size_bytes: 1024,
+  size_bytes: 3,
+  checksum_sha256: preparedVideoSha256,
   server_accessible: true
 };
 const disclosureText = "※ 이 콘텐츠는 쿠팡파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.";
@@ -122,6 +124,68 @@ describe("private YouTube live adapter readiness", () => {
       succeeded: false,
       side_effects: youtubeUploadSafeSideEffects,
       blocked_reasons: expect.arrayContaining(["server_asset_not_mp4"])
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks before videos.insert when fetched bytes do not match the approved checksum", async () => {
+    vi.stubEnv("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE", "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
+    const request = {
+      ...makeValidUploadRequest(),
+      prepared_video_asset: {
+        ...preparedVideoAsset,
+        checksum_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" }
+      })
+    );
+
+    const result = await new ServerYouTubeUploadAdapter({
+      accessToken: "access-secret-value",
+      fetchImpl: fetchMock
+    }).upload(request);
+
+    expect(result).toMatchObject({
+      attempted: false,
+      succeeded: false,
+      blocked_reasons: expect.arrayContaining(["server_asset_checksum_mismatch"]),
+      resumable_session_attempted: false,
+      side_effects: youtubeUploadSafeSideEffects
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks before videos.insert when fetched size does not match the approved metadata", async () => {
+    vi.stubEnv("RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE", "RUN_YOUTUBE_PRIVATE_UPLOAD_SMOKE");
+    const request = {
+      ...makeValidUploadRequest(),
+      prepared_video_asset: {
+        ...preparedVideoAsset,
+        size_bytes: 4
+      }
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "Content-Type": "video/mp4" }
+      })
+    );
+
+    const result = await new ServerYouTubeUploadAdapter({
+      accessToken: "access-secret-value",
+      fetchImpl: fetchMock
+    }).upload(request);
+
+    expect(result).toMatchObject({
+      attempted: false,
+      succeeded: false,
+      blocked_reasons: expect.arrayContaining(["server_asset_size_mismatch"]),
+      resumable_session_attempted: false,
+      side_effects: youtubeUploadSafeSideEffects
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
