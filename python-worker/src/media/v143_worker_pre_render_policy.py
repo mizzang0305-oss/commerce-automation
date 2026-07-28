@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Literal
 
 from .subtitle_generator import compose_usage_labeled_caption, wrap_caption
@@ -164,13 +165,7 @@ def evaluate_v143_worker_pre_render_policy(
         first_shot.get("caption"),
         first_shot.get("usage_label"),
     )
-    renderable_usage_label_present = bool(
-        isinstance(shots, list)
-        and any(
-            isinstance(shot, dict) and str(shot.get("usage_label") or "").strip()
-            for shot in shots
-        )
-    )
+    renderable_usage_label_present = _usage_label_survives_renderer(shots)
     hook_lines = wrap_caption(
         first_caption,
         max_chars=HOOK_MAX_CHARS,
@@ -212,6 +207,35 @@ def evaluate_v143_worker_pre_render_policy(
         "SAFE_TO_UPLOAD": False,
         "SAFE_TO_PUBLIC_UPLOAD": False,
     }
+
+
+def _usage_label_survives_renderer(shots: object) -> bool:
+    if not isinstance(shots, list):
+        return False
+    for index, shot in enumerate(shots):
+        if not isinstance(shot, dict):
+            continue
+        normalized_label = " ".join(str(shot.get("usage_label") or "").split())
+        if not normalized_label:
+            continue
+        composed_caption = compose_usage_labeled_caption(
+            shot.get("caption"),
+            normalized_label,
+        )
+        rendered_lines = wrap_caption(
+            composed_caption,
+            max_chars=HOOK_MAX_CHARS if index == 0 else 16,
+            max_lines=MAX_HOOK_LINES,
+        )
+        rendered_text = _without_whitespace("\n".join(rendered_lines))
+        expected_marker = _without_whitespace(f"[{normalized_label}]")
+        if expected_marker and expected_marker in rendered_text:
+            return True
+    return False
+
+
+def _without_whitespace(value: str) -> str:
+    return re.sub(r"\s+", "", value)
 
 
 def _worker_blocked_result(blocker: str, *, binding_verified: bool) -> dict[str, object]:
