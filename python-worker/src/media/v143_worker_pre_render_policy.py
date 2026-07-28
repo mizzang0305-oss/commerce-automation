@@ -235,7 +235,6 @@ def _full_text_survives_wrapping(source: str, rendered_lines: list[str]) -> bool
     compact_rendered = "".join(normalized_rendered.split())
     return bool(
         normalized_source
-        and "..." not in normalized_rendered
         and compact_rendered == compact_source
     )
 
