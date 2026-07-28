@@ -16,6 +16,7 @@ from src.media.tts_generator import (
     BLOCKED_NOT_KOREAN,
     BLOCKED_PAID_OR_CLOUD,
     BLOCKED_SAPI,
+    _command_path_is_runnable,
     create_tts_audio,
 )
 
@@ -31,7 +32,40 @@ def write_wav(path: Path, duration: float, amplitude: int = 1200) -> None:
         wav.writeframes(sample * frames)
 
 
+def write_runnable_voice_command(root: Path) -> Path:
+    if os.name == "nt":
+        command = root / "voice.cmd"
+        command.write_text("@echo off", encoding="utf-8")
+    else:
+        command = root / "voice.sh"
+        command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        command.chmod(0o700)
+    return command
+
+
 class TtsGeneratorTest(unittest.TestCase):
+    def test_posix_command_validation_accepts_executable_and_rejects_cmd(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            executable = root / "voice.sh"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            windows_script = root / "voice.cmd"
+            windows_script.write_text("@echo off", encoding="utf-8")
+
+            with patch("src.media.tts_generator.os.access", return_value=True):
+                self.assertTrue(
+                    _command_path_is_runnable(
+                        executable,
+                        platform_name="posix",
+                    )
+                )
+                self.assertFalse(
+                    _command_path_is_runnable(
+                        windows_script,
+                        platform_name="posix",
+                    )
+                )
+
     def test_placeholder_remains_explicit_local_test_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "placeholder.wav"
@@ -104,8 +138,7 @@ class TtsGeneratorTest(unittest.TestCase):
     def test_local_provider_generates_and_normalizes_non_silent_wav(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            command = root / "voice.cmd"
-            command.write_text("@echo off", encoding="utf-8")
+            command = write_runnable_voice_command(root)
             target = Path("voice.wav")
             original_cwd = Path.cwd()
 
@@ -149,8 +182,7 @@ class TtsGeneratorTest(unittest.TestCase):
     def test_duration_normalization_rejects_out_of_policy_effective_speed(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            command = root / "voice.cmd"
-            command.write_text("@echo off", encoding="utf-8")
+            command = write_runnable_voice_command(root)
             target = root / "voice.wav"
 
             def fake_run(args, **_kwargs):
@@ -177,8 +209,7 @@ class TtsGeneratorTest(unittest.TestCase):
     def test_local_provider_rejects_silent_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            command = root / "voice.cmd"
-            command.write_text("@echo off", encoding="utf-8")
+            command = write_runnable_voice_command(root)
             target = root / "voice.wav"
 
             def fake_run(args, **_kwargs):

@@ -149,15 +149,26 @@ def validate_local_voice_command(
     command_path = Path(normalized_command).expanduser()
     if not command_path.is_absolute() or not command_path.is_file():
         return BLOCKED_COMMAND
-    if os.name == "nt":
+    if not _command_path_is_runnable(command_path):
+        return BLOCKED_COMMAND
+    return None
+
+
+def _command_path_is_runnable(
+    command_path: Path,
+    *,
+    platform_name: str | None = None,
+) -> bool:
+    platform = platform_name or os.name
+    if platform == "nt":
         if command_path.suffix.lower() not in {".cmd", ".bat", ".exe", ".com"}:
-            return BLOCKED_COMMAND
+            return False
     elif command_path.suffix.lower() in {".cmd", ".bat"} or not os.access(
         command_path,
         os.X_OK,
     ):
-        return BLOCKED_COMMAND
-    return None
+        return False
+    return True
 
 
 def _effective_delivery_speed(
