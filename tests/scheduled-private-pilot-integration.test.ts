@@ -120,7 +120,7 @@ describe("scheduled Coupang provider to authoritative queue", () => {
     expect(scheduled).toHaveLength(1);
   });
 
-  test("binds the authoritative candidate into the signed Worker job", async () => {
+  test("blocks scheduled provider dispatch when only a product reference still exists", async () => {
     const repository = resetMockRepositoryForTests();
     for (const item of await repository.getQueue()) {
       await repository.updateQueueItemById(item.id, { queue_status: "hold" });
@@ -147,18 +147,14 @@ describe("scheduled Coupang provider to authoritative queue", () => {
     const response = await runNextBatch();
     const payload = await response.json();
     const jobs = await repository.getWorkerJobs();
-    expect(payload.created_jobs).toBe(1);
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({
-      product_queue_id: integrated.queue_id,
-      product_candidate_id: integrated.candidate_id
+    expect(payload).toMatchObject({
+      created_jobs: 0,
+      guarded_items: 1
     });
-    expect(jobs[0].payload).toMatchObject({
-      product_candidate_id: integrated.candidate_id,
-      server_visual_binding: {
-        product_candidate_id_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-        signature: expect.stringMatching(/^[a-f0-9]{64}$/)
-      }
+    expect(jobs).toHaveLength(0);
+    expect(await repository.getQueueItem(integrated.queue_id)).toMatchObject({
+      queue_status: "manual_review",
+      error_message: "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH"
     });
   });
 });

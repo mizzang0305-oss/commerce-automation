@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("scheduled private pilot authenticated API", () => {
-  test("runs provider to exact signed worker job with upload calls fixed at zero", async () => {
+  test("creates the authoritative queue but defers Worker dispatch until actual usage evidence exists", async () => {
     const repository = resetMockRepositoryForTests();
     for (const item of await repository.getQueue()) {
       await repository.updateQueueItemById(item.id, { queue_status: "hold" });
@@ -54,7 +54,14 @@ describe("scheduled private pilot authenticated API", () => {
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
       ok: true,
-      worker_dispatch: { attempted: true, created_jobs: 1, ok: true },
+      worker_dispatch: {
+        attempted: false,
+        created_jobs: 0,
+        guarded_items: 1,
+        ok: true,
+        deferred: true,
+        blocker: "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH"
+      },
       SAFE_TO_UPLOAD: false,
       SAFE_TO_PUBLIC_UPLOAD: false,
       COMMENT_AUTOMATION_ENABLED: false,
@@ -64,7 +71,8 @@ describe("scheduled private pilot authenticated API", () => {
       videos_insert_called: false,
       raw_coupang_url_exposed: false
     });
-    expect(await repository.getWorkerJobs()).toHaveLength(1);
+    expect(await repository.getWorkerJobs()).toHaveLength(0);
+    expect((await repository.getQueueItem(payload.queue_id))?.queue_status).toBe("manual_review");
     expect(JSON.stringify(payload)).not.toContain("www.coupang.com");
     expect(JSON.stringify(payload)).not.toContain("link.coupang.com");
   });

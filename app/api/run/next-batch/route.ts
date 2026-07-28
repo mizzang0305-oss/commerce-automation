@@ -279,6 +279,21 @@ export async function POST(request?: Request) {
       });
       continue;
     }
+    if (
+      item.theme === "coupang_partners_product_search" &&
+      (
+        !effectiveRenderPlan.render_plan.creative_policy.real_usage_scene_present ||
+        effectiveRenderPlan.render_plan.creative_policy.usage_source_role === "product_reference_still" ||
+        !effectiveRenderPlan.render_plan.creative_policy.usage_label_present
+      )
+    ) {
+      guardedItems += 1;
+      await repository.updateQueueItemById(item.id, {
+        queue_status: "manual_review",
+        error_message: "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH"
+      });
+      continue;
+    }
 
     const visualBinding = buildWorkerVisualBinding({
       queueId: item.id,

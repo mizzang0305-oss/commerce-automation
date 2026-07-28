@@ -9,9 +9,9 @@ import {
   type CommerceDailySlotId
 } from "@/lib/orchestration/commerceDailyCadence";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
-import { POST as dispatchNextBatch } from "../../run/next-batch/route";
 
 export const dynamic = "force-dynamic";
+const USAGE_SCENE_BLOCKER = "ACTUAL_USAGE_SCENE_EVIDENCE_REQUIRED_BEFORE_WORKER_DISPATCH";
 
 export async function POST(request: Request) {
   if (!isAuthorized(request, process.env.SCHEDULED_PRIVATE_PILOT_API_SECRET)) {
@@ -25,8 +25,9 @@ export async function POST(request: Request) {
     return NextResponse.json(safeBlocked("SCHEDULED_PRIVATE_PILOT_DISABLED"), { status: 409 });
   }
 
+  const repository = getAutomationRepository();
   const result = await runScheduledQueueIntegration({
-    repository: getAutomationRepository(),
+    repository,
     slotId: body.slot_id,
     approval: COUPANG_SCHEDULED_PRODUCT_SEARCH_APPROVAL,
     env: process.env
@@ -35,26 +36,22 @@ export async function POST(request: Request) {
     attempted: false,
     created_jobs: 0,
     guarded_items: 0,
-    ok: false
+    ok: false,
+    deferred: false,
+    blocker: result.ok ? USAGE_SCENE_BLOCKER : ""
   };
   if (result.ok) {
-    const dispatchResponse = await dispatchNextBatch(
-      new Request("http://internal/api/run/next-batch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ queue_id: result.queue_id })
-      })
-    );
-    const dispatchPayload = await dispatchResponse.json() as {
-      ok?: unknown;
-      created_jobs?: unknown;
-      guarded_items?: unknown;
-    };
+    await repository.updateQueueItemById(result.queue_id, {
+      queue_status: "manual_review",
+      error_message: USAGE_SCENE_BLOCKER
+    });
     workerDispatch = {
-      attempted: true,
-      created_jobs: number(dispatchPayload.created_jobs),
-      guarded_items: number(dispatchPayload.guarded_items),
-      ok: dispatchResponse.ok && dispatchPayload.ok === true
+      attempted: false,
+      created_jobs: 0,
+      guarded_items: 1,
+      ok: true,
+      deferred: true,
+      blocker: USAGE_SCENE_BLOCKER
     };
   }
   return NextResponse.json(
@@ -69,7 +66,7 @@ export async function POST(request: Request) {
       MAX_PRIVATE_PILOT_ITEMS: 1,
       FAKE_SUCCESS: false
     },
-    { status: result.ok && workerDispatch.ok && workerDispatch.created_jobs === 1 ? 200 : 409 }
+    { status: result.ok && workerDispatch.ok ? 200 : 409 }
   );
 }
 
@@ -94,8 +91,4 @@ function safeBlocked(blocker: string) {
     videos_insert_called: false,
     raw_coupang_url_exposed: false
   };
-}
-
-function number(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
