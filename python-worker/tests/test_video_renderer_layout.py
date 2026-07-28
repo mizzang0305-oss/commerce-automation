@@ -47,12 +47,13 @@ class VideoRendererLayoutTest(unittest.TestCase):
                 shot_durations=[3, 5],
             )
 
-        self.assertIn("drawbox=x=64:y=118:w=952:h=270:color=black@0.78:t=fill", filter_graph)
+        self.assertIn("drawbox=x=64:y=118:w=952:h=360:color=black@0.78:t=fill", filter_graph)
         self.assertIn("drawbox=x=64:y=118:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
-        self.assertIn("drawbox=x=64:y=378:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
+        self.assertIn("drawbox=x=64:y=468:w=952:h=10:color=0xfacc15@1:t=fill", filter_graph)
         self.assertIn("malgunbd.ttf", filter_graph)
         self.assertIn(f"fontsize={HOOK_FONT_SIZE}", filter_graph)
-        self.assertIn("y=168", filter_graph)
+        self.assertEqual(HOOK_FONT_SIZE, 104)
+        self.assertIn("y=226", filter_graph)
         self.assertIn("enable='between(t,0.000,3.000)'", filter_graph)
         self.assertIn("fontsize=44", filter_graph)
         self.assertIn("y=h-240-text_h", filter_graph)
@@ -93,7 +94,7 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertLessEqual(len(lines), 2)
         self.assertTrue(all(len(line) <= 24 for line in lines))
 
-    def test_usage_label_is_written_into_final_drawtext_input(self):
+    def test_usage_label_and_hook_are_written_to_separate_drawtext_inputs(self):
         target = Path("temp/test-usage-label-drawtext/captions.srt")
         subtitle_dir = target.parent / "drawtext"
         if subtitle_dir.exists():
@@ -102,20 +103,52 @@ class VideoRendererLayoutTest(unittest.TestCase):
 
         filter_graph = build_video_filter(
             target,
-            subtitle_text="[Usage example] Readable hook",
+            subtitle_text="Readable hook",
             shot_durations=[3],
-            shot_captions=["[Usage example] Readable hook"],
+            shot_captions=["Readable hook"],
+            shot_usage_labels=["Usage example"],
             subtitle_dir=subtitle_dir,
         )
 
-        line_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
-        rendered_text = " ".join(
-            path.read_text(encoding="utf-8") for path in line_files
-        )
-        self.assertIn("[Usage example]", rendered_text)
-        for path in line_files:
+        hook_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        label_files = sorted(subtitle_dir.glob("usage-label-cue-001-line-*.txt"))
+        hook_text = " ".join(path.read_text(encoding="utf-8") for path in hook_files)
+        label_text = " ".join(path.read_text(encoding="utf-8") for path in label_files)
+        self.assertEqual(hook_text, "Readable hook")
+        self.assertEqual(label_text, "Usage example")
+        self.assertNotIn("Usage example", hook_text)
+        self.assertNotIn("Readable hook", label_text)
+        for path in [*hook_files, *label_files]:
             escaped_path = str(path).replace("\\", "/").replace(":", "\\:")
             self.assertIn(f"textfile='{escaped_path}'", filter_graph)
+
+    def test_long_usage_label_keeps_the_full_hook_drawtext_input(self):
+        target = Path("temp/test-long-usage-label-drawtext/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        build_video_filter(
+            target,
+            subtitle_text="Readable hook",
+            shot_durations=[3],
+            shot_captions=["Readable hook"],
+            shot_usage_labels=["Extended generic usage example label"],
+            subtitle_dir=subtitle_dir,
+        )
+
+        hook_text = " ".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        )
+        label_text = " ".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(subtitle_dir.glob("usage-label-cue-001-line-*.txt"))
+        )
+        self.assertEqual(hook_text, "Readable hook")
+        self.assertEqual(label_text, "Extended generic usage example label")
+        self.assertNotIn("...", hook_text)
 
     def test_hook_copy_wraps_to_two_short_safe_lines(self):
         target = Path("temp/test-hook-filter/captions.srt")

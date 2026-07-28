@@ -22,17 +22,25 @@ DRAWTEXT_SUBTITLE_Y = "h-240-text_h"
 DRAWTEXT_BOX_COLOR = "black@0.42"
 DRAWTEXT_BOX_BORDER = 24
 DRAWTEXT_LINE_STEP = 58
-HOOK_FONT_SIZE = 82
+HOOK_FONT_SIZE = 104
 HOOK_MAX_CHARS = 12
-HOOK_TEXT_Y = 168
-HOOK_LINE_STEP = 96
+HOOK_TEXT_Y = 226
+HOOK_LINE_STEP = 118
 HOOK_BOX_X = 64
 HOOK_BOX_Y = 118
 HOOK_BOX_WIDTH = 952
-HOOK_BOX_HEIGHT = 270
+HOOK_BOX_HEIGHT = 360
 HOOK_BOX_COLOR = "black@0.78"
 HOOK_ACCENT_COLOR = "0xfacc15@1"
 HOOK_ACCENT_HEIGHT = 10
+USAGE_LABEL_FONT_SIZE = 36
+USAGE_LABEL_MAX_CHARS = 24
+USAGE_LABEL_MAX_LINES = 2
+USAGE_LABEL_X = 82
+USAGE_LABEL_Y = 136
+USAGE_LABEL_LINE_STEP = 44
+USAGE_LABEL_FONT_COLOR = "0xfacc15@1"
+USAGE_LABEL_BOX_COLOR = "black@0.90"
 
 LAYOUT_PRESETS = {
     "hook": {
@@ -69,6 +77,7 @@ def build_video_filter(
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
     subtitle_dir: Path | None = None,
 ) -> str:
     safe_srt_path = str(srt_path).replace("\\", "/")
@@ -78,6 +87,7 @@ def build_video_filter(
             subtitle_text or "",
             shot_durations=shot_durations,
             shot_captions=shot_captions,
+            shot_usage_labels=shot_usage_labels,
             subtitle_dir=subtitle_dir or srt_path.parent / "drawtext-subtitles",
         )
         return ",".join([base_filter, *drawtext_filters])
@@ -91,6 +101,7 @@ def build_image_sequence_filter_complex(
     subtitle_text: str | None,
     shot_durations: list[float],
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
     subtitle_dir: Path | None = None,
 ) -> str:
     _validate_image_sequence(image_count, shot_durations)
@@ -110,6 +121,7 @@ def build_image_sequence_filter_complex(
             subtitle_text or "",
             shot_durations=shot_durations,
             shot_captions=shot_captions,
+            shot_usage_labels=shot_usage_labels,
             subtitle_dir=subtitle_dir or srt_path.parent / "drawtext-subtitles",
         )
         parts.append(f"[sequence]{','.join(drawtext_filters)}[video]")
@@ -131,6 +143,7 @@ def build_render_command(
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
 ) -> list[str]:
     if shot_image_paths is None:
@@ -149,6 +162,7 @@ def build_render_command(
                 subtitle_text=subtitle_text,
                 shot_durations=shot_durations,
                 shot_captions=shot_captions,
+                shot_usage_labels=shot_usage_labels,
             ),
             "-c:v",
             "libx264",
@@ -192,6 +206,7 @@ def build_render_command(
                 subtitle_text=subtitle_text,
                 shot_durations=durations,
                 shot_captions=shot_captions,
+                shot_usage_labels=shot_usage_labels,
             ),
             "-map",
             "[video]",
@@ -259,9 +274,15 @@ def build_drawtext_subtitle_filters(
     *,
     shot_durations: list[float] | None,
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
     subtitle_dir: Path,
 ) -> list[str]:
-    cues = _build_subtitle_cues(subtitle_text, shot_durations, shot_captions)
+    cues = _build_subtitle_cues(
+        subtitle_text,
+        shot_durations,
+        shot_captions,
+        shot_usage_labels,
+    )
     subtitle_dir.mkdir(parents=True, exist_ok=True)
     filters: list[str] = []
     for index, cue in enumerate(cues, start=1):
@@ -281,6 +302,36 @@ def build_drawtext_subtitle_filters(
                     f"w={HOOK_BOX_WIDTH}:h={HOOK_ACCENT_HEIGHT}:"
                     f"color={HOOK_ACCENT_COLOR}:t=fill:enable='{enable}'",
                 ]
+            )
+        usage_label_lines = wrap_caption(
+            str(cue.get("usage_label") or ""),
+            max_chars=USAGE_LABEL_MAX_CHARS,
+            max_lines=USAGE_LABEL_MAX_LINES,
+        )
+        for label_line_index, label_line in enumerate(usage_label_lines, start=1):
+            label_path = (
+                subtitle_dir
+                / f"usage-label-cue-{index:03d}-line-{label_line_index:02d}.txt"
+            )
+            label_path.write_text(label_line, encoding="utf-8")
+            label_textfile = _escape_filter_path(label_path)
+            label_y = (
+                USAGE_LABEL_Y + ((label_line_index - 1) * USAGE_LABEL_LINE_STEP)
+                if is_hook
+                else f"h-360-text_h-{(len(usage_label_lines) - label_line_index) * USAGE_LABEL_LINE_STEP}"
+            )
+            filters.append(
+                "drawtext="
+                f"{_drawtext_font_clause(bold=True)}"
+                f"textfile='{label_textfile}':"
+                f"fontcolor={USAGE_LABEL_FONT_COLOR}:"
+                f"fontsize={USAGE_LABEL_FONT_SIZE}:"
+                f"x={USAGE_LABEL_X if is_hook else '(w-text_w)/2'}:"
+                f"y={label_y}:"
+                "box=1:"
+                f"boxcolor={USAGE_LABEL_BOX_COLOR}:"
+                "boxborderw=10:"
+                f"enable='{enable}'"
             )
         lines = str(cue["text"]).splitlines() or [str(cue["text"])]
         for line_index, line in enumerate(lines, start=1):
@@ -322,6 +373,7 @@ def _build_subtitle_cues(
     subtitle_text: str,
     shot_durations: list[float] | None,
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
 ) -> list[dict[str, float | str]]:
     lines = resolve_subtitle_cue_texts(subtitle_text, shot_durations, shot_captions)
     if shot_durations:
@@ -331,10 +383,13 @@ def _build_subtitle_cues(
         durations = [1.0 for _ in lines]
     if not lines:
         return []
+    if shot_usage_labels is not None and len(shot_usage_labels) != len(lines):
+        raise ValueError("shot usage label count must match subtitle cue count")
+    usage_labels = shot_usage_labels or ["" for _ in lines]
 
     cues: list[dict[str, float | str]] = []
     elapsed = 0.0
-    for line, duration in zip(lines, durations):
+    for line, duration, usage_label in zip(lines, durations, usage_labels):
         if duration <= 0:
             raise ValueError("subtitle cue duration must be positive")
         is_hook = len(cues) == 0
@@ -345,7 +400,14 @@ def _build_subtitle_cues(
                 max_lines=2,
             )
         )
-        cues.append({"text": wrapped, "start": elapsed, "end": elapsed + duration})
+        cues.append(
+            {
+                "text": wrapped,
+                "usage_label": " ".join(str(usage_label or "").split()),
+                "start": elapsed,
+                "end": elapsed + duration,
+            }
+        )
         elapsed += duration
     return cues
 
@@ -429,6 +491,7 @@ def render_vertical_video(
     subtitle_text: str | None = None,
     shot_durations: list[float] | None = None,
     shot_captions: list[str] | None = None,
+    shot_usage_labels: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
 ) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -441,6 +504,7 @@ def render_vertical_video(
         subtitle_text=subtitle_text,
         shot_durations=shot_durations,
         shot_captions=shot_captions,
+        shot_usage_labels=shot_usage_labels,
         shot_image_paths=shot_image_paths,
     )
     subprocess.run(command, check=True, capture_output=True, text=True)

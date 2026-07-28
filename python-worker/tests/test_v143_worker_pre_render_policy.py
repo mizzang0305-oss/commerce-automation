@@ -49,12 +49,11 @@ class V143CreativePolicyTest(unittest.TestCase):
             korean_voice_delivery_style="brisk_confident_sales",
         )
 
-        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-            result = evaluate_v143_worker_pre_render_policy(
-                render_plan,
-                {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                config,
-            )
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            config,
+        )
 
         self.assertTrue(result["gate_pass"])
         self.assertTrue(result["binding_verified"])
@@ -86,7 +85,7 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertFalse(result["gate_pass"])
         self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
 
-    def test_usage_label_clipped_by_renderer_is_blocked(self):
+    def test_long_usage_label_does_not_consume_the_hook_caption(self):
         render_plan = _render_plan(
             {
                 "real_usage_scene_present": True,
@@ -99,19 +98,94 @@ class V143CreativePolicyTest(unittest.TestCase):
             }
         )
         render_plan["shots"][0]["usage_label"] = (
-            "This usage disclosure is deliberately too long to survive the renderer "
-            "two line clipping limit in full"
+            "Extended generic usage example label"
         )
 
-        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-            result = evaluate_v143_worker_pre_render_policy(
-                render_plan,
-                {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                _valid_config(),
-            )
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_usage_label_that_exceeds_its_separate_badge_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = (
+            "This usage disclosure is deliberately too long to survive the separate "
+            "two line usage badge in full"
+        )
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
 
         self.assertFalse(result["gate_pass"])
         self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
+    def test_usage_label_without_renderable_hook_caption_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["caption"] = ""
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
+
+    def test_partially_rendered_or_ellipsized_hook_caption_is_blocked(self):
+        for caption in (
+            "This hook caption is far too long to survive in the two line hook area",
+            "Readable hook text followed by content that forces an ellipsis",
+        ):
+            with self.subTest(caption=caption):
+                render_plan = _render_plan(
+                    {
+                        "real_usage_scene_present": True,
+                        "usage_source_role": "generic_usage_example",
+                        "usage_label_present": True,
+                        "exact_product_identity_claim": False,
+                        "exact_product_identity_verified": False,
+                        "actor_nationality_claim": None,
+                        "actor_nationality_verified": False,
+                    }
+                )
+                render_plan["shots"][0]["caption"] = caption
+
+                result = evaluate_v143_worker_pre_render_policy(
+                    render_plan,
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    _valid_config(),
+                )
+
+                self.assertFalse(result["gate_pass"])
+                self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
 
     def test_first_rendered_shot_is_hook_regardless_of_shot_id(self):
         for shot_id in ("intro", "scene-1"):
@@ -129,12 +203,11 @@ class V143CreativePolicyTest(unittest.TestCase):
                 )
                 render_plan["shots"][0]["shot_id"] = shot_id
 
-                with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-                    result = evaluate_v143_worker_pre_render_policy(
-                        render_plan,
-                        {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                        _valid_config(),
-                    )
+                result = evaluate_v143_worker_pre_render_policy(
+                    render_plan,
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    _valid_config(),
+                )
 
                 self.assertTrue(result["gate_pass"])
 
@@ -194,7 +267,6 @@ class V143CreativePolicyTest(unittest.TestCase):
         )
 
         self.assertFalse(result["gate_pass"])
-        self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
         self.assertIn("V143_REAL_USAGE_SCENE_REQUIRED", result["blockers"])
         self.assertIn("V143_REAL_USAGE_SOURCE_REQUIRED", result["blockers"])
         self.assertIn("V143_APPROVED_KOREAN_MERCHANT_TTS_REQUIRED", result["blockers"])

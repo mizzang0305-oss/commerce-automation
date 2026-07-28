@@ -143,12 +143,16 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.assertEqual(len(tts.call_args.args[0].splitlines()), 2)
         self.assertEqual(
             srt.call_args.args[0],
-            "[Usage example] Hook caption second line\nDetail caption",
+            "Hook caption second line\nDetail caption",
         )
         self.assertEqual(srt.call_args.kwargs["shot_durations"], [3, 5])
         self.assertEqual(
             srt.call_args.kwargs["shot_captions"],
-            ["[Usage example] Hook caption second line", "Detail caption"],
+            ["Hook caption second line", "Detail caption"],
+        )
+        self.assertEqual(
+            render.call_args.kwargs["shot_usage_labels"],
+            ["Usage example", ""],
         )
         self.assertEqual(render.call_args.args[4], "Render plan product")
         self.assertEqual(render.call_args.kwargs["subtitle_text"], srt.call_args.args[0])

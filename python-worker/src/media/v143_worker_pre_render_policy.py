@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import math
-import re
 from typing import Literal
 
-from .subtitle_generator import compose_usage_labeled_caption, wrap_caption
+from .subtitle_generator import wrap_caption
 from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
     HOOK_FONT_SIZE,
     HOOK_MAX_CHARS,
+    USAGE_LABEL_MAX_CHARS,
+    USAGE_LABEL_MAX_LINES,
 )
 
 
@@ -161,19 +162,20 @@ def evaluate_v143_worker_pre_render_policy(
 
     shots = render_plan.get("shots")
     first_shot = shots[0] if isinstance(shots, list) and shots and isinstance(shots[0], dict) else {}
-    first_caption = compose_usage_labeled_caption(
-        first_shot.get("caption"),
-        first_shot.get("usage_label"),
-    )
+    first_caption = " ".join(str(first_shot.get("caption") or "").split())
     renderable_usage_label_present = _usage_label_survives_renderer(shots)
     hook_lines = wrap_caption(
         first_caption,
         max_chars=HOOK_MAX_CHARS,
         max_lines=MAX_HOOK_LINES,
     )
+    hook_caption_survives_renderer = _full_text_survives_wrapping(
+        first_caption,
+        hook_lines,
+    )
     evidence = {
         "hook_font_px": HOOK_FONT_SIZE,
-        "hook_max_lines": len(hook_lines),
+        "hook_max_lines": len(hook_lines) if hook_caption_survives_renderer else math.inf,
         "hook_visible_within_seconds": (
             0.0 if first_shot else math.inf
         ),
@@ -212,30 +214,30 @@ def evaluate_v143_worker_pre_render_policy(
 def _usage_label_survives_renderer(shots: object) -> bool:
     if not isinstance(shots, list):
         return False
-    for index, shot in enumerate(shots):
+    for shot in shots:
         if not isinstance(shot, dict):
             continue
         normalized_label = " ".join(str(shot.get("usage_label") or "").split())
         if not normalized_label:
             continue
-        composed_caption = compose_usage_labeled_caption(
-            shot.get("caption"),
-            normalized_label,
-        )
         rendered_lines = wrap_caption(
-            composed_caption,
-            max_chars=HOOK_MAX_CHARS if index == 0 else 16,
-            max_lines=MAX_HOOK_LINES,
+            normalized_label,
+            max_chars=USAGE_LABEL_MAX_CHARS,
+            max_lines=USAGE_LABEL_MAX_LINES,
         )
-        rendered_text = _without_whitespace("\n".join(rendered_lines))
-        expected_marker = _without_whitespace(f"[{normalized_label}]")
-        if expected_marker and expected_marker in rendered_text:
+        if _full_text_survives_wrapping(normalized_label, rendered_lines):
             return True
     return False
 
 
-def _without_whitespace(value: str) -> str:
-    return re.sub(r"\s+", "", value)
+def _full_text_survives_wrapping(source: str, rendered_lines: list[str]) -> bool:
+    normalized_source = " ".join(str(source or "").split())
+    normalized_rendered = " ".join(" ".join(rendered_lines).split())
+    return bool(
+        normalized_source
+        and "..." not in normalized_rendered
+        and normalized_rendered == normalized_source
+    )
 
 
 def _worker_blocked_result(blocker: str, *, binding_verified: bool) -> dict[str, object]:
