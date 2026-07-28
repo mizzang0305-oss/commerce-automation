@@ -36,6 +36,9 @@ class WorkerVisualBindingTest(unittest.TestCase):
             "product": lambda job, payload, plan: plan.update(product_name="Spoofed product"),
             "script": lambda job, payload, plan: plan["shots"][0].update(voice_text="Spoofed script"),
             "caption": lambda job, payload, plan: plan["shots"][0].update(caption="Spoofed caption"),
+            "usage_label": lambda job, payload, plan: plan["shots"][0].update(
+                usage_label="Spoofed usage label"
+            ),
             "duration": lambda job, payload, plan: plan["shots"][0].update(duration_sec=8),
             "image": lambda job, payload, plan: plan["shots"][0].update(image_url="https://evil.invalid/image.jpg"),
             "disclosure": lambda job, payload, plan: plan.update(disclosure_text="Spoofed disclosure"),
