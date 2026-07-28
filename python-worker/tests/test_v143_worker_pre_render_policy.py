@@ -112,6 +112,52 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertTrue(result["gate_pass"])
         self.assertEqual(result["blockers"], [])
 
+    def test_wide_usage_label_is_pixel_wrapped_without_losing_the_hook(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = "W" * 24
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_wide_usage_label_that_cannot_fit_two_badge_lines_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = "W" * 64
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
     def test_usage_label_that_exceeds_its_separate_badge_is_blocked(self):
         render_plan = _render_plan(
             {

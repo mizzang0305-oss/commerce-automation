@@ -12,6 +12,7 @@ from src.media.tts_generator import create_tts_audio
 from src.media.video_renderer import (
     HOOK_FONT_SIZE,
     HOOK_TEXT_MAX_WIDTH,
+    USAGE_LABEL_TEXT_MAX_WIDTH,
     TYPOGRAPHY_STYLE,
     VIDEO_HEIGHT,
     VIDEO_WIDTH,
@@ -21,6 +22,7 @@ from src.media.video_renderer import (
     build_shot_layout_config,
     build_video_filter,
     measure_hook_line_width,
+    measure_usage_label_line_width,
 )
 
 
@@ -151,6 +153,39 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertEqual(hook_text, "Readable hook")
         self.assertEqual(label_text, "Extended generic usage example label")
         self.assertNotIn("...", hook_text)
+
+    def test_wide_usage_label_drawtext_lines_fit_the_badge_without_loss(self):
+        target = Path("temp/test-wide-usage-label-drawtext/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        source = "W" * 24
+        build_video_filter(
+            target,
+            subtitle_text="Readable hook",
+            shot_durations=[3],
+            shot_captions=["Readable hook"],
+            shot_usage_labels=[source],
+            subtitle_dir=subtitle_dir,
+        )
+
+        rendered_lines = [
+            path.read_text(encoding="utf-8")
+            for path in sorted(
+                subtitle_dir.glob("usage-label-cue-001-line-*.txt")
+            )
+        ]
+        self.assertEqual("".join(rendered_lines), source)
+        self.assertLessEqual(len(rendered_lines), 2)
+        self.assertTrue(
+            all(
+                measure_usage_label_line_width(line)
+                <= USAGE_LABEL_TEXT_MAX_WIDTH
+                for line in rendered_lines
+            )
+        )
 
     def test_hook_copy_wraps_to_two_short_safe_lines(self):
         target = Path("temp/test-hook-filter/captions.srt")

@@ -3,15 +3,15 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from .subtitle_generator import wrap_caption
 from .tts_generator import validate_local_voice_command
 from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
     HOOK_FONT_SIZE,
-    USAGE_LABEL_MAX_CHARS,
-    USAGE_LABEL_MAX_LINES,
+    USAGE_LABEL_TEXT_MAX_WIDTH,
+    measure_usage_label_line_width,
     wrap_hook_caption,
+    wrap_usage_label,
 )
 
 
@@ -232,12 +232,14 @@ def _usage_label_survives_renderer(shots: object) -> bool:
         if not normalized_label:
             continue
         renderable_label_found = True
-        rendered_lines = wrap_caption(
-            normalized_label,
-            max_chars=USAGE_LABEL_MAX_CHARS,
-            max_lines=USAGE_LABEL_MAX_LINES,
-        )
-        if not _full_text_survives_wrapping(normalized_label, rendered_lines):
+        rendered_lines = wrap_usage_label(normalized_label)
+        if (
+            not _full_text_survives_wrapping(normalized_label, rendered_lines)
+            or any(
+                measure_usage_label_line_width(line) > USAGE_LABEL_TEXT_MAX_WIDTH
+                for line in rendered_lines
+            )
+        ):
             return False
     return renderable_label_found
 

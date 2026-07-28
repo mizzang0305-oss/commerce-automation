@@ -46,6 +46,7 @@ USAGE_LABEL_Y = 136
 USAGE_LABEL_LINE_STEP = 44
 USAGE_LABEL_FONT_COLOR = "0xfacc15@1"
 USAGE_LABEL_BOX_COLOR = "black@0.90"
+USAGE_LABEL_TEXT_MAX_WIDTH = VIDEO_WIDTH - USAGE_LABEL_X - SAFE_MARGIN_X - 20
 
 LAYOUT_PRESETS = {
     "hook": {
@@ -308,11 +309,7 @@ def build_drawtext_subtitle_filters(
                     f"color={HOOK_ACCENT_COLOR}:t=fill:enable='{enable}'",
                 ]
             )
-        usage_label_lines = wrap_caption(
-            str(cue.get("usage_label") or ""),
-            max_chars=USAGE_LABEL_MAX_CHARS,
-            max_lines=USAGE_LABEL_MAX_LINES,
-        )
+        usage_label_lines = wrap_usage_label(str(cue.get("usage_label") or ""))
         for label_line_index, label_line in enumerate(usage_label_lines, start=1):
             label_path = (
                 subtitle_dir
@@ -429,9 +426,30 @@ def wrap_hook_caption(source: str) -> list[str]:
     return clipped
 
 
+def wrap_usage_label(source: str) -> list[str]:
+    normalized = " ".join(str(source or "").split())
+    if not normalized or _load_usage_label_font() is None:
+        return []
+
+    pixel_wrapped = _split_usage_label_by_pixel_width(normalized)
+    if len(pixel_wrapped) <= USAGE_LABEL_MAX_LINES:
+        return pixel_wrapped
+    clipped = pixel_wrapped[:USAGE_LABEL_MAX_LINES]
+    clipped[-1] = _ellipsize_usage_label_line(clipped[-1])
+    return clipped
+
+
 @lru_cache(maxsize=512)
 def measure_hook_line_width(line: str) -> float:
     font = _load_hook_font()
+    if font is None:
+        return float("inf")
+    return float(font.getlength(str(line)))
+
+
+@lru_cache(maxsize=512)
+def measure_usage_label_line_width(line: str) -> float:
+    font = _load_usage_label_font()
     if font is None:
         return float("inf")
     return float(font.getlength(str(line)))
@@ -466,6 +484,40 @@ def _split_hook_line_by_pixel_width(line: str) -> list[str]:
     return [wrapped_line for wrapped_line in lines if wrapped_line]
 
 
+def _split_usage_label_by_pixel_width(line: str) -> list[str]:
+    if not line:
+        return []
+    if _usage_label_line_fits(line):
+        return [line]
+
+    lines: list[str] = []
+    current = ""
+    for character in line:
+        candidate = f"{current}{character}"
+        if not current or _usage_label_line_fits(candidate):
+            current = candidate
+            continue
+
+        if " " in current:
+            head, tail = current.rsplit(" ", 1)
+            carried = f"{tail}{character}".lstrip()
+            if (
+                head
+                and carried
+                and _usage_label_line_fits(head)
+                and _usage_label_line_fits(carried)
+            ):
+                lines.append(head)
+                current = carried
+                continue
+
+        lines.append(current.rstrip())
+        current = character.lstrip()
+    if current:
+        lines.append(current.rstrip())
+    return [wrapped_line for wrapped_line in lines if wrapped_line]
+
+
 def _hook_line_fits(line: str) -> bool:
     return (
         len(line) <= HOOK_MAX_CHARS
@@ -473,9 +525,27 @@ def _hook_line_fits(line: str) -> bool:
     )
 
 
+def _usage_label_line_fits(line: str) -> bool:
+    return (
+        len(line) <= USAGE_LABEL_MAX_CHARS
+        and measure_usage_label_line_width(line) <= USAGE_LABEL_TEXT_MAX_WIDTH
+    )
+
+
 def _ellipsize_hook_line(line: str) -> str:
     prefix = line.rstrip(" .")
     while prefix and measure_hook_line_width(f"{prefix}...") > HOOK_TEXT_MAX_WIDTH:
+        prefix = prefix[:-1].rstrip()
+    return f"{prefix}..." if prefix else "..."
+
+
+def _ellipsize_usage_label_line(line: str) -> str:
+    prefix = line.rstrip(" .")
+    while (
+        prefix
+        and measure_usage_label_line_width(f"{prefix}...")
+        > USAGE_LABEL_TEXT_MAX_WIDTH
+    ):
         prefix = prefix[:-1].rstrip()
     return f"{prefix}..." if prefix else "..."
 
@@ -487,6 +557,17 @@ def _load_hook_font():
         return None
     try:
         return ImageFont.truetype(str(font_path), size=HOOK_FONT_SIZE)
+    except OSError:
+        return None
+
+
+@lru_cache(maxsize=1)
+def _load_usage_label_font():
+    font_path = _resolve_drawtext_font_path(bold=True)
+    if font_path is None:
+        return None
+    try:
+        return ImageFont.truetype(str(font_path), size=USAGE_LABEL_FONT_SIZE)
     except OSError:
         return None
 
