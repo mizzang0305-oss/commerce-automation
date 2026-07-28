@@ -93,6 +93,30 @@ class VideoRendererLayoutTest(unittest.TestCase):
         self.assertLessEqual(len(lines), 2)
         self.assertTrue(all(len(line) <= 24 for line in lines))
 
+    def test_usage_label_is_written_into_final_drawtext_input(self):
+        target = Path("temp/test-usage-label-drawtext/captions.srt")
+        subtitle_dir = target.parent / "drawtext"
+        if subtitle_dir.exists():
+            for child in subtitle_dir.iterdir():
+                child.unlink()
+
+        filter_graph = build_video_filter(
+            target,
+            subtitle_text="[Usage example] Readable hook",
+            shot_durations=[3],
+            shot_captions=["[Usage example] Readable hook"],
+            subtitle_dir=subtitle_dir,
+        )
+
+        line_files = sorted(subtitle_dir.glob("subtitle-cue-001-line-*.txt"))
+        rendered_text = " ".join(
+            path.read_text(encoding="utf-8") for path in line_files
+        )
+        self.assertIn("[Usage example]", rendered_text)
+        for path in line_files:
+            escaped_path = str(path).replace("\\", "/").replace(":", "\\:")
+            self.assertIn(f"textfile='{escaped_path}'", filter_graph)
+
     def test_hook_copy_wraps_to_two_short_safe_lines(self):
         target = Path("temp/test-hook-filter/captions.srt")
         subtitle_dir = target.parent / "drawtext"
