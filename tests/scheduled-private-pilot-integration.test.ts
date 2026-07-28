@@ -96,6 +96,30 @@ describe("scheduled Coupang provider to authoritative queue", () => {
     });
   });
 
+  test("concurrent calls create exactly one queue row for the deterministic KST schedule key", async () => {
+    const repository = resetMockRepositoryForTests();
+    const input = {
+      repository,
+      slotId: "evening_commute" as const,
+      approval: COUPANG_SCHEDULED_PRODUCT_SEARCH_APPROVAL,
+      now: NOW,
+      env: readyEnv(),
+      fetchImpl: async () => productResponse()
+    };
+    const results = await Promise.all([
+      runScheduledQueueIntegration(input),
+      runScheduledQueueIntegration(input)
+    ]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([
+      expect.objectContaining({ blocker: "DUPLICATE_PRODUCT_OR_SAME_DAY_DUPLICATE" })
+    ]);
+    const scheduled = (await repository.getQueue()).filter(
+      (item) => item.schedule_key === "commerce-daily-2026-07-28-evening_commute"
+    );
+    expect(scheduled).toHaveLength(1);
+  });
+
   test("binds the authoritative candidate into the signed Worker job", async () => {
     const repository = resetMockRepositoryForTests();
     for (const item of await repository.getQueue()) {

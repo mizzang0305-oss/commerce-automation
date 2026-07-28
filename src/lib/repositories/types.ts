@@ -60,6 +60,18 @@ export type ProductAssetPersistenceCapabilities = {
   blocked_reasons: string[];
 };
 
+export type ScheduledQueueBundleInput = {
+  schedule_key: string;
+  product_key: string;
+  candidate: ProductCandidate;
+  queue_item: ProductQueueItem;
+  content: GeneratedContent;
+};
+
+export type ScheduledQueueBundleResult =
+  | { created: true }
+  | { created: false; blocker: "SCHEDULE_KEY_ALREADY_PROMOTED" | "PRODUCT_KEY_ALREADY_PROMOTED" };
+
 export interface AutomationRepository {
   getSettings(): Promise<AutomationSettings>;
   updateSettings(input: Partial<AutomationSettings>): Promise<AutomationSettings>;
@@ -104,6 +116,7 @@ export interface AutomationRepository {
   getProductCandidate(id: string): Promise<ProductCandidate | null>;
   updateProductCandidate(id: string, patch: Partial<ProductCandidate>): Promise<ProductCandidate | null>;
   promoteCandidateToQueue(candidateId: string, options?: PromoteCandidateOptions): Promise<PromoteCandidateResult>;
+  createScheduledQueueBundle?(input: ScheduledQueueBundleInput): Promise<ScheduledQueueBundleResult>;
   upsertProductCandidates(candidates: ProductCandidate[]): Promise<ProductCandidate[]>;
   getProductionHistory(): Promise<ProductionHistory[]>;
   getProductAssets(productQueueId?: string): Promise<ProductAsset[]>;

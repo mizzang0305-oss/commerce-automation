@@ -9,6 +9,7 @@ export function buildWorkerResultQa(result: JsonRecord): {
   const visual = record(result.visual_gate);
   const asr = record(result.asr_gate);
   const output = record(result.render_output_gate);
+  const preparedAsset = record(result.prepared_video_asset);
   if (!creative && !visual && !asr && !output) {
     return { metadata: {}, status: "pending", note: "" };
   }
@@ -30,6 +31,13 @@ export function buildWorkerResultQa(result: JsonRecord): {
       video_codec: text(output?.video_codec),
       audio_codec: text(output?.audio_codec),
       audio_present: output?.audio_present === true,
+      video_checksum_sha256: sha256(preparedAsset?.checksum_sha256),
+      video_size_bytes: positiveNumber(preparedAsset?.size_bytes),
+      prepared_video_asset_provider: provider(preparedAsset?.provider),
+      prepared_video_asset_storage_key: boundedText(preparedAsset?.storage_key, 512),
+      prepared_video_asset_url: safeHttpsUrl(preparedAsset?.prepared_video_asset_url),
+      prepared_video_asset_expires_at: timestamp(preparedAsset?.expires_at),
+      prepared_video_asset_server_accessible: preparedAsset?.server_accessible === true,
       raw_urls_persisted: false,
       transcript_persisted: false
     },
@@ -48,4 +56,37 @@ function number(value: unknown) {
 
 function text(value: unknown) {
   return typeof value === "string" ? value.slice(0, 40) : "";
+}
+
+function boundedText(value: unknown, limit: number) {
+  return typeof value === "string" ? value.trim().slice(0, limit) : "";
+}
+
+function sha256(value: unknown) {
+  const normalized = boundedText(value, 64).toLowerCase();
+  return /^[a-f0-9]{64}$/.test(normalized) ? normalized : "";
+}
+
+function positiveNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function provider(value: unknown) {
+  return [
+    "local_dev",
+    "r2",
+    "supabase_storage",
+    "external_https"
+  ].includes(String(value)) ? String(value) : "";
+}
+
+function safeHttpsUrl(value: unknown) {
+  const normalized = boundedText(value, 2048);
+  return /^https:\/\//i.test(normalized) ? normalized : "";
+}
+
+function timestamp(value: unknown) {
+  const normalized = boundedText(value, 64);
+  if (!normalized) return "";
+  return Number.isFinite(Date.parse(normalized)) ? new Date(normalized).toISOString() : "";
 }

@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from ..config import WorkerConfig
 from ..storage_client import StorageClient
@@ -165,11 +166,34 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     )
 
     key_prefix = f"{job['id']}"
+    video_checksum_sha256 = hashlib.sha256(video_path.read_bytes()).hexdigest()
+    video_size_bytes = video_path.stat().st_size
+    video_storage_key = f"{key_prefix}/video.mp4"
+    video_url = storage.upload("video", video_path, video_storage_key)
+    storage_backend = str(getattr(config, "storage_backend", "local")).strip().lower()
+    provider = {
+        "r2": "r2",
+        "supabase": "supabase_storage",
+        "s3": "external_https",
+    }.get(storage_backend, "local_dev")
+    server_accessible = storage_backend != "local" and video_url.lower().startswith("https://")
     return {
-        "video_url": storage.upload("video", video_path, f"{key_prefix}/video.mp4"),
+        "video_url": video_url,
         "thumbnail_url": storage.upload("thumbnail", thumbnail_path, f"{key_prefix}/thumbnail.jpg"),
         "srt_url": storage.upload("subtitle", srt_path, f"{key_prefix}/captions.srt"),
         "upload_package_url": storage.upload("upload_package", package_path, f"{key_prefix}/upload_package.txt"),
+        "prepared_video_asset": {
+            "asset_id": f"asset-{job['id']}-video",
+            "storage_key": video_storage_key,
+            "signed_url": "",
+            "prepared_video_asset_url": video_url,
+            "mime_type": "video/mp4",
+            "size_bytes": video_size_bytes,
+            "checksum_sha256": video_checksum_sha256,
+            "expires_at": "",
+            "provider": provider,
+            "server_accessible": server_accessible,
+        },
         "visual_gate": {
             **visual_gate,
             "binding_verified": True,

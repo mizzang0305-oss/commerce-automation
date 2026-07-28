@@ -1,6 +1,7 @@
 import type { AutomationRepository } from "@/lib/repositories/types";
 import { buildDraftGeneratedContent } from "@/lib/content/contentTemplate";
 import { buildCoupangCandidate } from "@/lib/coupang/coupangCandidateImport";
+import { buildCandidatePromotion } from "@/lib/candidatePromotion";
 import {
   searchScheduledProducts,
   type AuthoritativeScheduledProduct
@@ -61,27 +62,36 @@ export async function runScheduledQueueIntegration(input: {
 
   const existingCandidates = await input.repository.getProductCandidates();
   const queueItems = await input.repository.getQueue();
-  const kstDate = search.safe_summary.schedule_id.slice("commerce-daily-".length, "commerce-daily-".length + 10);
+  const scheduleKey = search.safe_summary.schedule_id;
+  const kstDate = scheduleKey.slice("commerce-daily-".length, "commerce-daily-".length + 10);
 
   for (const product of search.products) {
     const built = toCandidate(product, existingCandidates);
     if (!built.candidate.selected_affiliate_url.trim()) continue;
-    if (existingCandidates.some((candidate) => candidate.product_key === built.candidate.product_key)) continue;
+    const productKey = built.candidate.product_key?.trim() ?? "";
+    if (!productKey) continue;
+    if (existingCandidates.some((candidate) => candidate.product_key === productKey)) continue;
     if (
       queueItems.some(
         (item) =>
-          item.queue_date === kstDate &&
-          normalizeName(item.product_name) === normalizeName(built.candidate.product_name)
+          item.product_key === productKey ||
+          (
+            item.queue_date === kstDate &&
+            normalizeName(item.product_name) === normalizeName(built.candidate.product_name)
+          )
       )
     ) {
       continue;
     }
-
-    await input.repository.upsertProductCandidates([built.candidate]);
-    const promotion = await input.repository.promoteCandidateToQueue(built.candidate.id, {
+    const promotion = buildCandidatePromotion({
+      candidate: built.candidate,
+      queueItems,
+      productionHistory: await input.repository.getProductionHistory(),
       now: toIso(input.now),
       scheduled_at: toIso(input.now)
     });
+    promotion.queue_item.schedule_key = scheduleKey;
+    promotion.queue_item.product_key = productKey;
     if (!promotion.queue_item.selected_affiliate_url.trim()) {
       return blocked("AFFILIATE_DEEPLINK_REQUIRED", search.external_api_called);
     }
@@ -94,7 +104,19 @@ export async function runScheduledQueueIntegration(input: {
     if (!content.disclosure_text.trim()) {
       return blocked("DISCLOSURE_TEXT_REQUIRED", search.external_api_called);
     }
-    await input.repository.upsertGeneratedContent(content);
+    if (!input.repository.createScheduledQueueBundle) {
+      return blocked("ATOMIC_SCHEDULED_QUEUE_REPOSITORY_REQUIRED", search.external_api_called);
+    }
+    const atomic = await input.repository.createScheduledQueueBundle({
+      schedule_key: scheduleKey,
+      product_key: productKey,
+      candidate: promotion.candidate,
+      queue_item: promotion.queue_item,
+      content
+    });
+    if (!atomic.created) {
+      continue;
+    }
     return {
       ok: true,
       candidate_id: promotion.candidate.id,

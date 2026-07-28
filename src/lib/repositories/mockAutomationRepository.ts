@@ -20,6 +20,8 @@ import type {
   MutableMockAutomationRepository,
   QueueFilters,
   QueueSummary,
+  ScheduledQueueBundleInput,
+  ScheduledQueueBundleResult,
   SettingsValidationResult
 } from "@/lib/repositories/types";
 import { assignSlots } from "@/lib/scheduler";
@@ -784,6 +786,41 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       };
     }
     return clone(promotion);
+  }
+
+  async createScheduledQueueBundle(
+    input: ScheduledQueueBundleInput
+  ): Promise<ScheduledQueueBundleResult> {
+    if (this.queue.some((item) => item.schedule_key === input.schedule_key)) {
+      return { created: false, blocker: "SCHEDULE_KEY_ALREADY_PROMOTED" };
+    }
+    if (this.queue.some((item) => item.product_key === input.product_key)) {
+      return { created: false, blocker: "PRODUCT_KEY_ALREADY_PROMOTED" };
+    }
+    const existingCandidate = this.productCandidates.find(
+      (item) => item.product_key === input.product_key || item.id === input.candidate.id
+    );
+    if (existingCandidate?.promoted_queue_id) {
+      return { created: false, blocker: "PRODUCT_KEY_ALREADY_PROMOTED" };
+    }
+
+    const candidate = {
+      ...input.candidate,
+      promotion_status: "promoted" as const,
+      promoted_queue_id: input.queue_item.id,
+      updated_at: nowIso()
+    };
+    const candidateIndex = this.productCandidates.findIndex((item) => item.id === candidate.id);
+    if (candidateIndex === -1) this.productCandidates.push(candidate);
+    else this.productCandidates[candidateIndex] = candidate;
+    this.queue.push({
+      ...input.queue_item,
+      schedule_key: input.schedule_key,
+      product_key: input.product_key
+    });
+    this.queue = this.queue.sort((a, b) => a.queue_rank - b.queue_rank);
+    this.contents.push(input.content);
+    return { created: true };
   }
 
   async upsertProductCandidates(candidates: ProductCandidate[]) {

@@ -142,12 +142,15 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.download_image", side_effect=_download_to_target) as download_image, \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan/voiceover.wav")) as tts, \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan/captions.srt")) as srt, \
-            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan/video.mp4")) as render, \
+            patch("src.tasks.video_render.render_vertical_video", side_effect=_render_to_target) as render, \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan/thumbnail.jpg")) as thumbnail, \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
             result = run_video_render(
                 job,
-                SimpleNamespace(korean_voice_delivery_style="brisk_confident_sales"),
+                SimpleNamespace(
+                    korean_voice_delivery_style="brisk_confident_sales",
+                    storage_backend="r2",
+                ),
                 storage,
                 Mock(),
             )
@@ -189,6 +192,21 @@ class VideoRenderValidationTest(unittest.TestCase):
         )
         self.assertEqual(thumbnail.call_args.args[0], Path("temp/job-render-plan/shot-001.jpg"))
         self.assertIn("video_url", result)
+        self.assertEqual(
+            result["prepared_video_asset"],
+            {
+                "asset_id": "asset-job-render-plan-video",
+                "storage_key": "job-render-plan/video.mp4",
+                "signed_url": "",
+                "prepared_video_asset_url": "https://storage.example/job-render-plan/video.mp4",
+                "mime_type": "video/mp4",
+                "size_bytes": len(b"validated-rendered-video"),
+                "checksum_sha256": "aaa92adf394bc87c0dfe03f6060a70a9cd9b8be3115840c506bb4a0d77f5727f",
+                "expires_at": "",
+                "provider": "r2",
+                "server_accessible": True,
+            },
+        )
 
     def test_render_plan_deduplicates_repeated_image_downloads(self):
         storage = Mock()
@@ -201,7 +219,7 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.download_image", side_effect=_download_to_target) as download_image, \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan-dedup/voiceover.wav")), \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan-dedup/captions.srt")), \
-            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan-dedup/video.mp4")) as render, \
+            patch("src.tasks.video_render.render_vertical_video", side_effect=_render_to_target) as render, \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan-dedup/thumbnail.jpg")), \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
             run_video_render(job, None, storage, Mock())
@@ -228,7 +246,7 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.download_image", side_effect=_download_to_target), \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-plan-dedup-metadata/voiceover.wav")), \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-plan-dedup-metadata/captions.srt")), \
-            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-plan-dedup-metadata/video.mp4")), \
+            patch("src.tasks.video_render.render_vertical_video", side_effect=_render_to_target), \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-plan-dedup-metadata/thumbnail.jpg")), \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
             run_video_render(job, None, storage, Mock())
@@ -253,7 +271,7 @@ class VideoRenderValidationTest(unittest.TestCase):
             patch("src.tasks.video_render.download_image", side_effect=_download_to_target), \
             patch("src.tasks.video_render.create_tts_audio", return_value=Path("temp/job-render-quality-metadata/voiceover.wav")), \
             patch("src.tasks.video_render.write_srt", return_value=Path("outputs/job-render-quality-metadata/captions.srt")), \
-            patch("src.tasks.video_render.render_vertical_video", return_value=Path("outputs/job-render-quality-metadata/video.mp4")), \
+            patch("src.tasks.video_render.render_vertical_video", side_effect=_render_to_target), \
             patch("src.tasks.video_render.create_thumbnail", return_value=Path("outputs/job-render-quality-metadata/thumbnail.jpg")), \
             patch("src.tasks.video_render.clean_dir", side_effect=_clean_dir_for_test):
             run_video_render(job, None, storage, Mock())
@@ -435,6 +453,12 @@ def _clean_dir_for_test(path: Path) -> Path:
 
 
 def _download_to_target(_url: str, target: Path) -> Path:
+    return target
+
+
+def _render_to_target(_image, _audio, _srt, target: Path, *_args, **_kwargs) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"validated-rendered-video")
     return target
 
 
