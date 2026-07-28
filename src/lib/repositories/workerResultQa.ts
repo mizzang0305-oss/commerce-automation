@@ -17,7 +17,8 @@ export function buildWorkerResultQa(result: JsonRecord): {
     creative?.gate_pass === true &&
     visual?.gate_pass === true &&
     asr?.pass === true &&
-    output?.pass === true;
+    output?.pass === true &&
+    hasValidPreparedVideoAssetEvidence(preparedAsset);
   return {
     metadata: {
       creative_policy_gate_pass: creative?.gate_pass === true,
@@ -44,6 +45,23 @@ export function buildWorkerResultQa(result: JsonRecord): {
     status: passed ? "passed" : "needs_fix",
     note: passed ? "Worker creative, ASR, and render output gates passed." : "Worker result gates require review."
   };
+}
+
+export function hasValidPreparedVideoAssetEvidence(value: unknown) {
+  const asset = record(value);
+  if (!asset) return false;
+  const assetProvider = provider(asset.provider);
+  return (
+    boundedText(asset.asset_id, 256).length > 0 &&
+    sha256(asset.checksum_sha256).length === 64 &&
+    positiveNumber(asset.size_bytes) > 0 &&
+    assetProvider.length > 0 &&
+    assetProvider !== "local_dev" &&
+    boundedText(asset.storage_key, 512).length > 0 &&
+    safeHttpsUrl(asset.prepared_video_asset_url).length > 0 &&
+    asset.mime_type === "video/mp4" &&
+    asset.server_accessible === true
+  );
 }
 
 function record(value: unknown): JsonRecord | null {

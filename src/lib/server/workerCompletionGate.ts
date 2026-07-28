@@ -1,4 +1,5 @@
 import type { JsonRecord, WorkerJob } from "@/types/automation";
+import { hasValidPreparedVideoAssetEvidence } from "@/lib/repositories/workerResultQa";
 
 export function validateSignedVideoWorkerCompletion(job: WorkerJob, result: JsonRecord) {
   if (job.job_type !== "video_render" || !isRecord(job.payload.server_visual_binding)) {
@@ -20,6 +21,9 @@ export function validateSignedVideoWorkerCompletion(job: WorkerJob, result: Json
     if (!gate || gate[passField] !== true) {
       return { ok: false as const, blocker: `WORKER_RESULT_GATE_FAILED:${gateName}` };
     }
+  }
+  if (!hasValidPreparedVideoAssetEvidence(result.prepared_video_asset)) {
+    return { ok: false as const, blocker: "WORKER_RESULT_PREPARED_ASSET_EVIDENCE_REQUIRED" };
   }
   return { ok: true as const };
 }

@@ -17,6 +17,13 @@ describe("signed worker completion quality gate", () => {
       ok: false,
       blocker: "WORKER_RESULT_ASSET_MISSING:video_url"
     });
+
+    const missingPreparedAsset = validResult();
+    delete missingPreparedAsset.prepared_video_asset;
+    expect(validateSignedVideoWorkerCompletion(jobFixture(), missingPreparedAsset)).toEqual({
+      ok: false,
+      blocker: "WORKER_RESULT_PREPARED_ASSET_EVIDENCE_REQUIRED"
+    });
   });
 
   test("accepts all four R2-bound assets only after every quality gate passes", () => {
@@ -55,6 +62,16 @@ function validResult() {
     creative_policy_gate: { gate_pass: true },
     visual_gate: { gate_pass: true },
     asr_gate: { pass: true },
-    render_output_gate: { pass: true }
+    render_output_gate: { pass: true },
+    prepared_video_asset: {
+      asset_id: "asset-job-1-video",
+      checksum_sha256: "a".repeat(64),
+      size_bytes: 123456,
+      provider: "r2",
+      storage_key: "job-1/video.mp4",
+      prepared_video_asset_url: "https://r2.example/video.mp4",
+      mime_type: "video/mp4",
+      server_accessible: true
+    }
   };
 }

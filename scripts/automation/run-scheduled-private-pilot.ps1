@@ -24,6 +24,7 @@ if ([System.IO.File]::Exists($lockPath)) {
 }
 
 $lockStream = $null
+$lockAcquired = $false
 try {
   try {
     $lockStream = [System.IO.File]::Open(
@@ -32,6 +33,7 @@ try {
       [System.IO.FileAccess]::Write,
       [System.IO.FileShare]::None
     )
+    $lockAcquired = $true
   } catch [System.IO.IOException] {
     Write-Output '{"ok":false,"blocker":"SCHEDULER_OVERLAP_LOCKED","external_api_called":false}'
     exit 0
@@ -54,7 +56,7 @@ try {
   if ($null -ne $lockStream) {
     $lockStream.Dispose()
   }
-  if ([System.IO.File]::Exists($lockPath)) {
+  if ($lockAcquired -and [System.IO.File]::Exists($lockPath)) {
     Remove-Item -LiteralPath $lockPath -Force
   }
 }

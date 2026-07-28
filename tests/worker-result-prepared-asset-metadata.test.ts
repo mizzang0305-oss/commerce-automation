@@ -20,11 +20,13 @@ describe("Worker result prepared asset metadata", () => {
         audio_present: true
       },
       prepared_video_asset: {
+        asset_id: "asset-job-1-video",
         checksum_sha256: "a".repeat(64),
         size_bytes: 123456,
         provider: "r2",
         storage_key: "job-1/video.mp4",
         prepared_video_asset_url: "https://assets.example/video.mp4",
+        mime_type: "video/mp4",
         expires_at: "2026-07-28T03:30:00.000Z",
         server_accessible: true
       }
@@ -41,7 +43,7 @@ describe("Worker result prepared asset metadata", () => {
     });
   });
 
-  test("does not preserve invalid checksum, provider, or non-HTTPS URL", () => {
+  test("does not mark QA passed for invalid checksum, provider, or non-HTTPS URL", () => {
     const result = buildWorkerResultQa({
       creative_policy_gate: { gate_pass: true },
       visual_gate: { gate_pass: true },
@@ -60,6 +62,26 @@ describe("Worker result prepared asset metadata", () => {
       video_checksum_sha256: "",
       prepared_video_asset_provider: "",
       prepared_video_asset_url: ""
+    });
+    expect(result.status).toBe("needs_fix");
+  });
+
+  test("does not mark QA passed when prepared asset evidence is omitted", () => {
+    const result = buildWorkerResultQa({
+      creative_policy_gate: { gate_pass: true },
+      visual_gate: { gate_pass: true },
+      asr_gate: { pass: true, product_anchor_recognized: true },
+      render_output_gate: { pass: true, audio_present: true }
+    });
+
+    expect(result.status).toBe("needs_fix");
+    expect(result.metadata).toMatchObject({
+      video_checksum_sha256: "",
+      video_size_bytes: 0,
+      prepared_video_asset_provider: "",
+      prepared_video_asset_storage_key: "",
+      prepared_video_asset_url: "",
+      prepared_video_asset_server_accessible: false
     });
   });
 });
