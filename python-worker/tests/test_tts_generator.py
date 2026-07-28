@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.media.tts_generator import (
     BLOCKED_AUDIO,
     BLOCKED_DELIVERY_STYLE,
+    BLOCKED_EFFECTIVE_SPEED,
     BLOCKED_NOT_APPROVED,
     BLOCKED_NOT_KOREAN,
     BLOCKED_PAID_OR_CLOUD,
@@ -116,8 +117,8 @@ class TtsGeneratorTest(unittest.TestCase):
                         _kwargs["env"]["KOREAN_VOICE_DELIVERY_STYLE"],
                         "brisk_confident_sales",
                     )
-                    self.assertEqual(_kwargs["env"]["MELOTTS_SPEED"], "1.250")
-                    write_wav(output, 2.0)
+                    self.assertEqual(_kwargs["env"]["MELOTTS_SPEED"], "1.200")
+                    write_wav(output, 1.06)
                 else:
                     write_wav(Path(args[-1]), 1.0)
                 return type("Completed", (), {"returncode": 0})()
@@ -133,7 +134,7 @@ class TtsGeneratorTest(unittest.TestCase):
                         provider_approved=True,
                         command=str(command),
                         delivery_style="brisk_confident_sales",
-                        speed=1.25,
+                        speed=1.2,
                     )
             finally:
                 os.chdir(original_cwd)
@@ -144,6 +145,34 @@ class TtsGeneratorTest(unittest.TestCase):
             self.assertFalse((root / "voice.raw.wav").exists())
             with wave.open(str(root / target), "rb") as wav:
                 self.assertAlmostEqual(wav.getnframes() / wav.getframerate(), 1.0, places=2)
+
+    def test_duration_normalization_rejects_out_of_policy_effective_speed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            command = root / "voice.cmd"
+            command.write_text("@echo off", encoding="utf-8")
+            target = root / "voice.wav"
+
+            def fake_run(args, **_kwargs):
+                output = Path(args[args.index("--output") + 1])
+                write_wav(output, 1.2)
+                return type("Completed", (), {"returncode": 0})()
+
+            with patch("src.media.tts_generator.subprocess.run", side_effect=fake_run) as run:
+                with self.assertRaisesRegex(RuntimeError, BLOCKED_EFFECTIVE_SPEED):
+                    create_tts_audio(
+                        "빠른 판매 음성 테스트",
+                        target,
+                        duration_seconds=1.0,
+                        provider="local_command",
+                        provider_approved=True,
+                        command=str(command),
+                        delivery_style="brisk_confident_sales",
+                        speed=1.25,
+                    )
+
+            self.assertEqual(run.call_count, 1)
+            self.assertFalse(target.exists())
 
     def test_local_provider_rejects_silent_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:

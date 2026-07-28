@@ -4,6 +4,7 @@ import math
 from typing import Literal
 
 from .subtitle_generator import wrap_caption
+from .tts_generator import validate_local_voice_command
 from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
@@ -100,6 +101,7 @@ def evaluate_v143_creative_policy(evidence: dict[str, object]) -> dict[str, obje
         str(evidence.get("tts_provider") or "").strip().lower() == "local_command"
         and evidence.get("tts_provider_approved") is True
         and str(evidence.get("tts_language") or "").strip().lower().startswith("ko")
+        and evidence.get("tts_command_valid") is True
         and str(evidence.get("tts_delivery_style") or "").strip()
         == REQUIRED_TTS_DELIVERY
     )
@@ -187,6 +189,18 @@ def evaluate_v143_worker_pre_render_policy(
         "tts_provider": getattr(config, "korean_voice_provider", ""),
         "tts_provider_approved": getattr(config, "korean_voice_provider_approved", False),
         "tts_language": getattr(config, "korean_voice_language", ""),
+        "tts_command_valid": (
+            validate_local_voice_command(
+                getattr(config, "korean_voice_provider", ""),
+                getattr(config, "korean_voice_command", ""),
+                reject_windows_sapi=getattr(
+                    config,
+                    "korean_voice_reject_windows_sapi",
+                    True,
+                ),
+            )
+            is None
+        ),
         "tts_speed_multiplier": getattr(config, "korean_voice_speed", 1.14),
         "tts_delivery_style": getattr(config, "korean_voice_delivery_style", ""),
         "safe_to_upload": False,

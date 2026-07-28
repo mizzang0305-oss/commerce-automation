@@ -15,7 +15,10 @@ BLOCKED_PAID_OR_CLOUD = "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
 BLOCKED_COMMAND = "BLOCKED_KOREAN_VOICE_COMMAND_INVALID"
 BLOCKED_GENERATION = "BLOCKED_KOREAN_VOICE_GENERATION_FAILED"
 BLOCKED_AUDIO = "BLOCKED_KOREAN_VOICE_AUDIO_INVALID"
+BLOCKED_EFFECTIVE_SPEED = "BLOCKED_KOREAN_VOICE_EFFECTIVE_SPEED_OUT_OF_RANGE"
 REQUIRED_DELIVERY_STYLE = "brisk_confident_sales"
+MIN_MERCHANT_TTS_SPEED = 1.2
+MAX_MERCHANT_TTS_SPEED = 1.3
 
 
 def create_tts_audio(
@@ -59,15 +62,14 @@ def create_tts_audio(
     if normalized_delivery_style != REQUIRED_DELIVERY_STYLE:
         raise RuntimeError(BLOCKED_DELIVERY_STYLE)
 
-    combined = f"{normalized_provider} {command}".lower()
-    if reject_windows_sapi and any(marker in combined for marker in ("windows sapi", "local_sapi", "sapi_voice", "system.speech")):
-        raise RuntimeError(BLOCKED_SAPI)
-    if any(marker in combined for marker in ("openai", "elevenlabs", "eleven_labs", "naver", "google", "azure", "cloud", "api")):
-        raise RuntimeError(BLOCKED_PAID_OR_CLOUD)
-
+    command_blocker = validate_local_voice_command(
+        normalized_provider,
+        command,
+        reject_windows_sapi=reject_windows_sapi,
+    )
+    if command_blocker:
+        raise RuntimeError(command_blocker)
     command_path = Path(command).expanduser()
-    if not command_path.is_absolute() or not command_path.is_file():
-        raise RuntimeError(BLOCKED_COMMAND)
 
     target = target.resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -88,6 +90,13 @@ def create_tts_audio(
         if duration_seconds is None:
             shutil.move(str(raw_path), str(target))
         else:
+            effective_speed = _effective_delivery_speed(
+                float(speed),
+                source_duration,
+                float(duration_seconds),
+            )
+            if not MIN_MERCHANT_TTS_SPEED <= effective_speed <= MAX_MERCHANT_TTS_SPEED:
+                raise RuntimeError(BLOCKED_EFFECTIVE_SPEED)
             _normalize_duration(
                 raw_path,
                 target,
@@ -103,6 +112,57 @@ def create_tts_audio(
     finally:
         script_path.unlink(missing_ok=True)
         raw_path.unlink(missing_ok=True)
+
+
+def validate_local_voice_command(
+    provider: str,
+    command: str,
+    *,
+    reject_windows_sapi: bool,
+) -> str | None:
+    normalized_provider = str(provider or "").strip().lower()
+    normalized_command = str(command or "").strip()
+    if normalized_provider != "local_command" or not normalized_command:
+        return BLOCKED_NOT_CONFIGURED
+
+    combined = f"{normalized_provider} {normalized_command}".lower()
+    if reject_windows_sapi and any(
+        marker in combined
+        for marker in ("windows sapi", "local_sapi", "sapi_voice", "system.speech")
+    ):
+        return BLOCKED_SAPI
+    if any(
+        marker in combined
+        for marker in (
+            "openai",
+            "elevenlabs",
+            "eleven_labs",
+            "naver",
+            "google",
+            "azure",
+            "cloud",
+            "api",
+        )
+    ):
+        return BLOCKED_PAID_OR_CLOUD
+
+    command_path = Path(normalized_command).expanduser()
+    if not command_path.is_absolute() or not command_path.is_file():
+        return BLOCKED_COMMAND
+    return None
+
+
+def _effective_delivery_speed(
+    configured_speed: float,
+    source_duration: float,
+    target_duration: float,
+) -> float:
+    normalization_multiplier = (
+        source_duration / target_duration
+        if source_duration > target_duration + 0.05
+        else 1.0
+    )
+    return configured_speed * normalization_multiplier
 
 
 def _create_placeholder_audio(text: str, target: Path, duration_seconds: float | None) -> Path:
