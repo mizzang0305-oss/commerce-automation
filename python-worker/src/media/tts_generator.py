@@ -149,6 +149,14 @@ def validate_local_voice_command(
     command_path = Path(normalized_command).expanduser()
     if not command_path.is_absolute() or not command_path.is_file():
         return BLOCKED_COMMAND
+    if os.name == "nt":
+        if command_path.suffix.lower() not in {".cmd", ".bat", ".exe", ".com"}:
+            return BLOCKED_COMMAND
+    elif command_path.suffix.lower() in {".cmd", ".bat"} or not os.access(
+        command_path,
+        os.X_OK,
+    ):
+        return BLOCKED_COMMAND
     return None
 
 

@@ -45,7 +45,7 @@ class V143CreativePolicyTest(unittest.TestCase):
             korean_voice_provider="local_command",
             korean_voice_provider_approved=True,
             korean_voice_language="ko-KR",
-            korean_voice_command=str(Path(__file__).resolve()),
+            korean_voice_command=sys.executable,
             korean_voice_reject_windows_sapi=True,
             korean_voice_speed=1.25,
             korean_voice_delivery_style="brisk_confident_sales",
@@ -332,6 +332,7 @@ class V143CreativePolicyTest(unittest.TestCase):
         commands = (
             "relative-voice.cmd",
             str(Path(__file__).resolve().with_name("missing-voice.cmd")),
+            str(Path(__file__).resolve()),
             "C:/voice/system.speech.cmd",
             "C:/voice/cloud-api.cmd",
         )
@@ -454,7 +455,7 @@ def _valid_config() -> SimpleNamespace:
         korean_voice_provider="local_command",
         korean_voice_provider_approved=True,
         korean_voice_language="ko-KR",
-        korean_voice_command=str(Path(__file__).resolve()),
+        korean_voice_command=sys.executable,
         korean_voice_reject_windows_sapi=True,
         korean_voice_speed=1.25,
         korean_voice_delivery_style="brisk_confident_sales",
