@@ -10,10 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.media.tts_generator import (
     BLOCKED_AUDIO,
+    BLOCKED_DELIVERY_STYLE,
+    BLOCKED_EFFECTIVE_SPEED,
     BLOCKED_NOT_APPROVED,
     BLOCKED_NOT_KOREAN,
     BLOCKED_PAID_OR_CLOUD,
     BLOCKED_SAPI,
+    _command_path_is_runnable,
     create_tts_audio,
 )
 
@@ -29,7 +32,40 @@ def write_wav(path: Path, duration: float, amplitude: int = 1200) -> None:
         wav.writeframes(sample * frames)
 
 
+def write_runnable_voice_command(root: Path) -> Path:
+    if os.name == "nt":
+        command = root / "voice.cmd"
+        command.write_text("@echo off", encoding="utf-8")
+    else:
+        command = root / "voice.sh"
+        command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        command.chmod(0o700)
+    return command
+
+
 class TtsGeneratorTest(unittest.TestCase):
+    def test_posix_command_validation_accepts_executable_and_rejects_cmd(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            executable = root / "voice.sh"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            windows_script = root / "voice.cmd"
+            windows_script.write_text("@echo off", encoding="utf-8")
+
+            with patch("src.media.tts_generator.os.access", return_value=True):
+                self.assertTrue(
+                    _command_path_is_runnable(
+                        executable,
+                        platform_name="posix",
+                    )
+                )
+                self.assertFalse(
+                    _command_path_is_runnable(
+                        windows_script,
+                        platform_name="posix",
+                    )
+                )
+
     def test_placeholder_remains_explicit_local_test_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "placeholder.wav"
@@ -54,6 +90,25 @@ class TtsGeneratorTest(unittest.TestCase):
                     command=str(command),
                 )
 
+    def test_local_provider_requires_exact_delivery_style_before_subprocess(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            command = Path(temp_dir) / "voice.cmd"
+            command.write_text("@echo off", encoding="utf-8")
+            target = Path(temp_dir) / "voice.wav"
+            for delivery_style in ("", "calm_narration"):
+                with self.subTest(delivery_style=delivery_style):
+                    with patch("src.media.tts_generator.subprocess.run") as run:
+                        with self.assertRaisesRegex(RuntimeError, BLOCKED_DELIVERY_STYLE):
+                            create_tts_audio(
+                                "테스트",
+                                target,
+                                provider="local_command",
+                                provider_approved=True,
+                                command=str(command),
+                                delivery_style=delivery_style,
+                            )
+                    run.assert_not_called()
+
     def test_local_provider_rejects_sapi_and_paid_cloud_markers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "voice.wav"
@@ -61,20 +116,29 @@ class TtsGeneratorTest(unittest.TestCase):
             sapi.write_text("@echo off", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, BLOCKED_SAPI):
                 create_tts_audio(
-                    "테스트", target, provider="local_command", provider_approved=True, command=str(sapi)
+                    "테스트",
+                    target,
+                    provider="local_command",
+                    provider_approved=True,
+                    command=str(sapi),
+                    delivery_style="brisk_confident_sales",
                 )
             paid = Path(temp_dir) / "cloud-voice.cmd"
             paid.write_text("@echo off", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, BLOCKED_PAID_OR_CLOUD):
                 create_tts_audio(
-                    "테스트", target, provider="local_command", provider_approved=True, command=str(paid)
+                    "테스트",
+                    target,
+                    provider="local_command",
+                    provider_approved=True,
+                    command=str(paid),
+                    delivery_style="brisk_confident_sales",
                 )
 
     def test_local_provider_generates_and_normalizes_non_silent_wav(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            command = root / "voice.cmd"
-            command.write_text("@echo off", encoding="utf-8")
+            command = write_runnable_voice_command(root)
             target = Path("voice.wav")
             original_cwd = Path.cwd()
 
@@ -82,7 +146,12 @@ class TtsGeneratorTest(unittest.TestCase):
                 if "--output" in args:
                     output = Path(args[args.index("--output") + 1])
                     self.assertTrue(output.is_absolute())
-                    write_wav(output, 2.0)
+                    self.assertEqual(
+                        _kwargs["env"]["KOREAN_VOICE_DELIVERY_STYLE"],
+                        "brisk_confident_sales",
+                    )
+                    self.assertEqual(_kwargs["env"]["MELOTTS_SPEED"], "1.200")
+                    write_wav(output, 1.06)
                 else:
                     write_wav(Path(args[-1]), 1.0)
                 return type("Completed", (), {"returncode": 0})()
@@ -97,6 +166,8 @@ class TtsGeneratorTest(unittest.TestCase):
                         provider="local_command",
                         provider_approved=True,
                         command=str(command),
+                        delivery_style="brisk_confident_sales",
+                        speed=1.2,
                     )
             finally:
                 os.chdir(original_cwd)
@@ -108,11 +179,37 @@ class TtsGeneratorTest(unittest.TestCase):
             with wave.open(str(root / target), "rb") as wav:
                 self.assertAlmostEqual(wav.getnframes() / wav.getframerate(), 1.0, places=2)
 
+    def test_duration_normalization_rejects_out_of_policy_effective_speed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            command = write_runnable_voice_command(root)
+            target = root / "voice.wav"
+
+            def fake_run(args, **_kwargs):
+                output = Path(args[args.index("--output") + 1])
+                write_wav(output, 1.2)
+                return type("Completed", (), {"returncode": 0})()
+
+            with patch("src.media.tts_generator.subprocess.run", side_effect=fake_run) as run:
+                with self.assertRaisesRegex(RuntimeError, BLOCKED_EFFECTIVE_SPEED):
+                    create_tts_audio(
+                        "빠른 판매 음성 테스트",
+                        target,
+                        duration_seconds=1.0,
+                        provider="local_command",
+                        provider_approved=True,
+                        command=str(command),
+                        delivery_style="brisk_confident_sales",
+                        speed=1.25,
+                    )
+
+            self.assertEqual(run.call_count, 1)
+            self.assertFalse(target.exists())
+
     def test_local_provider_rejects_silent_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            command = root / "voice.cmd"
-            command.write_text("@echo off", encoding="utf-8")
+            command = write_runnable_voice_command(root)
             target = root / "voice.wav"
 
             def fake_run(args, **_kwargs):
@@ -128,6 +225,7 @@ class TtsGeneratorTest(unittest.TestCase):
                         provider="local_command",
                         provider_approved=True,
                         command=str(command),
+                        delivery_style="brisk_confident_sales",
                     )
 
 

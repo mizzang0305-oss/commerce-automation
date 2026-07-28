@@ -10,6 +10,7 @@ from ..media.tts_generator import create_tts_audio
 from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
 from ..media.format_aware_visual_calibration import evaluate_runtime_format_profile
 from ..media.worker_visual_binding import verify_server_visual_binding
+from ..media.v143_worker_pre_render_policy import evaluate_v143_worker_pre_render_policy
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
@@ -29,6 +30,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     image_url = image_urls[0]
     voiceover_script = render_context["voiceover_script"]
     shot_captions = render_context["shot_captions"]
+    shot_usage_labels = render_context["shot_usage_labels"]
     subtitle_text = "\n".join(shot_captions)
     disclosure_text = render_context["disclosure_text"]
     shot_durations = render_context["shot_durations"]
@@ -46,6 +48,15 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         render_plan,
         getattr(config, "worker_visual_binding_secret", ""),
     )
+    v143_policy_gate = evaluate_v143_worker_pre_render_policy(
+        render_plan,
+        verified_binding,
+        config,
+    )
+    if not v143_policy_gate["gate_pass"]:
+        raise ValueError(
+            "v143_creative_policy_blocked:" + ",".join(v143_policy_gate["blockers"])
+        )
 
     ffmpeg_exe = require_ffmpeg_for_video_render()
 
@@ -85,6 +96,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         language=getattr(config, "korean_voice_language", "ko"),
         command=getattr(config, "korean_voice_command", ""),
         reject_windows_sapi=getattr(config, "korean_voice_reject_windows_sapi", True),
+        delivery_style=getattr(config, "korean_voice_delivery_style", ""),
         speed=getattr(config, "korean_voice_speed", 1.14),
         timeout_seconds=getattr(config, "korean_voice_timeout_seconds", 600),
         ffmpeg_exe=ffmpeg_exe,
@@ -106,6 +118,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         subtitle_text=subtitle_text,
         shot_durations=shot_durations,
         shot_captions=shot_captions,
+        shot_usage_labels=shot_usage_labels,
         shot_image_paths=sequence_image_paths,
     )
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
@@ -121,6 +134,8 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     quality_metadata_text = "\n".join(f"{key}: {value}" for key, value in quality_metadata.items())
     visual_metadata_text = "\n".join([
         "visual_binding_verified: true",
+        f"v143_creative_policy_gate_version: {v143_policy_gate['gate_version']}",
+        f"v143_creative_policy_gate_pass: {str(v143_policy_gate['gate_pass']).lower()}",
         f"pre_render_visual_gate_version: {visual_gate['gate_version']}",
         f"pre_render_visual_gate_pass: {str(visual_gate['gate_pass']).lower()}",
         f"pre_render_visual_format: {visual_gate['format_name']}",
@@ -140,6 +155,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
             **visual_gate,
             "binding_verified": True,
         },
+        "creative_policy_gate": v143_policy_gate,
     }
 
 
@@ -158,6 +174,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
 
     voice_lines: list[str] = []
     shot_captions: list[str] = []
+    shot_usage_labels: list[str] = []
     shot_durations: list[float] = []
     image_urls: list[str] = []
     for index, shot in enumerate(shots, start=1):
@@ -177,7 +194,10 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         if not caption:
             raise ValueError("render_plan.shots.caption is required")
         voice_lines.append(voice_text)
-        shot_captions.append(caption)
+        shot_captions.append(" ".join(caption.split()))
+        shot_usage_labels.append(
+            " ".join(str(shot.get("usage_label") or "").split())
+        )
         shot_durations.append(float(duration_sec))
 
     return {
@@ -185,6 +205,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         "image_urls": image_urls,
         "voiceover_script": "\n".join(voice_lines).strip(),
         "shot_captions": shot_captions,
+        "shot_usage_labels": shot_usage_labels,
         "disclosure_text": disclosure_text,
         "shot_durations": shot_durations,
     }

@@ -62,6 +62,8 @@ def validate_production_worker_env(env: dict[str, str]) -> list[str]:
         blockers.append("KOREAN_VOICE_PROVIDER_APPROVED must be true")
     if not env.get("KOREAN_VOICE_COMMAND", "").strip():
         blockers.append("KOREAN_VOICE_COMMAND is required")
+    if env.get("KOREAN_VOICE_DELIVERY_STYLE", "").strip() != "brisk_confident_sales":
+        blockers.append("KOREAN_VOICE_DELIVERY_STYLE must be brisk_confident_sales")
     return blockers
 
 
