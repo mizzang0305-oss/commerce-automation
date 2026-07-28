@@ -45,6 +45,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { buildWorkerResultQa } from "@/lib/repositories/workerResultQa";
 import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 type JsonMap = Record<string, unknown>;
@@ -260,18 +261,20 @@ export function buildSupabaseAssetRowsForWorkerJob(job: WorkerJob, options: { in
     ["upload_package", "upload-packages", getResultUrl(job.result, "upload_package_url")]
   ];
 
+  const qa = buildWorkerResultQa(job.result);
   return assets
     .filter(([assetType, , url]) => Boolean(url) && (options.includeVideo || assetType !== "video"))
     .map(([assetType, bucket, url]) => ({
       id: `asset-${job.id}-${assetType}`,
       product_queue_id: job.product_queue_id,
+      product_candidate_id: job.product_candidate_id || null,
       worker_job_id: job.id,
       asset_type: assetType,
       bucket,
       url,
-      render_qa_metadata: {},
-      qa_status: "pending",
-      qa_note: "",
+      render_qa_metadata: qa.metadata,
+      qa_status: qa.status,
+      qa_note: qa.note,
       created_at: nowIso(),
       updated_at: nowIso()
     }));

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAutomationRepository } from "@/lib/repositories/automationRepository";
 import { getWorkerAuthError, verifyWorkerRequest } from "@/lib/server/workerAuth";
+import { validateSignedVideoWorkerCompletion } from "@/lib/server/workerCompletionGate";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,25 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ ok: false, message: "worker_id is required." }, { status: 400 });
   }
 
-  const job = await getAutomationRepository().completeWorkerJob(id, workerId, result);
+  const repository = getAutomationRepository();
+  const existingJob = await repository.getWorkerJob(id);
+  if (!existingJob) {
+    return NextResponse.json({ ok: false, message: "Worker job not found." }, { status: 404 });
+  }
+  const completionGate = validateSignedVideoWorkerCompletion(existingJob, result);
+  if (!completionGate.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: completionGate.blocker,
+        uploaded_state_recorded: false,
+        queue_video_ready_recorded: false
+      },
+      { status: 422 }
+    );
+  }
+
+  const job = await repository.completeWorkerJob(id, workerId, result);
   if (!job) {
     return NextResponse.json({ ok: false, message: "Job was not claimed by this worker." }, { status: 404 });
   }

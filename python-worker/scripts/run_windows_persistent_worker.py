@@ -64,6 +64,20 @@ def validate_production_worker_env(env: dict[str, str]) -> list[str]:
         blockers.append("KOREAN_VOICE_COMMAND is required")
     if env.get("KOREAN_VOICE_DELIVERY_STYLE", "").strip() != "brisk_confident_sales":
         blockers.append("KOREAN_VOICE_DELIVERY_STYLE must be brisk_confident_sales")
+    try:
+        voice_speed = float(env.get("KOREAN_VOICE_SPEED", ""))
+    except ValueError:
+        voice_speed = 0.0
+    if not 1.2 <= voice_speed <= 1.3:
+        blockers.append("KOREAN_VOICE_SPEED must be between 1.2 and 1.3")
+    if env.get("KOREAN_ASR_PROVIDER", "").strip().lower() != "faster_whisper_local_command":
+        blockers.append("KOREAN_ASR_PROVIDER must be faster_whisper_local_command")
+    if env.get("KOREAN_ASR_PROVIDER_APPROVED", "").strip().lower() not in {"1", "true", "yes", "y"}:
+        blockers.append("KOREAN_ASR_PROVIDER_APPROVED must be true")
+    if not env.get("KOREAN_ASR_PYTHON_EXECUTABLE", "").strip():
+        blockers.append("KOREAN_ASR_PYTHON_EXECUTABLE is required")
+    if not env.get("KOREAN_ASR_VALIDATOR_SCRIPT", "").strip():
+        blockers.append("KOREAN_ASR_VALIDATOR_SCRIPT is required")
     return blockers
 
 

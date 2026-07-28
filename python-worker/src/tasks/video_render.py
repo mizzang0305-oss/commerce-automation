@@ -11,6 +11,9 @@ from ..media.video_renderer import build_render_quality_metadata, render_vertica
 from ..media.format_aware_visual_calibration import evaluate_runtime_format_profile
 from ..media.worker_visual_binding import verify_server_visual_binding
 from ..media.v143_worker_pre_render_policy import evaluate_v143_worker_pre_render_policy
+from ..media.korean_text_normalizer import normalize_korean_tts_text
+from ..media.korean_asr_validator import validate_korean_asr
+from ..media.render_output_validator import validate_render_output
 
 
 def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, heartbeat) -> dict:
@@ -28,7 +31,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     product_name = render_context["product_name"]
     image_urls = render_context["image_urls"]
     image_url = image_urls[0]
-    voiceover_script = render_context["voiceover_script"]
+    voiceover_script = normalize_korean_tts_text(render_context["voiceover_script"])
     shot_captions = render_context["shot_captions"]
     subtitle_text = "\n".join(shot_captions)
     disclosure_text = render_context["disclosure_text"]
@@ -96,9 +99,22 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         command=getattr(config, "korean_voice_command", ""),
         reject_windows_sapi=getattr(config, "korean_voice_reject_windows_sapi", True),
         delivery_style=getattr(config, "korean_voice_delivery_style", ""),
-        speed=getattr(config, "korean_voice_speed", 1.14),
+        speed=getattr(config, "korean_voice_speed", 1.25),
         timeout_seconds=getattr(config, "korean_voice_timeout_seconds", 600),
         ffmpeg_exe=ffmpeg_exe,
+    )
+    asr_gate = validate_korean_asr(
+        audio_path=audio_path,
+        expected_script=voiceover_script,
+        product_name=product_name,
+        work_dir=work_dir,
+        provider=getattr(config, "korean_asr_provider", "disabled"),
+        provider_approved=getattr(config, "korean_asr_provider_approved", False),
+        python_executable=getattr(config, "korean_asr_python_executable", ""),
+        validator_script=getattr(config, "korean_asr_validator_script", ""),
+        model=getattr(config, "korean_asr_model", "small"),
+        similarity_threshold=getattr(config, "korean_asr_similarity_threshold", 0.82),
+        timeout_seconds=getattr(config, "korean_asr_timeout_seconds", 900),
     )
     srt_path = write_srt(
         subtitle_text,
@@ -119,6 +135,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         shot_captions=shot_captions,
         shot_image_paths=sequence_image_paths,
     )
+    render_output_gate = validate_render_output(video_path, ffmpeg_exe)
     thumbnail_path = create_thumbnail(image_path, output_dir / "thumbnail.jpg", product_name)
     package_path = output_dir / "upload_package.txt"
     quality_metadata = build_render_quality_metadata(
@@ -137,6 +154,10 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         f"pre_render_visual_gate_version: {visual_gate['gate_version']}",
         f"pre_render_visual_gate_pass: {str(visual_gate['gate_pass']).lower()}",
         f"pre_render_visual_format: {visual_gate['format_name']}",
+        f"korean_asr_pass: {str(asr_gate['pass']).lower()}",
+        f"korean_asr_similarity: {asr_gate['similarity']}",
+        f"korean_asr_product_anchor_recognized: {str(asr_gate['product_anchor_recognized']).lower()}",
+        "render_output_h264_aac_1080x1920: true",
     ])
     package_path.write_text(
         f"{product_name}\n\n{voiceover_script}\n\n{disclosure_text}\n{affiliate_url}\n\nRender QA\n{quality_metadata_text}\n{visual_metadata_text}\n",
@@ -154,6 +175,8 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
             "binding_verified": True,
         },
         "creative_policy_gate": v143_policy_gate,
+        "asr_gate": asr_gate,
+        "render_output_gate": render_output_gate,
     }
 
 

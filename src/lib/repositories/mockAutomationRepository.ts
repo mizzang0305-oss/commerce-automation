@@ -34,6 +34,7 @@ import {
   type ProductCandidateFilters,
   type PromoteCandidateOptions
 } from "@/lib/candidatePromotion";
+import { buildWorkerResultQa } from "@/lib/repositories/workerResultQa";
 import { enrichProductCandidate, enrichProductCandidates } from "@/lib/candidates/candidateNormalizer";
 
 const DEFAULT_EXCLUDED_CATEGORIES = [
@@ -1043,6 +1044,7 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
     const thumbnailUrl = getResultUrl(result, "thumbnail_url");
     const srtUrl = getResultUrl(result, "srt_url");
     const uploadPackageUrl = getResultUrl(result, "upload_package_url");
+    const qa = buildWorkerResultQa(result);
     const assets: Array<[ProductAsset["asset_type"], string, string]> = [
       ["video", "rendered-videos", videoUrl],
       ["thumbnail", "thumbnails", thumbnailUrl],
@@ -1058,13 +1060,14 @@ export class InMemoryAutomationRepository implements MutableMockAutomationReposi
       this.productAssets.push({
         id,
         product_queue_id: job.product_queue_id,
+        product_candidate_id: job.product_candidate_id || null,
         worker_job_id: job.id,
         asset_type: assetType,
         bucket,
         url,
-        render_qa_metadata: {},
-        qa_status: "pending",
-        qa_note: "",
+        render_qa_metadata: qa.metadata,
+        qa_status: qa.status,
+        qa_note: qa.note,
         created_at: nowIso(),
         updated_at: nowIso()
       });

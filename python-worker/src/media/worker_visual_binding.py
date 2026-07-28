@@ -35,7 +35,7 @@ def verify_server_visual_binding(
         raise ValueError("worker_visual_binding_secret_missing_or_too_short")
 
     binding = payload.get("server_visual_binding")
-    if not isinstance(binding, dict) or set(binding) != EXPECTED_BINDING_KEYS:
+    if not isinstance(binding, dict):
         raise ValueError("server_visual_binding_schema_invalid")
 
     shots = render_plan.get("shots")
@@ -47,6 +47,17 @@ def verify_server_visual_binding(
         raise ValueError("server_visual_binding_queue_mismatch")
     if _required_string(render_plan.get("queue_id"), "render_plan_queue_id") != queue_id:
         raise ValueError("server_visual_binding_queue_mismatch")
+    product_candidate_id = str(job.get("product_candidate_id") or "").strip()
+    payload_candidate_id = str(payload.get("product_candidate_id") or "").strip()
+    expected_keys = set(EXPECTED_BINDING_KEYS)
+    if product_candidate_id:
+        if payload_candidate_id != product_candidate_id:
+            raise ValueError("server_visual_binding_candidate_mismatch")
+        expected_keys.add("product_candidate_id_sha256")
+    elif payload_candidate_id:
+        raise ValueError("server_visual_binding_candidate_mismatch")
+    if set(binding) != expected_keys:
+        raise ValueError("server_visual_binding_schema_invalid")
 
     product_name = _required_string(render_plan.get("product_name"), "render_plan_product_name")
     affiliate_url = _required_string(payload.get("selected_affiliate_url"), "selected_affiliate_url")
@@ -72,6 +83,7 @@ def verify_server_visual_binding(
         "version": "1",
         "issuer": "commerce-web-next-batch",
         "queue_id": queue_id,
+        **({"product_candidate_id_sha256": _sha256(product_candidate_id)} if product_candidate_id else {}),
         "product_name_sha256": _sha256(product_name),
         "affiliate_url_sha256": _sha256(affiliate_url),
         "script_sha256": _sha256("\n".join(voice_lines)),

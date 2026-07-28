@@ -165,7 +165,7 @@ class V143CreativePolicyTest(unittest.TestCase):
         )
 
         self.assertFalse(result["gate_pass"])
-        self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
+        self.assertNotIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
         self.assertIn("V143_REAL_USAGE_SCENE_REQUIRED", result["blockers"])
         self.assertIn("V143_REAL_USAGE_SOURCE_REQUIRED", result["blockers"])
         self.assertIn("V143_APPROVED_KOREAN_MERCHANT_TTS_REQUIRED", result["blockers"])

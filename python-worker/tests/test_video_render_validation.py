@@ -56,9 +56,38 @@ class VideoRenderValidationTest(unittest.TestCase):
         self.binding_patch.start()
         self.gate_patch.start()
         self.v143_gate_patch.start()
+        self.asr_patch = patch(
+            "src.tasks.video_render.validate_korean_asr",
+            return_value={
+                "provider": "faster_whisper_local_cpu_int8",
+                "model": "small",
+                "similarity": 0.95,
+                "threshold": 0.82,
+                "product_anchor_recognized": True,
+                "pass": True,
+                "transcript_persisted": False,
+                "raw_text_in_result": False,
+            },
+        )
+        self.render_output_patch = patch(
+            "src.tasks.video_render.validate_render_output",
+            return_value={
+                "pass": True,
+                "width": 1080,
+                "height": 1920,
+                "video_codec": "h264",
+                "audio_codec": "aac",
+                "audio_present": True,
+                "raw_probe_in_result": False,
+            },
+        )
+        self.asr_patch.start()
+        self.render_output_patch.start()
         self.addCleanup(self.binding_patch.stop)
         self.addCleanup(self.gate_patch.stop)
         self.addCleanup(self.v143_gate_patch.stop)
+        self.addCleanup(self.asr_patch.stop)
+        self.addCleanup(self.render_output_patch.stop)
 
     def test_missing_payload_fields_are_rejected_before_ffmpeg_check(self):
         missing_affiliate = _valid_payload() | {"selected_affiliate_url": "  "}
