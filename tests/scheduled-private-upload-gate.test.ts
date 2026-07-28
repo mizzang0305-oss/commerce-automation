@@ -136,6 +136,98 @@ describe("scheduled private pilot upload gate", () => {
     );
     expect(upload).toHaveBeenCalledTimes(1);
   });
+
+  test("concurrent duplicate requests and a same-approval retry call the adapter exactly once", async () => {
+    const upload = successfulUpload();
+    const store = atomicReservationStore();
+    const [first, second] = await Promise.all([
+      executeScheduledPrivatePilot(baseInput(upload, store)),
+      executeScheduledPrivatePilot(baseInput(upload, store))
+    ]);
+    expect([first, second].filter((result) => result.ok)).toHaveLength(1);
+    expect([first, second].filter((result) => !result.ok)).toEqual([
+      expect.objectContaining({
+        blocker: "DUPLICATE_OR_DAILY_PRIVATE_UPLOAD_BLOCKED",
+        adapter_call_count: 0
+      })
+    ]);
+    expect(upload).toHaveBeenCalledTimes(1);
+
+    const retry = await executeScheduledPrivatePilot(baseInput(upload, store));
+    expect(retry).toMatchObject({
+      ok: false,
+      blocker: "DUPLICATE_OR_DAILY_PRIVATE_UPLOAD_BLOCKED",
+      adapter_call_count: 0
+    });
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  test("concurrent same-day requests for different packages call the adapter exactly once", async () => {
+    const upload = successfulUpload();
+    const store = atomicReservationStore();
+    const first = baseInput(upload, store);
+    const second = baseInput(upload, store);
+    second.uploadPackage = { ...second.uploadPackage, id: "package-2" };
+    second.request = {
+      ...second.request,
+      candidate_id: "candidate-2",
+      prepared_video_asset: {
+        ...second.request.prepared_video_asset,
+        asset_id: "asset-2",
+        checksum_sha256: "c".repeat(64)
+      }
+    };
+    second.approval = {
+      ...second.approval,
+      approval_id: "approval-2",
+      upload_package_id: "package-2",
+      product_candidate_id: "candidate-2",
+      video_asset_id: "asset-2",
+      video_checksum_sha256: "c".repeat(64)
+    };
+    second.approvalNonce = "d".repeat(64);
+
+    const results = await Promise.all([
+      executeScheduledPrivatePilot(first),
+      executeScheduledPrivatePilot(second)
+    ]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ["expired approval", (input: ReturnType<typeof baseInput>) => {
+      input.approval = { ...input.approval, expires_at: "2026-07-28T03:19:59.000Z" };
+    }],
+    ["package mismatch", (input: ReturnType<typeof baseInput>) => {
+      input.approval = { ...input.approval, upload_package_id: "package-other" };
+    }],
+    ["candidate mismatch", (input: ReturnType<typeof baseInput>) => {
+      input.approval = { ...input.approval, product_candidate_id: "candidate-other" };
+    }],
+    ["asset mismatch", (input: ReturnType<typeof baseInput>) => {
+      input.approval = { ...input.approval, video_asset_id: "asset-other" };
+    }],
+    ["checksum mismatch", (input: ReturnType<typeof baseInput>) => {
+      input.approval = { ...input.approval, video_checksum_sha256: "e".repeat(64) };
+    }],
+    ["invalid nonce", (input: ReturnType<typeof baseInput>) => {
+      input.approvalNonce = "invalid";
+    }]
+  ])("blocks %s before reservation and adapter", async (_label, mutate) => {
+    const upload = vi.fn();
+    const store = reservationStore();
+    const input = baseInput(upload, store);
+    mutate(input);
+    const result = await executeScheduledPrivatePilot(input);
+    expect(result).toMatchObject({
+      ok: false,
+      blocker: "FRESH_OWNER_APPROVAL_REQUIRED",
+      adapter_call_count: 0
+    });
+    expect(store.reserve).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
 });
 
 function baseInput(
@@ -174,6 +266,37 @@ function reservationStore(
     markHumanReviewRequired: vi.fn(async () => true),
     complete: vi.fn(async () => true),
     ...overrides
+  };
+}
+
+function atomicReservationStore(): PrivatePilotReservationStore {
+  const approvals = new Set<string>();
+  const packages = new Set<string>();
+  let kstDateReserved = false;
+  return {
+    reserve: vi.fn(async ({ approvalId, uploadPackageId }) => {
+      if (
+        approvals.has(approvalId) ||
+        packages.has(uploadPackageId) ||
+        kstDateReserved
+      ) {
+        return {
+          reserved: false as const,
+          blocker: "DUPLICATE_OR_DAILY_PRIVATE_UPLOAD_BLOCKED"
+        };
+      }
+      approvals.add(approvalId);
+      packages.add(uploadPackageId);
+      kstDateReserved = true;
+      return {
+        reserved: true as const,
+        reservationId: `reservation-${approvalId}`
+      };
+    }),
+    markExternalCallStarted: vi.fn(async () => true),
+    markFailedBeforeExternalCall: vi.fn(async () => true),
+    markHumanReviewRequired: vi.fn(async () => true),
+    complete: vi.fn(async () => true)
   };
 }
 

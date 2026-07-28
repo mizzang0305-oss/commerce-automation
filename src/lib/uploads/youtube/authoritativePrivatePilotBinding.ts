@@ -62,6 +62,7 @@ export async function resolveAuthoritativePrivatePilotBinding(input: {
     !candidate ||
     candidate.promoted_queue_id !== queue.id ||
     !workerJob ||
+    workerJob.id !== videoAsset.worker_job_id ||
     workerJob.status !== "completed" ||
     workerJob.product_queue_id !== queue.id ||
     workerJob.product_candidate_id !== candidate.id

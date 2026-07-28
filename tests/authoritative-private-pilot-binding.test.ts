@@ -41,6 +41,30 @@ describe("authoritative private pilot asset binding", () => {
       now: "2026-07-28T03:20:00.000Z"
     })).rejects.toThrow(/AUTHORITATIVE_ASSET_BINDING_REQUIRED|PREPARED_VIDEO_ASSET_EXPIRED/);
   });
+
+  test("blocks a non-passed asset and a mismatched Worker job", async () => {
+    const qaRepository = repository();
+    qaRepository.getProductAssets = vi.fn(async () => [{
+      ...assetFixture({}),
+      qa_status: "needs_fix"
+    }]);
+    await expect(resolveAuthoritativePrivatePilotBinding({
+      repository: qaRepository,
+      uploadPackageId: "package-1",
+      videoAssetId: "asset-1"
+    })).rejects.toThrow("AUTHORITATIVE_ASSET_BINDING_REQUIRED");
+
+    const workerRepository = repository();
+    workerRepository.getWorkerJob = vi.fn(async () => ({
+      ...workerJobFixture(),
+      id: "job-other"
+    }));
+    await expect(resolveAuthoritativePrivatePilotBinding({
+      repository: workerRepository,
+      uploadPackageId: "package-1",
+      videoAssetId: "asset-1"
+    })).rejects.toThrow("AUTHORITATIVE_ASSET_BINDING_REQUIRED");
+  });
 });
 
 function repository(metadataPatch: Record<string, unknown> = {}) {
