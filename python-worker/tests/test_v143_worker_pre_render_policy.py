@@ -136,6 +136,39 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertFalse(result["gate_pass"])
         self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
 
+    def test_any_clipped_usage_label_in_multi_shot_plan_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"].append(
+            {
+                "shot_id": "scene-2",
+                "usage_label": (
+                    "This usage disclosure is deliberately too long to survive "
+                    "the separate two line usage badge in full"
+                ),
+                "caption": "Second scene",
+                "duration_sec": 3,
+            }
+        )
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
     def test_usage_label_without_renderable_hook_caption_is_blocked(self):
         render_plan = _render_plan(
             {

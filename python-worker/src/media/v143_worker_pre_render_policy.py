@@ -210,20 +210,22 @@ def evaluate_v143_worker_pre_render_policy(
 def _usage_label_survives_renderer(shots: object) -> bool:
     if not isinstance(shots, list):
         return False
+    renderable_label_found = False
     for shot in shots:
         if not isinstance(shot, dict):
             continue
         normalized_label = " ".join(str(shot.get("usage_label") or "").split())
         if not normalized_label:
             continue
+        renderable_label_found = True
         rendered_lines = wrap_caption(
             normalized_label,
             max_chars=USAGE_LABEL_MAX_CHARS,
             max_lines=USAGE_LABEL_MAX_LINES,
         )
-        if _full_text_survives_wrapping(normalized_label, rendered_lines):
-            return True
-    return False
+        if not _full_text_survives_wrapping(normalized_label, rendered_lines):
+            return False
+    return renderable_label_found
 
 
 def _full_text_survives_wrapping(source: str, rendered_lines: list[str]) -> bool:
