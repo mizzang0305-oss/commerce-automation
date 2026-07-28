@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import math
-import re
 from typing import Literal
 
-from .subtitle_generator import compose_usage_labeled_caption, wrap_caption
+from .tts_generator import validate_local_voice_command
 from .video_renderer import (
     HOOK_ACCENT_COLOR,
     HOOK_BOX_COLOR,
     HOOK_FONT_SIZE,
-    HOOK_MAX_CHARS,
+    USAGE_LABEL_TEXT_MAX_WIDTH,
+    measure_usage_label_line_width,
+    wrap_hook_caption,
+    wrap_usage_label,
 )
 
 
@@ -99,6 +101,7 @@ def evaluate_v143_creative_policy(evidence: dict[str, object]) -> dict[str, obje
         str(evidence.get("tts_provider") or "").strip().lower() == "local_command"
         and evidence.get("tts_provider_approved") is True
         and str(evidence.get("tts_language") or "").strip().lower().startswith("ko")
+        and evidence.get("tts_command_valid") is True
         and str(evidence.get("tts_delivery_style") or "").strip()
         == REQUIRED_TTS_DELIVERY
     )
@@ -161,19 +164,16 @@ def evaluate_v143_worker_pre_render_policy(
 
     shots = render_plan.get("shots")
     first_shot = shots[0] if isinstance(shots, list) and shots and isinstance(shots[0], dict) else {}
-    first_caption = compose_usage_labeled_caption(
-        first_shot.get("caption"),
-        first_shot.get("usage_label"),
-    )
+    first_caption = " ".join(str(first_shot.get("caption") or "").split())
     renderable_usage_label_present = _usage_label_survives_renderer(shots)
-    hook_lines = wrap_caption(
+    hook_lines = wrap_hook_caption(first_caption)
+    hook_caption_survives_renderer = _full_text_survives_wrapping(
         first_caption,
-        max_chars=HOOK_MAX_CHARS,
-        max_lines=MAX_HOOK_LINES,
+        hook_lines,
     )
     evidence = {
         "hook_font_px": HOOK_FONT_SIZE,
-        "hook_max_lines": len(hook_lines),
+        "hook_max_lines": len(hook_lines) if hook_caption_survives_renderer else math.inf,
         "hook_visible_within_seconds": (
             0.0 if first_shot else math.inf
         ),
@@ -189,6 +189,18 @@ def evaluate_v143_worker_pre_render_policy(
         "tts_provider": getattr(config, "korean_voice_provider", ""),
         "tts_provider_approved": getattr(config, "korean_voice_provider_approved", False),
         "tts_language": getattr(config, "korean_voice_language", ""),
+        "tts_command_valid": (
+            validate_local_voice_command(
+                getattr(config, "korean_voice_provider", ""),
+                getattr(config, "korean_voice_command", ""),
+                reject_windows_sapi=getattr(
+                    config,
+                    "korean_voice_reject_windows_sapi",
+                    True,
+                ),
+            )
+            is None
+        ),
         "tts_speed_multiplier": getattr(config, "korean_voice_speed", 1.14),
         "tts_delivery_style": getattr(config, "korean_voice_delivery_style", ""),
         "safe_to_upload": False,
@@ -212,30 +224,35 @@ def evaluate_v143_worker_pre_render_policy(
 def _usage_label_survives_renderer(shots: object) -> bool:
     if not isinstance(shots, list):
         return False
-    for index, shot in enumerate(shots):
+    renderable_label_found = False
+    for shot in shots:
         if not isinstance(shot, dict):
             continue
         normalized_label = " ".join(str(shot.get("usage_label") or "").split())
         if not normalized_label:
             continue
-        composed_caption = compose_usage_labeled_caption(
-            shot.get("caption"),
-            normalized_label,
-        )
-        rendered_lines = wrap_caption(
-            composed_caption,
-            max_chars=HOOK_MAX_CHARS if index == 0 else 16,
-            max_lines=MAX_HOOK_LINES,
-        )
-        rendered_text = _without_whitespace("\n".join(rendered_lines))
-        expected_marker = _without_whitespace(f"[{normalized_label}]")
-        if expected_marker and expected_marker in rendered_text:
-            return True
-    return False
+        renderable_label_found = True
+        rendered_lines = wrap_usage_label(normalized_label)
+        if (
+            not _full_text_survives_wrapping(normalized_label, rendered_lines)
+            or any(
+                measure_usage_label_line_width(line) > USAGE_LABEL_TEXT_MAX_WIDTH
+                for line in rendered_lines
+            )
+        ):
+            return False
+    return renderable_label_found
 
 
-def _without_whitespace(value: str) -> str:
-    return re.sub(r"\s+", "", value)
+def _full_text_survives_wrapping(source: str, rendered_lines: list[str]) -> bool:
+    normalized_source = " ".join(str(source or "").split())
+    normalized_rendered = " ".join(" ".join(rendered_lines).split())
+    compact_source = "".join(normalized_source.split())
+    compact_rendered = "".join(normalized_rendered.split())
+    return bool(
+        normalized_source
+        and compact_rendered == compact_source
+    )
 
 
 def _worker_blocked_result(blocker: str, *, binding_verified: bool) -> dict[str, object]:

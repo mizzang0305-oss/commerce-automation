@@ -45,16 +45,17 @@ class V143CreativePolicyTest(unittest.TestCase):
             korean_voice_provider="local_command",
             korean_voice_provider_approved=True,
             korean_voice_language="ko-KR",
+            korean_voice_command=sys.executable,
+            korean_voice_reject_windows_sapi=True,
             korean_voice_speed=1.25,
             korean_voice_delivery_style="brisk_confident_sales",
         )
 
-        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-            result = evaluate_v143_worker_pre_render_policy(
-                render_plan,
-                {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                config,
-            )
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            config,
+        )
 
         self.assertTrue(result["gate_pass"])
         self.assertTrue(result["binding_verified"])
@@ -86,7 +87,7 @@ class V143CreativePolicyTest(unittest.TestCase):
         self.assertFalse(result["gate_pass"])
         self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
 
-    def test_usage_label_clipped_by_renderer_is_blocked(self):
+    def test_long_usage_label_does_not_consume_the_hook_caption(self):
         render_plan = _render_plan(
             {
                 "real_usage_scene_present": True,
@@ -99,19 +100,223 @@ class V143CreativePolicyTest(unittest.TestCase):
             }
         )
         render_plan["shots"][0]["usage_label"] = (
-            "This usage disclosure is deliberately too long to survive the renderer "
-            "two line clipping limit in full"
+            "Extended generic usage example label"
         )
 
-        with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-            result = evaluate_v143_worker_pre_render_policy(
-                render_plan,
-                {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                _valid_config(),
-            )
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_wide_usage_label_is_pixel_wrapped_without_losing_the_hook(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = "W" * 24
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_wide_usage_label_that_cannot_fit_two_badge_lines_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = "W" * 64
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
 
         self.assertFalse(result["gate_pass"])
         self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
+    def test_usage_label_that_exceeds_its_separate_badge_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = (
+            "This usage disclosure is deliberately too long to survive the separate "
+            "two line usage badge in full"
+        )
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
+    def test_any_clipped_usage_label_in_multi_shot_plan_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"].append(
+            {
+                "shot_id": "scene-2",
+                "usage_label": (
+                    "This usage disclosure is deliberately too long to survive "
+                    "the separate two line usage badge in full"
+                ),
+                "caption": "Second scene",
+                "duration_sec": 3,
+            }
+        )
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertEqual(result["blockers"], ["V143_USAGE_LABEL_REQUIRED"])
+
+    def test_literal_ellipsis_in_fitting_hook_and_usage_label_passes(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["usage_label"] = "Usage... example"
+        render_plan["shots"][0]["caption"] = "Wait... look"
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertTrue(result["gate_pass"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_usage_label_without_renderable_hook_caption_is_blocked(self):
+        render_plan = _render_plan(
+            {
+                "real_usage_scene_present": True,
+                "usage_source_role": "generic_usage_example",
+                "usage_label_present": True,
+                "exact_product_identity_claim": False,
+                "exact_product_identity_verified": False,
+                "actor_nationality_claim": None,
+                "actor_nationality_verified": False,
+            }
+        )
+        render_plan["shots"][0]["caption"] = ""
+
+        result = evaluate_v143_worker_pre_render_policy(
+            render_plan,
+            {"binding_verified": True, "format_name": "real_usage_storyboard"},
+            _valid_config(),
+        )
+
+        self.assertFalse(result["gate_pass"])
+        self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
+
+    def test_partially_rendered_or_ellipsized_hook_caption_is_blocked(self):
+        for caption in (
+            "This hook caption is far too long to survive in the two line hook area",
+            "Readable hook text followed by content that forces an ellipsis",
+            "WWWWWWWWWWWWWWWWWWWWWWWW",
+        ):
+            with self.subTest(caption=caption):
+                render_plan = _render_plan(
+                    {
+                        "real_usage_scene_present": True,
+                        "usage_source_role": "generic_usage_example",
+                        "usage_label_present": True,
+                        "exact_product_identity_claim": False,
+                        "exact_product_identity_verified": False,
+                        "actor_nationality_claim": None,
+                        "actor_nationality_verified": False,
+                    }
+                )
+                render_plan["shots"][0]["caption"] = caption
+
+                result = evaluate_v143_worker_pre_render_policy(
+                    render_plan,
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    _valid_config(),
+                )
+
+                self.assertFalse(result["gate_pass"])
+                self.assertIn("V143_HOOK_READABILITY_REQUIRED", result["blockers"])
+
+    def test_wide_glyph_hook_that_fits_two_rendered_lines_passes(self):
+        for caption in ("WWWWWWWWWWWW", "WWWWWWWWWWWWWWWW"):
+            with self.subTest(caption=caption):
+                render_plan = _render_plan(
+                    {
+                        "real_usage_scene_present": True,
+                        "usage_source_role": "generic_usage_example",
+                        "usage_label_present": True,
+                        "exact_product_identity_claim": False,
+                        "exact_product_identity_verified": False,
+                        "actor_nationality_claim": None,
+                        "actor_nationality_verified": False,
+                    }
+                )
+                render_plan["shots"][0]["caption"] = caption
+
+                result = evaluate_v143_worker_pre_render_policy(
+                    render_plan,
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    _valid_config(),
+                )
+
+                self.assertTrue(result["gate_pass"])
+                self.assertEqual(result["blockers"], [])
 
     def test_first_rendered_shot_is_hook_regardless_of_shot_id(self):
         for shot_id in ("intro", "scene-1"):
@@ -129,12 +334,11 @@ class V143CreativePolicyTest(unittest.TestCase):
                 )
                 render_plan["shots"][0]["shot_id"] = shot_id
 
-                with patch("src.media.v143_worker_pre_render_policy.HOOK_FONT_SIZE", 110):
-                    result = evaluate_v143_worker_pre_render_policy(
-                        render_plan,
-                        {"binding_verified": True, "format_name": "real_usage_storyboard"},
-                        _valid_config(),
-                    )
+                result = evaluate_v143_worker_pre_render_policy(
+                    render_plan,
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    _valid_config(),
+                )
 
                 self.assertTrue(result["gate_pass"])
 
@@ -169,6 +373,41 @@ class V143CreativePolicyTest(unittest.TestCase):
             result["blockers"],
             ["V143_APPROVED_KOREAN_MERCHANT_TTS_REQUIRED"],
         )
+
+    def test_invalid_or_rejected_local_command_is_blocked_by_pre_io_gate(self):
+        commands = (
+            "relative-voice.cmd",
+            str(Path(__file__).resolve().with_name("missing-voice.cmd")),
+            str(Path(__file__).resolve()),
+            "C:/voice/system.speech.cmd",
+            "C:/voice/cloud-api.cmd",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                config = _valid_config()
+                config.korean_voice_command = command
+
+                result = evaluate_v143_worker_pre_render_policy(
+                    _render_plan(
+                        {
+                            "real_usage_scene_present": True,
+                            "usage_source_role": "generic_usage_example",
+                            "usage_label_present": True,
+                            "exact_product_identity_claim": False,
+                            "exact_product_identity_verified": False,
+                            "actor_nationality_claim": None,
+                            "actor_nationality_verified": False,
+                        }
+                    ),
+                    {"binding_verified": True, "format_name": "real_usage_storyboard"},
+                    config,
+                )
+
+                self.assertFalse(result["gate_pass"])
+                self.assertIn(
+                    "V143_APPROVED_KOREAN_MERCHANT_TTS_REQUIRED",
+                    result["blockers"],
+                )
 
     def test_current_product_still_contract_fails_closed(self):
         config = SimpleNamespace(
@@ -250,6 +489,7 @@ def _valid_evidence() -> dict:
         "tts_provider": "local_command",
         "tts_provider_approved": True,
         "tts_language": "ko-KR",
+        "tts_command_valid": True,
         "tts_speed_multiplier": 1.25,
         "tts_delivery_style": "brisk_confident_sales",
         "safe_to_upload": False,
@@ -262,6 +502,8 @@ def _valid_config() -> SimpleNamespace:
         korean_voice_provider="local_command",
         korean_voice_provider_approved=True,
         korean_voice_language="ko-KR",
+        korean_voice_command=sys.executable,
+        korean_voice_reject_windows_sapi=True,
         korean_voice_speed=1.25,
         korean_voice_delivery_style="brisk_confident_sales",
     )

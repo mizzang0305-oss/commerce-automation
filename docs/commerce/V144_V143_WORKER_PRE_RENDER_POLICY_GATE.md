@@ -10,13 +10,13 @@ The server-generated `render_plan` now carries a conservative `creative_policy` 
 
 After HMAC verification, the Python Worker combines the signed evidence with actual renderer and TTS settings and evaluates the V143 contract before FFmpeg discovery, image download, TTS, render, or storage upload.
 
-Real-usage evidence cannot pass on the signed `usage_label_present` flag alone. At least one shot must carry a non-empty signed `usage_label`, and the Worker prefixes that label into the same shot caption passed to both SRT generation and the video renderer. Hook timing is derived from the first rendered cue rather than a special `shot_id` value, matching the renderer's first-cue hook behavior.
+Real-usage evidence cannot pass on the signed `usage_label_present` flag alone. At least one shot must carry a non-empty signed `usage_label`. The Worker sends that label to a separate FFmpeg drawtext badge while keeping the first hook caption in its own 104 px, two-line drawtext area. The pre-render gate uses the same wrapping and exact-font pixel-width constraints as the renderer and blocks any label or hook that would be clipped or ellipsized. Hook timing is derived from the first rendered cue rather than a special `shot_id` value, matching the renderer's first-cue hook behavior.
 
 The approved local TTS path also requires the `local_command` provider and the exact `brisk_confident_sales` delivery style at Worker startup and immediately before provider execution. A `placeholder` provider cannot satisfy the merchant-TTS gate even if approval, language, speed, and delivery-style flags are set. The Worker passes the delivery style to the local provider through `KOREAN_VOICE_DELIVERY_STYLE`; a missing or different value blocks before the subprocess runs.
 
 ## Fail-closed current state
 
-The current storyboard uses a repeated product reference still, an 82 px hook, and a default 1.14 TTS speed with no approved merchant delivery style. Those facts must not be upgraded into real-usage evidence. The Worker therefore blocks the current template with explicit V143 blockers until separate reviewed work supplies truthful real-usage evidence, a compliant hook, and an approved Korean merchant TTS contract.
+The current hook is compliant at 104 px, but the current storyboard still uses a repeated product reference still and a default 1.14 TTS speed with no approved merchant delivery style. Those facts must not be upgraded into real-usage evidence. The Worker therefore blocks the current template with explicit V143 blockers until separate reviewed work supplies truthful real-usage evidence and an approved Korean merchant TTS contract.
 
 ## Safety
 

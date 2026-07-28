@@ -5,7 +5,7 @@ from ..storage_client import StorageClient
 from ..utils.files import clean_dir
 from ..media.image_downloader import download_image
 from ..media.ffmpeg_check import require_ffmpeg_for_video_render
-from ..media.subtitle_generator import compose_usage_labeled_caption, write_srt
+from ..media.subtitle_generator import write_srt
 from ..media.thumbnail_generator import create_thumbnail
 from ..media.tts_generator import create_tts_audio
 from ..media.video_renderer import build_render_quality_metadata, render_vertical_video
@@ -34,6 +34,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
     image_url = image_urls[0]
     voiceover_script = normalize_korean_tts_text(render_context["voiceover_script"])
     shot_captions = render_context["shot_captions"]
+    shot_usage_labels = render_context["shot_usage_labels"]
     subtitle_text = "\n".join(shot_captions)
     disclosure_text = render_context["disclosure_text"]
     shot_durations = render_context["shot_durations"]
@@ -134,6 +135,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         subtitle_text=subtitle_text,
         shot_durations=shot_durations,
         shot_captions=shot_captions,
+        shot_usage_labels=shot_usage_labels,
         shot_image_paths=sequence_image_paths,
     )
     render_output_gate = validate_render_output(video_path, ffmpeg_exe)
@@ -219,6 +221,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
 
     voice_lines: list[str] = []
     shot_captions: list[str] = []
+    shot_usage_labels: list[str] = []
     shot_durations: list[float] = []
     image_urls: list[str] = []
     for index, shot in enumerate(shots, start=1):
@@ -238,8 +241,9 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         if not caption:
             raise ValueError("render_plan.shots.caption is required")
         voice_lines.append(voice_text)
-        shot_captions.append(
-            compose_usage_labeled_caption(caption, shot.get("usage_label"))
+        shot_captions.append(" ".join(caption.split()))
+        shot_usage_labels.append(
+            " ".join(str(shot.get("usage_label") or "").split())
         )
         shot_durations.append(float(duration_sec))
 
@@ -248,6 +252,7 @@ def _context_from_render_plan(render_plan: object, fallback_product_name: str, f
         "image_urls": image_urls,
         "voiceover_script": "\n".join(voice_lines).strip(),
         "shot_captions": shot_captions,
+        "shot_usage_labels": shot_usage_labels,
         "disclosure_text": disclosure_text,
         "shot_durations": shot_durations,
     }
