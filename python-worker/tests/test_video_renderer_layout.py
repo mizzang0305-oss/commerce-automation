@@ -177,7 +177,7 @@ class VideoRendererLayoutTest(unittest.TestCase):
             for child in subtitle_dir.iterdir():
                 child.unlink()
 
-        source = "WWWWWWWWWWWW"
+        source = "WWWWWWWWWWWWWWWW"
         build_video_filter(
             target,
             subtitle_text=source,

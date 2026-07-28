@@ -420,14 +420,7 @@ def wrap_hook_caption(source: str) -> list[str]:
     if not normalized or _load_hook_font() is None:
         return []
 
-    character_wrapped = wrap_caption(
-        normalized,
-        max_chars=HOOK_MAX_CHARS,
-        max_lines=max(1, len(normalized)),
-    )
-    pixel_wrapped: list[str] = []
-    for candidate_line in character_wrapped:
-        pixel_wrapped.extend(_split_hook_line_by_pixel_width(candidate_line))
+    pixel_wrapped = _split_hook_line_by_pixel_width(normalized)
 
     if len(pixel_wrapped) <= 2:
         return pixel_wrapped
@@ -447,21 +440,37 @@ def measure_hook_line_width(line: str) -> float:
 def _split_hook_line_by_pixel_width(line: str) -> list[str]:
     if not line:
         return []
-    if measure_hook_line_width(line) <= HOOK_TEXT_MAX_WIDTH:
+    if _hook_line_fits(line):
         return [line]
 
     lines: list[str] = []
     current = ""
     for character in line:
         candidate = f"{current}{character}"
-        if not current or measure_hook_line_width(candidate) <= HOOK_TEXT_MAX_WIDTH:
+        if not current or _hook_line_fits(candidate):
             current = candidate
             continue
+
+        if " " in current:
+            head, tail = current.rsplit(" ", 1)
+            carried = f"{tail}{character}".lstrip()
+            if head and carried and _hook_line_fits(head) and _hook_line_fits(carried):
+                lines.append(head)
+                current = carried
+                continue
+
         lines.append(current.rstrip())
         current = character.lstrip()
     if current:
         lines.append(current.rstrip())
     return [wrapped_line for wrapped_line in lines if wrapped_line]
+
+
+def _hook_line_fits(line: str) -> bool:
+    return (
+        len(line) <= HOOK_MAX_CHARS
+        and measure_hook_line_width(line) <= HOOK_TEXT_MAX_WIDTH
+    )
 
 
 def _ellipsize_hook_line(line: str) -> str:
