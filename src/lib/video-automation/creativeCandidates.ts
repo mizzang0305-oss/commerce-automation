@@ -4,13 +4,15 @@ import type { ProductVideoAutomationInput } from "./types";
 export function generateDeterministicCreativeCandidates(input: ProductVideoAutomationInput): CreativeCandidate[] {
   const { canonicalProductName: name, aliases, anchors, category } = input.product;
   const [anchor1, anchor2, anchor3, anchor4 = category] = anchors;
+  const problemSubject = anchor1 === "정리" && anchor2 ? `${anchor2} 정리` : anchor1.endsWith("정리") ? anchor1 : `${anchor1} 정리`;
   const common = {
     productName: name,
     canonicalProductName: name,
     productAliases: aliases,
     productCategory: category,
     productAnchors: anchors,
-    disclosureRequired: false,
+    disclosureRequired: Boolean(input.product.affiliateUrl),
+    disclosure: input.product.disclosureText,
     claimsPersonalExperience: false,
     personalExperienceEvidence: false
   } as const;
@@ -19,7 +21,7 @@ export function generateDeterministicCreativeCandidates(input: ProductVideoAutom
       ...common,
       id: `${input.product.productKey}-problem-first`,
       angle: "problem_first",
-      hook: `${anchor1} 정리, 왜 자꾸 불편할까요?`,
+      hook: `${problemSubject}, 왜 자꾸 불편할까요?`,
       script: `${name}으로 ${anchor1} 주변의 불편한 문제를 줄여 보세요. ${anchor2}와 ${anchor3}을 한곳에 정리하면 동선이 간편해집니다. 사용 전 크기와 ${anchor4} 조건을 확인하세요.`,
       cta: "내 공간에 맞는지 확인해 보세요."
     },
@@ -36,7 +38,7 @@ export function generateDeterministicCreativeCandidates(input: ProductVideoAutom
       id: `${input.product.productKey}-curiosity-checklist`,
       angle: "curiosity_checklist",
       hook: `${anchor1}, 왜 3가지를 확인할까요?`,
-      script: `${name}을 고를 때 ${anchor1} 정리의 불편을 줄이는 세 가지를 확인하세요. ${anchor2} 공간에 맞는 크기인지, ${anchor3} 사용이 간편한지 비교하세요. 구매 전 필요한 ${anchor4} 조건을 확인하면 선택이 쉬워집니다.`,
+      script: `${anchor1} 정리 기준 세 가지만 확인하세요. ${name}을 고를 때 ${anchor2} 공간에 맞는 크기인지, ${anchor3} 사용이 간편한지 비교하세요. 구매 전 필요한 ${anchor4} 조건을 확인하면 선택이 쉬워집니다.`,
       cta: "세 가지 조건부터 비교해 보세요."
     }
   ];

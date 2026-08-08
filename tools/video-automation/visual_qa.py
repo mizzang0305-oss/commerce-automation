@@ -159,12 +159,41 @@ def _finite_float(value: Any) -> float | None:
         return None
 
 
+def validate_image(request: dict[str, Any]) -> dict[str, Any]:
+    path = Path(request["image_path"]).resolve(strict=True)
+    if path.stat().st_size <= 0:
+        raise ValueError("PRODUCT_IMAGE_EMPTY")
+    with Image.open(path) as image:
+        image.verify()
+    with Image.open(path) as image:
+        width, height = image.size
+        image_format = image.format or "unknown"
+    if width < 320 or height < 320:
+        raise ValueError("PRODUCT_IMAGE_DIMENSIONS_TOO_SMALL")
+    return {
+        "status": "success",
+        "decoded": True,
+        "width": width,
+        "height": height,
+        "format": image_format,
+        "size_bytes": path.stat().st_size,
+        "raw_path_printed": False,
+        "external_api_called": False,
+        "upload_attempted": False,
+    }
+
+
 def main() -> int:
     try:
         request = json.loads(sys.stdin.read())
-        if request.get("operation") != "analyze":
+        operation = request.get("operation")
+        if operation == "analyze":
+            result = analyze(request)
+        elif operation == "validate_image":
+            result = validate_image(request)
+        else:
             raise ValueError("VISUAL_QA_OPERATION_INVALID")
-        print(json.dumps(analyze(request), ensure_ascii=False))
+        print(json.dumps(result, ensure_ascii=False))
         return 0
     except Exception as exc:
         message = str(exc)

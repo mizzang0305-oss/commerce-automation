@@ -34,6 +34,22 @@ export type ProductVideoAutomationInput = {
     priceText?: string;
     imagePaths: string[];
     affiliateUrl?: string;
+    disclosureText?: string;
+    exactProductReference?: {
+      sourceUrl: string;
+      localPath: string;
+      identityType: "product_reference";
+      sourceProvider: string;
+      sourceRequestId: string;
+    };
+    sourceProvenance?: {
+      sourceProvider: string;
+      sourceRequestId: string;
+      discoveredAt: string;
+      sourceKeyword: string;
+      rawProductId: string;
+      productKey: string;
+    };
     realUseAsset?: OwnerReviewedRealUseAsset;
   };
   creative: { candidateCount: 3; language: "ko" };
