@@ -8,6 +8,7 @@ export type WhisperXResponse = {
   safe_error?: string;
   processing_seconds?: number;
   aligned_ratio?: number;
+  transcript_source?: "provided_local_asr" | "whisperx_transcribe";
 };
 
 type SpawnProcess = () => ChildProcessWithoutNullStreams;
@@ -44,14 +45,14 @@ export class PersistentWhisperXProvider {
     return this.readyPromise;
   }
 
-  async align(audioPath: string): Promise<WhisperXResponse> {
+  async align(audioPath: string, transcript?: string): Promise<WhisperXResponse> {
     await this.start();
     if (!this.child || !this.child.stdin.writable) throw new Error("WHISPERX_PROCESS_UNAVAILABLE");
     const id = `align-${String(++this.requestCountValue).padStart(3, "0")}`;
     return new Promise<WhisperXResponse>((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(id); reject(new Error("WHISPERX_REQUEST_TIMEOUT")); }, this.timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.child?.stdin.write(`${JSON.stringify({ id, audio_path: audioPath, language: "ko", model: "tiny", device: "cpu", compute_type: "int8" })}\n`);
+      this.child?.stdin.write(`${JSON.stringify({ id, audio_path: audioPath, transcript: transcript?.trim() || undefined, language: "ko", model: "tiny", device: "cpu", compute_type: "int8" })}\n`);
     });
   }
 

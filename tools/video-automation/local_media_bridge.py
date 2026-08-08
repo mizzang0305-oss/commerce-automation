@@ -174,6 +174,117 @@ def render(request: dict[str, Any]) -> dict[str, Any]:
     return {"status": "success", "output": str(output), "shot_count": len(shot_images), "hook_font_px": 104, "usage_labels_separate_from_hook": True, "layout": planned, "hook_text_file": str(output.parent / "drawtext-subtitles" / "subtitle-cue-001-line-01.txt"), "usage_label_text_file": str(usage_text_path)}
 
 
+def render_v2(request: dict[str, Any]) -> dict[str, Any]:
+    """Render local V2 full-bleed motion without changing the Production Worker renderer."""
+    output = Path(request["output"]).resolve()
+    work = output.parent / "render-inputs"
+    work.mkdir(parents=True, exist_ok=True)
+    source_paths = [Path(value).resolve(strict=True) for value in request["image_paths"]]
+    captions = request.get("captions")
+    if not isinstance(captions, list) or not captions:
+        raise ValueError("LOCAL_MEDIA_CAPTIONS_REQUIRED")
+    if any(len(cue.get("words", [])) > 4 for cue in captions if isinstance(cue, dict)):
+        raise ValueError("CAPTION_SAFE_TIMELINE_FAILED")
+    planned = layout_plan({"hook": request.get("hook"), "usage_label": request.get("usage_label", USAGE_LABEL)})
+    if planned["passed"] is not True or request.get("layout_plan") != planned:
+        raise ValueError(planned["blockers"][0] if planned["blockers"] else "VIDEO_LAYOUT_PLAN_BINDING_FAILED")
+    audio_path = Path(request["audio_path"]).resolve(strict=True)
+    audio_duration = wav_duration(audio_path)
+    shot_captions = [str(cue["text"]) for cue in captions]
+    shot_captions[0] = str(request["hook"])
+    starts = [float(cue["start"]) for cue in captions]
+    shot_durations = [max(0.12, (starts[index + 1] if index + 1 < len(starts) else audio_duration) - start) for index, start in enumerate(starts)]
+    shot_images = [source_paths[index % len(source_paths)] for index in range(len(shot_captions))]
+    srt = output.parent / "captions.srt"
+    write_srt("\n".join(shot_captions), srt, shot_durations, shot_captions)
+
+    video_renderer.HOOK_FONT_SIZE = 104
+    video_renderer.HOOK_TEXT_Y = 190
+    video_renderer.HOOK_LINE_STEP = 112
+    video_renderer.HOOK_BOX_HEIGHT = 330
+    video_renderer.DRAWTEXT_SUBTITLE_FONT_SIZE = int(request.get("caption_font_px", 66))
+    video_renderer.DRAWTEXT_LINE_STEP = 80
+    video_renderer.DRAWTEXT_SUBTITLE_Y = "h-290-text_h"
+    original_base = video_renderer._build_base_video_filter
+    original_builder = video_renderer.build_drawtext_subtitle_filters
+    original_wrap = video_renderer.wrap_caption
+    base_call = {"index": 0}
+
+    def build_motion_base() -> str:
+        index = base_call["index"]
+        base_call["index"] += 1
+        crop_x = ("(in_w-out_w)/2", "(in_w-out_w)*min(t/2.4,1)", "(in_w-out_w)*(1-min(t/2.4,1))")[index % 3]
+        return (
+            "scale=w='trunc(1080*(1+0.035*t)/2)*2':h='trunc(1920*(1+0.035*t)/2)*2':"
+            "force_original_aspect_ratio=increase:eval=frame:out_range=tv,"
+            f"crop=1080:1920:x='{crop_x}':y='(in_h-out_h)/2',"
+            "format=yuv420p"
+        )
+
+    full_label_path = work / "usage-label-full.txt"
+    short_label_path = work / "usage-label-short.txt"
+    full_label_path.write_text(str(planned["usage_label"]), encoding="utf-8")
+    short_label_path.write_text("사용 예시", encoding="utf-8")
+
+    def build_v2_filters(*args: Any, **kwargs: Any) -> list[str]:
+        filters = original_builder(*args, **kwargs)
+        font_clause = f"fontfile='{str(FONT_PATH).replace(chr(92), '/').replace(':', chr(92) + ':')}':" if FONT_PATH.is_file() else ""
+        full_text = str(full_label_path).replace("\\", "/").replace(":", "\\:")
+        short_text = str(short_label_path).replace("\\", "/").replace(":", "\\:")
+        filters.extend([
+            "drawbox=x=72:y=500:w=520:h=72:color=0x0f172a@0.88:t=fill:enable='between(t,0,1.8)'",
+            f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=38:x=96:y=513:enable='between(t,0,1.8)'",
+            "drawbox=x=72:y=500:w=210:h=54:color=0x0f172a@0.70:t=fill:enable='gt(t,1.8)'",
+            f"drawtext={font_clause}textfile='{short_text}':fontcolor=0xfacc15:fontsize=28:x=92:y=510:enable='gt(t,1.8)'",
+        ])
+        elapsed = 0.0
+        emphasis_dir = work / "emphasis"
+        emphasis_dir.mkdir(parents=True, exist_ok=True)
+        for index, (cue, duration) in enumerate(zip(captions, shot_durations), start=1):
+            word = str(cue.get("emphasisWord", "")).strip() if isinstance(cue, dict) else ""
+            if word:
+                path = emphasis_dir / f"emphasis-{index:03d}.txt"
+                path.write_text(word, encoding="utf-8")
+                textfile = str(path).replace("\\", "/").replace(":", "\\:")
+                start = elapsed
+                end = elapsed + duration
+                filters.append(
+                    f"drawtext={font_clause}textfile='{textfile}':fontcolor=0xfacc15:fontsize=38:"
+                    f"x=(w-text_w)/2:y=h-520:alpha='if(lt(t,{start + 0.12:.3f}),max(0,(t-{start:.3f})/0.12),1)':"
+                    f"enable='between(t,{start:.3f},{end:.3f})'"
+                )
+            elapsed += duration
+        return filters
+
+    def wrap_v2_caption(text: str, max_chars: int = 24, max_lines: int = 2) -> list[str]:
+        return original_wrap(text, max_chars=12 if max_chars == 16 else max_chars, max_lines=max_lines)
+
+    video_renderer._build_base_video_filter = build_motion_base
+    video_renderer.build_drawtext_subtitle_filters = build_v2_filters
+    video_renderer.wrap_caption = wrap_v2_caption
+    try:
+        video_renderer.render_vertical_video(
+            shot_images[0], audio_path, srt, output, str(request["title"]), "ffmpeg",
+            subtitle_text="\n".join(shot_captions), shot_durations=shot_durations,
+            shot_captions=shot_captions, shot_image_paths=shot_images,
+        )
+    finally:
+        video_renderer._build_base_video_filter = original_base
+        video_renderer.build_drawtext_subtitle_filters = original_builder
+        video_renderer.wrap_caption = original_wrap
+    return {
+        "status": "success", "output": str(output), "shot_count": len(shot_images),
+        "hook_font_px": 104, "caption_font_px": int(request.get("caption_font_px", 66)),
+        "caption_animation": str(request.get("caption_animation", "pop")),
+        "primary_visual_width_ratio": float(request.get("primary_visual_width_ratio", 0.92)),
+        "canvas_fill_ratio": float(request.get("canvas_fill_ratio", 0.93)),
+        "motion_preset": "push_pan", "usage_label_mode": "full_then_abbreviated",
+        "usage_labels_separate_from_hook": True, "layout": planned,
+        "hook_text_file": str(output.parent / "drawtext-subtitles" / "subtitle-cue-001-line-01.txt"),
+        "usage_label_text_file": str(full_label_path), "usage_label_short_text_file": str(short_label_path),
+    }
+
+
 def inspect(request: dict[str, Any]) -> dict[str, Any]:
     output = Path(request["output"]).resolve(strict=True)
     completed = subprocess.run(
@@ -225,7 +336,7 @@ def main() -> int:
     try:
         request = read_request()
         operation = request.get("operation")
-        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "layout_plan": layout_plan, "tts": tts, "render": render, "inspect": inspect}[operation](request)
+        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "layout_plan": layout_plan, "tts": tts, "render": render, "render_v2": render_v2, "inspect": inspect}[operation](request)
         emit(result)
         return 0
     except Exception as exc:

@@ -35,8 +35,8 @@ export function generateDeterministicCreativeCandidates(input: ProductVideoAutom
       ...common,
       id: `${input.product.productKey}-curiosity-checklist`,
       angle: "curiosity_checklist",
-      hook: `${anchor1}, 이 3가지만 확인하세요`,
-      script: `${name}을 고를 때 ${anchor1}, ${anchor2}, ${anchor3} 세 가지를 확인하세요. 공간에 맞는 크기인지, 정리가 간편한지, ${anchor4} 조건에 맞는지 비교하면 선택이 쉬워집니다.`,
+      hook: `${anchor1}, 왜 3가지를 확인할까요?`,
+      script: `${name}을 고를 때 ${anchor1} 정리의 불편을 줄이는 세 가지를 확인하세요. ${anchor2} 공간에 맞는 크기인지, ${anchor3} 사용이 간편한지 비교하세요. 구매 전 필요한 ${anchor4} 조건을 확인하면 선택이 쉬워집니다.`,
       cta: "세 가지 조건부터 비교해 보세요."
     }
   ];

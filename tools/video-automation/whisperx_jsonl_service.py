@@ -50,8 +50,16 @@ def main() -> int:
                 raise ValueError("WHISPERX_REQUEST_POLICY_BLOCKED")
             request_started = time.perf_counter()
             audio = whisperx.load_audio(str(request["audio_path"]))
-            transcript = model.transcribe(audio, batch_size=4, language="ko")
-            aligned = whisperx.align(transcript["segments"], align_model, metadata, audio, "cpu", return_char_alignments=False)
+            provided_transcript = str(request.get("transcript", "")).strip()
+            if provided_transcript:
+                duration = len(audio) / 16000
+                transcript_segments = [{"start": 0.0, "end": duration, "text": provided_transcript}]
+                transcript_source = "provided_local_asr"
+            else:
+                transcript = model.transcribe(audio, batch_size=4, language="ko")
+                transcript_segments = transcript["segments"]
+                transcript_source = "whisperx_transcribe"
+            aligned = whisperx.align(transcript_segments, align_model, metadata, audio, "cpu", return_char_alignments=False)
             words, missing = words_from_alignment(aligned)
             peak_rss = max(peak_rss, process.memory_info().rss)
             total = len(words) + missing
@@ -61,6 +69,7 @@ def main() -> int:
                 "words": words,
                 "processing_seconds": round(time.perf_counter() - request_started, 3),
                 "aligned_ratio": round(len(words) / total, 4) if total else 0,
+                "transcript_source": transcript_source,
                 "peak_rss_mb": round(peak_rss / 1024 / 1024, 2),
             })
         except Exception:
