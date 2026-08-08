@@ -1,7 +1,10 @@
 """Local-only bridge to approved Worker media primitives. JSON in/out; no external writes."""
 from __future__ import annotations
 
+from array import array
+import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -15,7 +18,7 @@ sys.path.insert(0, str(REPO_ROOT / "python-worker"))
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 from src.media.pre_render_visual_evidence_gate import build_scene_similarity_profile, summarize_scene_similarity_profile  # noqa: E402
 from src.media.subtitle_generator import write_srt  # noqa: E402
-from src.media.tts_generator import create_tts_audio  # noqa: E402
+from src.media.tts_generator import TtsGenerationError, create_tts_audio  # noqa: E402
 from src.media import video_renderer  # noqa: E402
 
 VIDEO_WIDTH = 1080
@@ -116,14 +119,106 @@ def layout_plan(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def tts(request: dict[str, Any]) -> dict[str, Any]:
-    if os.environ.get("MELOTTS_SPEED") != "1.2":
-        raise ValueError("MELOTTS_SPEED_1_2_REQUIRED")
+    text = str(request.get("text", ""))
     target = Path(request["target"]).resolve()
-    create_tts_audio(
-        str(request["text"]), target, provider="local_command", provider_approved=True,
-        language="ko", command=str(request["command"]), speed=1.2, timeout_seconds=600,
-    )
-    return {"status": "success", "output": str(target), "duration_seconds": wav_duration(target), "provider": "local_command", "speed": 1.2}
+    attempt = int(request.get("attempt", 1))
+    segment_index = request.get("segmentIndex")
+    base = {
+        "attempt": attempt,
+        "inputHash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "inputCharacters": len(text),
+        "segmentIndex": segment_index if isinstance(segment_index, int) else None,
+    }
+    try:
+        if os.environ.get("MELOTTS_SPEED") != "1.2":
+            raise TtsGenerationError("TTS_RUNTIME_INVARIANT_FAILED", stage="preflight", retryable=False)
+        create_tts_audio(
+            text, target, provider="local_command", provider_approved=True,
+            language="ko", command=str(request["command"]), speed=1.2, timeout_seconds=600,
+        )
+        validation = validate_tts_wav(target)
+        return {
+            "status": "success", "safeCode": "TTS_SUCCESS", "stage": "complete",
+            **base, "output": str(target), "outputCreated": True, "retryable": False,
+            "duration_seconds": validation["durationSeconds"], "provider": "local_command",
+            "speed": 1.2, "validation": validation,
+        }
+    except TtsGenerationError as exc:
+        return {
+            "status": "failed", "safeCode": exc.safe_code, "stage": exc.stage, **base,
+            "outputCreated": target.is_file(), "retryable": exc.retryable,
+        }
+    except Exception:
+        return {
+            "status": "failed", "safeCode": "TTS_UNKNOWN_RUNTIME_FAILURE", "stage": "runtime", **base,
+            "outputCreated": target.is_file(), "retryable": False,
+        }
+
+
+def concat_wav(request: dict[str, Any]) -> dict[str, Any]:
+    sources = [Path(value).resolve(strict=True) for value in request.get("source_paths", [])]
+    if len(sources) < 2:
+        raise ValueError("TTS_SEGMENTS_REQUIRED")
+    pause_ms = int(request.get("pause_ms", 500))
+    if pause_ms < 400 or pause_ms > 600:
+        raise ValueError("TTS_SEGMENT_PAUSE_INVALID")
+    target = Path(request["target"]).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    params: tuple[int, int, int] | None = None
+    chunks: list[bytes] = []
+    for source in sources:
+        validation = validate_tts_wav(source)
+        with wave.open(str(source), "rb") as audio:
+            current = (audio.getnchannels(), audio.getsampwidth(), audio.getframerate())
+            if params is None:
+                params = current
+            elif params != current:
+                raise ValueError("TTS_SEGMENT_FORMAT_MISMATCH")
+            chunks.append(audio.readframes(audio.getnframes()))
+    assert params is not None
+    channels, sample_width, sample_rate = params
+    silence = b"\x00" * int(round(sample_rate * pause_ms / 1000)) * channels * sample_width
+    with wave.open(str(target), "wb") as audio:
+        audio.setnchannels(channels)
+        audio.setsampwidth(sample_width)
+        audio.setframerate(sample_rate)
+        audio.writeframes(silence.join(chunks))
+    validation = validate_tts_wav(target)
+    return {"status": "success", "output": str(target), "segments": len(sources), "pauseMs": pause_ms, "validation": validation}
+
+
+def validate_tts_wav(path: Path) -> dict[str, Any]:
+    try:
+        size = path.stat().st_size
+        with wave.open(str(path), "rb") as audio:
+            channels = audio.getnchannels()
+            sample_width = audio.getsampwidth()
+            sample_rate = audio.getframerate()
+            frame_count = audio.getnframes()
+            frames = audio.readframes(frame_count)
+    except (OSError, EOFError, wave.Error) as exc:
+        raise TtsGenerationError("TTS_OUTPUT_INVALID", stage="output_validation", retryable=False) from exc
+    if size <= 1024 or channels != 1 or sample_width != 2 or sample_rate != 44100 or frame_count <= 0:
+        raise TtsGenerationError("TTS_OUTPUT_INVALID", stage="output_validation", retryable=False)
+    samples = array("h")
+    samples.frombytes(frames)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    if not samples:
+        raise TtsGenerationError("TTS_OUTPUT_INVALID", stage="output_validation", retryable=False)
+    peak = max(abs(value) for value in samples)
+    rms = math.sqrt(sum(value * value for value in samples) / len(samples))
+    duration = frame_count / sample_rate
+    if peak <= 32 or rms <= 16 or not 0.1 <= duration <= 180:
+        raise TtsGenerationError("TTS_OUTPUT_INVALID", stage="output_validation", retryable=False)
+    return {
+        "passed": True, "fileBytes": size, "wavDecode": True, "channels": channels,
+        "sampleWidthBytes": sample_width, "sampleRate": sample_rate, "frameCount": frame_count,
+        "durationSeconds": round(duration, 3), "peak": peak,
+        "peakDbfs": round(20 * math.log10(peak / 32768), 2),
+        "rmsDbfs": round(20 * math.log10(rms / 32768), 2), "nonSilent": True,
+        "invalidSamples": 0,
+    }
 
 
 def render(request: dict[str, Any]) -> dict[str, Any]:
@@ -367,7 +462,7 @@ def main() -> int:
     try:
         request = read_request()
         operation = request.get("operation")
-        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "layout_plan": layout_plan, "tts": tts, "render": render, "render_v2": render_v2, "inspect": inspect}[operation](request)
+        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "layout_plan": layout_plan, "tts": tts, "concat_wav": concat_wav, "render": render, "render_v2": render_v2, "inspect": inspect}[operation](request)
         emit(result)
         return 0
     except Exception as exc:

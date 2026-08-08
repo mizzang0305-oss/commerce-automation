@@ -94,6 +94,12 @@
     "video-automation:e2e:v2": "tsx scripts/video-automation/run-autonomous-video-review-v2.ts",
     "live-product-video:e2e": "tsx scripts/live-product-video/run-live-product-video-v1.ts",
     "live-product-video:finalize": "tsx scripts/live-product-video/finalize-live-product-video-v1.ts",
+    "queue-video:scout": "tsx scripts/queue-scheduler/run-nightly-scout.ts",
+    "queue-video:run-next": "tsx scripts/queue-scheduler/run-next-batch.ts",
+    "queue-video:status": "tsx scripts/queue-scheduler/status.ts",
+    "queue-video:recover-slot": "tsx scripts/queue-scheduler/run-single-slot-recovery.ts",
+    "queue-video:configure-pilot": "tsx scripts/queue-scheduler/configure-pilot.ts",
+    "queue-video:preflight": "tsx scripts/queue-scheduler/preflight.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

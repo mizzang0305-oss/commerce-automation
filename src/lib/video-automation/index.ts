@@ -8,6 +8,7 @@ export * from "./localRuntime";
 export * from "./layoutCollision";
 export * from "./types";
 export * from "./ttsNormalization";
+export * from "./ttsRecovery";
 export * from "./whisperxPersistentProvider";
 export * from "./qa/automatedVideoQuality";
 export * from "./qa/config";
