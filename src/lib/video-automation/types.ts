@@ -34,9 +34,33 @@ export type ProductVideoAutomationInput = {
     priceText?: string;
     imagePaths: string[];
     affiliateUrl?: string;
+    realUseAsset?: OwnerReviewedRealUseAsset;
   };
   creative: { candidateCount: 3; language: "ko" };
   mode: "local_review_only";
+};
+
+export type OwnerReviewStatus = "pending" | "pass" | "fail";
+
+export type OwnerReviewedRealUseAsset = {
+  assetId: string;
+  productKey: string;
+  sourcePath: string;
+  reviewEvidencePath: string;
+  sourceType: "owner_reviewed_local_video";
+  identityType: "generic_usage_example" | "exact_product_use";
+  usageType: "real_use_context";
+  ownerReviewStatus: "pass";
+  ownerReviewedAt?: string;
+};
+
+export type LocalAutomationQaStatus = {
+  technicalQaPassed: boolean;
+  captionQaPassed: boolean;
+  layoutQaPassed: boolean;
+  visualEvidencePassed: boolean;
+  ownerReviewStatus: OwnerReviewStatus;
+  publishQualityPassed: boolean;
 };
 
 export type CreativeSelectionArtifact = {

@@ -5,5 +5,7 @@ export * from "./pipeline";
 export * from "./productInput";
 export * from "./productFixtures";
 export * from "./localRuntime";
+export * from "./layoutCollision";
 export * from "./types";
+export * from "./ttsNormalization";
 export * from "./whisperxPersistentProvider";
