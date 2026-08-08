@@ -1,7 +1,19 @@
 import { describe, expect, test } from "vitest";
 
 import { rankCreativeCandidates } from "@/lib/video-lab/creativeRanker";
+import { scoreCreativeCandidate } from "@/lib/video-lab/viralityScorer";
+import type { CreativeScoreDimension } from "@/lib/video-lab/types";
 import { creativeCandidateFixtures } from "./fixtures/creativeCandidates";
+
+const POSITIVE_DIMENSIONS: CreativeScoreDimension[] = [
+  "hook",
+  "curiosity",
+  "problem",
+  "benefit",
+  "purchaseIntent",
+  "retention",
+  "clarity"
+];
 
 describe("video lab creative ranker", () => {
   test("ranks all 24 fixtures deterministically with blocked candidates after passing candidates", () => {
@@ -11,23 +23,42 @@ describe("video lab creative ranker", () => {
 
     expect(first).toEqual(second);
     expect(first.map((item) => item.rank)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
-    const firstBlocked = first.findIndex((item) => !item.passed);
+    const firstBlocked = first.findIndex((item) => !item.score.passed);
     expect(firstBlocked).toBeGreaterThan(0);
-    expect(first.slice(0, firstBlocked).every((item) => item.passed)).toBe(true);
-    expect(first.slice(firstBlocked).every((item) => !item.passed)).toBe(true);
+    expect(first.slice(0, firstBlocked).every((item) => item.score.passed)).toBe(true);
+    expect(first.slice(firstBlocked).every((item) => !item.score.passed)).toBe(true);
+    expect(first[0].score.blockers).toEqual([]);
   });
 
   test("blocks the later duplicate while preserving the first candidate", () => {
     const duplicate = {
       ...creativeCandidateFixtures[0],
-      candidate_id: "LAB_DUPLICATE"
+      id: "LAB_DUPLICATE"
     };
     const ranked = rankCreativeCandidates([creativeCandidateFixtures[0], duplicate]);
-    const original = ranked.find((item) => item.candidate_id === "LAB_01");
-    const repeated = ranked.find((item) => item.candidate_id === "LAB_DUPLICATE");
+    const original = ranked.find((item) => item.candidate.id === "LAB_01");
+    const repeated = ranked.find((item) => item.candidate.id === "LAB_DUPLICATE");
 
-    expect(original?.blockers).not.toContain("DUPLICATE_CANDIDATE");
-    expect(repeated?.passed).toBe(false);
-    expect(repeated?.blockers).toContain("DUPLICATE_CANDIDATE");
+    expect(original?.score.blockers).not.toContain("DUPLICATE_CANDIDATE");
+    expect(repeated?.score.passed).toBe(false);
+    expect(repeated?.score.blockers).toContain("DUPLICATE_CANDIDATE");
+  });
+
+  test("binds every fixture to an expected outcome, score range, strongest factor, and blocker", () => {
+    for (const fixture of creativeCandidateFixtures) {
+      const result = scoreCreativeCandidate(fixture);
+      const [minimum, maximum] = fixture.expected.scoreRange;
+      const strongestValue = Math.max(
+        ...POSITIVE_DIMENSIONS.map((dimension) => result.breakdown[dimension])
+      );
+
+      expect(result.passed).toBe(fixture.expected.outcome === "PASS");
+      expect(result.totalScore).toBeGreaterThanOrEqual(minimum);
+      expect(result.totalScore).toBeLessThanOrEqual(maximum);
+      expect(result.breakdown[fixture.expected.strongestFactor]).toBe(strongestValue);
+      if (fixture.expected.blocker) {
+        expect(result.blockers).toContain(fixture.expected.blocker);
+      }
+    }
   });
 });

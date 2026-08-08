@@ -26,13 +26,26 @@ export type VideoLabRendererResult =
       upload_called: false;
     };
 
-export interface VideoLabRenderer {
+export type RendererReadiness = {
+  renderer: "disabled" | "remotion_experimental";
+  status: "NOT_CONFIGURED" | "READY_EXPERIMENTAL";
+  configured: boolean;
+};
+
+export interface ExperimentalRenderer {
   readonly name: "disabled" | "remotion_experimental";
+  inspect(): Promise<RendererReadiness>;
   render(request: VideoLabRendererRequest): Promise<VideoLabRendererResult>;
 }
 
-export class DisabledVideoLabRenderer implements VideoLabRenderer {
+export type VideoLabRenderer = ExperimentalRenderer;
+
+export class DisabledVideoLabRenderer implements ExperimentalRenderer {
   readonly name = "disabled" as const;
+
+  async inspect(): Promise<RendererReadiness> {
+    return { renderer: "disabled", status: "NOT_CONFIGURED", configured: false };
+  }
 
   async render(request: VideoLabRendererRequest): Promise<VideoLabRendererResult> {
     void request;
@@ -50,10 +63,18 @@ export type ExperimentalRemotionAdapter = (
   request: Readonly<VideoLabRendererRequest>
 ) => Promise<{ output_path: string }>;
 
-export class ExperimentalRemotionRenderer implements VideoLabRenderer {
+export class ExperimentalRemotionRenderer implements ExperimentalRenderer {
   readonly name = "remotion_experimental" as const;
 
   constructor(private readonly adapter: ExperimentalRemotionAdapter) {}
+
+  async inspect(): Promise<RendererReadiness> {
+    return {
+      renderer: "remotion_experimental",
+      status: "READY_EXPERIMENTAL",
+      configured: true
+    };
+  }
 
   async render(request: VideoLabRendererRequest): Promise<VideoLabRendererResult> {
     validateRequest(request);

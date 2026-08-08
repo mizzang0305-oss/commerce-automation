@@ -1,8 +1,14 @@
 export type WordAlignmentToken = {
   word: string;
-  start_seconds: number;
-  end_seconds: number;
+  start: number;
+  end: number;
   confidence: number | null;
+};
+
+export type ProviderReadiness = {
+  provider: "disabled" | "local_whisperx";
+  status: "NOT_CONFIGURED" | "READY_LOCAL";
+  configured: boolean;
 };
 
 export type WordAlignmentRequest = {
@@ -31,11 +37,16 @@ export type WordAlignmentResult =
 
 export interface WordAlignmentProvider {
   readonly name: "disabled" | "local_whisperx";
+  inspect(): Promise<ProviderReadiness>;
   align(request: WordAlignmentRequest): Promise<WordAlignmentResult>;
 }
 
 export class DisabledWordAlignmentProvider implements WordAlignmentProvider {
   readonly name = "disabled" as const;
+
+  async inspect(): Promise<ProviderReadiness> {
+    return { provider: "disabled", status: "NOT_CONFIGURED", configured: false };
+  }
 
   async align(request: WordAlignmentRequest): Promise<WordAlignmentResult> {
     void request;
@@ -57,6 +68,10 @@ export class WhisperXLocalProvider implements WordAlignmentProvider {
   readonly name = "local_whisperx" as const;
 
   constructor(private readonly bridge: LocalWhisperXBridge) {}
+
+  async inspect(): Promise<ProviderReadiness> {
+    return { provider: "local_whisperx", status: "READY_LOCAL", configured: true };
+  }
 
   async align(request: WordAlignmentRequest): Promise<WordAlignmentResult> {
     if (!request.audio_path.trim()) throw new Error("VIDEO_LAB_AUDIO_PATH_REQUIRED");
@@ -94,8 +109,8 @@ function parseBridgeWords(value: unknown): WordAlignmentToken[] {
   return wordItems.map((item) => {
     if (!item || typeof item !== "object") throw new Error("VIDEO_LAB_WHISPERX_INVALID_WORD");
     const word = "word" in item && typeof item.word === "string" ? item.word.trim() : "";
-    const start = "start_seconds" in item ? item.start_seconds : undefined;
-    const end = "end_seconds" in item ? item.end_seconds : undefined;
+    const start = "start" in item ? item.start : undefined;
+    const end = "end" in item ? item.end : undefined;
     const confidence = "confidence" in item ? item.confidence : null;
     if (
       !word ||
@@ -115,8 +130,8 @@ function parseBridgeWords(value: unknown): WordAlignmentToken[] {
     previousEnd = end;
     return {
       word,
-      start_seconds: start,
-      end_seconds: end,
+      start,
+      end,
       confidence: confidence as number | null
     };
   });

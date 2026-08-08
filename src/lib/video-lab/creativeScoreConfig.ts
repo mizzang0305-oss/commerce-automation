@@ -4,19 +4,19 @@ export const CREATIVE_SCORE_CONFIG = Object.freeze({
   version: "video-lab-creative-score-v1",
   firstSentenceMaxChars: 60,
   disclosureMinimumChars: 5,
-  passingScore: 55,
+  passingScore: 50,
   positiveWeights: {
-    hook_strength: 0.22,
-    curiosity: 0.12,
-    problem_clarity: 0.14,
-    benefit_specificity: 0.16,
-    purchase_intent: 0.1,
-    retention: 0.16,
-    clarity: 0.1
+    hook: 0.22,
+    retention: 0.18,
+    problem: 0.13,
+    benefit: 0.13,
+    curiosity: 0.1,
+    purchaseIntent: 0.1,
+    clarity: 0.14
   } satisfies Partial<Record<CreativeScoreDimension, number>>,
   riskWeights: {
-    overclaim_risk: 0.15,
-    repetition_risk: 0.1
+    overclaimRisk: 0.15,
+    repetitionRisk: 0.1
   } satisfies Partial<Record<CreativeScoreDimension, number>>,
   explicitOverclaimPatterns: [
     /100\s*%/iu,

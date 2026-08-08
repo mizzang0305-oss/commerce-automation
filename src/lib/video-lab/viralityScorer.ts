@@ -3,6 +3,7 @@ import type {
   CreativeBlocker,
   CreativeCandidate,
   CreativeScoreBreakdown,
+  CreativeScoreDimension,
   CreativeScoreResult
 } from "./types";
 
@@ -10,17 +11,18 @@ const SENTENCE_BOUNDARY = /[.!?。！？]|(?:다|요)[\s\n]+/u;
 const TOKEN_PATTERN = /[가-힣A-Za-z0-9]+/gu;
 
 export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeScoreResult {
-  const hook = normalize(candidate.hook);
-  const script = normalize(candidate.script);
-  const productName = normalize(candidate.product_name);
-  const disclosure = normalize(candidate.disclosure_text ?? "");
+  const safeCandidate = candidate && typeof candidate === "object" ? candidate : ({} as CreativeCandidate);
+  const hook = normalize(safeCandidate.hook);
+  const script = normalize(safeCandidate.script);
+  const productName = normalize(safeCandidate.productName);
+  const disclosure = normalize(safeCandidate.disclosure ?? "");
   const combined = `${hook} ${script}`.trim();
   const blockers: CreativeBlocker[] = [];
 
   if (!script) blockers.push("EMPTY_SCRIPT");
   if (!hook) blockers.push("MISSING_HOOK");
   if (
-    candidate.disclosure_required &&
+    safeCandidate.disclosureRequired === true &&
     disclosure.length < CREATIVE_SCORE_CONFIG.disclosureMinimumChars
   ) {
     blockers.push("MISSING_DISCLOSURE");
@@ -37,7 +39,9 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
     blockers.push("PRODUCT_NAME_MISSING");
   }
 
-  const anchors = (candidate.product_anchors ?? []).map(normalize).filter(Boolean);
+  const anchors = (Array.isArray(safeCandidate.productAnchors) ? safeCandidate.productAnchors : [])
+    .map(normalize)
+    .filter(Boolean);
   const contentWithoutProduct = normalizedCombined.replace(normalizedProduct, "");
   const anchorMatched = anchors.some((anchor) => contentWithoutProduct.includes(compact(anchor)));
   if (productName && !anchorMatched) blockers.push("UNRELATED_SCRIPT");
@@ -46,8 +50,8 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
   if (firstSentence.length > CREATIVE_SCORE_CONFIG.firstSentenceMaxChars) {
     blockers.push("FIRST_SENTENCE_TOO_LONG");
   }
-  if (candidate.claims_personal_experience && !candidate.personal_experience_evidence) {
-    blockers.push("UNVERIFIED_PERSONAL_EXPERIENCE");
+  if (safeCandidate.claimsPersonalExperience === true && !safeCandidate.personalExperienceEvidence) {
+    blockers.push("FAKE_PERSONAL_EXPERIENCE_CLAIM");
   }
 
   const dimensions = calculateDimensions({
@@ -76,13 +80,15 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
 
   return {
     version: "video-lab-creative-score-v1",
-    candidate_id: candidate.candidate_id,
+    candidateId: normalize(safeCandidate.id) || "INVALID_CANDIDATE",
     passed: blockers.length === 0 && totalScore >= CREATIVE_SCORE_CONFIG.passingScore,
     blockers: unique(blockers),
-    dimensions,
-    positive_score: positiveScore,
-    risk_penalty: riskPenalty,
-    total_score: totalScore,
+    breakdown: dimensions,
+    strengths: summarizeDimensions(dimensions, "strength"),
+    weaknesses: summarizeDimensions(dimensions, "weakness"),
+    positiveScore,
+    riskPenalty,
+    totalScore,
     SAFE_TO_UPLOAD: false,
     SAFE_TO_PUBLIC_UPLOAD: false
   };
@@ -142,16 +148,40 @@ function calculateDimensions(input: DimensionInput): CreativeScoreBreakdown {
   const overclaimRisk = input.hasExplicitOverclaim ? 100 : clamp(softOverclaimCount * 22);
 
   return {
-    hook_strength: round2(hookStrength),
+    hook: round2(hookStrength),
     curiosity: round2(curiosity),
-    problem_clarity: round2(problemClarity),
-    benefit_specificity: round2(benefitSpecificity),
-    purchase_intent: round2(purchaseIntent),
+    problem: round2(problemClarity),
+    benefit: round2(benefitSpecificity),
+    purchaseIntent: round2(purchaseIntent),
     retention: round2(retention),
     clarity: round2(clarity),
-    overclaim_risk: round2(overclaimRisk),
-    repetition_risk: round2(repetitionRisk)
+    overclaimRisk: round2(overclaimRisk),
+    repetitionRisk: round2(repetitionRisk)
   };
+}
+
+function summarizeDimensions(
+  dimensions: CreativeScoreBreakdown,
+  kind: "strength" | "weakness"
+): string[] {
+  const positive: CreativeScoreDimension[] = [
+    "hook",
+    "curiosity",
+    "problem",
+    "benefit",
+    "purchaseIntent",
+    "retention",
+    "clarity"
+  ];
+  return positive
+    .filter((dimension) =>
+      kind === "strength" ? dimensions[dimension] >= 70 : dimensions[dimension] < 45
+    )
+    .sort((left, right) =>
+      kind === "strength"
+        ? dimensions[right] - dimensions[left] || left.localeCompare(right)
+        : dimensions[left] - dimensions[right] || left.localeCompare(right)
+    );
 }
 
 function calculateRepetitionRisk(text: string): number {

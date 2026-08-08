@@ -15,12 +15,12 @@ Positive score:
 | Dimension | Weight |
 |---|---:|
 | Hook strength | 22% |
-| Curiosity | 12% |
-| Problem clarity | 14% |
-| Benefit specificity | 16% |
+| Retention | 18% |
+| Problem clarity | 13% |
+| Benefit specificity | 13% |
+| Curiosity | 10% |
 | Purchase intent | 10% |
-| Retention | 16% |
-| Clarity | 10% |
+| Clarity | 14% |
 
 Risk penalty:
 
@@ -29,7 +29,7 @@ Risk penalty:
 | Overclaim risk | 15% |
 | Repetition risk | 10% |
 
-Hard blockers는 빈 script/hook, disclosure 누락, 명시적 과장, 상품 무관 script, 상품명 누락, 긴 첫 문장, 중복 후보, 증거 없는 개인 사용 경험이다. blocker가 있거나 최종 점수가 55 미만이면 `passed=false`다.
+Hard blockers는 빈 script/hook, disclosure 누락, 명시적 과장, 상품 무관 script, 상품명 누락, 긴 첫 문장, 중복 후보, 증거 없는 개인 사용 경험이다. blocker가 있거나 최종 점수가 50 미만이면 `passed=false`다.
 
 ## 설계 이유
 

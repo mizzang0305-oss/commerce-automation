@@ -25,7 +25,7 @@ function main(): void {
       {
         version: "video-lab-creative-score-v1",
         candidates: ranked.length,
-        passed: ranked.filter((item) => item.passed).length,
+        passed: ranked.filter((item) => item.score.passed).length,
         SAFE_TO_UPLOAD: false,
         SAFE_TO_PUBLIC_UPLOAD: false,
         results: ranked

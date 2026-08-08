@@ -26,7 +26,7 @@ If separately approved, use a disposable Python 3.12 environment outside the rep
 Bridge contract:
 
 ```text
-python tools/video-lab/whisperx_bridge.py --audio <local-file> --language ko --model small --device cpu --compute-type int8
+python tools/video-lab/whisperx_bridge.py --audio <local-file> --language ko --output data/video-lab/alignment.json --model small --device cpu --compute-type int8
 ```
 
-The bridge emits word timing JSON to stdout and no secret-bearing stderr/stdout is persisted. A future evaluation needs 5–10 owner-approved Korean local samples and should measure transcript similarity, aligned word ratio, missing timings, runtime, peak memory, and caption-boundary usefulness.
+The bridge writes word timing JSON only to the explicit local output path and emits a count-only safe summary to stdout. No raw stderr/stdout is persisted. A future evaluation needs 5–10 owner-approved Korean local samples and should measure transcript similarity, aligned word ratio, missing timings, runtime, peak memory, and caption-boundary usefulness.

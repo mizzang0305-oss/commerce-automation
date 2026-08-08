@@ -1,6 +1,22 @@
 import type { CreativeCandidate } from "@/lib/video-lab/types";
+import type { CreativeBlocker, CreativeScoreDimension } from "@/lib/video-lab/types";
 
 const DISCLOSURE = "이 포스팅은 쿠팡 파트너스 활동의 일환으로 수수료를 제공받습니다.";
+const EXPECTED_STRONGEST: Record<number, CreativeScoreDimension> = {
+  1: "hook", 2: "benefit", 3: "problem", 4: "clarity", 5: "clarity", 6: "hook",
+  7: "clarity", 8: "clarity", 9: "clarity", 10: "clarity", 11: "hook", 12: "clarity",
+  13: "clarity", 14: "clarity", 15: "clarity", 16: "hook", 17: "clarity", 18: "clarity",
+  19: "clarity", 20: "hook", 21: "clarity", 22: "clarity", 23: "hook", 24: "hook"
+};
+
+export type CreativeCandidateFixture = CreativeCandidate & {
+  expected: {
+    outcome: "PASS" | "BLOCK";
+    scoreRange: readonly [number, number];
+    strongestFactor: CreativeScoreDimension;
+    blocker?: CreativeBlocker;
+  };
+};
 
 function candidate(
   id: number,
@@ -8,21 +24,30 @@ function candidate(
   anchor: string,
   hook: string,
   body: string,
-  overrides: Partial<CreativeCandidate> = {}
-): CreativeCandidate {
+  overrides: Partial<CreativeCandidate> = {},
+  expectation: Partial<CreativeCandidateFixture["expected"]> = {}
+): CreativeCandidateFixture {
   return {
-    candidate_id: `LAB_${String(id).padStart(2, "0")}`,
-    product_name: product,
+    id: `LAB_${String(id).padStart(2, "0")}`,
+    productName: product,
+    productCategory: "synthetic_household",
+    angle: "problem_to_benefit",
     hook,
     script: `${product}, ${body}`,
-    disclosure_required: true,
-    disclosure_text: DISCLOSURE,
-    product_anchors: [anchor],
-    ...overrides
+    disclosureRequired: true,
+    disclosure: DISCLOSURE,
+    productAnchors: [anchor],
+    ...overrides,
+    expected: {
+      outcome: "PASS",
+      scoreRange: [50, 100],
+      strongestFactor: EXPECTED_STRONGEST[id],
+      ...expectation
+    }
   };
 }
 
-export const creativeCandidateFixtures: CreativeCandidate[] = [
+export const creativeCandidateFixtures: CreativeCandidateFixture[] = [
   candidate(1, "접이식 빨래건조대", "건조", "비 오는 날 빨래 냄새, 왜 반복될까요?", "좁은 공간의 건조 문제를 한 번에 정리합니다. 접어서 보관해 공간을 줄이고 필요한 날 바로 펼칠 수 있어요."),
   candidate(2, "무선 미니 청소기", "청소", "과자 부스러기 10초면 정리됩니다!", "차 안 청소가 번거로울 때 빠르게 꺼내 쓰세요. 작은 틈까지 간편하게 닿아 시간을 줄여 줍니다."),
   candidate(3, "회전식 양념 정리대", "양념", "양념통 찾느라 요리 흐름이 끊기나요?", "좁은 수납 문제를 회전 구조로 정리합니다. 필요한 양념을 바로 골라 조리 시간을 절약해 보세요."),
@@ -33,7 +58,7 @@ export const creativeCandidateFixtures: CreativeCandidate[] = [
   candidate(8, "전자레인지 찜기", "찜", "바쁜 아침 5분, 따뜻한 한 끼 가능할까요?", "조리 시간이 부족한 문제를 간편한 찜 방식으로 줄입니다. 한 번에 데우고 바로 먹기 편해요."),
   candidate(9, "신발 건조 탈취기", "신발", "젖은 신발 냄새, 다음 날까지 남나요?", "신발 건조와 냄새 걱정을 줄이는 데 도움을 줍니다. 비 오는 날 필요한 관리 시간을 절약해요."),
   candidate(10, "냉장고 회전 트레이", "냉장고", "냉장고 안쪽 식재료, 또 잊으셨나요?", "깊은 칸 정리 문제를 회전 트레이로 줄입니다. 필요한 식재료를 바로 찾아 공간을 편하게 씁니다."),
-  candidate(11, "다용도 틈새 브러시", "틈새", "손이 안 닿는 틈, 왜 계속 더러울까요?", "좁은 틈 청소 문제를 가는 브러시로 정리합니다. 주방과 욕실의 필요한 곳에 간편하게 써보세요."),
+  candidate(11, "다용도 틈새 브러시", "틈새", "손이 안 닿는 틈, 왜 계속 더러울까요?", "좁은 틈새 청소 문제를 가는 브러시로 정리합니다. 주방과 욕실의 필요한 곳에 간편하게 써보세요."),
   candidate(12, "압축 수납 파우치", "수납", "옷장 공간이 부족하면 이 차이를 보세요!", "부피 큰 옷 수납 문제를 압축해 줄입니다. 계절 옷을 정리하고 필요한 공간을 확보할 수 있어요."),
   candidate(13, "창문 틈새 막이", "외풍", "난방해도 방이 추운 이유가 틈일까요?", "창문 외풍 문제를 간편하게 줄이는 데 도움을 줍니다. 필요한 길이만 사용해 공간을 따뜻하게 관리해요."),
   candidate(14, "욕실 스퀴지", "물기", "샤워 뒤 물기, 그냥 두면 왜 번거로울까요?", "욕실 물기 정리 문제를 빠르게 줄입니다. 벽과 거울을 한 번에 밀어 청소 시간을 절약해요."),
@@ -41,10 +66,10 @@ export const creativeCandidateFixtures: CreativeCandidate[] = [
   candidate(16, "손잡이 밀폐용기", "밀폐", "가루 식재료 쏟는 문제, 왜 반복될까요?", "주방 보관 문제를 손잡이와 밀폐 구조로 줄입니다. 필요한 양만 편하게 덜어 정리 시간을 절약해요."),
   candidate(17, "침대 틈새 쿠션", "틈새", "침대 틈으로 물건이 계속 빠지나요?", "침대와 벽 사이 틈새 문제를 채워 줍니다. 작은 물건을 찾는 시간을 줄이고 공간을 정리해요."),
   candidate(18, "자동 센서 휴지통", "센서", "손대지 않고 뚜껑이 열리면 편할까요?", "조리 중 쓰레기 처리의 번거로움을 센서로 줄입니다. 필요한 순간 바로 열려 주방 동선을 간편하게 해요."),
-  candidate(19, "접이식 빨래건조대", "건조", "건조대 하나면 무조건 냄새가 100% 사라집니다!", "건조 문제를 완벽하게 해결합니다."),
-  candidate(20, "무선 미니 청소기", "청소", "차량 청소 전후를 보세요!", "다른 주제만 이야기하고 제품 기능은 설명하지 않습니다.", { product_anchors: ["흡입력"] }),
-  candidate(21, "회전식 양념 정리대", "양념", "이 제품 결과가 궁금한가요?", "양념 정리 문제를 줄입니다.", { disclosure_text: "" }),
-  candidate(22, "실리콘 음식 덮개", "보관", "", "보관 문제를 간편하게 줄입니다."),
-  candidate(23, "휴대용 보풀 제거기", "보풀", "제가 매일 써 본 진짜 결과입니다!", "보풀 정리 시간을 줄여 편하게 관리합니다.", { claims_personal_experience: true, personal_experience_evidence: false }),
-  candidate(24, "싱크대 물막이", "물튐", "싱크대 물튐이 계속 반복되는 이유와 설치 위치 그리고 사용 전에 확인해야 하는 폭과 높이와 주변 공간을 한 문장으로 전부 설명합니다", "물튐 문제를 줄이고 설거지 공간을 간편하게 정리합니다.")
+  candidate(19, "접이식 빨래건조대", "건조", "건조대 하나면 무조건 냄새가 100% 사라집니다!", "건조 문제를 완벽하게 해결합니다.", {}, { outcome: "BLOCK", scoreRange: [0, 100], blocker: "EXPLICIT_OVERCLAIM" }),
+  candidate(20, "무선 미니 청소기", "청소", "차량 청소 전후를 보세요!", "다른 주제만 이야기하고 제품 기능은 설명하지 않습니다.", { productAnchors: ["흡입력"] }, { outcome: "BLOCK", scoreRange: [0, 100], blocker: "UNRELATED_SCRIPT" }),
+  candidate(21, "회전식 양념 정리대", "양념", "이 제품 결과가 궁금한가요?", "양념 정리 문제를 줄입니다.", { disclosure: "" }, { outcome: "BLOCK", scoreRange: [0, 100], blocker: "MISSING_DISCLOSURE" }),
+  candidate(22, "실리콘 음식 덮개", "보관", "", "보관 문제를 간편하게 줄입니다.", {}, { outcome: "BLOCK", scoreRange: [0, 100], strongestFactor: "clarity", blocker: "MISSING_HOOK" }),
+  candidate(23, "휴대용 보풀 제거기", "보풀", "제가 매일 써 본 진짜 결과입니다!", "보풀 정리 시간을 줄여 편하게 관리합니다.", { claimsPersonalExperience: true, personalExperienceEvidence: false }, { outcome: "BLOCK", scoreRange: [0, 100], blocker: "FAKE_PERSONAL_EXPERIENCE_CLAIM" }),
+  candidate(24, "싱크대 물막이", "물튐", "싱크대 물튐이 계속 반복되는 이유를 확인하세요", "물튐 문제를 줄이기 위한 설치 위치와 사용 전에 확인해야 하는 폭과 높이와 주변 공간과 설거지 동선을 한 문장으로 아주 자세하게 전부 설명합니다. 다음 단계에서 간편한 관리법을 확인하세요.", {}, { outcome: "BLOCK", scoreRange: [0, 100], blocker: "FIRST_SENTENCE_TOO_LONG" })
 ];

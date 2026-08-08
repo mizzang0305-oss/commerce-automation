@@ -16,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--audio", required=True)
     parser.add_argument("--language", choices=["ko"], default="ko")
+    parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="small")
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     parser.add_argument("--compute-type", choices=["int8", "float16", "float32"], default="int8")
@@ -27,6 +28,9 @@ def main() -> int:
     audio_path = Path(args.audio).resolve(strict=True)
     if not audio_path.is_file():
         raise ValueError("VIDEO_LAB_AUDIO_FILE_REQUIRED")
+    output_path = Path(args.output).resolve()
+    if output_path.suffix.lower() != ".json":
+        raise ValueError("VIDEO_LAB_JSON_OUTPUT_REQUIRED")
 
     try:
         import whisperx  # type: ignore[import-not-found]
@@ -56,15 +60,18 @@ def main() -> int:
             words.append(
                 {
                     "word": str(word.get("word", "")).strip(),
-                    "start_seconds": float(word["start"]),
-                    "end_seconds": float(word["end"]),
+                    "start": float(word["start"]),
+                    "end": float(word["end"]),
                     "confidence": float(word["score"]) if word.get("score") is not None else None,
                 }
             )
+    payload = {"provider": "whisperx", "language": "ko", "segments": segments, "words": words}
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
         json.dumps(
-            {"provider": "whisperx", "language": "ko", "segments": segments, "words": words},
-            ensure_ascii=False,
+            {"status": "completed", "provider": "whisperx", "word_count": len(words)},
+            ensure_ascii=True,
         )
     )
     return 0

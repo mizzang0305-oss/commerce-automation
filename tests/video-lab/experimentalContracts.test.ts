@@ -13,10 +13,10 @@ import {
 } from "@/lib/video-lab/wordAlignmentProvider";
 
 const words: WordAlignmentToken[] = [
-  { word: "좁은", start_seconds: 0, end_seconds: 0.3, confidence: 0.97 },
-  { word: "공간도", start_seconds: 0.32, end_seconds: 0.7, confidence: 0.96 },
-  { word: "깔끔하게", start_seconds: 0.72, end_seconds: 1.2, confidence: 0.94 },
-  { word: "정리해요", start_seconds: 1.8, end_seconds: 2.3, confidence: 0.95 }
+  { word: "좁은", start: 0, end: 0.3, confidence: 0.97 },
+  { word: "공간도", start: 0.32, end: 0.7, confidence: 0.96 },
+  { word: "깔끔하게", start: 0.72, end: 1.2, confidence: 0.94 },
+  { word: "정리해요", start: 1.8, end: 2.3, confidence: 0.95 }
 ];
 
 describe("video lab experimental contracts", () => {
@@ -32,6 +32,11 @@ describe("video lab experimental contracts", () => {
       reason: "WHISPERX_NOT_CONFIGURED",
       words: [],
       external_calls: 0
+    });
+    await expect(new DisabledWordAlignmentProvider().inspect()).resolves.toEqual({
+      provider: "disabled",
+      status: "NOT_CONFIGURED",
+      configured: false
     });
   });
 
@@ -49,6 +54,11 @@ describe("video lab experimental contracts", () => {
     });
     expect(result.status).toBe("completed");
     expect(result.external_calls).toBe(0);
+    await expect(provider.inspect()).resolves.toEqual({
+      provider: "local_whisperx",
+      status: "READY_LOCAL",
+      configured: true
+    });
   });
 
   test("builds deterministic caption cues from aligned Korean words", () => {
@@ -94,6 +104,11 @@ describe("video lab experimental contracts", () => {
       reason: "NOT_CONFIGURED",
       upload_called: false
     });
+    await expect(new DisabledVideoLabRenderer().inspect()).resolves.toEqual({
+      renderer: "disabled",
+      status: "NOT_CONFIGURED",
+      configured: false
+    });
 
     const adapter = vi.fn(async () => ({ output_path: "video-lab.mp4" }));
     const rendered = await new ExperimentalRemotionRenderer(adapter).render(request);
@@ -102,6 +117,11 @@ describe("video lab experimental contracts", () => {
       renderer: "remotion_experimental",
       output_path: "video-lab.mp4",
       upload_called: false
+    });
+    await expect(new ExperimentalRemotionRenderer(adapter).inspect()).resolves.toEqual({
+      renderer: "remotion_experimental",
+      status: "READY_EXPERIMENTAL",
+      configured: true
     });
   });
 

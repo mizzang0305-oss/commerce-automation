@@ -9,15 +9,15 @@ export const VIDEO_LAB_FLAGS = Object.freeze({
 } as const);
 
 export type CreativeScoreDimension =
-  | "hook_strength"
+  | "hook"
   | "curiosity"
-  | "problem_clarity"
-  | "benefit_specificity"
-  | "purchase_intent"
+  | "problem"
+  | "benefit"
+  | "purchaseIntent"
   | "retention"
   | "clarity"
-  | "overclaim_risk"
-  | "repetition_risk";
+  | "overclaimRisk"
+  | "repetitionRisk";
 
 export type CreativeBlocker =
   | "EMPTY_SCRIPT"
@@ -28,36 +28,53 @@ export type CreativeBlocker =
   | "PRODUCT_NAME_MISSING"
   | "FIRST_SENTENCE_TOO_LONG"
   | "DUPLICATE_CANDIDATE"
-  | "UNVERIFIED_PERSONAL_EXPERIENCE";
+  | "FAKE_PERSONAL_EXPERIENCE_CLAIM";
 
-export type CreativeCandidate = {
-  candidate_id: string;
-  product_name: string;
+export interface CreativeCandidate {
+  id: string;
+  productName: string;
+  productCategory?: string;
+  angle: string;
   hook: string;
   script: string;
-  disclosure_required: boolean;
-  disclosure_text?: string | null;
-  product_anchors?: string[];
-  duplicate_key?: string | null;
-  claims_personal_experience?: boolean;
-  personal_experience_evidence?: boolean;
-};
+  cta?: string;
+  disclosure?: string;
+  productAnchors?: string[];
+  disclosureRequired?: boolean;
+  duplicateKey?: string | null;
+  claimsPersonalExperience?: boolean;
+  personalExperienceEvidence?: boolean;
+}
 
-export type CreativeScoreBreakdown = Record<CreativeScoreDimension, number>;
+export interface CreativeScoreBreakdown {
+  hook: number;
+  curiosity: number;
+  problem: number;
+  benefit: number;
+  purchaseIntent: number;
+  retention: number;
+  clarity: number;
+  overclaimRisk: number;
+  repetitionRisk: number;
+}
 
-export type CreativeScoreResult = {
+export interface CreativeScoreResult {
   version: "video-lab-creative-score-v1";
-  candidate_id: string;
-  passed: boolean;
+  candidateId: string;
+  totalScore: number;
+  positiveScore: number;
+  riskPenalty: number;
+  breakdown: CreativeScoreBreakdown;
+  strengths: string[];
+  weaknesses: string[];
   blockers: CreativeBlocker[];
-  dimensions: CreativeScoreBreakdown;
-  positive_score: number;
-  risk_penalty: number;
-  total_score: number;
+  passed: boolean;
   SAFE_TO_UPLOAD: false;
   SAFE_TO_PUBLIC_UPLOAD: false;
-};
+}
 
-export type RankedCreative = CreativeScoreResult & {
+export interface RankedCreative {
+  candidate: CreativeCandidate;
+  score: CreativeScoreResult;
   rank: number;
-};
+}

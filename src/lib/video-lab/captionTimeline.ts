@@ -28,8 +28,8 @@ export function buildCaptionTimeline(
     validateWord(word, group.length ? group[group.length - 1] : undefined);
     const prospective = [...group, word];
     const text = joinWords(prospective);
-    const duration = word.end_seconds - prospective[0].start_seconds;
-    const gap = group.length ? word.start_seconds - group[group.length - 1].end_seconds : 0;
+    const duration = word.end - prospective[0].start;
+    const gap = group.length ? word.start - group[group.length - 1].end : 0;
     if (group.length && (text.length > maxChars || duration > maxDuration || gap > maxGap)) {
       cues.push(toCue(group, cues.length));
       group = [word];
@@ -45,8 +45,8 @@ function toCue(words: WordAlignmentToken[], index: number): CaptionCue {
   return {
     cue_id: `cue-${String(index + 1).padStart(3, "0")}`,
     text: joinWords(words),
-    start_seconds: words[0].start_seconds,
-    end_seconds: words[words.length - 1].end_seconds,
+    start_seconds: words[0].start,
+    end_seconds: words[words.length - 1].end,
     words: words.length
   };
 }
@@ -58,11 +58,11 @@ function joinWords(words: readonly WordAlignmentToken[]): string {
 function validateWord(word: WordAlignmentToken, previous?: WordAlignmentToken): void {
   if (
     !word.word.trim() ||
-    !Number.isFinite(word.start_seconds) ||
-    !Number.isFinite(word.end_seconds) ||
-    word.start_seconds < 0 ||
-    word.end_seconds <= word.start_seconds ||
-    (previous && word.start_seconds < previous.end_seconds)
+    !Number.isFinite(word.start) ||
+    !Number.isFinite(word.end) ||
+    word.start < 0 ||
+    word.end <= word.start ||
+    (previous && word.start < previous.end)
   ) {
     throw new Error("VIDEO_LAB_INVALID_ALIGNMENT_TIMELINE");
   }
