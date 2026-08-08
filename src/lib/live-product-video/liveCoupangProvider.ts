@@ -27,6 +27,7 @@ export async function searchLiveCoupangProducts(input: {
   env?: Record<string, string | undefined>;
   fetchImpl?: typeof fetch;
   now?: Date;
+  allowDeeplink?: boolean;
 }): Promise<LiveCoupangProviderResult> {
   const env = input.env ?? process.env;
   const readiness = readCoupangPartnersEnv(env).readiness;
@@ -63,7 +64,7 @@ export async function searchLiveCoupangProducts(input: {
   const missingAffiliate = pending.filter((product) => !product.selectedAffiliateUrl && isLikelyCoupangProductUrl(product.rawProductUrl));
   let deeplinkApiCalled = false;
   let apiCallCount = 1;
-  if (missingAffiliate.length > 0) {
+  if (missingAffiliate.length > 0 && input.allowDeeplink !== false) {
     const deeplink = await requestCoupangDeeplinkAffiliateUrls({
       rawCoupangUrls: missingAffiliate.map((product) => product.rawProductUrl),
       env,

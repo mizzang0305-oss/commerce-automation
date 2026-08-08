@@ -49,6 +49,9 @@ export type LocalQueueItem = {
   candidate: LiveProductCandidate;
   createdAt: string;
   updatedAt: string;
+  localRevision: number;
+  controlPreviousStatus?: LocalQueueStatus;
+  holdReason?: string;
 };
 
 export type LocalRun = {
@@ -66,7 +69,7 @@ export type LocalRun = {
 };
 
 export type QueueSchedulerSettings = {
-  mode: "no_upload_pilot";
+  mode: "no_upload_pilot" | "no_upload_daily_69";
   dailyTargetCount: number;
   batchSize: number;
   intervalHours: number;
@@ -81,12 +84,29 @@ export type QueueSchedulerSettings = {
   retryBackoffMinutes: number;
   maxAttempts: number;
   maxProductCandidates: number;
+  reserveRatio: number;
+  minimumReserveCount: number;
+  maxRawDiscoveries: number;
+  maxProviderCalls: number;
+  processingDailyCap: number;
+  maxCategoryRatio: number;
+  maxProductFamilyRatio: number;
+  maxExactAssetReuse: number;
 };
 
 export type ReserveCandidate = RankedLiveProduct & {
   insertedAt: string;
   claimedBySlot: string;
   claimedAt: string;
+  queueDate?: string;
+};
+
+export type QueueControlState = {
+  localRevision: number;
+  projectionRevision: number;
+  snapshotHash: string;
+  projectedAt: string;
+  source: "local_queue_scheduler";
 };
 
 export const QUEUE_SCHEDULER_FLAGS = Object.freeze({
