@@ -88,6 +88,8 @@
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
+    "video-lab:score": "tsx scripts/video-lab/score-creatives.ts",
+    "video-lab:calibrate": "tsx scripts/video-lab/calibrate-scorer.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

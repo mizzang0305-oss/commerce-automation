@@ -25,6 +25,11 @@ python-worker/logs/**
 commerce-assets/generated-motion/
 commerce-assets/autopilot/
 commerce-assets/review/
+/data/video-lab/
+/commerce-assets/video-lab/
+/models/video-lab/
+/audio/video-lab/
+/video-lab-outputs/
 # Local visual-gate image corpus is intentionally not committed. Keep only
 # sanitized JSON manifests/reports needed for code review and calibration lineage.
 /commerce-assets/research/**
