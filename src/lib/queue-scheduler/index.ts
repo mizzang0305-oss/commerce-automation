@@ -4,6 +4,7 @@ export * from "./nightlyScout";
 export * from "./repository";
 export * from "./runtimePreflight";
 export * from "./settings";
+export * from "./singleSlotRecovery";
 export * from "./status";
 export * from "./types";
 export * from "./videoExecutor";

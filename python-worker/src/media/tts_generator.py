@@ -12,8 +12,28 @@ BLOCKED_NOT_KOREAN = "KOREAN_VOICE_PROVIDER_NOT_KOREAN_CAPABLE"
 BLOCKED_SAPI = "VOICEOVER_REJECTED_LOCAL_SAPI_VOICE"
 BLOCKED_PAID_OR_CLOUD = "VOICE_PROVIDER_PAID_OR_CLOUD_REQUIRES_APPROVAL"
 BLOCKED_COMMAND = "BLOCKED_KOREAN_VOICE_COMMAND_INVALID"
-BLOCKED_GENERATION = "BLOCKED_KOREAN_VOICE_GENERATION_FAILED"
-BLOCKED_AUDIO = "BLOCKED_KOREAN_VOICE_AUDIO_INVALID"
+TTS_INPUT_UNSUPPORTED = "TTS_INPUT_UNSUPPORTED"
+TTS_FRONTEND_NORMALIZATION_FAILED = "TTS_FRONTEND_NORMALIZATION_FAILED"
+TTS_PHONEMIZER_FAILED = "TTS_PHONEMIZER_FAILED"
+TTS_MODEL_INFERENCE_FAILED = "TTS_MODEL_INFERENCE_FAILED"
+TTS_OUTPUT_NOT_CREATED = "TTS_OUTPUT_NOT_CREATED"
+TTS_OUTPUT_INVALID = "TTS_OUTPUT_INVALID"
+TTS_SUBPROCESS_TIMEOUT = "TTS_SUBPROCESS_TIMEOUT"
+TTS_RUNTIME_TRANSIENT = "TTS_RUNTIME_TRANSIENT"
+TTS_FILESYSTEM_FAILED = "TTS_FILESYSTEM_FAILED"
+TTS_UNKNOWN_RUNTIME_FAILURE = "TTS_UNKNOWN_RUNTIME_FAILURE"
+
+# Backward-compatible names for callers/tests that import the old constants.
+BLOCKED_GENERATION = TTS_UNKNOWN_RUNTIME_FAILURE
+BLOCKED_AUDIO = TTS_OUTPUT_INVALID
+
+
+class TtsGenerationError(RuntimeError):
+    def __init__(self, safe_code: str, *, stage: str, retryable: bool) -> None:
+        super().__init__(safe_code)
+        self.safe_code = safe_code
+        self.stage = stage
+        self.retryable = retryable
 
 
 def create_tts_audio(
@@ -91,7 +111,7 @@ def create_tts_audio(
             )
         final_duration = _validate_wav(target, require_non_silent=True)
         if duration_seconds is not None and abs(final_duration - float(duration_seconds)) > 0.12:
-            raise RuntimeError(BLOCKED_AUDIO)
+            raise TtsGenerationError(TTS_OUTPUT_INVALID, stage="output_validation", retryable=False)
         return target
     finally:
         script_path.unlink(missing_ok=True)
@@ -138,10 +158,15 @@ def _run_local_command(
             timeout=timeout_seconds,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(BLOCKED_GENERATION) from exc
-    if completed.returncode != 0 or not output_path.is_file() or output_path.stat().st_size <= 44:
-        raise RuntimeError(BLOCKED_GENERATION)
+    except subprocess.TimeoutExpired as exc:
+        raise TtsGenerationError(TTS_SUBPROCESS_TIMEOUT, stage="subprocess", retryable=True) from exc
+    except OSError as exc:
+        raise TtsGenerationError(TTS_FILESYSTEM_FAILED, stage="subprocess", retryable=False) from exc
+    if completed.returncode != 0:
+        safe_code, stage, retryable = _classify_local_command_failure(completed.stderr)
+        raise TtsGenerationError(safe_code, stage=stage, retryable=retryable)
+    if not output_path.is_file() or output_path.stat().st_size <= 44:
+        raise TtsGenerationError(TTS_OUTPUT_NOT_CREATED, stage="output", retryable=False)
 
 
 def _normalize_duration(
@@ -174,10 +199,12 @@ def _normalize_duration(
             timeout=timeout_seconds,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(BLOCKED_AUDIO) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise TtsGenerationError(TTS_SUBPROCESS_TIMEOUT, stage="normalization", retryable=True) from exc
+    except OSError as exc:
+        raise TtsGenerationError(TTS_FILESYSTEM_FAILED, stage="normalization", retryable=False) from exc
     if completed.returncode != 0 or not target.is_file() or target.stat().st_size <= 44:
-        raise RuntimeError(BLOCKED_AUDIO)
+        raise TtsGenerationError(TTS_OUTPUT_INVALID, stage="normalization", retryable=False)
 
 
 def _atempo_filters(ratio: float) -> list[str]:
@@ -199,12 +226,32 @@ def _validate_wav(path: Path, *, require_non_silent: bool) -> float:
             frame_count = wav.getnframes()
             frames = wav.readframes(frame_count)
     except (OSError, EOFError, wave.Error) as exc:
-        raise RuntimeError(BLOCKED_AUDIO) from exc
+        raise TtsGenerationError(TTS_OUTPUT_INVALID, stage="output_validation", retryable=False) from exc
     if channels <= 0 or sample_width != 2 or frame_rate <= 0 or frame_count <= 0:
-        raise RuntimeError(BLOCKED_AUDIO)
+        raise TtsGenerationError(TTS_OUTPUT_INVALID, stage="output_validation", retryable=False)
     if require_non_silent:
         samples = array("h")
         samples.frombytes(frames)
         if not samples or max(abs(sample) for sample in samples) <= 32:
-            raise RuntimeError(BLOCKED_AUDIO)
+            raise TtsGenerationError(TTS_OUTPUT_INVALID, stage="output_validation", retryable=False)
     return frame_count / frame_rate
+
+
+def _classify_local_command_failure(stderr: bytes | str | None) -> tuple[str, str, bool]:
+    if isinstance(stderr, bytes):
+        text = stderr.decode("utf-8", errors="replace").lower()
+    else:
+        text = str(stderr or "").lower()
+    if "keyerror:" in text or "unsupported character" in text or "unsupported symbol" in text:
+        return TTS_INPUT_UNSUPPORTED, "frontend", False
+    if any(marker in text for marker in ("phonemizer", "phoneme", "g2p", "mecab", "eunjeon")):
+        return TTS_PHONEMIZER_FAILED, "frontend", False
+    if "normaliz" in text or "unicode" in text:
+        return TTS_FRONTEND_NORMALIZATION_FAILED, "frontend", False
+    if "timeout" in text or "timed out" in text:
+        return TTS_SUBPROCESS_TIMEOUT, "subprocess", True
+    if any(marker in text for marker in ("resource temporarily unavailable", "out of memory", "memoryerror")):
+        return TTS_RUNTIME_TRANSIENT, "runtime", True
+    if any(marker in text for marker in ("runtimeerror", "inference", "torch", "tensor")):
+        return TTS_MODEL_INFERENCE_FAILED, "model_inference", False
+    return TTS_UNKNOWN_RUNTIME_FAILURE, "runtime", False

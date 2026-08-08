@@ -97,6 +97,7 @@
     "queue-video:scout": "tsx scripts/queue-scheduler/run-nightly-scout.ts",
     "queue-video:run-next": "tsx scripts/queue-scheduler/run-next-batch.ts",
     "queue-video:status": "tsx scripts/queue-scheduler/status.ts",
+    "queue-video:recover-slot": "tsx scripts/queue-scheduler/run-single-slot-recovery.ts",
     "queue-video:configure-pilot": "tsx scripts/queue-scheduler/configure-pilot.ts",
     "queue-video:preflight": "tsx scripts/queue-scheduler/preflight.ts",
     "lint": "eslint .",
