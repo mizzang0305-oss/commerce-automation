@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { scoreCreativeCandidate } from "@/lib/video-lab/viralityScorer";
+import { CREATIVE_SCORE_CONFIG } from "@/lib/video-lab/creativeScoreConfig";
 import type { CreativeBlocker, CreativeCandidate } from "@/lib/video-lab/types";
 import { creativeCandidateFixtures } from "./fixtures/creativeCandidates";
 
@@ -94,11 +95,82 @@ describe("video lab creative scorer", () => {
   });
 
   test("fails closed for malformed runtime input", () => {
-    const result = scoreCreativeCandidate(null as unknown as CreativeCandidate);
+    const malformed: unknown[] = [
+      null,
+      undefined,
+      {},
+      7,
+      [],
+      { ...base, productName: 3 },
+      { ...base, hook: null },
+      { ...base, script: {} },
+      { ...base, productAliases: ["허용", 3] }
+    ];
 
-    expect(result.passed).toBe(false);
-    expect(result.blockers).toContain("EMPTY_SCRIPT");
-    expect(result.blockers).toContain("MISSING_HOOK");
-    expect(result.candidateId).toBe("INVALID_CANDIDATE");
+    for (const candidate of malformed) {
+      expect(() => scoreCreativeCandidate(candidate)).not.toThrow();
+      const result = scoreCreativeCandidate(candidate);
+      expect(result.passed).toBe(false);
+      expect(result.blockers).toEqual(["INVALID_CANDIDATE_INPUT"]);
+    }
+  });
+
+  test.each([
+    [undefined, "PRODUCT_ANCHORS_REQUIRED"],
+    [[], "PRODUCT_ANCHORS_REQUIRED"],
+    [["건조"], null],
+    [["흡입력"], "UNRELATED_SCRIPT"]
+  ] as const)("applies product anchor semantics for %j", (productAnchors, expected) => {
+    const result = scoreCreativeCandidate(withChanges({ productAnchors }));
+    if (expected) expect(result.blockers).toContain(expected);
+    else expect(result.blockers).not.toContain("UNRELATED_SCRIPT");
+  });
+
+  test("does not count an anchor that exists only inside product identity", () => {
+    const result = scoreCreativeCandidate(
+      withChanges({
+        productName: "초강력 건조 도구",
+        canonicalProductName: "초강력 건조 도구",
+        productAliases: [],
+        productAnchors: ["건조"],
+        hook: "초강력 건조 도구가 필요한가요?",
+        script: "초강력 건조 도구는 생활 불편을 줄이는 제품입니다."
+      })
+    );
+    expect(result.blockers).toContain("UNRELATED_SCRIPT");
+  });
+
+  test("accepts a canonical name or approved alias without requiring the raw Coupang name", () => {
+    const canonical = scoreCreativeCandidate(
+      withChanges({
+        productName: "브랜드 공식 초특가 접이식 빨래건조대 대형 2026 신형",
+        canonicalProductName: "접이식 빨래건조대"
+      })
+    );
+    const alias = scoreCreativeCandidate(
+      withChanges({
+        productName: "브랜드 공식 초특가 접이식 빨래건조대 대형 2026 신형",
+        canonicalProductName: undefined,
+        productAliases: ["빨래건조대"]
+      })
+    );
+    const missing = scoreCreativeCandidate(
+      withChanges({ canonicalProductName: undefined, productAliases: [] })
+    );
+    const unmatched = scoreCreativeCandidate(
+      withChanges({ canonicalProductName: "무선 청소기", productAliases: ["핸디 청소기"] })
+    );
+
+    expect(canonical.blockers).not.toContain("PRODUCT_NAME_MISSING");
+    expect(alias.blockers).not.toContain("PRODUCT_NAME_MISSING");
+    expect(missing.blockers).toContain("PRODUCT_IDENTITY_REQUIRED");
+    expect(unmatched.blockers).toContain("PRODUCT_NAME_MISSING");
+  });
+
+  test("blocks hooks longer than the configured render-safe contract", () => {
+    const result = scoreCreativeCandidate(
+      withChanges({ hook: "가".repeat(CREATIVE_SCORE_CONFIG.hookMaxChars + 1) })
+    );
+    expect(result.blockers).toContain("HOOK_TOO_LONG");
   });
 });

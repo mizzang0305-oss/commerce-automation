@@ -61,4 +61,12 @@ describe("video lab creative ranker", () => {
       }
     }
   });
+
+  test("ranks malformed candidates without throwing and keeps them blocked", () => {
+    const malformed: unknown[] = [null, 1, [], { ...creativeCandidateFixtures[0], hook: null }];
+    expect(() => rankCreativeCandidates(malformed)).not.toThrow();
+    const ranked = rankCreativeCandidates(malformed);
+    expect(ranked).toHaveLength(malformed.length);
+    expect(ranked.every((item) => item.score.blockers.includes("INVALID_CANDIDATE_INPUT"))).toBe(true);
+  });
 });

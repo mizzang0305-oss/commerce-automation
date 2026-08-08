@@ -1,18 +1,23 @@
+import { parseCreativeCandidate } from "./creativeCandidateParser";
 import type { CreativeCandidate, CreativeScoreResult, RankedCreative } from "./types";
 import { scoreCreativeCandidate } from "./viralityScorer";
 
-export function rankCreativeCandidates(candidates: readonly CreativeCandidate[]): RankedCreative[] {
+export function rankCreativeCandidates(candidates: readonly unknown[]): RankedCreative[] {
   const seen = new Set<string>();
-  const scored = candidates.map((candidate) => {
+  const normalizedCandidates = candidates.map((candidate, index) =>
+    parseCreativeCandidate(candidate, `INVALID_CANDIDATE_${String(index + 1).padStart(2, "0")}`).candidate
+  );
+  const scored = candidates.map((candidate, index) => {
     const score = scoreCreativeCandidate(candidate);
-    const key = dedupeKey(candidate);
+    if (score.blockers.includes("INVALID_CANDIDATE_INPUT")) return score;
+    const key = dedupeKey(normalizedCandidates[index]);
     if (seen.has(key)) return blockDuplicate(score);
     seen.add(key);
     return score;
   });
 
   return scored
-    .map((score, index) => ({ candidate: candidates[index], score }))
+    .map((score, index) => ({ candidate: normalizedCandidates[index], score }))
     .sort(
       (left, right) =>
         Number(right.score.passed) - Number(left.score.passed) ||
@@ -42,5 +47,5 @@ function dedupeKey(candidate: CreativeCandidate): string {
 }
 
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, "");
+  return typeof value === "string" ? value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, "") : "";
 }

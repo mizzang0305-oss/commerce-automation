@@ -30,6 +30,7 @@ function candidate(
   return {
     id: `LAB_${String(id).padStart(2, "0")}`,
     productName: product,
+    canonicalProductName: product,
     productCategory: "synthetic_household",
     angle: "problem_to_benefit",
     hook,

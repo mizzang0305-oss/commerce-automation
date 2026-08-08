@@ -1,4 +1,5 @@
 export * from "./captionTimeline";
+export * from "./creativeCandidateParser";
 export * from "./creativeRanker";
 export * from "./creativeScoreConfig";
 export * from "./rendererContract";

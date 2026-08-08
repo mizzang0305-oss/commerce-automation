@@ -1,7 +1,7 @@
 import { CREATIVE_SCORE_CONFIG } from "./creativeScoreConfig";
+import { parseCreativeCandidate } from "./creativeCandidateParser";
 import type {
   CreativeBlocker,
-  CreativeCandidate,
   CreativeScoreBreakdown,
   CreativeScoreDimension,
   CreativeScoreResult
@@ -10,8 +10,10 @@ import type {
 const SENTENCE_BOUNDARY = /[.!?。！？]|(?:다|요)[\s\n]+/u;
 const TOKEN_PATTERN = /[가-힣A-Za-z0-9]+/gu;
 
-export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeScoreResult {
-  const safeCandidate = candidate && typeof candidate === "object" ? candidate : ({} as CreativeCandidate);
+export function scoreCreativeCandidate(candidate: unknown): CreativeScoreResult {
+  const parsed = parseCreativeCandidate(candidate);
+  if (!parsed.success) return invalidCandidateScore(parsed.candidate.id);
+  const safeCandidate = parsed.candidate;
   const hook = normalize(safeCandidate.hook);
   const script = normalize(safeCandidate.script);
   const productName = normalize(safeCandidate.productName);
@@ -21,6 +23,7 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
 
   if (!script) blockers.push("EMPTY_SCRIPT");
   if (!hook) blockers.push("MISSING_HOOK");
+  if (hook.length > CREATIVE_SCORE_CONFIG.hookMaxChars) blockers.push("HOOK_TOO_LONG");
   if (
     safeCandidate.disclosureRequired === true &&
     disclosure.length < CREATIVE_SCORE_CONFIG.disclosureMinimumChars
@@ -33,18 +36,26 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
   );
   if (hasExplicitOverclaim) blockers.push("EXPLICIT_OVERCLAIM");
 
-  const normalizedProduct = compact(productName);
   const normalizedCombined = compact(combined);
-  if (!normalizedProduct || !normalizedCombined.includes(normalizedProduct)) {
+  const identityTerms = [safeCandidate.canonicalProductName, ...(safeCandidate.productAliases ?? [])]
+    .map((value) => compact(value ?? ""))
+    .filter(Boolean);
+  if (identityTerms.length === 0) {
+    blockers.push("PRODUCT_IDENTITY_REQUIRED");
+  } else if (!identityTerms.some((identity) => normalizedCombined.includes(identity))) {
     blockers.push("PRODUCT_NAME_MISSING");
   }
 
-  const anchors = (Array.isArray(safeCandidate.productAnchors) ? safeCandidate.productAnchors : [])
+  const anchors = (safeCandidate.productAnchors ?? [])
     .map(normalize)
     .filter(Boolean);
-  const contentWithoutProduct = normalizedCombined.replace(normalizedProduct, "");
+  if (anchors.length === 0) blockers.push("PRODUCT_ANCHORS_REQUIRED");
+  const contentWithoutProduct = [compact(productName), ...identityTerms].reduce(
+    (content, identity) => removeAll(content, identity),
+    normalizedCombined
+  );
   const anchorMatched = anchors.some((anchor) => contentWithoutProduct.includes(compact(anchor)));
-  if (productName && !anchorMatched) blockers.push("UNRELATED_SCRIPT");
+  if (anchors.length > 0 && !anchorMatched) blockers.push("UNRELATED_SCRIPT");
 
   const firstSentence = script.split(SENTENCE_BOUNDARY)[0]?.trim() ?? "";
   if (firstSentence.length > CREATIVE_SCORE_CONFIG.firstSentenceMaxChars) {
@@ -79,7 +90,7 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
   const totalScore = clamp(round2(positiveScore - riskPenalty));
 
   return {
-    version: "video-lab-creative-score-v1",
+    version: "video-lab-creative-score-v2",
     candidateId: normalize(safeCandidate.id) || "INVALID_CANDIDATE",
     passed: blockers.length === 0 && totalScore >= CREATIVE_SCORE_CONFIG.passingScore,
     blockers: unique(blockers),
@@ -89,6 +100,34 @@ export function scoreCreativeCandidate(candidate: CreativeCandidate): CreativeSc
     positiveScore,
     riskPenalty,
     totalScore,
+    SAFE_TO_UPLOAD: false,
+    SAFE_TO_PUBLIC_UPLOAD: false
+  };
+}
+
+function invalidCandidateScore(candidateId: string): CreativeScoreResult {
+  const breakdown: CreativeScoreBreakdown = {
+    hook: 0,
+    curiosity: 0,
+    problem: 0,
+    benefit: 0,
+    purchaseIntent: 0,
+    retention: 0,
+    clarity: 0,
+    overclaimRisk: 0,
+    repetitionRisk: 0
+  };
+  return {
+    version: "video-lab-creative-score-v2",
+    candidateId,
+    totalScore: 0,
+    positiveScore: 0,
+    riskPenalty: 0,
+    breakdown,
+    strengths: [],
+    weaknesses: ["hook", "curiosity", "problem", "benefit", "purchaseIntent", "retention", "clarity"],
+    blockers: ["INVALID_CANDIDATE_INPUT"],
+    passed: false,
     SAFE_TO_UPLOAD: false,
     SAFE_TO_PUBLIC_UPLOAD: false
   };
@@ -218,6 +257,10 @@ function normalize(value: string): string {
 
 function compact(value: string): string {
   return normalize(value).toLowerCase().replace(/[^가-힣a-z0-9]/gu, "");
+}
+
+function removeAll(value: string, fragment: string): string {
+  return fragment ? value.split(fragment).join("") : value;
 }
 
 function unique<T>(values: T[]): T[] {

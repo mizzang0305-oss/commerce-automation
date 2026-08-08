@@ -20,10 +20,14 @@ export type CreativeScoreDimension =
   | "repetitionRisk";
 
 export type CreativeBlocker =
+  | "INVALID_CANDIDATE_INPUT"
   | "EMPTY_SCRIPT"
   | "MISSING_HOOK"
+  | "HOOK_TOO_LONG"
   | "MISSING_DISCLOSURE"
   | "EXPLICIT_OVERCLAIM"
+  | "PRODUCT_ANCHORS_REQUIRED"
+  | "PRODUCT_IDENTITY_REQUIRED"
   | "UNRELATED_SCRIPT"
   | "PRODUCT_NAME_MISSING"
   | "FIRST_SENTENCE_TOO_LONG"
@@ -33,6 +37,8 @@ export type CreativeBlocker =
 export interface CreativeCandidate {
   id: string;
   productName: string;
+  canonicalProductName?: string;
+  productAliases?: string[];
   productCategory?: string;
   angle: string;
   hook: string;
@@ -59,7 +65,7 @@ export interface CreativeScoreBreakdown {
 }
 
 export interface CreativeScoreResult {
-  version: "video-lab-creative-score-v1";
+  version: "video-lab-creative-score-v2";
   candidateId: string;
   totalScore: number;
   positiveScore: number;

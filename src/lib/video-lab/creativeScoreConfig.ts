@@ -1,7 +1,8 @@
 import type { CreativeScoreDimension } from "./types";
 
 export const CREATIVE_SCORE_CONFIG = Object.freeze({
-  version: "video-lab-creative-score-v1",
+  version: "video-lab-creative-score-v2",
+  hookMaxChars: 48,
   firstSentenceMaxChars: 60,
   disclosureMinimumChars: 5,
   passingScore: 50,
