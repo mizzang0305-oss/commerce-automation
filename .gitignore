@@ -27,6 +27,7 @@ python-worker/logs/**
 !python-worker/logs/.gitkeep
 commerce-assets/generated-motion/
 commerce-assets/autopilot/
+commerce-assets/sheets-runner/
 commerce-assets/review/
 /data/video-lab/
 /commerce-assets/video-lab/

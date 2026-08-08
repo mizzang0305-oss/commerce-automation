@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { statfs } from "node:fs/promises";
 import { acquireProcessLock } from "./lock";
 import { atomicWriteJson } from "./atomicJson";
-import { LocalQueueRepository } from "./repository";
+import { LocalQueueRepository, kstDate } from "./repository";
 import { inspectQueueVideoRuntime, type QueueVideoRuntimeReadiness } from "./runtimePreflight";
 import { executeQueueVideoBatch, type QueueVideoResult } from "./videoExecutor";
 import { QUEUE_SCHEDULER_FLAGS, type LocalRun } from "./types";
@@ -19,6 +19,9 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     if (!settings.enabled) return recordNoop(repository, runId, now, "QUEUE_SCHEDULER_DISABLED");
     if (settings.isPaused) return recordNoop(repository, runId, now, "QUEUE_SCHEDULER_PAUSED");
     await repository.recoverStale(now);
+    const capItems = (await repository.items()).filter((item) => item.queueDate === kstDate(now) && item.queueRank <= settings.processingDailyCap);
+    const capActionable = capItems.some((item) => item.status === "scheduled" || item.status === "retry_wait");
+    if (capItems.length >= settings.processingDailyCap && !capActionable) return recordNoop(repository, runId, now, "DAILY_PROCESSING_CAP_REACHED", { processingDailyCap: settings.processingDailyCap });
     const freeGb = await diskFreeGb(repository.root);
     if (freeGb < settings.minimumFreeGb) return recordNoop(repository, runId, now, "DISK_SPACE_GUARD_BLOCKED", { freeGb });
     const readiness = await (input.preflight ?? (() => inspectQueueVideoRuntime({ diskSpace: true })))();
