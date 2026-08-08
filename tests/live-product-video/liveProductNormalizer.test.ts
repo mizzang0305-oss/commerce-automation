@@ -10,14 +10,14 @@ describe("live product normalizer", () => {
   test("binds deterministic identity, provenance, aliases, and anchors", () => {
     const result = normalizeLiveProduct(providerProduct());
     expect(result.productKey).toContain("coupang:product:111222333");
-    expect(result.useCase).toBe("vehicle_organization");
+    expect(result.useCase).toBe("vehicle_console_organization");
     expect(result.productAnchors).toEqual(expect.arrayContaining(["차량", "정리", "수납"]));
     expect(result.sourceRequestId).toBe("search-123456789abc");
   });
 
-  test("classifies only supported owner-reviewed use cases", () => {
-    expect(classifyLiveProductUseCase("책상 케이블 선정리 홀더")).toBe("desk_organization");
-    expect(classifyLiveProductUseCase("접이식 빨래 건조대")).toBe("laundry_drying");
+  test("classifies only registry-supported use cases", () => {
+    expect(classifyLiveProductUseCase("책상 케이블 선정리 홀더")).toBe("cable_organization");
+    expect(classifyLiveProductUseCase("접이식 빨래 건조대")).toBe("laundry_space_organization");
     expect(classifyLiveProductUseCase("휴대용 선풍기")).toBe("unsupported");
   });
 });

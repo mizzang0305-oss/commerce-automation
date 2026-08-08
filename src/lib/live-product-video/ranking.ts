@@ -1,5 +1,6 @@
 import { buildCoupangCandidate } from "@/lib/coupang/coupangCandidateImport";
 import { scoreEventAwareCandidate } from "@/lib/coupang/eventCandidateRanking";
+import { SUPPORTED_USAGE_EVIDENCE_USE_CASES, type SupportedUsageEvidenceUseCase } from "@/lib/usage-evidence";
 import type { LiveProductCandidate, LiveProductKeywordContext, LiveProductScore, RankedLiveProduct } from "./types";
 
 export function rankLiveProducts(input: {
@@ -83,7 +84,7 @@ export function selectDistinctLiveProductSlots(input: {
   const selected: RankedLiveProduct[] = [];
   const attempts: Record<string, number> = {};
   const rejected = input.ranked.filter((entry) => !entry.score.eligible).map((entry) => ({ productKey: entry.candidate.productKey, reasons: entry.score.blockers }));
-  for (const useCase of ["vehicle_organization", "desk_organization", "laundry_drying"] as const) {
+  for (const useCase of Object.keys(SUPPORTED_USAGE_EVIDENCE_USE_CASES) as SupportedUsageEvidenceUseCase[]) {
     const pool = input.ranked.filter((entry) => entry.candidate.useCase === useCase);
     attempts[useCase] = Math.min(pool.length, maxAttempts);
     const chosen = pool.slice(0, maxAttempts).find((entry) => entry.score.eligible);
@@ -101,8 +102,8 @@ function normalize(value: string) {
 }
 
 function preferredCategoriesFor(useCase: LiveProductCandidate["useCase"]): string[] {
-  if (useCase === "vehicle_organization") return ["자동차용품", "차량", "수납"];
-  if (useCase === "desk_organization") return ["수납", "정리", "문구"];
-  if (useCase === "laundry_drying") return ["세탁", "건조", "캠핑"];
+  if (useCase.startsWith("vehicle")) return ["자동차용품", "차량", "수납"];
+  if (useCase === "desk_organization" || useCase === "cable_organization") return ["수납", "정리", "문구", "디지털"];
+  if (useCase === "laundry_drying" || useCase === "laundry_space_organization") return ["세탁", "건조", "캠핑", "가구"];
   return [];
 }

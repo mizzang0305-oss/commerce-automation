@@ -4,6 +4,10 @@ import type { OwnerReviewedRealUseAsset } from "@/lib/video-automation/types";
 import type { LiveProductCandidate, LiveProductUseCase } from "./types";
 
 const CHANNEL_BY_USE_CASE: Record<Exclude<LiveProductUseCase, "unsupported">, string> = {
+  vehicle_console_organization: "father_jobs",
+  vehicle_cabin_storage: "father_jobs",
+  cable_organization: "lets_buy",
+  laundry_space_organization: "neoman_moleulgeol",
   vehicle_organization: "father_jobs",
   desk_organization: "lets_buy",
   laundry_drying: "neoman_moleulgeol"

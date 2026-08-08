@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "usage-evidence-library-plan-v2",
+  "reviewEvidence": "commerce-assets/review/v049/three-channel-upload-preflight-report.json",
+  "inventoryExclusions": [
+    { "relativeReference": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v023/free-stock-asset-manifest.json", "blockCode": "USAGE_ASSET_RIGHTS_UNCLEAR" }
+  ],
+  "videoSources": [
+    { "sourceId": "v057-father-jobs", "channel": "father_jobs", "relativePath": "commerce-assets/review/v057/father_jobs/corrected-preview-v057.mp4", "group": "vehicle" },
+    { "sourceId": "v057-lets-buy", "channel": "lets_buy", "relativePath": "commerce-assets/review/v057/lets_buy/corrected-preview-v057.mp4", "group": "desk" },
+    { "sourceId": "v057-neoman", "channel": "neoman_moleulgeol", "relativePath": "commerce-assets/review/v057/neoman_moleulgeol/corrected-preview-v057.mp4", "group": "laundry" }
+  ],
+  "imagePools": [
+    { "poolId": "v046-vehicle", "group": "vehicle", "glob": "commerce-assets/review/v046/generated-scenes/father_jobs/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v112-vehicle", "group": "vehicle", "glob": "commerce-assets/review/v112/father_jobs/generated-scenes/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v046-source-vehicle", "group": "vehicle", "glob": "commerce-assets/review/v046/_v035-source/father_jobs/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v046-desk", "group": "desk", "glob": "commerce-assets/review/v046/generated-scenes/lets_buy/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v046-source-desk", "group": "desk", "glob": "commerce-assets/review/v046/_v035-source/lets_buy/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v035-laundry", "group": "laundry", "glob": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v035/image-skill-scenes/*.png", "sourceHumanReviewStatus": "pass" },
+    { "poolId": "v029-laundry", "group": "laundry", "glob": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v029/scene-assets/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v046-laundry", "group": "laundry", "glob": "commerce-assets/review/v046/generated-scenes/neoman_moleulgeol/*.png", "sourceHumanReviewStatus": "not_available" },
+    { "poolId": "v046-source-laundry", "group": "laundry", "glob": "commerce-assets/review/v046/_v035-source/neoman_moleulgeol/*.png", "sourceHumanReviewStatus": "not_available" }
+  ],
+  "useCaseGroups": {
+    "vehicle_console_organization": "vehicle",
+    "vehicle_cabin_storage": "vehicle",
+    "vehicle_organization": "vehicle",
+    "cable_organization": "desk",
+    "desk_organization": "desk",
+    "laundry_space_organization": "laundry",
+    "laundry_drying": "laundry"
+  },
+  "useCaseAllowedPools": {
+    "vehicle_console_organization": ["video-v057-father-jobs", "v046-vehicle", "v046-source-vehicle"],
+    "vehicle_cabin_storage": ["v112-vehicle"],
+    "vehicle_organization": ["video-v057-father-jobs", "v046-vehicle", "v046-source-vehicle", "v112-vehicle"],
+    "cable_organization": ["video-v057-lets-buy", "v046-desk", "v046-source-desk"],
+    "desk_organization": ["video-v057-lets-buy", "v046-desk", "v046-source-desk"],
+    "laundry_space_organization": ["video-v057-neoman", "v029-laundry", "v035-laundry", "v046-laundry", "v046-source-laundry"],
+    "laundry_drying": ["video-v057-neoman", "v029-laundry", "v035-laundry", "v046-laundry", "v046-source-laundry"]
+  },
+  "useCasePackCounts": {
+    "vehicle_console_organization": 4,
+    "vehicle_cabin_storage": 4,
+    "vehicle_organization": 4,
+    "cable_organization": 4,
+    "desk_organization": 4,
+    "laundry_space_organization": 5,
+    "laundry_drying": 5
+  }
+}

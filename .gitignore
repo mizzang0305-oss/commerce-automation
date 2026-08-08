@@ -8,6 +8,8 @@ node_modules
 /data/video-automation/
 /data/live-product-video/
 /data/queue-scheduler-v1/
+/data/usage-evidence-library-v2/
+/data/daily69-asset-capacity-*/
 .next
 out
 coverage
