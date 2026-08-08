@@ -1,6 +1,7 @@
 import { buildRollingEventWindow, listCommerceEventsForWindow } from "@/lib/coupang/eventCalendar";
 import { buildEventProductKeywordPlan } from "@/lib/coupang/eventProductKeywordPlanner";
 import type { LiveProductKeywordContext } from "./types";
+import { SUPPORTED_USAGE_EVIDENCE_USE_CASES, type SupportedUsageEvidenceUseCase } from "@/lib/usage-evidence";
 
 export function buildLiveProductKeywordContexts(today: string | Date = new Date()): {
   window: ReturnType<typeof buildRollingEventWindow>;
@@ -33,27 +34,25 @@ export function buildLiveProductKeywordContexts(today: string | Date = new Date(
   return { window, contexts: contexts.slice(0, 5) };
 }
 
-export function buildDaily69KeywordContexts(today: string | Date = new Date(), maximum = 15): {
+export function buildDaily69KeywordContexts(today: string | Date = new Date(), maximum = 30, supportedUseCases: SupportedUsageEvidenceUseCase[] = Object.keys(SUPPORTED_USAGE_EVIDENCE_USE_CASES) as SupportedUsageEvidenceUseCase[]): {
   window: ReturnType<typeof buildRollingEventWindow>;
   contexts: LiveProductKeywordContext[];
 } {
   const base = buildLiveProductKeywordContexts(today);
   const template = (pattern: RegExp) => base.contexts.find((entry) => pattern.test(entry.keyword)) ?? base.contexts[0];
   if (!template(/./u)) return base;
-  const groups: Array<{ pattern: RegExp; keywords: string[] }> = [
-    { pattern: /차량/u, keywords: ["차량용 정리함", "차량 수납함", "자동차 트렁크 정리함", "차량 컵홀더 정리", "차박 수납 정리"] },
-    { pattern: /책상/u, keywords: ["책상 케이블 정리", "데스크 선정리", "충전선 정리함", "전선 정리 클립", "책상 수납 정리"] },
-    { pattern: /빨래|건조/u, keywords: ["캠핑 빨래건조대", "접이식 빨래건조대", "실내 빨래 건조대", "세탁실 행거", "공간절약 건조대"] }
-  ];
   const contexts: LiveProductKeywordContext[] = [];
-  for (const group of groups) {
-    const source = template(group.pattern);
-    if (!source) continue;
-    for (const keyword of group.keywords) {
+  const maximumKeywordCount = Math.max(...supportedUseCases.map((useCase) => SUPPORTED_USAGE_EVIDENCE_USE_CASES[useCase].keywords.length), 0);
+  for (let keywordIndex = 0; keywordIndex < maximumKeywordCount; keywordIndex += 1) {
+    for (const useCase of supportedUseCases) {
+      const definition = SUPPORTED_USAGE_EVIDENCE_USE_CASES[useCase];
+      const source = template(useCase.startsWith("vehicle") ? /차량/u : useCase.includes("laundry") ? /빨래|건조/u : /책상/u);
+      const keyword = definition.keywords[keywordIndex];
+      if (!source || !keyword) continue;
       contexts.push({ ...source, keyword, plan: { ...source.plan, primaryKeywords: [keyword, ...source.plan.primaryKeywords.filter((value) => value !== keyword)] } });
     }
   }
-  return { window: base.window, contexts: contexts.slice(0, Math.max(1, Math.min(15, maximum))) };
+  return { window: base.window, contexts: [...new Map(contexts.map((entry) => [entry.keyword, entry])).values()].slice(0, Math.max(1, Math.min(30, maximum))) };
 }
 
 function context(input: { event: { eventId: string; name: string }; plan: LiveProductKeywordContext["plan"]; keyword: string }): LiveProductKeywordContext {

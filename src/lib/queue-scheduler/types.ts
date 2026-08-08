@@ -1,4 +1,5 @@
 import type { LiveProductCandidate, RankedLiveProduct } from "@/lib/live-product-video";
+import type { UsageEvidenceAllocation } from "@/lib/usage-evidence";
 
 export type LocalQueueStatus =
   | "discovered" | "scheduled" | "claimed" | "processing"
@@ -47,6 +48,7 @@ export type LocalQueueItem = {
   safeMessage: string;
   reviewMetadata: { codexReview: "not_executed" | "pass" | "block" };
   candidate: LiveProductCandidate;
+  usageEvidenceAllocation?: UsageEvidenceAllocation;
   createdAt: string;
   updatedAt: string;
   localRevision: number;
@@ -99,6 +101,7 @@ export type ReserveCandidate = RankedLiveProduct & {
   claimedBySlot: string;
   claimedAt: string;
   queueDate?: string;
+  usageEvidenceAllocation?: UsageEvidenceAllocation;
 };
 
 export type QueueControlState = {

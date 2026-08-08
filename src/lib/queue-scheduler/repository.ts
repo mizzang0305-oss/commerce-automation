@@ -6,6 +6,7 @@ import { acquireProcessLock } from "./lock";
 import { DEFAULT_QUEUE_SCHEDULER_SETTINGS, validateSettings } from "./settings";
 import type { LocalQueueItem, LocalRun, QueueControlState, QueueSchedulerSettings, ReserveCandidate } from "./types";
 import type { RankedLiveProduct } from "@/lib/live-product-video";
+import type { UsageCapacityPlan } from "@/lib/usage-evidence";
 
 export class LocalQueueRepository {
   readonly root: string;
@@ -44,7 +45,7 @@ export class LocalQueueRepository {
   }
   async addRun(run: LocalRun): Promise<void> { const release = await acquireProcessLock(join(this.root, "runs.mutation.lock"), run.runId, 60_000); try { const runs = await this.runs(); runs.push(run); await atomicWriteJson(this.runsPath, runs.slice(-500)); } finally { await release(); } }
 
-  async insertRanked(input: { ranked: RankedLiveProduct[]; queueDate: string; now: Date; dueNow?: boolean }): Promise<{ queued: LocalQueueItem[]; duplicateSkipped: number; reserveAdded: number; reserveCount: number }> {
+  async insertRanked(input: { ranked: RankedLiveProduct[]; queueDate: string; now: Date; dueNow?: boolean; capacityPlan?: UsageCapacityPlan }): Promise<{ queued: LocalQueueItem[]; duplicateSkipped: number; reserveAdded: number; reserveCount: number }> {
     return this.mutate(async (items, settings) => {
       const sameDay = items.filter((item) => item.queueDate === input.queueDate);
       const keys = new Set(sameDay.map((item) => item.productKey));
@@ -53,9 +54,9 @@ export class LocalQueueRepository {
       const selected: RankedLiveProduct[] = [];
       let duplicateSkipped = 0;
       if (capacity === 0) return { value: { queued: [], duplicateSkipped: input.ranked.length, reserveAdded: 0, reserveCount: (await this.reserveCandidates()).length }, items };
-      const candidates = settings.mode === "no_upload_daily_69"
+      const candidates = input.capacityPlan?.active ?? (settings.mode === "no_upload_daily_69"
         ? selectDailyDiverseRanked(input.ranked, settings, sameDay)
-        : input.ranked;
+        : input.ranked);
       for (const entry of candidates) {
         const name = normalizeName(entry.candidate.canonicalProductName);
         if (!entry.score.eligible || keys.has(entry.candidate.productKey) || names.has(name)) { duplicateSkipped += 1; continue; }
@@ -63,6 +64,7 @@ export class LocalQueueRepository {
         if (selected.length >= capacity) break;
       }
       const nowIso = input.now.toISOString();
+      const allocationByProduct = new Map((input.capacityPlan?.allocations ?? []).map((allocation) => [allocation.productKey, allocation]));
       const queued = selected.map((entry, index): LocalQueueItem => {
         const rank = sameDay.length + index + 1;
         return {
@@ -76,15 +78,16 @@ export class LocalQueueRepository {
           candidateHistory: [{ productKey: entry.candidate.productKey, canonicalProductName: entry.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "PRIMARY_SELECTED", schedulerAttempts: 0, replacementOfProductKey: "" }],
           leaseOwner: "", leaseAcquiredAt: "", leaseExpiresAt: "", nextAttemptAt: "",
           claimedAt: "", startedAt: "", finishedAt: "", creativeScore: null, videoQualityScore: null, videoPath: "", reviewPath: "",
-          errorCode: "", safeMessage: "", reviewMetadata: { codexReview: "not_executed" }, candidate: entry.candidate, createdAt: nowIso, updatedAt: nowIso, localRevision: 0
+          errorCode: "", safeMessage: "", reviewMetadata: { codexReview: "not_executed" }, candidate: entry.candidate, usageEvidenceAllocation: allocationByProduct.get(entry.candidate.productKey), createdAt: nowIso, updatedAt: nowIso, localRevision: 0
         };
       });
       const selectedKeys = new Set(selected.map((entry) => entry.candidate.productKey));
       const currentReserve = await this.reserveCandidates();
       const reserveKeys = new Set(currentReserve.map((entry) => entry.candidate.productKey));
-      const reserveAdditions: ReserveCandidate[] = input.ranked
+      const reservePool = input.capacityPlan?.reserve ?? input.ranked;
+      const reserveAdditions: ReserveCandidate[] = reservePool
         .filter((entry) => entry.score.eligible && !selectedKeys.has(entry.candidate.productKey) && !keys.has(entry.candidate.productKey) && !reserveKeys.has(entry.candidate.productKey))
-        .map((entry) => ({ ...entry, insertedAt: nowIso, claimedBySlot: "", claimedAt: "", queueDate: input.queueDate }));
+        .map((entry) => ({ ...entry, insertedAt: nowIso, claimedBySlot: "", claimedAt: "", queueDate: input.queueDate, usageEvidenceAllocation: allocationByProduct.get(entry.candidate.productKey) }));
       if (reserveAdditions.length) await atomicWriteJson(this.reservePath, [...currentReserve, ...reserveAdditions]);
       items.push(...queued); return { value: { queued, duplicateSkipped, reserveAdded: reserveAdditions.length, reserveCount: currentReserve.length + reserveAdditions.length }, items };
     });
@@ -134,7 +137,7 @@ export class LocalQueueRepository {
         productKey: replacement.candidate.productKey, productId: replacement.candidate.rawProductId,
         rawProductName: replacement.candidate.rawProductName, canonicalProductName: replacement.candidate.canonicalProductName,
         sourceProvider: replacement.candidate.sourceProvider, sourceKeyword: replacement.candidate.sourceKeyword,
-        productScore: replacement.score.finalProductScore, candidate: replacement.candidate,
+        productScore: replacement.score.finalProductScore, candidate: replacement.candidate, usageEvidenceAllocation: replacement.usageEvidenceAllocation,
         productCandidateAttempt: productCandidateAttempt + 1, attemptCount: 0, status: "scheduled", scheduledAt: new Date(input.now.getTime() - 1_000).toISOString(),
         claimedAt: "", startedAt: "", finishedAt: "", leaseOwner: "", leaseAcquiredAt: "", leaseExpiresAt: "", nextAttemptAt: "",
         creativeScore: null, videoQualityScore: null, videoPath: "", reviewPath: "", errorCode: "", safeMessage: "PRODUCT_REPLACEMENT_SCHEDULED", updatedAt: nowIso

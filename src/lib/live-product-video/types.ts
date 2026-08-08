@@ -1,7 +1,8 @@
 import type { EventProductKeywordPlan } from "@/lib/coupang/eventProductKeywordPlanner";
 import type { ProductVideoAutomationInput } from "@/lib/video-automation/types";
+import type { UsageEvidenceUseCase } from "@/lib/usage-evidence";
 
-export type LiveProductUseCase = "vehicle_organization" | "desk_organization" | "laundry_drying" | "unsupported";
+export type LiveProductUseCase = UsageEvidenceUseCase;
 
 export type LiveProductKeywordContext = {
   keyword: string;

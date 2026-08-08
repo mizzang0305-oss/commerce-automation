@@ -104,6 +104,8 @@
     "queue-control:configure-daily69": "tsx scripts/queue-control-integration/configure-daily69.ts",
     "queue-control:project": "node --conditions=react-server --import tsx scripts/queue-control-integration/project.ts",
     "queue-control:run-once": "node --conditions=react-server --import tsx scripts/queue-control-integration/run-control-runner.ts",
+    "usage-evidence:focused": "vitest run tests/usage-evidence tests/daily-69-control/nightlyScout.test.ts",
+    "usage-evidence:shadow": "tsx scripts/usage-evidence/run-daily69-capacity-shadow.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
