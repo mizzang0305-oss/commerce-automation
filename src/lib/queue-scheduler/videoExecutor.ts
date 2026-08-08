@@ -9,7 +9,7 @@ import type { LocalQueueItem } from "./types";
 export type QueueVideoResult = { queueId: string; productKey: string; passed: boolean; errorCode: string; finalVideo: string; reviewPath: string; creativeScore: number; videoQualityScore: number; retryable: boolean };
 
 export async function executeQueueVideoBatch(input: { items: LocalQueueItem[]; runId: string; root: string }): Promise<QueueVideoResult[]> {
-  if (input.items.length !== 3) throw new Error("QUEUE_VIDEO_EXACTLY_THREE_ITEMS_REQUIRED");
+  if (input.items.length < 1 || input.items.length > 3) throw new Error("QUEUE_VIDEO_ONE_TO_THREE_ITEMS_REQUIRED");
   const runtime = runtimeConfig();
   const runRoot = join(input.root, "artifacts", input.runId);
   await mkdir(runRoot, { recursive: true });

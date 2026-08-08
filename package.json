@@ -98,6 +98,7 @@
     "queue-video:run-next": "tsx scripts/queue-scheduler/run-next-batch.ts",
     "queue-video:status": "tsx scripts/queue-scheduler/status.ts",
     "queue-video:configure-pilot": "tsx scripts/queue-scheduler/configure-pilot.ts",
+    "queue-video:preflight": "tsx scripts/queue-scheduler/preflight.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

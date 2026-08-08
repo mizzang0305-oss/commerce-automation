@@ -41,6 +41,7 @@ async function main(): Promise<void> {
   const mediaBridge = resolve("tools", "video-automation", "local_media_bridge.py");
   const visualQaBridge = resolve("tools", "video-automation", "visual_qa.py");
   const whisperService = resolve("tools", "video-automation", "whisperx_jsonl_service.py");
+  const audioPauseRepair = resolve("tools", "video-automation", "audio_pause_repair.py");
   await mkdir(outputRoot, { recursive: true });
   const allProducts = liveInputManifest
     ? await loadLiveProductInputs(liveInputManifest, runId)
@@ -57,7 +58,7 @@ async function main(): Promise<void> {
   for (const input of products) {
     const ranked = rankCreativeCandidates(generateDeterministicCreativeCandidates(input));
     const selected = selectDistinctHookCandidate(ranked, usedFamilies, PREFERRED_HOOK_FAMILY[input.product.productKey]);
-    if (!selected) throw new Error("HOOK_TEMPLATE_REPETITION");
+    if (!selected) continue;
     const family = classifyHookFamily(selected.candidate.hook);
     usedFamilies.add(family);
     selectedByProduct.set(input.product.productKey, selected);
@@ -86,21 +87,8 @@ async function main(): Promise<void> {
     const narration = buildKoreanProductNarration({ canonicalProductName: input.product.canonicalProductName, hook: selected.candidate.hook, script: selected.candidate.script });
     const voiceRoot = join(productRoot, "voice");
     await mkdir(voiceRoot, { recursive: true });
-    let stageStarted = performance.now();
-    const tts = await runJsonProcess(required.python, [mediaBridge], { operation: "tts", text: narration, target: join(voiceRoot, "tts.wav"), command: required.ttsCommand }, 660_000);
-    if (tts.status !== "success") throw new Error("TTS_FAILED");
-    const ttsSeconds = elapsed(stageStarted);
-    stageStarted = performance.now();
-    const asr = await runFasterWhisper({ pythonExe: required.asrPython, scriptPath: required.asrScript, modelPath: required.asrModel, audioPath: String(tts.output), outputPath: join(voiceRoot, "asr-provider.json") });
-    const similarity = koreanTextSimilarity(narration, asr.transcript);
-    const compactTranscript = compactKorean(asr.transcript);
-    const recognizedAnchors = input.product.anchors.filter((anchor) => compactTranscript.includes(compactKorean(anchor)));
-    const identitySimilarity = bestKoreanSubstringSimilarity(input.product.canonicalProductName, asr.transcript);
-    const coreAnchorSimilarity = bestKoreanSubstringSimilarity(input.product.anchors[0], asr.transcript);
-    const asrPassed = similarity >= 0.82 && recognizedAnchors.length >= 2 && identitySimilarity >= 0.65 && coreAnchorSimilarity >= 0.65;
-    await writeJson(join(voiceRoot, "asr.json"), { provider: "faster-whisper", rawTranscript: asr.transcript, similarity, threshold: 0.82, recognizedAnchors, contextAnchorMinimum: 2, identitySimilarity, identityThreshold: 0.65, coreAnchor: input.product.anchors[0], coreAnchorSimilarity, coreAnchorThreshold: 0.65, passed: asrPassed, externalApiCalled: false, uploadAttempted: false });
-    if (!asrPassed) throw new Error("ASR_FAILED");
-    prepared.set(input.product.productKey, { input, productRoot, selected, narration, audioPath: String(tts.output), audioDuration: Number(tts.duration_seconds), asrTranscript: asr.transcript, asrPassed, similarity, recognizedAnchors, coreAnchorSimilarity, ttsSeconds, asrSeconds: elapsed(stageStarted), genericImagePaths });
+    const voice = await synthesizeAndValidateVoice({ required, mediaBridge, audioPauseRepair, voiceRoot, narration, canonicalProductName: input.product.canonicalProductName, anchors: input.product.anchors });
+    prepared.set(input.product.productKey, { input, productRoot, selected, narration, audioPath: voice.audioPath, audioDuration: voice.audioDuration, asrTranscript: voice.asrTranscript, asrPassed: true, similarity: voice.similarity, recognizedAnchors: voice.recognizedAnchors, coreAnchorSimilarity: voice.coreAnchorSimilarity, ttsSeconds: voice.ttsSeconds, asrSeconds: voice.asrSeconds, audioRepair: voice.audioRepair, asrAttempts: voice.asrAttempts, asrRecovered: voice.asrRecovered, genericImagePaths });
     } catch (error) {
       items.push(blockedItem(input.product.productKey, error));
     }
@@ -191,7 +179,7 @@ async function main(): Promise<void> {
       const finalReview = evaluateAutomatedVideoQuality(finalInput);
       await writeJson(join(finalRoot, "review-input.json"), finalInput);
       await writeJson(join(finalRoot, "automated-review.json"), finalReview);
-      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, exactProductReference: Boolean(input.product.exactProductReference), genericUsageEvidence: Boolean(input.product.realUseAsset), exactProductUse: false, overclaim: false, sourceProvider: input.product.sourceProvenance?.sourceProvider ?? null, sourceRequestId: input.product.sourceProvenance?.sourceRequestId ?? null, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
+      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, asrAttempts: value.asrAttempts, asrRecovered: value.asrRecovered, audioRepair: value.audioRepair, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, exactProductReference: Boolean(input.product.exactProductReference), genericUsageEvidence: Boolean(input.product.realUseAsset), exactProductUse: false, overclaim: false, sourceProvider: input.product.sourceProvenance?.sourceProvider ?? null, sourceRequestId: input.product.sourceProvenance?.sourceRequestId ?? null, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
       items.push(summary);
       await writeJson(join(value.productRoot, "summary.json"), summary);
       } catch (error) {
@@ -211,12 +199,13 @@ type PreparedProduct = {
   input: ReturnType<typeof loadApprovedProductFixtures>[number]; productRoot: string;
   selected: ReturnType<typeof rankCreativeCandidates>[number]; narration: string; audioPath: string; audioDuration: number; asrTranscript: string;
   asrPassed: boolean; similarity: number; recognizedAnchors: string[]; coreAnchorSimilarity: number; ttsSeconds: number; asrSeconds: number;
+  audioRepair: Record<string, unknown>; asrAttempts: number; asrRecovered: boolean;
   genericImagePaths: string[];
 };
 
 async function loadLiveProductInputs(path: string, runId: string): Promise<ReturnType<typeof loadApprovedProductFixtures>> {
   const value = JSON.parse(await readFile(resolve(path), "utf8")) as { products?: unknown };
-  if (!Array.isArray(value.products) || value.products.length !== 3) throw new Error("LIVE_PRODUCT_VIDEO_EXACTLY_THREE_INPUTS_REQUIRED");
+  if (!Array.isArray(value.products) || value.products.length < 1 || value.products.length > 3) throw new Error("LIVE_PRODUCT_VIDEO_ONE_TO_THREE_INPUTS_REQUIRED");
   return value.products.map((entry) => {
     const product = entry as ReturnType<typeof loadApprovedProductFixtures>[number];
     return { ...product, runId };
@@ -225,6 +214,46 @@ async function loadLiveProductInputs(path: string, runId: string): Promise<Retur
 
 function normalizeWordTimeline(words: Array<{ word: string; start: number; end: number; confidence: number | null }>) { let previousEnd = 0; return words.map((word) => { const start = Math.max(previousEnd, word.start); const end = Math.max(start + 0.01, word.end); previousEnd = end; return { ...word, start, end }; }); }
 function compactKorean(value: string): string { return value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, ""); }
+async function synthesizeAndValidateVoice(input: {
+  required: { python: string; ttsCommand: string; asrPython: string; asrScript: string; asrModel: string };
+  mediaBridge: string; audioPauseRepair: string; voiceRoot: string; narration: string; canonicalProductName: string; anchors: string[];
+}) {
+  const started = performance.now();
+  let ttsSeconds = 0; let asrSeconds = 0;
+  let final: Awaited<ReturnType<typeof prepareVoiceAttempt>> | null = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const ttsStarted = performance.now();
+    const value = await prepareVoiceAttempt(input, attempt);
+    ttsSeconds += elapsed(ttsStarted) - value.asrSeconds;
+    asrSeconds += value.asrSeconds;
+    final = value;
+    if (value.passed) break;
+  }
+  if (!final?.passed) throw new Error("ASR_FAILED_AFTER_REPAIR");
+  await writeJson(join(input.voiceRoot, "asr.json"), { provider: "faster-whisper", rawTranscript: final.transcript, similarity: final.similarity, threshold: 0.82, recognizedAnchors: final.recognizedAnchors, contextAnchorMinimum: 2, identitySimilarity: final.identitySimilarity, identityThreshold: 0.65, coreAnchor: input.anchors[0], coreAnchorSimilarity: final.coreAnchorSimilarity, coreAnchorThreshold: 0.65, passed: true, attempts: final.attempt, recovered: final.attempt > 1, externalApiCalled: false, uploadAttempted: false });
+  return { audioPath: final.audioPath, audioDuration: final.audioDuration, asrTranscript: final.transcript, similarity: final.similarity, recognizedAnchors: final.recognizedAnchors, coreAnchorSimilarity: final.coreAnchorSimilarity, audioRepair: final.audioRepair, asrAttempts: final.attempt, asrRecovered: final.attempt > 1, ttsSeconds: Math.round(ttsSeconds * 100) / 100, asrSeconds: Math.round(asrSeconds * 100) / 100, totalSeconds: elapsed(started) };
+}
+
+async function prepareVoiceAttempt(input: Parameters<typeof synthesizeAndValidateVoice>[0], attempt: number) {
+  const suffix = attempt === 1 ? "" : "-recovery";
+  const tts = await runJsonProcess(input.required.python, [input.mediaBridge], { operation: "tts", text: input.narration, target: join(input.voiceRoot, `tts${suffix}.wav`), command: input.required.ttsCommand }, 660_000);
+  if (tts.status !== "success") throw new Error("TTS_FAILED");
+  const repairedPath = join(input.voiceRoot, `tts${suffix}-repaired.wav`);
+  const audioRepair = await runJsonProcess(input.required.python, [input.audioPauseRepair], { source_path: String(tts.output), output_path: repairedPath, threshold_ms: 700, target_ms: 500, minimum_ms: 300 }, 120_000);
+  if (audioRepair.status !== "success") throw new Error("AUDIO_PAUSE_REPAIR_FAILED");
+  await writeJson(join(input.voiceRoot, `audio-repair${suffix}.json`), audioRepair);
+  const audioPath = repairedPath;
+  const asrStarted = performance.now();
+  const asr = await runFasterWhisper({ pythonExe: input.required.asrPython, scriptPath: input.required.asrScript, modelPath: input.required.asrModel, audioPath, outputPath: join(input.voiceRoot, `asr-provider${suffix}.json`) });
+  const asrSeconds = elapsed(asrStarted);
+  const similarity = koreanTextSimilarity(input.narration, asr.transcript);
+  const compactTranscript = compactKorean(asr.transcript);
+  const recognizedAnchors = input.anchors.filter((anchor) => compactTranscript.includes(compactKorean(anchor)));
+  const identitySimilarity = bestKoreanSubstringSimilarity(input.canonicalProductName, asr.transcript);
+  const coreAnchorSimilarity = bestKoreanSubstringSimilarity(input.anchors[0], asr.transcript);
+  const passed = similarity >= 0.82 && recognizedAnchors.length >= 2 && identitySimilarity >= 0.65 && coreAnchorSimilarity >= 0.65;
+  return { attempt, audioPath, audioDuration: Number(audioRepair.durationAfterSeconds ?? tts.duration_seconds), audioRepair, transcript: asr.transcript, similarity, recognizedAnchors, identitySimilarity, coreAnchorSimilarity, passed, asrSeconds };
+}
 function blockedItem(productKey: string, error: unknown): Record<string, unknown> {
   const blocker = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message) ? error.message : "VIDEO_AUTOMATION_REJECTED_PRODUCT";
   return { productKey, status: "VIDEO_AUTOMATION_REJECTED_PRODUCT", machineQaPassed: false, finalAutomatedQaPassed: false, blockers: [blocker], humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };

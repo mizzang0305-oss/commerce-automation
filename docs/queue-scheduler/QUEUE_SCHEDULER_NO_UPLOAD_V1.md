@@ -21,7 +21,17 @@ This stacked pilot connects PR #237's proven live Coupang product-to-video path 
 npm run queue-video:scout
 npm run queue-video:run-next
 npm run queue-video:status
+npm run queue-video:preflight
+npm run queue-video:configure-pilot -- --fresh
 .\scripts\queue-scheduler\install-no-upload-pilot.ps1 -WorktreeRoot $PWD -WhatIf
 ```
 
-The git default is disabled. Local pilot activation is stored only in ignored `data/queue-scheduler-v1/settings.json`. Set `isPaused=true` for an operator pause without deleting tasks.
+The git default is disabled. A fresh pilot creates an ignored `data/queue-scheduler-v1/pilots/pilot-<timestamp>/` namespace and changes only the ignored `active-pilot.json` pointer. Historical queue evidence is never rewritten. Disable the active pilot with `npm run queue-video:configure-pilot -- --disable`.
+
+## Reliability repair
+
+- Runtime readiness is checked after stale-lease recovery and disk guard, but before `claimDue()`. A failed check records only configured booleans and returns `RUNTIME_PREFLIGHT_BLOCKED` with zero queue mutation.
+- Eligible products beyond the nine active logical slots are retained in an ignored durable reserve pool. Product-specific hard failures can atomically replace the product while preserving the slot ID and full candidate history.
+- Scheduler attempts, media repair cycles, and product candidate attempts are separate counters. A slot is limited to the primary product plus two reserve candidates.
+- PCM WAV pauses over 700 ms are deterministically compressed before faster-whisper and WhisperX. Any audio change invalidates prior time-based output and forces fresh ASR/alignment/caption generation. The 0.82 ASR threshold and 900 ms hard-silence blocker are unchanged.
+- Wrapper exit codes are `0` for success/no-op, `2` for partial, `3` for runtime preflight block, and `4` for failed batch.

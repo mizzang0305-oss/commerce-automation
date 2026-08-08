@@ -15,7 +15,7 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   if (settings.isPaused) return recordNoop(repository, runId, startedAt, "QUEUE_SCHEDULER_PAUSED");
   const queueDate = kstDate(now);
   const existing = (await repository.items()).filter((item) => item.queueDate === queueDate);
-  if (existing.length >= settings.dailyTargetCount) return recordNoop(repository, runId, startedAt, "DAILY_QUEUE_ALREADY_FILLED", { queued: existing.length, apiCallCount: 0 });
+  if (existing.length >= settings.dailyTargetCount) return recordNoop(repository, runId, startedAt, "DAILY_QUEUE_ALREADY_FILLED", { queued: existing.length, apiCallCount: 0, reserveCount: (await repository.reserveCandidates()).length });
   const readiness = readCoupangPartnersEnv(process.env).readiness;
   if (!(readiness.provider_enabled && readiness.access_key_present && readiness.secret_key_present && readiness.customer_id_or_partner_id_present)) throw new Error("COUPANG_PROVIDER_NOT_CONFIGURED");
   const { contexts } = buildLiveProductKeywordContexts(now);
@@ -26,7 +26,7 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   const ranked = rankLiveProducts({ candidates, keywordContexts: contexts, usageEvidenceAvailable: supportsUsageEvidence });
   const insertion = await repository.insertRanked({ ranked, queueDate, now, dueNow: input.dueNow });
   const apiCallCount = providerResults.reduce((sum, value) => sum + value.apiCallCount, 0);
-  const run: LocalRun = { runId, type: "nightly_discovery", status: insertion.queued.length + existing.length === settings.dailyTargetCount ? "success" : "partial", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: insertion.queued.length, failed: 0, retried: 0, safeMessage: insertion.queued.length ? "NIGHTLY_QUEUE_CREATED" : "NIGHTLY_NO_NEW_ITEMS", metrics: { queueDate, apiCallCount, discovered: raw.length, normalized: candidates.length, eligible: ranked.filter((entry) => entry.score.eligible).length, selected: insertion.queued.length, duplicateSkipped: insertion.duplicateSkipped, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
+  const run: LocalRun = { runId, type: "nightly_discovery", status: insertion.queued.length + existing.length === settings.dailyTargetCount ? "success" : "partial", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: insertion.queued.length, failed: 0, retried: 0, safeMessage: insertion.queued.length ? "NIGHTLY_QUEUE_CREATED" : "NIGHTLY_NO_NEW_ITEMS", metrics: { queueDate, apiCallCount, discovered: raw.length, normalized: candidates.length, eligible: ranked.filter((entry) => entry.score.eligible).length, selected: insertion.queued.length, reserveAdded: insertion.reserveAdded, reserveCount: insertion.reserveCount, duplicateSkipped: insertion.duplicateSkipped, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
   await repository.addRun(run);
   return { run, queued: insertion.queued, ranked, providerResults };
 }

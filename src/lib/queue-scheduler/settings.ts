@@ -14,7 +14,8 @@ export const DEFAULT_QUEUE_SCHEDULER_SETTINGS: QueueSchedulerSettings = Object.f
   minimumFreeGb: 5,
   leaseMinutes: 120,
   retryBackoffMinutes: 30,
-  maxAttempts: 2
+  maxAttempts: 2,
+  maxProductCandidates: 3
 });
 
 export function validateSettings(value: QueueSchedulerSettings): QueueSchedulerSettings {
@@ -23,5 +24,6 @@ export function validateSettings(value: QueueSchedulerSettings): QueueSchedulerS
   if (value.batchSize !== 3) throw new Error("PILOT_BATCH_SIZE_INVALID");
   if (value.intervalHours < 1 || value.startHour < 0 || value.endHour > 23 || value.startHour > value.endHour) throw new Error("SCHEDULE_SETTINGS_INVALID");
   if (value.maxAttempts < 1 || value.maxAttempts > 2) throw new Error("RETRY_LIMIT_INVALID");
+  if (value.maxProductCandidates !== 3) throw new Error("PRODUCT_CANDIDATE_LIMIT_INVALID");
   return value;
 }

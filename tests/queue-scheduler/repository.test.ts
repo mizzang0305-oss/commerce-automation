@@ -15,7 +15,7 @@ describe("local durable queue", () => {
     const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z");
     const first = await repository.insertRanked({ ranked: ranked(12), queueDate: "2026-08-08", now, dueNow: true });
     const second = await repository.insertRanked({ ranked: ranked(12), queueDate: "2026-08-08", now, dueNow: true });
-    expect(first.queued).toHaveLength(9); expect(new Set(first.queued.map((item) => item.productKey)).size).toBe(9); expect(second.queued).toHaveLength(0);
+    expect(first.queued).toHaveLength(9); expect(new Set(first.queued.map((item) => item.productKey)).size).toBe(9); expect(first.reserveCount).toBe(3); expect(second.queued).toHaveLength(0); expect(second.reserveCount).toBe(3);
     expect(await repository.items()).toHaveLength(9);
     expect((await readdir(repository.root)).some((name) => name.endsWith(".tmp"))).toBe(false);
     expect(JSON.parse(await readFile(repository.queuePath, "utf8"))).toHaveLength(9);
@@ -43,6 +43,28 @@ describe("local durable queue", () => {
     expect(await repository.recoverStale(new Date(now.getTime() + 120_000))).toBe(1);
     const reclaimed = await repository.claimDue({ now: new Date(now.getTime() + 120_000), runId: "retry", limit: 1, leaseMinutes: 1, pilotMax: 9 }); expect(reclaimed[0].id).toBe(item.id);
     const status = await repository.fail({ id: item.id, code: "TEMPORARY_SUBPROCESS_FAILURE", retryable: true, now, settings: await repository.settings() }); expect(status).toBe("failed");
+  });
+
+  it("claims reserve candidates atomically and never assigns one product to two slots", async () => {
+    const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z"); await repository.insertRanked({ ranked: ranked(14), queueDate: "2026-08-08", now, dueNow: true });
+    const items = await repository.items();
+    const [left, right] = await Promise.all([
+      repository.replaceWithReserve({ id: items[0].id, reason: "ASR_FAILED_AFTER_REPAIR", now }),
+      repository.replaceWithReserve({ id: items[1].id, reason: "PRODUCT_IDENTITY_AUDIO_FAILED", now })
+    ]);
+    expect(left).not.toBeNull(); expect(right).not.toBeNull(); expect(left!.productKey).not.toBe(right!.productKey);
+    expect(left!.slotId).toBe("slot-001"); expect(right!.slotId).toBe("slot-002");
+    expect((await repository.reserveCandidates()).filter((entry) => entry.claimedBySlot).length).toBe(2);
+  });
+
+  it("stops after primary plus two replacements when reserve candidates keep failing", async () => {
+    const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z"); await repository.insertRanked({ ranked: ranked(14), queueDate: "2026-08-08", now, dueNow: true });
+    const item = (await repository.items())[0];
+    expect(await repository.replaceWithReserve({ id: item.id, reason: "ASR_FAILED_AFTER_REPAIR", now })).not.toBeNull();
+    expect(await repository.replaceWithReserve({ id: item.id, reason: "VIDEO_AUTO_QA_FAILED_AFTER_REPAIR", now })).not.toBeNull();
+    expect(await repository.replaceWithReserve({ id: item.id, reason: "PRODUCT_IDENTITY_AUDIO_FAILED", now })).toBeNull();
+    const final = (await repository.items()).find((entry) => entry.id === item.id)!;
+    expect(final.productCandidateAttempt).toBe(3); expect(final.candidateHistory).toHaveLength(3);
   });
 });
 

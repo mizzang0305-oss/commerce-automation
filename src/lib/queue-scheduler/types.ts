@@ -1,4 +1,4 @@
-import type { LiveProductCandidate } from "@/lib/live-product-video";
+import type { LiveProductCandidate, RankedLiveProduct } from "@/lib/live-product-video";
 
 export type LocalQueueStatus =
   | "discovered" | "scheduled" | "claimed" | "processing"
@@ -7,6 +7,7 @@ export type LocalQueueStatus =
 
 export type LocalQueueItem = {
   id: string;
+  slotId: string;
   queueDate: string;
   queueRank: number;
   productKey: string;
@@ -19,6 +20,18 @@ export type LocalQueueItem = {
   scheduledAt: string;
   status: LocalQueueStatus;
   attemptCount: number;
+  productCandidateAttempt: number;
+  maxProductCandidates: number;
+  candidateHistory: Array<{
+    productKey: string;
+    canonicalProductName: string;
+    startedAt: string;
+    finishedAt: string;
+    outcome: "active" | "passed" | "replaced" | "blocked";
+    reason: string;
+    schedulerAttempts: number;
+    replacementOfProductKey: string;
+  }>;
   leaseOwner: string;
   leaseAcquiredAt: string;
   leaseExpiresAt: string;
@@ -41,7 +54,7 @@ export type LocalQueueItem = {
 export type LocalRun = {
   runId: string;
   type: "nightly_discovery" | "scheduled_batch";
-  status: "success" | "partial" | "failed" | "noop";
+  status: "success" | "partial" | "failed" | "blocked_preflight" | "noop";
   startedAt: string;
   finishedAt: string;
   claimed: number;
@@ -67,6 +80,13 @@ export type QueueSchedulerSettings = {
   leaseMinutes: number;
   retryBackoffMinutes: number;
   maxAttempts: number;
+  maxProductCandidates: number;
+};
+
+export type ReserveCandidate = RankedLiveProduct & {
+  insertedAt: string;
+  claimedBySlot: string;
+  claimedAt: string;
 };
 
 export const QUEUE_SCHEDULER_FLAGS = Object.freeze({
