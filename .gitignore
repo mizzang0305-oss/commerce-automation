@@ -5,6 +5,7 @@
 .env.local.comfyui
 config/comfyui/*.local.json
 node_modules
+/data/video-automation/
 .next
 out
 coverage
