@@ -121,6 +121,26 @@ export function validateAffiliateUrl(value: string): AffiliateValidationResult {
   }
 }
 
+export function materializeCoupangProductUrlFromAffiliate(value: string): string {
+  const affiliate = validateAffiliateUrl(value);
+  if (!affiliate.ok) {
+    return "";
+  }
+  const url = new URL(affiliate.normalized_url);
+  const pageKey = url.searchParams.get("pageKey") ?? "";
+  if (!/^\d+$/u.test(pageKey)) {
+    return "";
+  }
+  const raw = new URL(`https://www.coupang.com/vp/products/${pageKey}`);
+  for (const key of KEEP_QUERY_PARAMS) {
+    const parameter = url.searchParams.get(key);
+    if (parameter && /^\d+$/u.test(parameter)) {
+      raw.searchParams.set(key, parameter);
+    }
+  }
+  return raw.toString();
+}
+
 function normalizeKeyPart(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 }

@@ -7,5 +7,9 @@ const valid = { runId: "run-1", product: { productKey: "product-001", rawProduct
 describe("product input", () => {
   test("accepts the exact local Korean three-candidate contract", () => expect(validateProductVideoInput(valid)).toBe(valid));
   test("blocks a non-local mode", () => expect(() => validateProductVideoInput({ ...valid, mode: "publish" as never })).toThrow("VIDEO_AUTOMATION_LOCAL_REVIEW_ONLY"));
+  test("requires disclosure and provenance for affiliate-backed exact product references", () => {
+    expect(() => validateProductVideoInput({ ...valid, product: { ...valid.product, affiliateUrl: "https://link.coupang.com/a/x" } })).toThrow("VIDEO_AUTOMATION_DISCLOSURE_REQUIRED");
+    expect(() => validateProductVideoInput({ ...valid, product: { ...valid.product, affiliateUrl: "https://link.coupang.com/a/x", disclosureText: "파트너스 고지", exactProductReference: { sourceUrl: "https://image.coupangcdn.com/a.jpg", localPath: "x", identityType: "product_reference", sourceProvider: "provider", sourceRequestId: "request" } } })).toThrow("VIDEO_AUTOMATION_SOURCE_PROVENANCE_REQUIRED");
+  });
   test("recognizes a mildly mistranscribed Korean product phrase", () => expect(bestKoreanSubstringSimilarity("차량용 컵홀더 정리함", "차량용 커플 더 정리함으로 시작합니다")).toBeGreaterThanOrEqual(0.65));
 });

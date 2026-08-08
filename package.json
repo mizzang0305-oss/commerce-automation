@@ -92,6 +92,8 @@
     "video-lab:calibrate": "tsx scripts/video-lab/calibrate-scorer.ts",
     "video-automation:e2e": "tsx scripts/video-automation/run-product-to-video-v1.ts",
     "video-automation:e2e:v2": "tsx scripts/video-automation/run-autonomous-video-review-v2.ts",
+    "live-product-video:e2e": "tsx scripts/live-product-video/run-live-product-video-v1.ts",
+    "live-product-video:finalize": "tsx scripts/live-product-video/finalize-live-product-video-v1.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

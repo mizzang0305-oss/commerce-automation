@@ -180,6 +180,11 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     work = output.parent / "render-inputs"
     work.mkdir(parents=True, exist_ok=True)
     source_paths = [Path(value).resolve(strict=True) for value in request["image_paths"]]
+    scene_roles = request.get("scene_roles")
+    if not isinstance(scene_roles, list) or len(scene_roles) != len(source_paths):
+        scene_roles = ["generic_usage_example"] * len(source_paths)
+    if any(role not in {"product_reference", "generic_usage_example"} for role in scene_roles):
+        raise ValueError("VIDEO_SCENE_ROLE_INVALID")
     captions = request.get("captions")
     if not isinstance(captions, list) or not captions:
         raise ValueError("LOCAL_MEDIA_CAPTIONS_REQUIRED")
@@ -194,7 +199,14 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     shot_captions[0] = str(request["hook"])
     starts = [float(cue["start"]) for cue in captions]
     shot_durations = [max(0.12, (starts[index + 1] if index + 1 < len(starts) else audio_duration) - start) for index, start in enumerate(starts)]
-    shot_images = [source_paths[index % len(source_paths)] for index in range(len(shot_captions))]
+    generic_paths = [path for path, role in zip(source_paths, scene_roles) if role == "generic_usage_example"]
+    reference_paths = [path for path, role in zip(source_paths, scene_roles) if role == "product_reference"]
+    if not generic_paths:
+        raise ValueError("GENERIC_USAGE_SCENES_REQUIRED")
+    shot_images = [
+        reference_paths[0] if index == 0 and reference_paths else generic_paths[(index - (1 if reference_paths else 0)) % len(generic_paths)]
+        for index in range(len(shot_captions))
+    ]
     srt = output.parent / "captions.srt"
     write_srt("\n".join(shot_captions), srt, shot_durations, shot_captions)
 
@@ -223,20 +235,35 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
 
     full_label_path = work / "usage-label-full.txt"
     short_label_path = work / "usage-label-short.txt"
+    reference_label_path = work / "product-reference-label.txt"
     full_label_path.write_text(str(planned["usage_label"]), encoding="utf-8")
     short_label_path.write_text("사용 예시", encoding="utf-8")
+    reference_label_path.write_text("상품 참고 이미지", encoding="utf-8")
 
     def build_v2_filters(*args: Any, **kwargs: Any) -> list[str]:
         filters = original_builder(*args, **kwargs)
         font_clause = f"fontfile='{str(FONT_PATH).replace(chr(92), '/').replace(':', chr(92) + ':')}':" if FONT_PATH.is_file() else ""
         full_text = str(full_label_path).replace("\\", "/").replace(":", "\\:")
         short_text = str(short_label_path).replace("\\", "/").replace(":", "\\:")
-        filters.extend([
-            "drawbox=x=72:y=500:w=520:h=72:color=0x0f172a@0.88:t=fill:enable='between(t,0,1.8)'",
-            f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=38:x=96:y=513:enable='between(t,0,1.8)'",
-            "drawbox=x=72:y=500:w=210:h=54:color=0x0f172a@0.70:t=fill:enable='gt(t,1.8)'",
-            f"drawtext={font_clause}textfile='{short_text}':fontcolor=0xfacc15:fontsize=28:x=92:y=510:enable='gt(t,1.8)'",
-        ])
+        if reference_paths:
+            reference_text = str(reference_label_path).replace("\\", "/").replace(":", "\\:")
+            reference_end = shot_durations[0]
+            generic_full_end = reference_end + min(1.8, shot_durations[1] if len(shot_durations) > 1 else 1.8)
+            filters.extend([
+                f"drawbox=x=72:y=500:w=360:h=64:color=0x0f172a@0.88:t=fill:enable='between(t,0,{reference_end:.3f})'",
+                f"drawtext={font_clause}textfile='{reference_text}':fontcolor=0x38bdf8:fontsize=34:x=94:y=512:enable='between(t,0,{reference_end:.3f})'",
+                f"drawbox=x=72:y=500:w=520:h=72:color=0x0f172a@0.88:t=fill:enable='between(t,{reference_end:.3f},{generic_full_end:.3f})'",
+                f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=38:x=96:y=513:enable='between(t,{reference_end:.3f},{generic_full_end:.3f})'",
+                f"drawbox=x=72:y=500:w=210:h=54:color=0x0f172a@0.70:t=fill:enable='gt(t,{generic_full_end:.3f})'",
+                f"drawtext={font_clause}textfile='{short_text}':fontcolor=0xfacc15:fontsize=28:x=92:y=510:enable='gt(t,{generic_full_end:.3f})'",
+            ])
+        else:
+            filters.extend([
+                "drawbox=x=72:y=500:w=520:h=72:color=0x0f172a@0.88:t=fill:enable='between(t,0,1.8)'",
+                f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=38:x=96:y=513:enable='between(t,0,1.8)'",
+                "drawbox=x=72:y=500:w=210:h=54:color=0x0f172a@0.70:t=fill:enable='gt(t,1.8)'",
+                f"drawtext={font_clause}textfile='{short_text}':fontcolor=0xfacc15:fontsize=28:x=92:y=510:enable='gt(t,1.8)'",
+            ])
         elapsed = 0.0
         emphasis_dir = work / "emphasis"
         emphasis_dir.mkdir(parents=True, exist_ok=True)
@@ -279,9 +306,13 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         "primary_visual_width_ratio": float(request.get("primary_visual_width_ratio", 0.92)),
         "canvas_fill_ratio": float(request.get("canvas_fill_ratio", 0.93)),
         "motion_preset": "push_pan", "usage_label_mode": "full_then_abbreviated",
+        "product_reference_scene_count": 1 if reference_paths else 0,
+        "generic_usage_scene_source_count": len(generic_paths),
+        "exact_product_use_claimed": False,
         "usage_labels_separate_from_hook": True, "layout": planned,
         "hook_text_file": str(output.parent / "drawtext-subtitles" / "subtitle-cue-001-line-01.txt"),
         "usage_label_text_file": str(full_label_path), "usage_label_short_text_file": str(short_label_path),
+        "product_reference_label_text_file": str(reference_label_path) if reference_paths else None,
     }
 
 

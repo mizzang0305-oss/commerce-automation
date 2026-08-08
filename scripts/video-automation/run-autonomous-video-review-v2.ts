@@ -1,4 +1,4 @@
-import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { rankCreativeCandidates } from "../../src/lib/video-lab/creativeRanker";
@@ -35,17 +35,22 @@ async function main(): Promise<void> {
     asrModel: process.env.VIDEO_AUTOMATION_ASR_MODEL ?? ""
   };
   if (Object.values(required).some((value) => !value.trim())) throw new Error("VIDEO_AUTOMATION_LOCAL_RUNTIME_NOT_CONFIGURED");
-  const runId = `run-v2-${new Date().toISOString().replace(/[-:TZ.]/gu, "").slice(0, 14)}`;
+  const liveInputManifest = process.env.LIVE_PRODUCT_VIDEO_INPUT_MANIFEST?.trim() ?? "";
+  const runId = process.env.VIDEO_AUTOMATION_RUN_ID?.trim() || `run-v2-${new Date().toISOString().replace(/[-:TZ.]/gu, "").slice(0, 14)}`;
   const outputRoot = resolve("data", "video-automation", runId);
   const mediaBridge = resolve("tools", "video-automation", "local_media_bridge.py");
   const visualQaBridge = resolve("tools", "video-automation", "visual_qa.py");
   const whisperService = resolve("tools", "video-automation", "whisperx_jsonl_service.py");
   await mkdir(outputRoot, { recursive: true });
-  const allProducts = loadApprovedProductFixtures(required.assetRoot, runId);
+  const allProducts = liveInputManifest
+    ? await loadLiveProductInputs(liveInputManifest, runId)
+    : loadApprovedProductFixtures(required.assetRoot, runId);
   const cable = allProducts.find((input) => input.product.productKey.includes("cable-organizer"));
-  if (!cable) throw new Error("REFERENCE_CABLE_PRODUCT_REQUIRED");
-  const products = mode === "reference" ? [cable] : [cable, ...allProducts.filter((input) => input !== cable)];
-  console.log(JSON.stringify({ event: "autonomous_video_v2_start", mode, products: products.length, configured: Object.fromEntries(Object.entries(required).map(([key, value]) => [key, Boolean(value)])), ...AUTONOMOUS_VIDEO_REVIEW_FLAGS }));
+  if (!liveInputManifest && !cable) throw new Error("REFERENCE_CABLE_PRODUCT_REQUIRED");
+  const products = liveInputManifest
+    ? allProducts
+    : mode === "reference" ? [cable!] : [cable!, ...allProducts.filter((input) => input !== cable)];
+  console.log(JSON.stringify({ event: "autonomous_video_v2_start", mode, products: products.length, liveProductInputs: Boolean(liveInputManifest), configured: Object.fromEntries(Object.entries(required).map(([key, value]) => [key, Boolean(value)])), ...AUTONOMOUS_VIDEO_REVIEW_FLAGS }));
 
   const usedFamilies = new Set<HookFamily>();
   const selectedByProduct = new Map<string, ReturnType<typeof rankCreativeCandidates>[number]>();
@@ -60,16 +65,21 @@ async function main(): Promise<void> {
 
   const startedAt = new Date().toISOString();
   const runStarted = performance.now();
+  const items: Array<Record<string, unknown>> = [];
   const prepared = new Map<string, PreparedProduct>();
   for (const [index, input] of products.entries()) {
     const productRoot = join(outputRoot, `product-${String(index + 1).padStart(3, "0")}`);
     await mkdir(productRoot, { recursive: true });
+    try {
     const asset = input.product.realUseAsset;
     if (!asset || asset.ownerReviewStatus !== "pass" || asset.identityType !== "generic_usage_example") throw new Error("OWNER_REVIEWED_GENERIC_USE_ASSET_REQUIRED");
     await Promise.all([stat(asset.sourcePath), stat(asset.reviewEvidencePath)]);
     const frames = await runJsonProcess(required.python, [mediaBridge], { operation: "prepare_reviewed_asset", source_path: asset.sourcePath, target_dir: join(productRoot, "source-frames") }, 180_000);
     if (frames.status !== "success" || !Array.isArray(frames.image_paths) || frames.image_paths.length < 5) throw new Error("OWNER_REVIEWED_FRAME_EXTRACTION_FAILED");
-    input.product.imagePaths = frames.image_paths.map(String);
+    const genericImagePaths = frames.image_paths.map(String);
+    const exactReference = input.product.exactProductReference;
+    if (exactReference) await stat(exactReference.localPath);
+    input.product.imagePaths = exactReference ? [exactReference.localPath, ...genericImagePaths] : genericImagePaths;
     validateProductVideoInput(input);
     const selected = selectedByProduct.get(input.product.productKey);
     if (!selected) throw new Error("CREATIVE_SELECTION_FAILED");
@@ -90,17 +100,20 @@ async function main(): Promise<void> {
     const asrPassed = similarity >= 0.82 && recognizedAnchors.length >= 2 && identitySimilarity >= 0.65 && coreAnchorSimilarity >= 0.65;
     await writeJson(join(voiceRoot, "asr.json"), { provider: "faster-whisper", rawTranscript: asr.transcript, similarity, threshold: 0.82, recognizedAnchors, contextAnchorMinimum: 2, identitySimilarity, identityThreshold: 0.65, coreAnchor: input.product.anchors[0], coreAnchorSimilarity, coreAnchorThreshold: 0.65, passed: asrPassed, externalApiCalled: false, uploadAttempted: false });
     if (!asrPassed) throw new Error("ASR_FAILED");
-    prepared.set(input.product.productKey, { input, productRoot, selected, narration, audioPath: String(tts.output), audioDuration: Number(tts.duration_seconds), asrTranscript: asr.transcript, asrPassed, similarity, recognizedAnchors, coreAnchorSimilarity, ttsSeconds, asrSeconds: elapsed(stageStarted) });
+    prepared.set(input.product.productKey, { input, productRoot, selected, narration, audioPath: String(tts.output), audioDuration: Number(tts.duration_seconds), asrTranscript: asr.transcript, asrPassed, similarity, recognizedAnchors, coreAnchorSimilarity, ttsSeconds, asrSeconds: elapsed(stageStarted), genericImagePaths });
+    } catch (error) {
+      items.push(blockedItem(input.product.productKey, error));
+    }
   }
 
   const whisper = new PersistentWhisperXProvider(() => createLocalWhisperXProcess(required.python, whisperService, { ...process.env, HF_HOME: process.env.VIDEO_AUTOMATION_HF_HOME, TORCH_HOME: process.env.VIDEO_AUTOMATION_TORCH_HOME }), 300_000);
   const modelLoadSeconds = await whisper.start();
-  const items: Array<Record<string, unknown>> = [];
   try {
     for (const input of products) {
       const itemStarted = performance.now();
       const value = prepared.get(input.product.productKey);
-      if (!value) throw new Error("VOICE_PREPARATION_FAILED");
+      if (!value) continue;
+      try {
       const alignment = await whisper.align(value.audioPath, value.asrTranscript);
       if (alignment.status !== "success" || alignment.transcript_source !== "provided_local_asr" || !alignment.words?.length || (alignment.aligned_ratio ?? 0) < 0.95) throw new Error("WHISPERX_ALIGNMENT_FAILED");
       const words = restoreKnownCaptionTokens(normalizeWordTimeline(alignment.words), [input.product.canonicalProductName, ...input.product.aliases, ...input.product.anchors]);
@@ -108,7 +121,7 @@ async function main(): Promise<void> {
       const captions = buildPopGroupCaptions(words);
       if (captions.some((cue) => cue.words.length > 4)) throw new Error("CAPTION_SAFE_TIMELINE_FAILED");
       await writeJson(join(value.productRoot, "captions.json"), { mode: "POP_GROUP", animation: "pop", maxWordsPerCue: 4, maxEmphasisWordsPerCue: 1, cues: captions });
-      const visualGate = await runJsonProcess(required.python, [mediaBridge], { operation: "visual_gate", image_paths: input.product.imagePaths, real_use_asset: input.product.realUseAsset }, 120_000);
+      const visualGate = await runJsonProcess(required.python, [mediaBridge], { operation: "visual_gate", image_paths: value.genericImagePaths, real_use_asset: input.product.realUseAsset }, 120_000);
       if (visualGate.gate_pass !== true || visualGate.identity_type !== "generic_usage_example" || Number(visualGate.exact_product_scene_count) !== 0) throw new Error("VISUAL_EVIDENCE_GATE_FAILED");
       const v143 = evaluateV143ReusableCreativePolicy({ hook_font_px: 104, hook_max_lines: 2, hook_visible_within_seconds: 0, hook_high_contrast: true, real_usage_scene_present: true, usage_source_role: "generic_usage_example", usage_label_present: true, exact_product_identity_claim: false, exact_product_identity_verified: false, actor_nationality_verified: false, product_identity_binding_verified: true, tts_provider_approved: true, tts_language: "ko", tts_speed_multiplier: 1.2, tts_delivery_style: "brisk_confident_sales", safe_to_upload: false, safe_to_public_upload: false });
       if (!v143.passed) throw new Error("V143_CREATIVE_POLICY_FAILED");
@@ -116,9 +129,9 @@ async function main(): Promise<void> {
       if (!layout.passed) throw new Error(layout.blockers[0]);
       const bridgeLayout = await runJsonProcess(required.python, [mediaBridge], { operation: "layout_plan", hook: value.selected.candidate.hook, usage_label: USAGE_LABEL }, 60_000);
       if (bridgeLayout.passed !== true) throw new Error(String((bridgeLayout.blockers as string[])[0]));
-      await writeJson(join(value.productRoot, "render-plan.json"), { candidateId: value.selected.candidate.id, selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), captions, visualGate, v143, layout: bridgeLayout, identityType: "generic_usage_example", exactProductUseClaimed: false, productIdentityBound: true, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS });
+      await writeJson(join(value.productRoot, "render-plan.json"), { candidateId: value.selected.candidate.id, selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), captions, visualGate, v143, layout: bridgeLayout, identityType: "mixed_reference_and_generic_usage", exactProductReference: input.product.exactProductReference ? { ...input.product.exactProductReference, localPathPresent: true } : null, genericUsageEvidence: input.product.realUseAsset ? { assetId: input.product.realUseAsset.assetId, identityType: input.product.realUseAsset.identityType, ownerReviewStatus: input.product.realUseAsset.ownerReviewStatus } : null, disclosureText: input.product.disclosureText ?? "", sourceProvenance: input.product.sourceProvenance ?? null, exactProductUseClaimed: false, productIdentityBound: true, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS });
 
-      let profile: RenderRepairProfile = input.product.productKey.includes("cable-organizer") ? LEGACY_INITIAL_PROFILE : V2_PROVEN_PROFILE;
+      let profile: RenderRepairProfile = !liveInputManifest && input.product.productKey.includes("cable-organizer") ? LEGACY_INITIAL_PROFILE : V2_PROVEN_PROFILE;
       let chosen: { review: AutomatedVideoReview; input: AutomatedReviewInput; outputPath: string } | null = null;
       const repairs: unknown[] = [];
       for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -130,6 +143,7 @@ async function main(): Promise<void> {
         const renderStarted = performance.now();
         const render = await runJsonProcess(required.python, [mediaBridge], {
           operation: renderOperation, output: outputPath, audio_path: value.audioPath, image_paths: input.product.imagePaths,
+          scene_roles: input.product.exactProductReference ? ["product_reference", ...value.genericImagePaths.map(() => "generic_usage_example")] : value.genericImagePaths.map(() => "generic_usage_example"),
           captions, hook: value.selected.candidate.hook, title: input.product.canonicalProductName, usage_label: USAGE_LABEL,
           layout_plan: bridgeLayout, caption_font_px: profile.captionFontPx, caption_animation: profile.captionAnimation,
           primary_visual_width_ratio: profile.primaryVisualWidthRatio, canvas_fill_ratio: profile.canvasFillRatio
@@ -177,9 +191,12 @@ async function main(): Promise<void> {
       const finalReview = evaluateAutomatedVideoQuality(finalInput);
       await writeJson(join(finalRoot, "review-input.json"), finalInput);
       await writeJson(join(finalRoot, "automated-review.json"), finalReview);
-      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
+      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, exactProductReference: Boolean(input.product.exactProductReference), genericUsageEvidence: Boolean(input.product.realUseAsset), exactProductUse: false, overclaim: false, sourceProvider: input.product.sourceProvenance?.sourceProvider ?? null, sourceRequestId: input.product.sourceProvenance?.sourceRequestId ?? null, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
       items.push(summary);
       await writeJson(join(value.productRoot, "summary.json"), summary);
+      } catch (error) {
+        items.push(blockedItem(input.product.productKey, error));
+      }
     }
   } finally { await whisper.close(); }
 
@@ -194,10 +211,24 @@ type PreparedProduct = {
   input: ReturnType<typeof loadApprovedProductFixtures>[number]; productRoot: string;
   selected: ReturnType<typeof rankCreativeCandidates>[number]; narration: string; audioPath: string; audioDuration: number; asrTranscript: string;
   asrPassed: boolean; similarity: number; recognizedAnchors: string[]; coreAnchorSimilarity: number; ttsSeconds: number; asrSeconds: number;
+  genericImagePaths: string[];
 };
+
+async function loadLiveProductInputs(path: string, runId: string): Promise<ReturnType<typeof loadApprovedProductFixtures>> {
+  const value = JSON.parse(await readFile(resolve(path), "utf8")) as { products?: unknown };
+  if (!Array.isArray(value.products) || value.products.length !== 3) throw new Error("LIVE_PRODUCT_VIDEO_EXACTLY_THREE_INPUTS_REQUIRED");
+  return value.products.map((entry) => {
+    const product = entry as ReturnType<typeof loadApprovedProductFixtures>[number];
+    return { ...product, runId };
+  });
+}
 
 function normalizeWordTimeline(words: Array<{ word: string; start: number; end: number; confidence: number | null }>) { let previousEnd = 0; return words.map((word) => { const start = Math.max(previousEnd, word.start); const end = Math.max(start + 0.01, word.end); previousEnd = end; return { ...word, start, end }; }); }
 function compactKorean(value: string): string { return value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, ""); }
+function blockedItem(productKey: string, error: unknown): Record<string, unknown> {
+  const blocker = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message) ? error.message : "VIDEO_AUTOMATION_REJECTED_PRODUCT";
+  return { productKey, status: "VIDEO_AUTOMATION_REJECTED_PRODUCT", machineQaPassed: false, finalAutomatedQaPassed: false, blockers: [blocker], humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
+}
 async function writeJson(path: string, value: unknown): Promise<void> { await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8"); }
 function elapsed(started: number): number { return Math.round((performance.now() - started) / 10) / 100; }
 void main().catch((error: unknown) => { const message = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message) ? error.message : "AUTONOMOUS_VIDEO_REVIEW_V2_FAILED"; console.error(JSON.stringify({ event: "autonomous_video_v2_failed", safeError: message, SAFE_TO_UPLOAD: false })); process.exitCode = 1; });
