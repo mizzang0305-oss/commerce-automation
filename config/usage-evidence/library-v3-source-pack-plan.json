@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "usage-evidence-source-pack-plan-v3",
+  "existingRegistrySource": "data/usage-evidence-library-v2/registry.json",
+  "sanitizedVideoPools": [
+    {
+      "poolId": "laundry-v027-visual-only",
+      "sourceId": "v3-laundry-v027-visual-only",
+      "relativePath": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v027/visual-only-local-review-video.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v027/review-summary.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "laundry-v033-metadata-fail-only",
+      "sourceId": "v3-laundry-v033-local-review",
+      "relativePath": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v033/local-review-video.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v033/human-review-decision.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset_metadata_failure_not_visual_approval",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "laundry-v035-human-pass",
+      "sourceId": "v3-laundry-v035-human-pass",
+      "relativePath": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v035/local-review-video.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "pass",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/candidate-3c4f2ee364ba5b07/v035/human-review-decision.json",
+      "rightsBasis": "local_project_generated_human_reviewed_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "desk-v048-pending",
+      "sourceId": "v3-desk-v048-local-review",
+      "relativePath": "commerce-assets/review/v048/lets_buy/local-review-video.mp4",
+      "group": "desk",
+      "allowedUseCases": ["cable_organization", "desk_organization"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v048/lets_buy/review-summary.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "laundry-v048-pending",
+      "sourceId": "v3-laundry-v048-local-review",
+      "relativePath": "commerce-assets/review/v048/neoman_moleulgeol/local-review-video.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v048/neoman_moleulgeol/review-summary.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "desk-v056-corrected",
+      "sourceId": "v3-desk-v056-corrected",
+      "relativePath": "commerce-assets/review/v056/lets_buy/corrected-preview.mp4",
+      "group": "desk",
+      "allowedUseCases": ["cable_organization", "desk_organization"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v056/v056-corrected-preview-report.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "laundry-v056-corrected",
+      "sourceId": "v3-laundry-v056-corrected",
+      "relativePath": "commerce-assets/review/v056/neoman_moleulgeol/corrected-preview.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "not_available",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v056/v056-corrected-preview-report.json",
+      "rightsBasis": "local_project_generated_sanitized_review_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "desk-v057-human-pass",
+      "sourceId": "v3-desk-v057-human-pass",
+      "relativePath": "commerce-assets/review/v057/lets_buy/corrected-preview-v057.mp4",
+      "group": "desk",
+      "allowedUseCases": ["cable_organization", "desk_organization"],
+      "sourceHumanReviewStatus": "pass",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v049/three-channel-upload-preflight-report.json",
+      "rightsBasis": "local_project_generated_human_reviewed_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    },
+    {
+      "poolId": "laundry-v057-human-pass",
+      "sourceId": "v3-laundry-v057-human-pass",
+      "relativePath": "commerce-assets/review/v057/neoman_moleulgeol/corrected-preview-v057.mp4",
+      "group": "laundry",
+      "allowedUseCases": ["laundry_space_organization", "laundry_drying"],
+      "sourceHumanReviewStatus": "pass",
+      "reviewEvidenceRelativeReference": "commerce-assets/review/v049/three-channel-upload-preflight-report.json",
+      "rightsBasis": "local_project_generated_human_reviewed_asset",
+      "privacyReviewRequired": true,
+      "excludedPatterns": ["account", "message", "invoice", "address", "phone"]
+    }
+  ],
+  "targetPackCounts": {
+    "cable_organization": 3,
+    "desk_organization": 3,
+    "laundry_space_organization": 3,
+    "laundry_drying": 3
+  },
+  "extraction": {
+    "clipsPerSource": 4,
+    "clipDurationSeconds": 2.2,
+    "minimumDurationSeconds": 1.0,
+    "maximumDurationSeconds": 4.0,
+    "targetFps": 30,
+    "sceneThreshold": 0.12,
+    "minimumVisualChangeRatio": 0.0015,
+    "maximumFreezeRatio": 0.85,
+    "maximumBlackFrameRatio": 0.5,
+    "temporalDuplicateAverageHamming": 6,
+    "supplementalSceneWindows": [
+      {
+        "sourceId": "v3-laundry-v033-local-review",
+        "role": "organization",
+        "startSeconds": 12.267,
+        "durationSeconds": 2.2
+      }
+    ]
+  },
+  "sourceLimits": {
+    "maxUsagePackReuse": 5,
+    "maxAssetDailyReuse": 5,
+    "maxSameSequenceConsecutive": 2,
+    "maxSameSourceVideoDaily": 15,
+    "maxPrimaryPacksPerSource": 2,
+    "minimumDistinctNewSourceIds": 8,
+    "minimumNewDerivedMotionClips": 24,
+    "maximumNewPacks": 18
+  },
+  "reviewRequirements": {
+    "sourceContactSheetRequired": true,
+    "clipFirstMiddleLastRequired": true,
+    "motionStripRequired": true,
+    "codexVisualReviewRequired": true,
+    "humanOwnerStatusPromotionAllowed": false,
+    "publishEligible": false
+  }
+}

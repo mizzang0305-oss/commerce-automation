@@ -32,6 +32,19 @@ export type UsageEvidenceAsset = {
   noUploadAutomationEligible: boolean;
   publishEligible: false;
   visualFingerprint: string;
+  temporalFingerprint?: string;
+  motionQa?: {
+    durationSeconds: number;
+    freezeRatio: number;
+    longestFreezeSeconds: number;
+    visualChangeRatio: number;
+    blackFrameRatio: number;
+    blurScore: number;
+    frameFill: number;
+    motionPresent: boolean;
+    decodePassed: boolean;
+    textContaminationIndicator: "clear" | "review_required";
+  };
   sourceFingerprint: string;
   dailyReuseLimit: number;
   consecutiveReuseLimit: number;
@@ -57,6 +70,9 @@ export type UsageEvidencePack = {
   sequenceFingerprint: string;
   noUploadAutomationEligible: boolean;
   publishEligible: false;
+  packGeneration?: "v2" | "v3_motion";
+  trustTier?: "HUMAN_REVIEWED_SOURCE_DERIVED" | "CODEX_REVIEWED_LOCAL_ONLY";
+  primarySourceId?: string;
 };
 
 export type UsageEvidenceRegistry = {
