@@ -77,6 +77,18 @@ export type UsageEvidenceAsset = {
   identityFidelityScore?: number;
 };
 
+export type ProductAvailabilityEvidence = {
+  productKey: string;
+  observedInPrepare: boolean;
+  observedInRun1: boolean;
+  observedInRun2: boolean;
+  observedInTargetedRecovery: boolean;
+  observationCount: number;
+  sourceKeywords: string[];
+  lastObservedAt: string;
+  availabilityScore: number;
+};
+
 export type UsageEvidencePack = {
   packId: string;
   useCase: string;
@@ -106,6 +118,10 @@ export type UsageEvidencePack = {
   sourceImageSha256?: string;
   syntheticDisclosureRequired?: true;
   productPixelProvenance?: "exact_coupang_reference" | "reference_image_edit";
+  availabilityEvidence?: ProductAvailabilityEvidence;
+  replacementOfPackId?: string;
+  replacementOfProductKey?: string;
+  replacementReason?: "SELECTED_PRODUCT_NOT_STABLE_IN_LIVE_SEARCH";
 };
 
 export type UsageEvidenceRegistry = {

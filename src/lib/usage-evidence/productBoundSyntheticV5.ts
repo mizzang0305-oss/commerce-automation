@@ -25,6 +25,7 @@ export const V5_UNCHANGED_POLICY_LIMITS = Object.freeze({
   assetDailyReuseLimit: 5,
   productBoundDailyReuseLimit: 1,
   productBoundConsecutiveReuseLimit: 1,
+  minimumAvailabilityScore: 0.5,
   policyThresholdChanges: 0
 });
 
@@ -274,7 +275,8 @@ export function selectMinimalPositiveV5Packs(input: {
     .sort((left, right) => {
       const leftCandidate = candidateByKey.get(left.boundProductKey ?? "");
       const rightCandidate = candidateByKey.get(right.boundProductKey ?? "");
-      return Number(right.identityFidelityScore ?? 0) - Number(left.identityFidelityScore ?? 0)
+      return Number(right.availabilityEvidence?.availabilityScore ?? 0) - Number(left.availabilityEvidence?.availabilityScore ?? 0)
+        || Number(right.identityFidelityScore ?? 0) - Number(left.identityFidelityScore ?? 0)
         || Number(rightCandidate?.score.finalProductScore ?? 0) - Number(leftCandidate?.score.finalProductScore ?? 0)
         || left.packId.localeCompare(right.packId);
     });
@@ -284,6 +286,9 @@ export function selectMinimalPositiveV5Packs(input: {
     let zeroGainReason: string | null = null;
     if (!candidate) zeroGainReason = "PRODUCT_NOT_PRESENT_IN_LIVE_CANDIDATES";
     else if (!isV5ProductBoundPackEligible(pack, assets)) zeroGainReason = "SYNTHETIC_PACK_QA_FAILED";
+    else if (pack.availabilityEvidence
+      && pack.availabilityEvidence.availabilityScore < V5_UNCHANGED_POLICY_LIMITS.minimumAvailabilityScore
+      && !pack.availabilityEvidence.observedInTargetedRecovery) zeroGainReason = "PRODUCT_AVAILABILITY_NOT_STABLE";
     else if (activeKeys.has(productKey) || reserveKeys.has(productKey)) zeroGainReason = "DUPLICATE_PRODUCT";
     else if (candidate.score.policySafetyScore !== 100 || candidate.score.imageReadinessScore !== 100 || candidate.score.affiliateReadinessScore !== 100) zeroGainReason = "PRODUCT_NOT_POLICY_IMAGE_AFFILIATE_READY";
     const category = candidate ? categoryKey(candidate.candidate.categoryPath || candidate.candidate.category) : "";

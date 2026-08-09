@@ -6,5 +6,6 @@ export * from "./contracts";
 export * from "./fingerprint";
 export * from "./productBoundSyntheticV5";
 export * from "./registry";
+export * from "./slot069RecoveryV5";
 export * from "./sourcePacksV3";
 export * from "./taxonomy";
