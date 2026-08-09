@@ -111,17 +111,18 @@ export class LocalQueueRepository {
   }
 
   async markProcessing(ids: string[], now: Date): Promise<void> { await this.patch(ids, (item) => { item.status = "processing"; item.startedAt ||= now.toISOString(); }); }
-  async complete(input: { id: string; videoPath: string; reviewPath: string; creativeScore: number; videoQualityScore: number; now: Date }): Promise<void> { await this.patch([input.id], (item) => { item.status = "video_ready_autoqa"; item.finishedAt = input.now.toISOString(); item.videoPath = input.videoPath; item.reviewPath = input.reviewPath; item.creativeScore = input.creativeScore; item.videoQualityScore = input.videoQualityScore; item.errorCode = ""; item.safeMessage = "MACHINE_QA_PASSED_CODEX_NOT_EXECUTED"; item.leaseOwner = ""; item.leaseExpiresAt = ""; const active = [...(item.candidateHistory ?? [])].reverse().find((entry) => entry.outcome === "active"); if (active) { active.outcome = "passed"; active.finishedAt = input.now.toISOString(); active.schedulerAttempts = item.attemptCount; } }); }
+  async complete(input: { id: string; videoPath: string; reviewPath: string; creativeScore: number; videoQualityScore: number; now: Date }): Promise<void> { await this.patch([input.id], (item) => { item.status = "video_ready_machine_qa"; item.finishedAt = input.now.toISOString(); item.videoPath = input.videoPath; item.reviewPath = input.reviewPath; item.creativeScore = input.creativeScore; item.videoQualityScore = input.videoQualityScore; item.errorCode = ""; item.safeMessage = "MACHINE_QA_PASSED_CODEX_NOT_EXECUTED"; item.leaseOwner = ""; item.leaseAcquiredAt = ""; item.leaseExpiresAt = ""; const active = [...(item.candidateHistory ?? [])].reverse().find((entry) => entry.outcome === "active"); if (active) { active.outcome = "passed"; active.finishedAt = input.now.toISOString(); active.schedulerAttempts = item.attemptCount; } }); }
   async recordCodexVisualReviews(input: { reviews: Array<{ productKey: string; passed: boolean }>; now: Date }): Promise<number> {
     return this.mutate(async (items) => {
       const reviews = new Map(input.reviews.map((review) => [review.productKey, review.passed]));
       if (reviews.size !== input.reviews.length || reviews.size === 0) throw new Error("CODEX_VISUAL_REVIEW_INPUT_INVALID");
       const matched = items.filter((item) => reviews.has(item.productKey));
       if (matched.length !== reviews.size) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
-      if (matched.some((item) => item.status !== "video_ready_autoqa")) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_STATE_CONFLICT");
+      if (matched.some((item) => !["video_ready_machine_qa", "video_ready_autoqa"].includes(item.status))) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_STATE_CONFLICT");
       for (const item of matched) {
         const passed = reviews.get(item.productKey) === true;
         item.reviewMetadata.codexReview = passed ? "pass" : "block";
+        item.status = passed ? "video_ready_autoqa" : "manual_review";
         item.safeMessage = passed ? "CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD" : "CODEX_VISUAL_REVIEW_BLOCKED";
         item.updatedAt = input.now.toISOString();
       }
@@ -181,12 +182,12 @@ export class LocalQueueRepository {
       if (item.localRevision !== input.expectedRevision) throw new Error("STALE_CONTROL_COMMAND");
       const nowIso = input.now.toISOString();
       if (input.action === "hold") {
-        if (["claimed", "processing", "video_ready_autoqa", "skipped"].includes(item.status)) throw new Error("CONTROL_COMMAND_STATE_CONFLICT");
+        if (["claimed", "processing", "video_ready_machine_qa", "video_ready_autoqa", "skipped"].includes(item.status)) throw new Error("CONTROL_COMMAND_STATE_CONFLICT");
         item.controlPreviousStatus = item.status;
         item.status = "hold";
         item.holdReason = safeCode(input.reason || "OWNER_HOLD");
       } else if (input.action === "skip") {
-        if (["claimed", "processing", "video_ready_autoqa"].includes(item.status)) throw new Error("CONTROL_COMMAND_STATE_CONFLICT");
+        if (["claimed", "processing", "video_ready_machine_qa", "video_ready_autoqa"].includes(item.status)) throw new Error("CONTROL_COMMAND_STATE_CONFLICT");
         item.status = "skipped";
         item.finishedAt = nowIso;
       } else if (input.action === "release_hold") {

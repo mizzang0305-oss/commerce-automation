@@ -23,7 +23,9 @@ export const DEFAULT_QUEUE_SCHEDULER_SETTINGS: QueueSchedulerSettings = Object.f
   processingDailyCap: 9,
   maxCategoryRatio: 1,
   maxProductFamilyRatio: 1,
-  maxExactAssetReuse: 5
+  maxExactAssetReuse: 5,
+  observationMode: false,
+  autoPauseAfterObservation: false
 });
 
 export const DAILY_69_NO_UPLOAD_SETTINGS: QueueSchedulerSettings = Object.freeze({
@@ -57,8 +59,10 @@ export function validateSettings(value: QueueSchedulerSettings): QueueSchedulerS
   if (value.reserveRatio !== 0.2 || value.minimumReserveCount < 0) throw new Error("RESERVE_SETTINGS_INVALID");
   if (!Number.isInteger(value.maxRawDiscoveries) || value.maxRawDiscoveries < value.dailyTargetCount || value.maxRawDiscoveries > 240) throw new Error("DISCOVERY_CAP_INVALID");
   if (!Number.isInteger(value.maxProviderCalls) || value.maxProviderCalls < 1 || value.maxProviderCalls > 30) throw new Error("PROVIDER_CALL_CAP_INVALID");
-  if (!Number.isInteger(value.processingDailyCap) || value.processingDailyCap < 1 || value.processingDailyCap > 9) throw new Error("PROCESSING_DAILY_CAP_INVALID");
+  const maximumProcessingCap = value.mode === "no_upload_pilot" ? 9 : 69;
+  if (!Number.isInteger(value.processingDailyCap) || value.processingDailyCap < 1 || value.processingDailyCap > maximumProcessingCap || value.processingDailyCap > value.dailyTargetCount) throw new Error("PROCESSING_DAILY_CAP_INVALID");
   if (value.maxCategoryRatio <= 0 || value.maxCategoryRatio > 1 || value.maxProductFamilyRatio <= 0 || value.maxProductFamilyRatio > 1) throw new Error("DIVERSITY_SETTINGS_INVALID");
   if (value.maxExactAssetReuse !== 5) throw new Error("ASSET_REUSE_CAP_INVALID");
+  if (typeof value.observationMode !== "boolean" || typeof value.autoPauseAfterObservation !== "boolean") throw new Error("OBSERVATION_SETTINGS_INVALID");
   return value;
 }

@@ -3,7 +3,8 @@ param(
     [string]$EnvFile = "C:\Users\LOVE\MyProjects\commerce-automation\.env.local"
 )
 $ErrorActionPreference = "Stop"
-Set-Location -LiteralPath (Resolve-Path -LiteralPath $WorktreeRoot).Path
+$resolvedWorktree = (Resolve-Path -LiteralPath $WorktreeRoot).Path
+Set-Location -LiteralPath $resolvedWorktree
 if (-not (Test-Path -LiteralPath $EnvFile)) { throw "QUEUE_SCHEDULER_ENV_FILE_MISSING" }
 foreach ($line in Get-Content -LiteralPath $EnvFile -Encoding utf8) {
     if ($line -match '^\s*#' -or $line -notmatch '=') { continue }

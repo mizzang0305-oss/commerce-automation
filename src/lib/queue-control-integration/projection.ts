@@ -85,7 +85,7 @@ function queueRow(item: Awaited<ReturnType<LocalQueueRepository["items"]>>[numbe
   const fallbackCount = Math.max(0, (item.candidateHistory?.length ?? 1) - 1);
   return [
     item.id, item.queueDate, item.scheduledAt, item.status, item.canonicalProductName, item.candidate.categoryPath || item.candidate.category,
-    item.candidate.priceText, "", "", `image_count:${item.candidate.productImageUrls.length}`, "", item.status === "video_ready_autoqa" ? "ready" : "pending",
+    item.candidate.priceText, "", "", `image_count:${item.candidate.productImageUrls.length}`, "", item.status === "video_ready_autoqa" ? "ready_autoqa" : item.status === "video_ready_machine_qa" ? "ready_machine_qa" : "pending",
     item.videoQualityScore ?? "", item.candidate.useCase, item.reviewMetadata.codexReview, item.videoQualityScore === null ? "pending" : item.videoQualityScore >= 80 ? "machine_pass" : "machine_block",
     "NO_UPLOAD", "", item.errorCode || item.safeMessage, item.updatedAt,
     item.slotId, item.localRevision, item.queueDate, item.queueRank, "local_queue_scheduler", projectionRevision,

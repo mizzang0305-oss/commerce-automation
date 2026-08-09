@@ -42,6 +42,7 @@ describe("local durable queue", () => {
     await repository.insertRanked({ ranked: ranked(2), queueDate: "2026-08-08", now, dueNow: true });
     const [claimed] = await repository.claimDue({ now, runId: "review", limit: 1, leaseMinutes: 10, pilotMax: 9 });
     await repository.complete({ id: claimed.id, videoPath: "x.mp4", reviewPath: "review.json", creativeScore: 90, videoQualityScore: 90, now });
+    expect((await repository.items()).find((item) => item.id === claimed.id)?.status).toBe("video_ready_machine_qa");
     expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: true }], now })).toBe(1);
     const reviewed = (await repository.items()).find((item) => item.id === claimed.id)!;
     expect(reviewed.status).toBe("video_ready_autoqa");
@@ -50,6 +51,7 @@ describe("local durable queue", () => {
     expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: false }], now })).toBe(1);
     const blocked = (await repository.items()).find((item) => item.id === claimed.id)!;
     expect(blocked.reviewMetadata.codexReview).toBe("block");
+    expect(blocked.status).toBe("manual_review");
     expect(blocked.safeMessage).toBe("CODEX_VISUAL_REVIEW_BLOCKED");
     await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: "missing-product", passed: true }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
   });

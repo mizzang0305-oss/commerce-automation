@@ -8,7 +8,7 @@ import { inspectQueueVideoRuntime, type QueueVideoRuntimeReadiness } from "./run
 import { executeQueueVideoBatch, type QueueVideoResult } from "./videoExecutor";
 import { QUEUE_SCHEDULER_FLAGS, type LocalRun } from "./types";
 
-export async function runNextBatch(input: { repository?: LocalQueueRepository; now?: Date; executor?: typeof executeQueueVideoBatch; preflight?: () => Promise<QueueVideoRuntimeReadiness> } = {}) {
+export async function runNextBatch(input: { repository?: LocalQueueRepository; now?: Date; executor?: typeof executeQueueVideoBatch; preflight?: () => Promise<QueueVideoRuntimeReadiness>; env?: NodeJS.ProcessEnv } = {}) {
   const repository = input.repository ?? new LocalQueueRepository(); const now = input.now ?? new Date(); const started = performance.now();
   const runId = `batch-${now.toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}`;
   let release: (() => Promise<void>) | null = null;
@@ -18,6 +18,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     const settings = await repository.settings();
     if (!settings.enabled) return recordNoop(repository, runId, now, "QUEUE_SCHEDULER_DISABLED");
     if (settings.isPaused) return recordNoop(repository, runId, now, "QUEUE_SCHEDULER_PAUSED");
+    if (unsafeUploadFlagPresent(input.env ?? process.env)) return recordNoop(repository, runId, now, "UPLOAD_SAFETY_FLAG_BLOCKED", {}, "blocked_preflight");
     await repository.recoverStale(now);
     const capItems = (await repository.items()).filter((item) => item.queueDate === kstDate(now) && item.queueRank <= settings.processingDailyCap);
     const capActionable = capItems.some((item) => item.status === "scheduled" || item.status === "retry_wait");
@@ -55,6 +56,11 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, failed, retried, safeMessage: status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
     await repository.addRun(run); return { run, results: allResults };
   } finally { await release(); }
+}
+
+function unsafeUploadFlagPresent(env: NodeJS.ProcessEnv) {
+  return ["SAFE_TO_UPLOAD", "SAFE_TO_PUBLIC_UPLOAD", "YOUTUBE_AUTO_UPLOAD", "PUBLIC_UPLOAD", "UNLISTED_UPLOAD", "TIKTOK_AUTO_UPLOAD", "THREADS_AUTO_POST", "COMMENT_AUTOMATION"]
+    .some((name) => env[name]?.trim().toLowerCase() === "true");
 }
 
 async function recordNoop(repository: LocalQueueRepository, runId: string, now: Date, message: string, metrics: Record<string, number> = {}, status: LocalRun["status"] = "noop") { const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: Number(metrics.claimed ?? 0), completed: 0, failed: 0, retried: 0, safeMessage: message, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, results: [] }; }
