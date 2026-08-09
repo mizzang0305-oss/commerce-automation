@@ -1,15 +1,20 @@
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { DAILY_69_NO_UPLOAD_SETTINGS, LocalQueueRepository, QUEUE_SCHEDULER_FLAGS, runNightlyScout } from "../../src/lib/queue-scheduler";
-import { SUPPORTED_USAGE_EVIDENCE_USE_CASES, usageEvidenceCapacityUnits, validateUsageEvidenceRegistry, type UsageEvidenceAllocation } from "../../src/lib/usage-evidence";
+import { evaluateV3MarginalPacks, selectV3Registry, SUPPORTED_USAGE_EVIDENCE_USE_CASES, usageEvidenceCapacityUnits, validateUsageEvidenceRegistry, type UsageEvidenceAllocation, type UsageEvidenceRegistry } from "../../src/lib/usage-evidence";
 
 function argument(name: string): string {
   const index = process.argv.indexOf(name);
   const value = index >= 0 ? process.argv[index + 1]?.trim() : "";
   if (!value) throw new Error(`${name.slice(2).toUpperCase().replace(/-/gu, "_")}_REQUIRED`);
   return value;
+}
+
+function optionalArgument(name: string): string {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1]?.trim() ?? "" : "";
 }
 
 function digest(value: unknown): string {
@@ -39,7 +44,7 @@ function maxCount(counts: Map<string, number>): number {
 async function main() {
   const root = resolve(argument("--root"));
   const registryPath = resolve(argument("--registry"));
-  if (!basename(root).startsWith("daily69-asset-capacity-")) throw new Error("SHADOW_ROOT_NAME_INVALID");
+  if (!["daily69-asset-capacity-", "daily69-source-packs-v3-"].some((prefix) => basename(root).startsWith(prefix))) throw new Error("SHADOW_ROOT_NAME_INVALID");
   const now = new Date(process.argv.includes("--now") ? argument("--now") : new Date().toISOString());
   if (Number.isNaN(now.getTime())) throw new Error("SHADOW_NOW_INVALID");
   const registryStarted = performance.now();
@@ -49,13 +54,35 @@ async function main() {
   await repository.writeSettings({ ...DAILY_69_NO_UPLOAD_SETTINGS, enabled: false, isPaused: true });
 
   const discoveryStarted = performance.now();
-  const first = await runNightlyScout({ repository, now, providerReady: true, usageEvidenceRegistry: registry, shadowMode: true });
+  const first = await runNightlyScout({ repository, now, usageEvidenceRegistry: registry, shadowMode: true });
   const discoverySeconds = Math.round((performance.now() - discoveryStarted) / 10) / 100;
   const firstItems = await repository.items();
   const firstReserve = await repository.reserveCandidates();
   const firstProjection = firstItems.map((item) => ({ productKey: item.productKey, rank: item.queueRank, useCase: item.candidate.useCase, allocation: item.usageEvidenceAllocation }));
   const firstReserveProjection = firstReserve.map((entry) => ({ productKey: entry.candidate.productKey, useCase: entry.candidate.useCase, allocation: entry.usageEvidenceAllocation }));
   const firstSnapshotDigest = digest({ active: firstProjection, reserve: firstReserveProjection });
+
+  const candidateRegistryPath = optionalArgument("--candidate-registry");
+  const selectedRegistryOutput = optionalArgument("--selected-registry-output");
+  let v3Marginal: ReturnType<typeof evaluateV3MarginalPacks> | null = null;
+  let selectedRegistry: UsageEvidenceRegistry | null = null;
+  if (candidateRegistryPath) {
+    const candidateRegistry = validateUsageEvidenceRegistry(JSON.parse(await readFile(resolve(candidateRegistryPath), "utf8")));
+    v3Marginal = evaluateV3MarginalPacks({
+      ranked: first.ranked,
+      baselineRegistry: registry,
+      candidateRegistry,
+      settings: DAILY_69_NO_UPLOAD_SETTINGS,
+      rawCount: Number(first.run.metrics.discovered ?? first.ranked.length),
+      normalizedCount: Number(first.run.metrics.normalized ?? first.ranked.length)
+    });
+    if (v3Marginal.result === "TARGET_REACHED") {
+      selectedRegistry = selectV3Registry(candidateRegistry, v3Marginal.selectedPackIds);
+      if (!selectedRegistryOutput) throw new Error("SELECTED_REGISTRY_OUTPUT_REQUIRED");
+      await mkdir(dirname(resolve(selectedRegistryOutput)), { recursive: true });
+      await writeFile(resolve(selectedRegistryOutput), `${JSON.stringify(selectedRegistry, null, 2)}\n`, "utf8");
+    }
+  }
 
   const activeKeys = new Set(firstItems.map((item) => item.productKey));
   const reserveKeys = new Set(firstReserve.map((entry) => entry.candidate.productKey));
@@ -140,7 +167,7 @@ async function main() {
   let secondApiCallCount: number | null = null;
   let secondSnapshotDigest: string | null = null;
   if (ready) {
-    const second = await runNightlyScout({ repository, now, providerReady: true, usageEvidenceRegistry: registry, shadowMode: true });
+    const second = await runNightlyScout({ repository, now, usageEvidenceRegistry: registry, shadowMode: true });
     secondApiCallCount = Number(second.run.metrics.apiCallCount ?? -1);
     const secondItems = await repository.items();
     const secondReserve = await repository.reserveCandidates();
@@ -161,8 +188,10 @@ async function main() {
   const unsupported = first.ranked.filter((entry) => entry.candidate.useCase === "unsupported");
   const assetUnavailable = first.ranked.filter((entry) => entry.score.blockers.includes("USAGE_EVIDENCE_NOT_AVAILABLE"));
   const idempotent = ready && secondApiCallCount === 0 && firstSnapshotDigest === secondSnapshotDigest;
+  const marginalAnalysisReady = v3Marginal?.result === "TARGET_REACHED" && Boolean(selectedRegistry);
+  const reportResult = v3Marginal ? (marginalAnalysisReady ? "MARGINAL_ANALYSIS_PASS" : "MARGINAL_ANALYSIS_FAIL") : ready && idempotent ? "PASS" : "FAIL";
   const report = {
-    schemaVersion: "daily69-usage-capacity-shadow-v2",
+    schemaVersion: v3Marginal ? "daily69-usage-source-packs-shadow-v3" : "daily69-usage-capacity-shadow-v2",
     generatedAt: new Date().toISOString(),
     queueRoot: basename(root),
     taskState: { enabled: false, isPaused: true },
@@ -187,13 +216,15 @@ async function main() {
     reserveValidation,
     performance: { registryLoadMs, allocationMs: Number(first.run.metrics.allocationMs ?? 0), discoverySeconds },
     idempotency: { secondScoutExecuted: ready, secondApiCallCount, firstSnapshotDigest, secondSnapshotDigest, unchanged: idempotent },
+    v3Marginal,
+    selectedV3Registry: selectedRegistry ? { packs: selectedRegistry.packs.filter((pack) => pack.packGeneration === "v3_motion").length, packIds: v3Marginal?.selectedPackIds ?? [], pathStored: false } : null,
     writes: { ...QUEUE_SCHEDULER_FLAGS, CONTROL_COMMAND_EXECUTION: 0, VIDEO_RENDER: 0, TTS: 0, ASR: 0, WHISPERX: 0, WORKER_CHANGE: 0, SCHEDULER_CHANGE: 0 },
-    result: ready && idempotent ? "PASS" : "FAIL"
+    result: reportResult
   };
   await mkdir(join(root, "capacity"), { recursive: true });
   await writeFile(join(root, "capacity", "usage-capacity-gap.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify(report));
-  if (report.result !== "PASS") process.exitCode = 2;
+  if (report.result !== "PASS" && report.result !== "MARGINAL_ANALYSIS_PASS") process.exitCode = 2;
 }
 
 void main().catch((error: unknown) => {

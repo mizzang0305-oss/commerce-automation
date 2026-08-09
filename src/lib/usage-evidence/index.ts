@@ -4,4 +4,5 @@ export * from "./classifier";
 export * from "./contracts";
 export * from "./fingerprint";
 export * from "./registry";
+export * from "./sourcePacksV3";
 export * from "./taxonomy";

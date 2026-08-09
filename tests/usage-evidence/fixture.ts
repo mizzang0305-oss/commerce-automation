@@ -105,3 +105,78 @@ export function makeRankedProducts(count = 120): RankedLiveProduct[] {
     };
   });
 }
+
+export function withV3MotionPack(registry: UsageEvidenceRegistry, useCase: SupportedUsageEvidenceUseCase, packIndex: number, sourceIds = [`v3-source-${useCase}-a`, `v3-source-${useCase}-b`]): UsageEvidenceRegistry {
+  const definition = SUPPORTED_USAGE_EVIDENCE_USE_CASES[useCase];
+  const copy = structuredClone(registry);
+  const roles: UsageEvidenceAsset["sceneRoles"][] = [
+    ["problem", "before"],
+    ["problem"],
+    ["usage", "organization"],
+    ["usage", "hand_interaction"],
+    ["usage", "organization", "after"],
+    ["after"],
+    ["usage", "after"]
+  ];
+  const assetIds: string[] = [];
+  for (const [assetIndex, sceneRoles] of roles.entries()) {
+    const key = `v3-${useCase}-${packIndex}-${assetIndex}`;
+    const digest = createHash("sha256").update(key).digest("hex");
+    const assetId = `asset-${key}`;
+    assetIds.push(assetId);
+    copy.assets.push({
+      assetId,
+      sourceId: sourceIds[assetIndex % sourceIds.length],
+      sourceKind: "derived_clip",
+      sourceRelativeReference: `sanitized/${sourceIds[assetIndex % sourceIds.length]}.mp4`,
+      sourceSha256: createHash("sha256").update(`source-${sourceIds[assetIndex % sourceIds.length]}`).digest("hex"),
+      derivedSha256: digest,
+      derivationOperation: "ffmpeg_scene_detected_h264_motion_clip",
+      clipStartSeconds: assetIndex * 2.5,
+      clipEndSeconds: assetIndex * 2.5 + 2.2,
+      useCases: [useCase],
+      sceneRoles,
+      categoryAllowlist: [...definition.categoryAllowlist],
+      categoryBlocklist: [...definition.categoryBlocklist],
+      identityType: "generic_usage_example",
+      trustTier: "CODEX_REVIEWED_LOCAL_ONLY",
+      sourceHumanReviewStatus: "not_available",
+      derivedMachineQaStatus: "pass",
+      derivedCodexVisualReviewStatus: "pass",
+      humanOwnerReviewStatus: "not_requested",
+      noUploadAutomationEligible: true,
+      publishEligible: false,
+      visualFingerprint: digest.slice(0, 16),
+      temporalFingerprint: createHash("sha256").update(`temporal-${key}`).digest("hex"),
+      motionQa: { durationSeconds: 2.2, freezeRatio: 0.1, longestFreezeSeconds: 0.2, visualChangeRatio: 0.2, blackFrameRatio: 0, blurScore: 100, frameFill: 1, motionPresent: true, decodePassed: true, textContaminationIndicator: "clear" },
+      sourceFingerprint: createHash("sha256").update(`fingerprint-${sourceIds[assetIndex % sourceIds.length]}`).digest("hex").slice(0, 16),
+      dailyReuseLimit: 5,
+      consecutiveReuseLimit: 2,
+      createdAt: "2026-08-09T00:00:00.000Z",
+      reviewedAt: "2026-08-09T00:00:00.000Z",
+      safeReviewNotes: ["machine motion QA pass", "Codex local visual review pass"],
+      blockCodes: []
+    });
+  }
+  copy.packs.push({
+    packId: `${useCase}-v3-test-pack-${packIndex}`,
+    useCase,
+    subUseCase: useCase,
+    assetIds,
+    problemAssetIds: assetIds.slice(0, 2),
+    usageAssetIds: assetIds.slice(2, 5),
+    actionAssetIds: assetIds.slice(2, 5),
+    afterAssetIds: assetIds.slice(4, 7),
+    categoryAllowlist: [...definition.categoryAllowlist],
+    categoryBlocklist: [...definition.categoryBlocklist],
+    dailyReuseLimit: 5,
+    consecutiveReuseLimit: 2,
+    sequenceFingerprint: createHash("sha256").update(assetIds.join("|")).digest("hex").slice(0, 24),
+    noUploadAutomationEligible: true,
+    publishEligible: false,
+    packGeneration: "v3_motion",
+    trustTier: "CODEX_REVIEWED_LOCAL_ONLY",
+    primarySourceId: sourceIds[0]
+  });
+  return copy;
+}

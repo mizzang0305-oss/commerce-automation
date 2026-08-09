@@ -106,6 +106,8 @@
     "queue-control:run-once": "node --conditions=react-server --import tsx scripts/queue-control-integration/run-control-runner.ts",
     "usage-evidence:focused": "vitest run tests/usage-evidence tests/daily-69-control/nightlyScout.test.ts",
     "usage-evidence:shadow": "tsx scripts/usage-evidence/run-daily69-capacity-shadow.ts",
+    "usage-evidence:v3:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/daily-69-control/nightlyScout.test.ts",
+    "usage-evidence:v3:simulate": "tsx scripts/usage-evidence/run-v3-capacity-simulation.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
