@@ -108,6 +108,7 @@
     "usage-evidence:shadow": "tsx scripts/usage-evidence/run-daily69-capacity-shadow.ts",
     "usage-evidence:v3:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/daily-69-control/nightlyScout.test.ts",
     "usage-evidence:v3:simulate": "tsx scripts/usage-evidence/run-v3-capacity-simulation.ts",
+    "usage-evidence:v4:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/usage-evidence-v4 tests/daily-69-control",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
