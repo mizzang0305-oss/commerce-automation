@@ -6,6 +6,7 @@ async function main() {
     sourceRoot: resolve(requiredArg("--source-root")),
     operationBase: resolve(requiredArg("--operation-base")),
     expectedGitHead: requiredArg("--expected-head"),
+    assetBoundaryRoot: process.cwd(),
     now: new Date()
   });
   process.stdout.write(`${JSON.stringify({ event: "daily69_first_operation_armed", decision: result.manifest.decision, operationDate: result.manifest.operationDate, namespace: result.manifest.namespace, prevalidatedReady: 9, scheduled: 60, batches: 20, idempotent: result.idempotent, SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 })}\n`);

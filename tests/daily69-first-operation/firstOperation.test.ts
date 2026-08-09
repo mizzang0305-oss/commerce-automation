@@ -14,7 +14,7 @@ describe("first no-upload Daily69 operation", () => {
   it("carries the prevalidated nine without rerendering and schedules exactly 20 hourly groups of three", async () => {
     const fixture = await sourceFixture();
     const before = await hashFile(join(fixture.sourceRoot, "queue.json"));
-    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "a".repeat(40) });
+    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "a".repeat(40) });
     const snapshot = await firstOperationStatus(armed.operationRoot);
     expect(armed.manifest.operationDate).toBe("2026-08-11");
     expect(armed.manifest.schedule).toHaveLength(20);
@@ -26,22 +26,22 @@ describe("first no-upload Daily69 operation", () => {
     expect(carried.every((item) => item.operationCarryover?.prevalidatedCanary === true && item.status === "video_ready_autoqa")).toBe(true);
     expect(snapshot.items.slice(9).every((item) => item.attemptCount === 0 && !item.videoPath && !item.reviewPath)).toBe(true);
     expect(await hashFile(join(fixture.sourceRoot, "queue.json"))).toBe(before);
-    await expect(verifySourceBundle(fixture.sourceRoot, armed.manifest)).resolves.toMatchObject({ bundleHash: armed.manifest.sourceBundleHash });
+    await expect(verifySourceBundle(fixture.sourceRoot, armed.manifest, fixture.parent)).resolves.toMatchObject({ bundleHash: armed.manifest.sourceBundleHash });
   }, 30_000);
 
   it("is idempotent and fails closed when original evidence changes", async () => {
     const fixture = await sourceFixture();
-    const input = { sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "b".repeat(40) };
+    const input = { sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "b".repeat(40) };
     const first = await armFirstOperation(input);
     const second = await armFirstOperation(input);
     expect(second.idempotent).toBe(true);
     await writeFile(join(fixture.sourceRoot, "source-proof.json"), "{}\n");
-    await expect(verifySourceBundle(fixture.sourceRoot, first.manifest)).rejects.toThrow("SOURCE_PROOF_HASH_MISMATCH");
+    await expect(verifySourceBundle(fixture.sourceRoot, first.manifest, fixture.parent)).rejects.toThrow("SOURCE_PROOF_HASH_MISMATCH");
   });
 
   it("pauses idempotently and does not arm day two while review is pending", async () => {
     const fixture = await sourceFixture();
-    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "c".repeat(40) });
+    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "c".repeat(40) });
     const first = await closeoutFirstOperation(armed.operationRoot);
     const second = await closeoutFirstOperation(armed.operationRoot);
     expect(first).toMatchObject({ decision: "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_CLOSEOUT_PENDING", firstOperationReady: false, continuousDaily69Ready: false });
@@ -79,7 +79,7 @@ async function sourceFixture() {
   await writeFile(join(sourceRoot, "runs.json"), "[]\n");
   await writeFile(join(sourceRoot, "selected-registry.json"), "{}\n");
   await writeFile(join(sourceRoot, "final-summary.json"), `${JSON.stringify({ decision: "COUPANG_IMAGE_SKILL_USAGE_SCENES_V5_PROVEN_DAILY69_CAPACITY" })}\n`);
-  return { sourceRoot, operationBase };
+  return { parent, sourceRoot, operationBase };
 }
 
 async function hashFile(path: string) { return createHash("sha256").update(await readFile(path)).digest("hex"); }

@@ -37,21 +37,21 @@ export type FirstOperationManifest = {
   closeout?: { closedAt: string; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
 
-export async function armFirstOperation(input: { sourceRoot: string; operationBase: string; now: Date; expectedGitHead: string }) {
+export async function armFirstOperation(input: { sourceRoot: string; operationBase: string; now: Date; expectedGitHead: string; assetBoundaryRoot?: string }) {
   const operationDate = nextKstDate(input.now);
   const namespace = `operation-${operationDate}`;
   const operationRoot = resolve(input.operationBase, namespace);
   const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
   if (existing) {
     if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead) throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
-    await verifySourceBundle(input.sourceRoot, existing);
+    await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
     return { operationRoot, manifest: existing, idempotent: true };
   }
 
   const sourceRoot = resolve(input.sourceRoot);
   const source = await readSource(sourceRoot);
   assertSource(source);
-  const before = await sourceBundle(sourceRoot, source.queue);
+  const before = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
   const armedAt = input.now.toISOString();
   const schedule = scheduleGroups();
   const queue = source.queue.map((item) => cloneQueueItem(item, operationDate, armedAt, basename(sourceRoot), before.assetHashes));
@@ -89,7 +89,7 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
     copyFile(join(sourceRoot, "selected-registry.json"), join(operationRoot, "selected-registry.json"))
   ]);
 
-  const after = await sourceBundle(sourceRoot, source.queue);
+  const after = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
   if (after.bundleHash !== before.bundleHash) throw new Error("SOURCE_PROOF_MUTATED_DURING_CLONE");
   const manifest: FirstOperationManifest = {
     schemaVersion: "daily69-first-operation-v1",
@@ -117,9 +117,9 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
   return { operationRoot, manifest, idempotent: false };
 }
 
-export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest) {
+export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot = process.cwd()) {
   const source = await readSource(resolve(sourceRoot));
-  const actual = await sourceBundle(resolve(sourceRoot), source.queue);
+  const actual = await sourceBundle(resolve(sourceRoot), source.queue, assetBoundaryRoot);
   if (actual.bundleHash !== manifest.sourceBundleHash) throw new Error("SOURCE_PROOF_HASH_MISMATCH");
   return actual;
 }
@@ -267,13 +267,13 @@ function assertSource(source: Awaited<ReturnType<typeof readSource>>) {
   if (source.settings.uploadEnabled !== false || source.settings.enabled !== false || source.settings.isPaused !== true) throw new Error("FIRST_OPERATION_SOURCE_SAFETY_INVALID");
 }
 
-async function sourceBundle(root: string, queue: LocalQueueItem[]) {
+async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundaryRoot = process.cwd()) {
   const fileHashes: Record<string, string> = {};
   for (const name of SOURCE_FILES) fileHashes[name] = await hashFile(join(root, name));
   const assetHashes: Record<string, string> = {};
   for (const item of queue.filter((entry) => entry.queueRank <= 9)) {
     for (const [kind, path] of [["video", item.videoPath], ["review", item.reviewPath]] as const) {
-      if (!path || escapesRoot(root, path)) throw new Error("FIRST_OPERATION_SOURCE_ASSET_INVALID");
+      if (!path || escapesRoot(assetBoundaryRoot, path)) throw new Error("FIRST_OPERATION_SOURCE_ASSET_INVALID");
       assetHashes[`${item.slotId}:${kind}`] = await hashFile(path);
     }
   }
