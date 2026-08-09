@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { SUPPORTED_USAGE_EVIDENCE_USE_CASES, type SupportedUsageEvidenceUseCase } from "./taxonomy";
+import { GENERIC_USAGE_EVIDENCE_USE_CASES, SUPPORTED_USAGE_EVIDENCE_USE_CASES } from "./taxonomy";
 import type { UsageEvidenceAsset, UsageEvidencePack, UsageEvidenceRegistry } from "./contracts";
+import { isV5ProductBoundPackEligible, isV5SyntheticAssetEligible } from "./productBoundSyntheticV5";
 
 export async function loadUsageEvidenceRegistry(path = process.env.USAGE_EVIDENCE_REGISTRY_PATH?.trim()): Promise<UsageEvidenceRegistry> {
   if (!path) throw new Error("USAGE_EVIDENCE_REGISTRY_NOT_READY");
@@ -27,16 +28,17 @@ export function validateUsageEvidenceRegistry(value: unknown): UsageEvidenceRegi
   const assets = new Map(registry.assets.map((asset) => [asset.assetId, asset]));
   const packIds = new Set<string>();
   for (const pack of registry.packs) {
-    if (!isEligiblePack(pack, assetIds) || packIds.has(pack.packId) || !packAssetsMatch(pack, assets)) throw new Error("USAGE_PACK_QA_FAILED");
+    if (!isEligiblePack(pack, assetIds, assets) || packIds.has(pack.packId) || !packAssetsMatch(pack, assets)) throw new Error("USAGE_PACK_QA_FAILED");
     packIds.add(pack.packId);
   }
-  for (const useCase of Object.keys(SUPPORTED_USAGE_EVIDENCE_USE_CASES) as SupportedUsageEvidenceUseCase[]) {
+  for (const useCase of GENERIC_USAGE_EVIDENCE_USE_CASES) {
     if (eligiblePacksForUseCase(registry, useCase).length < 2) throw new Error("USAGE_EVIDENCE_REGISTRY_NOT_READY");
   }
   return registry;
 }
 
 export function isEligibleAsset(asset: UsageEvidenceAsset): boolean {
+  if (asset.identityType === "synthetic_product_usage_example") return isV5SyntheticAssetEligible(asset);
   const derivedVideoLineageReady = !["derived_clip", "derived_frame_pack"].includes(asset.sourceKind) || (typeof asset.clipStartSeconds === "number" && typeof asset.clipEndSeconds === "number" && asset.clipStartSeconds >= 0 && asset.clipEndSeconds >= asset.clipStartSeconds && asset.derivationOperation.startsWith("ffmpeg_"));
   const derivedClipReady = asset.sourceKind !== "derived_clip" || (
     typeof asset.temporalFingerprint === "string"
@@ -56,7 +58,10 @@ export function isEligibleAsset(asset: UsageEvidenceAsset): boolean {
   return lineageReady && derivedClipReady && reviewReady && trustReady && asset.noUploadAutomationEligible && asset.publishEligible === false && asset.identityType === "generic_usage_example" && asset.blockCodes.length === 0 && asset.dailyReuseLimit > 0 && asset.dailyReuseLimit <= 5;
 }
 
-export function isEligiblePack(pack: UsageEvidencePack, assetIds: Set<string>): boolean {
+export function isEligiblePack(pack: UsageEvidencePack, assetIds: Set<string>, assets?: Map<string, UsageEvidenceAsset>): boolean {
+  if (pack.packKind === "product_bound_synthetic_pack") {
+    return Boolean(assets && pack.assetIds.every((id) => assetIds.has(id)) && isV5ProductBoundPackEligible(pack, assets));
+  }
   const baseReady = pack.useCase in SUPPORTED_USAGE_EVIDENCE_USE_CASES && pack.noUploadAutomationEligible && pack.publishEligible === false && pack.assetIds.length >= 3 && new Set(pack.assetIds).size === pack.assetIds.length && pack.assetIds.every((id) => assetIds.has(id)) && pack.problemAssetIds.length > 0 && pack.usageAssetIds.length > 0 && pack.afterAssetIds.length > 0 && [...pack.problemAssetIds, ...pack.usageAssetIds, ...pack.actionAssetIds, ...pack.afterAssetIds].every((id) => pack.assetIds.includes(id)) && pack.dailyReuseLimit > 0 && pack.dailyReuseLimit <= 5 && pack.consecutiveReuseLimit > 0 && pack.consecutiveReuseLimit <= 2 && Boolean(pack.sequenceFingerprint);
   if (!baseReady || pack.packGeneration !== "v3_motion") return baseReady;
   return pack.assetIds.length >= 7
@@ -66,8 +71,10 @@ export function isEligiblePack(pack: UsageEvidencePack, assetIds: Set<string>): 
 }
 
 export function eligiblePacksForUseCase(registry: UsageEvidenceRegistry, useCase: string) {
-  const assetIds = new Set(registry.assets.filter(isEligibleAsset).map((asset) => asset.assetId));
-  return registry.packs.filter((pack) => pack.useCase === useCase && isEligiblePack(pack, assetIds));
+  const eligibleAssets = registry.assets.filter(isEligibleAsset);
+  const assetIds = new Set(eligibleAssets.map((asset) => asset.assetId));
+  const assets = new Map(eligibleAssets.map((asset) => [asset.assetId, asset]));
+  return registry.packs.filter((pack) => pack.useCase === useCase && isEligiblePack(pack, assetIds, assets));
 }
 
 export function usageEvidenceCapacityUnits(registry: UsageEvidenceRegistry): number {
@@ -75,6 +82,7 @@ export function usageEvidenceCapacityUnits(registry: UsageEvidenceRegistry): num
 }
 
 function packAssetsMatch(pack: UsageEvidencePack, assets: Map<string, UsageEvidenceAsset>): boolean {
+  if (pack.packKind === "product_bound_synthetic_pack") return isV5ProductBoundPackEligible(pack, assets);
   const selected = pack.assetIds.map((id) => assets.get(id));
   if (selected.some((asset) => !asset || !asset.useCases.includes(pack.useCase))) return false;
   if (pack.packGeneration === "v3_motion" && new Set(selected.map((asset) => asset?.sourceId)).size < 2) return false;

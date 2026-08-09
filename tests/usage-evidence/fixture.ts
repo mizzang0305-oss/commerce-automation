@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { RankedLiveProduct } from "@/lib/live-product-video";
-import { SUPPORTED_USAGE_EVIDENCE_USE_CASES, type SupportedUsageEvidenceUseCase, type UsageEvidenceAsset, type UsageEvidencePack, type UsageEvidenceRegistry } from "@/lib/usage-evidence";
+import { GENERIC_USAGE_EVIDENCE_USE_CASES, SUPPORTED_USAGE_EVIDENCE_USE_CASES, type SupportedUsageEvidenceUseCase, type UsageEvidenceAsset, type UsageEvidencePack, type UsageEvidenceRegistry } from "@/lib/usage-evidence";
 
-const USE_CASES = Object.keys(SUPPORTED_USAGE_EVIDENCE_USE_CASES) as SupportedUsageEvidenceUseCase[];
+const USE_CASES = [...GENERIC_USAGE_EVIDENCE_USE_CASES] as SupportedUsageEvidenceUseCase[];
 
 export function makeUsageEvidenceRegistry(input: { packsPerUseCase?: number; sourceKind?: UsageEvidenceAsset["sourceKind"]; sharedSourceId?: string; maxSameSourceVideoDaily?: number } = {}): UsageEvidenceRegistry {
   const packsPerUseCase = input.packsPerUseCase ?? 4;
@@ -84,11 +84,17 @@ export function makeUsageEvidenceRegistry(input: { packsPerUseCase?: number; sou
 export function makeRankedProducts(count = 120): RankedLiveProduct[] {
   return Array.from({ length: count }, (_, index) => {
     const useCase = USE_CASES[index % USE_CASES.length];
-    const categories = useCase.startsWith("vehicle")
-      ? ["\uC790\uB3D9\uCC28\uC6A9\uD488"]
-      : useCase.includes("laundry")
-        ? ["\uAC00\uAD6C", "\uC2A4\uD3EC\uCE20", "\uD648\uC778\uD14C\uB9AC\uC5B4"]
-        : ["\uC0DD\uD65C\uC6A9\uD488", "\uBB38\uAD6C", "\uB514\uC9C0\uD138"];
+    const categories = useCase === "home_storage"
+      ? ["홈인테리어"]
+      : useCase === "kitchen_organization"
+        ? ["주방용품"]
+        : useCase === "camping_storage"
+          ? ["스포츠/레저"]
+          : useCase.startsWith("vehicle")
+            ? ["\uC790\uB3D9\uCC28\uC6A9\uD488"]
+            : useCase.includes("laundry")
+              ? ["\uAC00\uAD6C", "\uC2A4\uD3EC\uCE20", "\uD648\uC778\uD14C\uB9AC\uC5B4"]
+              : ["\uC0DD\uD65C\uC6A9\uD488", "\uBB38\uAD6C", "\uB514\uC9C0\uD138"];
     const group = categories[index % categories.length];
     const productKey = `test-product-${index}`;
     const productName = `${index} ${useCase} product`;

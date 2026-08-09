@@ -36,7 +36,14 @@ export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; reg
   const assets = new Map(registry.assets.map((asset) => [asset.assetId, asset]));
   const useCasePacks = eligiblePacksForUseCase(registry, candidate.candidate.useCase);
   if (useCasePacks.length === 0) return { allocation: null, reason: "useCaseMismatchRejected" };
-  const compatiblePacks = useCasePacks.filter((pack) => categoryCompatible(pack, candidate.candidate.categoryPath || candidate.candidate.category));
+  const productBoundPacks = useCasePacks.filter((pack) => pack.packKind === "product_bound_synthetic_pack");
+  const exactProductBoundPacks = productBoundPacks.filter((pack) => pack.boundProductKey === candidate.candidate.productKey);
+  const genericPacks = useCasePacks.filter((pack) => pack.packKind !== "product_bound_synthetic_pack");
+  if (productBoundPacks.length > 0 && exactProductBoundPacks.length === 0 && genericPacks.length === 0) {
+    return { allocation: null, reason: "productBoundMismatchRejected" };
+  }
+  const compatiblePacks = [...exactProductBoundPacks, ...genericPacks]
+    .filter((pack) => categoryCompatible(pack, candidate.candidate.categoryPath || candidate.candidate.category));
   if (compatiblePacks.length === 0) return { allocation: null, reason: "categoryCompatibilityRejected" };
 
   const options = compatiblePacks
@@ -113,9 +120,14 @@ function resolveAssets(ids: string[], assets: Map<string, UsageEvidenceAsset>): 
 }
 
 function comparePackOptions(left: PackOption, right: PackOption, state: AllocationState): number {
-  return compareOptionPressure(left, right)
+  return productBoundPriority(left.pack) - productBoundPriority(right.pack)
+    || compareOptionPressure(left, right)
     || (state.packUses.get(left.pack.packId) ?? 0) - (state.packUses.get(right.pack.packId) ?? 0)
     || left.pack.packId.localeCompare(right.pack.packId);
+}
+
+function productBoundPriority(pack: UsageEvidencePack) {
+  return pack.packKind === "product_bound_synthetic_pack" ? 0 : 1;
 }
 
 function compareOptionPressure(left: PackOption, right: PackOption): number {

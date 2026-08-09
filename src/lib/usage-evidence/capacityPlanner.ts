@@ -10,7 +10,7 @@ export type UsageCapacityPlan = {
   allocations: UsageEvidenceAllocation[];
   diagnostics: {
     rawCount: number; normalizedCount: number; uniqueCount: number; policyEligibleCount: number; supportedUseCaseCount: number; usageAssetEligibleCount: number;
-    categoryCapacityRejected: number; familyCapacityRejected: number; assetCapacityRejected: number; sequenceCapacityRejected: number; useCaseMismatchRejected: number;
+    categoryCapacityRejected: number; familyCapacityRejected: number; assetCapacityRejected: number; sequenceCapacityRejected: number; useCaseMismatchRejected: number; productBoundMismatchRejected: number;
     activeSelected: number; reserveSelected: number; activeShortfall: number; reserveShortfall: number; allocationMs: number;
   };
 };
@@ -29,7 +29,7 @@ export function planUsageEvidenceCapacity(input: { ranked: RankedLiveProduct[]; 
   const categoryMax = Math.max(1, Math.floor(input.settings.dailyTargetCount * input.settings.maxCategoryRatio));
   const familyMax = Math.max(1, Math.floor(input.settings.dailyTargetCount * input.settings.maxProductFamilyRatio));
   const remaining = [...policyEligible];
-  let categoryCapacityRejected = 0; let familyCapacityRejected = 0; let assetCapacityRejected = 0; let sequenceCapacityRejected = 0; let useCaseMismatchRejected = 0;
+  let categoryCapacityRejected = 0; let familyCapacityRejected = 0; let assetCapacityRejected = 0; let sequenceCapacityRejected = 0; let useCaseMismatchRejected = 0; let productBoundMismatchRejected = 0;
   while (remaining.length && active.length < input.settings.dailyTargetCount) {
     const lastTwo = active.slice(-2).map((entry) => entry.candidate.useCase);
     const candidates = remaining.map((entry, index) => ({ entry, index })).filter(({ entry }) => {
@@ -44,6 +44,7 @@ export function planUsageEvidenceCapacity(input: { ranked: RankedLiveProduct[]; 
       if (result.reason === "sequenceCapacityRejected") sequenceCapacityRejected += 1;
       else if (result.reason === "categoryCompatibilityRejected") categoryCapacityRejected += 1;
       else if (result.reason === "useCaseMismatchRejected") useCaseMismatchRejected += 1;
+      else if (result.reason === "productBoundMismatchRejected") productBoundMismatchRejected += 1;
       else assetCapacityRejected += 1;
     }
     if (chosenIndex < 0 || !chosenAllocation) break;
@@ -61,6 +62,7 @@ export function planUsageEvidenceCapacity(input: { ranked: RankedLiveProduct[]; 
       if (result.reason === "sequenceCapacityRejected") sequenceCapacityRejected += 1;
       else if (result.reason === "categoryCompatibilityRejected") categoryCapacityRejected += 1;
       else if (result.reason === "useCaseMismatchRejected") useCaseMismatchRejected += 1;
+      else if (result.reason === "productBoundMismatchRejected") productBoundMismatchRejected += 1;
       else assetCapacityRejected += 1;
     }
     if (chosenIndex < 0 || !chosenAllocation) break;
@@ -74,7 +76,7 @@ export function planUsageEvidenceCapacity(input: { ranked: RankedLiveProduct[]; 
     else if ((familyCounts.get(family) ?? 0) >= familyMax) familyCapacityRejected += 1;
   }
   const supportedUseCaseCount = new Set(input.registry.packs.map((pack) => pack.useCase)).size;
-  return { active, reserve, allocations: [...allocationByKey.values()], diagnostics: { rawCount: input.rawCount ?? input.ranked.length, normalizedCount: input.normalizedCount ?? input.ranked.length, uniqueCount: unique.length, policyEligibleCount: policyEligible.length, supportedUseCaseCount, usageAssetEligibleCount: active.length + reserve.length, categoryCapacityRejected, familyCapacityRejected, assetCapacityRejected, sequenceCapacityRejected, useCaseMismatchRejected, activeSelected: active.length, reserveSelected: reserve.length, activeShortfall: Math.max(0, input.settings.dailyTargetCount - active.length), reserveShortfall: Math.max(0, input.settings.minimumReserveCount - reserve.length), allocationMs: Math.round((performance.now() - started) * 1_000) / 1_000 } };
+  return { active, reserve, allocations: [...allocationByKey.values()], diagnostics: { rawCount: input.rawCount ?? input.ranked.length, normalizedCount: input.normalizedCount ?? input.ranked.length, uniqueCount: unique.length, policyEligibleCount: policyEligible.length, supportedUseCaseCount, usageAssetEligibleCount: active.length + reserve.length, categoryCapacityRejected, familyCapacityRejected, assetCapacityRejected, sequenceCapacityRejected, useCaseMismatchRejected, productBoundMismatchRejected, activeSelected: active.length, reserveSelected: reserve.length, activeShortfall: Math.max(0, input.settings.dailyTargetCount - active.length), reserveShortfall: Math.max(0, input.settings.minimumReserveCount - reserve.length), allocationMs: Math.round((performance.now() - started) * 1_000) / 1_000 } };
 }
 
 function uniqueRanked(values: RankedLiveProduct[]) { const keys = new Set<string>(); const names = new Set<string>(); return values.filter((entry) => { const name = normalize(entry.candidate.canonicalProductName); if (keys.has(entry.candidate.productKey) || names.has(name)) return false; keys.add(entry.candidate.productKey); names.add(name); return true; }); }

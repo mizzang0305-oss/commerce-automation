@@ -20,6 +20,9 @@ node_modules
 /data/daily69-category-opportunity-v4-*/
 /data/daily69-category-selected-v4-*/
 /data/v4-category-opportunity-proof-*/
+/data/coupang-image-skill-usage-scenes-v5/
+/data/daily69-coupang-image-skill-v5-*/
+/tmp/imagegen/
 .next
 out
 coverage

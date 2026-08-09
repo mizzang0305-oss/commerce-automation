@@ -102,6 +102,9 @@ function normalize(value: string) {
 }
 
 function preferredCategoriesFor(useCase: LiveProductCandidate["useCase"]): string[] {
+  if (useCase === "home_storage") return ["홈인테리어", "가구", "수납", "정리"];
+  if (useCase === "kitchen_organization") return ["주방용품", "주방", "수납", "정리"];
+  if (useCase === "camping_storage") return ["스포츠/레저", "캠핑", "수납", "정리"];
   if (useCase.startsWith("vehicle")) return ["자동차용품", "차량", "수납"];
   if (useCase === "desk_organization" || useCase === "cable_organization") return ["수납", "정리", "문구", "디지털"];
   if (useCase === "laundry_drying" || useCase === "laundry_space_organization") return ["세탁", "건조", "캠핑", "가구"];
