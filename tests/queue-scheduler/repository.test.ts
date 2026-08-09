@@ -37,6 +37,23 @@ describe("local durable queue", () => {
     const third = await repository.claimDue({ now, runId: "r3", limit: 9, leaseMinutes: 10, pilotMax: 9 }); expect(third).toHaveLength(2);
   });
 
+  it("records Codex visual review without promoting human review or upload state", async () => {
+    const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z");
+    await repository.insertRanked({ ranked: ranked(2), queueDate: "2026-08-08", now, dueNow: true });
+    const [claimed] = await repository.claimDue({ now, runId: "review", limit: 1, leaseMinutes: 10, pilotMax: 9 });
+    await repository.complete({ id: claimed.id, videoPath: "x.mp4", reviewPath: "review.json", creativeScore: 90, videoQualityScore: 90, now });
+    expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: true }], now })).toBe(1);
+    const reviewed = (await repository.items()).find((item) => item.id === claimed.id)!;
+    expect(reviewed.status).toBe("video_ready_autoqa");
+    expect(reviewed.reviewMetadata.codexReview).toBe("pass");
+    expect(reviewed.safeMessage).toBe("CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD");
+    expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: false }], now })).toBe(1);
+    const blocked = (await repository.items()).find((item) => item.id === claimed.id)!;
+    expect(blocked.reviewMetadata.codexReview).toBe("block");
+    expect(blocked.safeMessage).toBe("CODEX_VISUAL_REVIEW_BLOCKED");
+    await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: "missing-product", passed: true }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
+  });
+
   it("recovers stale leases and enforces max two attempts", async () => {
     const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z"); await repository.insertRanked({ ranked: ranked(9), queueDate: "2026-08-08", now, dueNow: true });
     const [item] = await repository.claimDue({ now, runId: "stale", limit: 1, leaseMinutes: 1, pilotMax: 9 });

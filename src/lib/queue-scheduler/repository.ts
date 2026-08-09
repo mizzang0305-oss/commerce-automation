@@ -112,6 +112,22 @@ export class LocalQueueRepository {
 
   async markProcessing(ids: string[], now: Date): Promise<void> { await this.patch(ids, (item) => { item.status = "processing"; item.startedAt ||= now.toISOString(); }); }
   async complete(input: { id: string; videoPath: string; reviewPath: string; creativeScore: number; videoQualityScore: number; now: Date }): Promise<void> { await this.patch([input.id], (item) => { item.status = "video_ready_autoqa"; item.finishedAt = input.now.toISOString(); item.videoPath = input.videoPath; item.reviewPath = input.reviewPath; item.creativeScore = input.creativeScore; item.videoQualityScore = input.videoQualityScore; item.errorCode = ""; item.safeMessage = "MACHINE_QA_PASSED_CODEX_NOT_EXECUTED"; item.leaseOwner = ""; item.leaseExpiresAt = ""; const active = [...(item.candidateHistory ?? [])].reverse().find((entry) => entry.outcome === "active"); if (active) { active.outcome = "passed"; active.finishedAt = input.now.toISOString(); active.schedulerAttempts = item.attemptCount; } }); }
+  async recordCodexVisualReviews(input: { reviews: Array<{ productKey: string; passed: boolean }>; now: Date }): Promise<number> {
+    return this.mutate(async (items) => {
+      const reviews = new Map(input.reviews.map((review) => [review.productKey, review.passed]));
+      if (reviews.size !== input.reviews.length || reviews.size === 0) throw new Error("CODEX_VISUAL_REVIEW_INPUT_INVALID");
+      const matched = items.filter((item) => reviews.has(item.productKey));
+      if (matched.length !== reviews.size) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
+      if (matched.some((item) => item.status !== "video_ready_autoqa")) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_STATE_CONFLICT");
+      for (const item of matched) {
+        const passed = reviews.get(item.productKey) === true;
+        item.reviewMetadata.codexReview = passed ? "pass" : "block";
+        item.safeMessage = passed ? "CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD" : "CODEX_VISUAL_REVIEW_BLOCKED";
+        item.updatedAt = input.now.toISOString();
+      }
+      return { value: matched.length, items };
+    });
+  }
   async fail(input: { id: string; code: string; retryable: boolean; now: Date; settings: QueueSchedulerSettings }): Promise<"retry_wait" | "failed" | "blocked"> { let result: "retry_wait" | "failed" | "blocked" = "blocked"; await this.patch([input.id], (item) => { if (input.retryable && item.attemptCount < input.settings.maxAttempts) { result = "retry_wait"; item.status = result; item.nextAttemptAt = new Date(input.now.getTime() + input.settings.retryBackoffMinutes * 60_000).toISOString(); } else { result = input.retryable ? "failed" : "blocked"; item.status = result; item.finishedAt = input.now.toISOString(); } item.errorCode = safeCode(input.code); item.safeMessage = safeCode(input.code); item.leaseOwner = ""; item.leaseExpiresAt = ""; }); return result; }
 
   async replaceWithReserve(input: { id: string; reason: string; now: Date; expectedRevision?: number }): Promise<LocalQueueItem | null> {

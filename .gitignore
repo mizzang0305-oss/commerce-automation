@@ -22,6 +22,7 @@ node_modules
 /data/v4-category-opportunity-proof-*/
 /data/coupang-image-skill-usage-scenes-v5/
 /data/daily69-coupang-image-skill-v5-*/
+/data/control-center-canary-v6/
 /tmp/imagegen/
 .next
 out

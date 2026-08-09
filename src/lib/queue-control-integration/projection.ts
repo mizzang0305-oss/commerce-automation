@@ -49,11 +49,32 @@ export class QueueProjectionService {
     const refreshed = await this.gateway.getValues(sheetName, range);
     const columns = assertHeaders(refreshed[0] ?? [], headers, sheetName);
     const existing = new Map(refreshed.slice(1).map((row, index) => [rowValue(row, columns, keyHeader), index + 2] as const).filter(([key]) => Boolean(key)));
+    const updates: Array<{ rowNumber: number; row: SheetRow }> = [];
+    const additions: SheetRow[] = [];
     for (const row of incoming) {
       const key = incomingKey(row);
       const rowNumber = existing.get(key);
-      if (rowNumber) await this.gateway.updateValues(sheetName, `A${rowNumber}:${columnName(headers.length)}${rowNumber}`, [row]);
-      else await this.gateway.appendValues(sheetName, `A:${columnName(headers.length)}`, [row]);
+      if (rowNumber) updates.push({ rowNumber, row });
+      else additions.push(row);
+    }
+    const orderedUpdates = updates.sort((left, right) => left.rowNumber - right.rowNumber);
+    for (let index = 0; index < orderedUpdates.length;) {
+      const group = [orderedUpdates[index]];
+      index += 1;
+      while (index < orderedUpdates.length && orderedUpdates[index].rowNumber === group[group.length - 1].rowNumber + 1) {
+        group.push(orderedUpdates[index]);
+        index += 1;
+      }
+      await this.gateway.updateValues(
+        sheetName,
+        `A${group[0].rowNumber}:${columnName(headers.length)}${group[group.length - 1].rowNumber}`,
+        group.map((entry) => entry.row)
+      );
+    }
+    if (additions.length > 0) {
+      const startRow = refreshed.length + 1;
+      const endRow = startRow + additions.length - 1;
+      await this.gateway.updateValues(sheetName, `A${startRow}:${columnName(headers.length)}${endRow}`, additions);
     }
   }
 }

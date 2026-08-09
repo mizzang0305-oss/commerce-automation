@@ -17,7 +17,8 @@ async function main(): Promise<void> {
     for (const key of ["firstFrameNote", "firstThreeSecondsNote", "contactSheetNote"] as const) {
       if (typeof note[key] !== "string" || note[key].trim().length < 20 || note[key] === "looks good") throw new Error("CODEX_VISUAL_REVIEW_NOTE_TOO_GENERIC");
     }
-    const productRoot = join(runRoot, `product-${String(index + 1).padStart(3, "0")}`, "final");
+    const productBase = join(runRoot, `product-${String(index + 1).padStart(3, "0")}`);
+    const productRoot = join(productBase, "final");
     const reviewInput = JSON.parse(await readFile(join(productRoot, "review-input.json"), "utf8")) as AutomatedReviewInput;
     const visualReview: CodexVisualReview = {
       visualReviewExecuted: true,
@@ -28,6 +29,10 @@ async function main(): Promise<void> {
     };
     const review = evaluateAutomatedVideoQuality({ ...reviewInput, codexVisualReview: visualReview });
     await writeFile(join(productRoot, "automated-review.json"), `${JSON.stringify(review, null, 2)}\n`, "utf8");
+    const summaryPath = join(productBase, "summary.json");
+    const summary = JSON.parse(await readFile(summaryPath, "utf8")) as Record<string, unknown>;
+    Object.assign(summary, { status: review.finalAutomatedQaPassed ? "AUTO_QA_PASS" : "AUTO_QA_BLOCKED", visualReviewExecuted: true, finalAutomatedQaPassed: review.finalAutomatedQaPassed, humanOwnerReviewStatus: "not_requested", publishReady: false });
+    await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
     Object.assign(item, { status: review.finalAutomatedQaPassed ? "AUTO_QA_PASS" : "AUTO_QA_BLOCKED", score: review.score, visualReviewExecuted: true, finalAutomatedQaPassed: review.finalAutomatedQaPassed, blockers: review.blockers, humanOwnerReviewStatus: "not_requested", publishReady: false });
     if (review.finalAutomatedQaPassed) passed += 1;
   }

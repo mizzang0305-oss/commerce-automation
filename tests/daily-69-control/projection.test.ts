@@ -11,6 +11,21 @@ import { rankedProducts } from "./fixtures";
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
+class CountingMemorySheetsGateway extends MemorySheetsGateway {
+  updateCallCount = 0;
+  appendCallCount = 0;
+
+  override async updateValues(...args: Parameters<MemorySheetsGateway["updateValues"]>) {
+    this.updateCallCount += 1;
+    return super.updateValues(...args);
+  }
+
+  override async appendValues(...args: Parameters<MemorySheetsGateway["appendValues"]>) {
+    this.appendCallCount += 1;
+    return super.appendValues(...args);
+  }
+}
+
 describe("local queue to Sheets projection", () => {
   test("projects 69 and reserve using RAW-safe values without copying local paths back", async () => {
     const root = await mkdtemp(join(tmpdir(), "daily69-projection-")); roots.push(root);
@@ -19,7 +34,7 @@ describe("local queue to Sheets projection", () => {
     const [claimed] = await repository.claimDue({ now, runId: "projection-video", limit: 1, leaseMinutes: 10, pilotMax: 69 });
     await repository.complete({ id: claimed.id, videoPath: "C:\\private\\daily69\\output.mp4", reviewPath: "C:\\private\\daily69\\review.json", creativeScore: 90, videoQualityScore: 91, now });
     const revisionBefore = (await repository.controlState()).localRevision;
-    const gateway = new MemorySheetsGateway();
+    const gateway = new CountingMemorySheetsGateway();
     const result = await new QueueProjectionService(gateway, repository, "daily69-canary-test").project();
     const queueRows = gateway.sheets.get(SHEET_NAMES.queue)!; const headers = queueRows[0].map(String);
     const localRows = queueRows.slice(1).filter((row) => row[headers.indexOf("Namespace")] === "daily69-canary-test");
@@ -27,6 +42,12 @@ describe("local queue to Sheets projection", () => {
     expect(localRows[0][4]).toBe('=HYPERLINK("https://invalid.example","상품")');
     expect(JSON.stringify(localRows)).not.toContain("C:\\private"); expect(localRows[0][headers.indexOf("Artifact Reference ID")]).toMatch(/^artifact-/u);
     expect(result.state.projectionRevision).toBe(revisionBefore); expect((await repository.controlState()).localRevision).toBe(revisionBefore);
+    expect(gateway.appendCallCount).toBe(0);
+    expect(gateway.updateCallCount).toBeLessThanOrEqual(6);
+    gateway.appendCallCount = 0; gateway.updateCallCount = 0;
+    await new QueueProjectionService(gateway, repository, "daily69-canary-test").project();
+    expect(gateway.appendCallCount).toBe(0);
+    expect(gateway.updateCallCount).toBeLessThanOrEqual(3);
     const clientSource = await readFile("src/lib/queue-control-integration/sheetsOnlyClient.ts", "utf8");
     expect(clientSource).toContain("valueInputOption=RAW"); expect(clientSource).not.toContain("drive/v3"); expect(clientSource).not.toContain("uploadVideo");
   });
