@@ -3,16 +3,24 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { GoogleAuth } from "google-auth-library";
+import {
+  resolveGoogleServiceAccountCredential,
+  type GoogleCredentialResolverOptions
+} from "./googleServiceAccountCredential";
 import { SHEET_NAMES, SheetsControlError, type SheetRow } from "./sheetSchemas";
 
-const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
-const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 export type GoogleSheetsConfig = {
   spreadsheetId: string;
   serviceAccountEmail: string;
   privateKey: string;
   driveVideoFolderId: string;
+  credentialSource: "key_file" | "legacy";
+  keyFileOutsideRepo: boolean;
+  keyFilePermissionsChecked: boolean;
+  privateKeyParseReady: boolean;
 };
 
 export interface SheetsGateway {
@@ -22,23 +30,51 @@ export interface SheetsGateway {
   clearValues(sheetName: string, range: string): Promise<void>;
 }
 
-export function googleSheetsConfigured(env: NodeJS.ProcessEnv = process.env) {
-  return Boolean(env.GOOGLE_SHEETS_SPREADSHEET_ID && env.GOOGLE_SERVICE_ACCOUNT_EMAIL && env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
+export function buildGoogleAuthScopes(config: Pick<GoogleSheetsConfig, "driveVideoFolderId">): string[] {
+  return config.driveVideoFolderId.trim() ? [SHEETS_SCOPE, DRIVE_FILE_SCOPE] : [SHEETS_SCOPE];
 }
 
-export function googleDriveConfigured(env: NodeJS.ProcessEnv = process.env) {
-  return googleSheetsConfigured(env) && Boolean(env.GOOGLE_DRIVE_VIDEO_FOLDER_ID);
-}
-
-export function readGoogleSheetsConfig(env: NodeJS.ProcessEnv = process.env): GoogleSheetsConfig {
-  if (!googleSheetsConfigured(env)) {
-    throw new SheetsControlError("GOOGLE_SHEETS_NOT_CONFIGURED", "Google Sheets 연결이 설정되지 않았습니다.", 503);
+export function googleSheetsConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+  options: GoogleCredentialResolverOptions = {}
+) {
+  try {
+    readGoogleSheetsConfig(env, options);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+export function googleDriveConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+  options: GoogleCredentialResolverOptions = {}
+) {
+  try {
+    return Boolean(readGoogleSheetsConfig(env, options).driveVideoFolderId.trim());
+  } catch {
+    return false;
+  }
+}
+
+export function readGoogleSheetsConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  options: GoogleCredentialResolverOptions = {}
+): GoogleSheetsConfig {
+  const spreadsheetId = env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ?? "";
+  if (!spreadsheetId) {
+    throw new SheetsControlError("GOOGLE_SHEETS_SPREADSHEET_ID_MISSING", "Google Sheets spreadsheet ID 설정이 없습니다.", 503);
+  }
+  const credential = resolveGoogleServiceAccountCredential(env, options);
   return {
-    spreadsheetId: env.GOOGLE_SHEETS_SPREADSHEET_ID!.trim(),
-    serviceAccountEmail: env.GOOGLE_SERVICE_ACCOUNT_EMAIL!.trim(),
-    privateKey: env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!.replace(/\\n/g, "\n").trim(),
-    driveVideoFolderId: env.GOOGLE_DRIVE_VIDEO_FOLDER_ID?.trim() ?? ""
+    spreadsheetId,
+    serviceAccountEmail: credential.serviceAccountEmail,
+    privateKey: credential.privateKey,
+    driveVideoFolderId: env.GOOGLE_DRIVE_VIDEO_FOLDER_ID?.trim() ?? "",
+    credentialSource: credential.source,
+    keyFileOutsideRepo: credential.keyFileOutsideRepo,
+    keyFilePermissionsChecked: credential.keyFilePermissionsChecked,
+    privateKeyParseReady: credential.privateKeyParseReady
   };
 }
 
@@ -53,7 +89,7 @@ export class GoogleSheetsClient implements SheetsGateway {
   constructor(private readonly config: GoogleSheetsConfig = readGoogleSheetsConfig()) {
     this.auth = new GoogleAuth({
       credentials: { client_email: config.serviceAccountEmail, private_key: config.privateKey },
-      scopes: [SHEETS_SCOPE, DRIVE_FILE_SCOPE]
+      scopes: buildGoogleAuthScopes(config)
     });
   }
 

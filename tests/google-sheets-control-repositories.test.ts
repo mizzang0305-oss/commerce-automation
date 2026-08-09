@@ -77,7 +77,7 @@ describe("Google Sheets control repositories", () => {
   test("returns a safe not-configured error without credential values", () => {
     expect(() => readGoogleSheetsConfig({} as NodeJS.ProcessEnv)).toThrowError(SheetsControlError);
     try { readGoogleSheetsConfig({} as NodeJS.ProcessEnv); } catch (error) {
-      expect(error).toMatchObject({ code: "GOOGLE_SHEETS_NOT_CONFIGURED", status: 503 });
+      expect(error).toMatchObject({ code: "GOOGLE_SHEETS_SPREADSHEET_ID_MISSING", status: 503 });
       expect(JSON.stringify(error)).not.toContain("private_key");
     }
   });
