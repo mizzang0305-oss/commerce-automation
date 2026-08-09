@@ -121,7 +121,10 @@ export class SheetsControlError extends Error {
     public readonly code: "GOOGLE_SHEETS_NOT_CONFIGURED" | "GOOGLE_SHEETS_READ_FAILED" |
       "GOOGLE_SHEETS_WRITE_FAILED" | "GOOGLE_SHEETS_ROW_NOT_FOUND" | "GOOGLE_SHEETS_SCHEMA_MISMATCH" |
       "ROW_CHANGED_RELOAD_REQUIRED" | "COMMAND_NOT_ALLOWED" | "COMMAND_STATE_CONFLICT" | "UNSAFE_SETTING_FORBIDDEN" |
-      "SHEETS_PROJECTION_READ_ONLY" | "STALE_CONTROL_COMMAND",
+      "SHEETS_PROJECTION_READ_ONLY" | "STALE_CONTROL_COMMAND" | "GOOGLE_SHEETS_SPREADSHEET_ID_MISSING" |
+      "GOOGLE_SERVICE_ACCOUNT_KEY_FILE_MISSING" | "GOOGLE_SERVICE_ACCOUNT_KEY_FILE_INVALID" |
+      "GOOGLE_SERVICE_ACCOUNT_EMAIL_MISSING" | "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_MISSING" |
+      "GOOGLE_SERVICE_ACCOUNT_CONFIGURATION_CONFLICT",
     message: string,
     public readonly status = 500
   ) {
@@ -190,7 +193,7 @@ export function toKstDate(date = new Date()) {
 
 export function safeJson(value: unknown) {
   return JSON.stringify(value, (key, entry) => {
-    if (/private.?key|password|secret|token|service.?account/i.test(key)) return "[REDACTED]";
+    if (/private.?key|password|secret|token|service.?account|client.?email|key.?file|credential.?path/i.test(key)) return "[REDACTED]";
     if (/url$/i.test(key) && typeof entry === "string" && entry) return "[REDACTED_URL]";
     if (typeof entry !== "string") return entry;
     return entry

@@ -49,11 +49,32 @@ export class QueueProjectionService {
     const refreshed = await this.gateway.getValues(sheetName, range);
     const columns = assertHeaders(refreshed[0] ?? [], headers, sheetName);
     const existing = new Map(refreshed.slice(1).map((row, index) => [rowValue(row, columns, keyHeader), index + 2] as const).filter(([key]) => Boolean(key)));
+    const updates: Array<{ rowNumber: number; row: SheetRow }> = [];
+    const additions: SheetRow[] = [];
     for (const row of incoming) {
       const key = incomingKey(row);
       const rowNumber = existing.get(key);
-      if (rowNumber) await this.gateway.updateValues(sheetName, `A${rowNumber}:${columnName(headers.length)}${rowNumber}`, [row]);
-      else await this.gateway.appendValues(sheetName, `A:${columnName(headers.length)}`, [row]);
+      if (rowNumber) updates.push({ rowNumber, row });
+      else additions.push(row);
+    }
+    const orderedUpdates = updates.sort((left, right) => left.rowNumber - right.rowNumber);
+    for (let index = 0; index < orderedUpdates.length;) {
+      const group = [orderedUpdates[index]];
+      index += 1;
+      while (index < orderedUpdates.length && orderedUpdates[index].rowNumber === group[group.length - 1].rowNumber + 1) {
+        group.push(orderedUpdates[index]);
+        index += 1;
+      }
+      await this.gateway.updateValues(
+        sheetName,
+        `A${group[0].rowNumber}:${columnName(headers.length)}${group[group.length - 1].rowNumber}`,
+        group.map((entry) => entry.row)
+      );
+    }
+    if (additions.length > 0) {
+      const startRow = refreshed.length + 1;
+      const endRow = startRow + additions.length - 1;
+      await this.gateway.updateValues(sheetName, `A${startRow}:${columnName(headers.length)}${endRow}`, additions);
     }
   }
 }
@@ -64,7 +85,7 @@ function queueRow(item: Awaited<ReturnType<LocalQueueRepository["items"]>>[numbe
   const fallbackCount = Math.max(0, (item.candidateHistory?.length ?? 1) - 1);
   return [
     item.id, item.queueDate, item.scheduledAt, item.status, item.canonicalProductName, item.candidate.categoryPath || item.candidate.category,
-    item.candidate.priceText, "", "", `image_count:${item.candidate.productImageUrls.length}`, "", item.status === "video_ready_autoqa" ? "ready" : "pending",
+    item.candidate.priceText, "", "", `image_count:${item.candidate.productImageUrls.length}`, "", item.status === "video_ready_autoqa" ? "ready_autoqa" : item.status === "video_ready_machine_qa" ? "ready_machine_qa" : "pending",
     item.videoQualityScore ?? "", item.candidate.useCase, item.reviewMetadata.codexReview, item.videoQualityScore === null ? "pending" : item.videoQualityScore >= 80 ? "machine_pass" : "machine_block",
     "NO_UPLOAD", "", item.errorCode || item.safeMessage, item.updatedAt,
     item.slotId, item.localRevision, item.queueDate, item.queueRank, "local_queue_scheduler", projectionRevision,

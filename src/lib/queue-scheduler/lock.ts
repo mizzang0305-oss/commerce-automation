@@ -17,7 +17,11 @@ export async function acquireProcessLock(path: string, runId: string, staleMs: n
       const current = await readLock(path);
       const stale = !current || Date.now() - Date.parse(current.acquiredAt) > staleMs;
       if (!stale || attempt > 0) throw new Error("SCHEDULER_ALREADY_RUNNING");
-      await unlink(path);
+      try {
+        await unlink(path);
+      } catch (unlinkError) {
+        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") throw unlinkError;
+      }
     }
   }
   throw new Error("SCHEDULER_ALREADY_RUNNING");

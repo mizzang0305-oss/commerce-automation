@@ -3,7 +3,7 @@ import type { UsageEvidenceAllocation } from "@/lib/usage-evidence";
 
 export type LocalQueueStatus =
   | "discovered" | "scheduled" | "claimed" | "processing"
-  | "video_ready_autoqa" | "retry_wait" | "manual_review"
+  | "video_ready_machine_qa" | "video_ready_autoqa" | "retry_wait" | "manual_review"
   | "blocked" | "failed" | "hold" | "skipped";
 
 export type LocalQueueItem = {
@@ -47,6 +47,13 @@ export type LocalQueueItem = {
   errorCode: string;
   safeMessage: string;
   reviewMetadata: { codexReview: "not_executed" | "pass" | "block" };
+  operationCarryover?: {
+    prevalidatedCanary: true;
+    sourceCanaryRunId: string;
+    sourceVideoHash: string;
+    sourceReviewHash: string;
+    carriedIntoOperationDate: string;
+  };
   candidate: LiveProductCandidate;
   usageEvidenceAllocation?: UsageEvidenceAllocation;
   createdAt: string;
@@ -71,7 +78,7 @@ export type LocalRun = {
 };
 
 export type QueueSchedulerSettings = {
-  mode: "no_upload_pilot" | "no_upload_daily_69";
+  mode: "no_upload_pilot" | "no_upload_daily_69" | "no_upload_daily69_first_operation";
   dailyTargetCount: number;
   batchSize: number;
   intervalHours: number;
@@ -94,6 +101,8 @@ export type QueueSchedulerSettings = {
   maxCategoryRatio: number;
   maxProductFamilyRatio: number;
   maxExactAssetReuse: number;
+  observationMode: boolean;
+  autoPauseAfterObservation: boolean;
 };
 
 export type ReserveCandidate = RankedLiveProduct & {

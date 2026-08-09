@@ -3,7 +3,8 @@ param(
     [string]$EnvFile = "C:\Users\LOVE\MyProjects\commerce-automation\.env.local"
 )
 $ErrorActionPreference = "Stop"
-Set-Location -LiteralPath (Resolve-Path -LiteralPath $WorktreeRoot).Path
+$resolvedWorktree = (Resolve-Path -LiteralPath $WorktreeRoot).Path
+Set-Location -LiteralPath $resolvedWorktree
 if (-not (Test-Path -LiteralPath $EnvFile)) { throw "QUEUE_SCHEDULER_ENV_FILE_MISSING" }
 foreach ($line in Get-Content -LiteralPath $EnvFile -Encoding utf8) {
     if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
@@ -13,7 +14,9 @@ foreach ($line in Get-Content -LiteralPath $EnvFile -Encoding utf8) {
     if ($name -match '^[A-Z][A-Z0-9_]+$') { [Environment]::SetEnvironmentVariable($name, $value, 'Process') }
 }
 $voiceRoot = "C:\Users\LOVE\.local\commerce-automation-voice"
-$env:VIDEO_AUTOMATION_ASSET_ROOT = "C:\Users\LOVE\MyProjects\commerce-automation"
+if ([string]::IsNullOrWhiteSpace($env:VIDEO_AUTOMATION_ASSET_ROOT)) {
+    $env:VIDEO_AUTOMATION_ASSET_ROOT = $resolvedWorktree
+}
 $env:VIDEO_AUTOMATION_PYTHON = "C:\Users\LOVE\.local\minz-video-lab-whisperx\Scripts\python.exe"
 $env:VIDEO_AUTOMATION_TTS_COMMAND = Join-Path $voiceRoot "scripts\melotts_wrapper.cmd"
 $env:VIDEO_AUTOMATION_ASR_PYTHON = $env:VIDEO_AUTOMATION_PYTHON
