@@ -1,4 +1,22 @@
 export const SUPPORTED_USAGE_EVIDENCE_USE_CASES = {
+  home_storage: {
+    ruleId: "home-storage-v5", priority: 150,
+    positiveTerms: ["옷장 수납", "현관 수납", "리빙박스", "홈 수납"], negativeTerms: ["차량", "세탁", "싱크대", "주방", "캠핑", "책상", "데스크"],
+    categoryAllowlist: ["홈인테리어", "가구/홈"], categoryBlocklist: ["식품", "건강기능", "자동차"],
+    keywords: ["옷장 수납 정리", "현관 수납 정리", "리빙박스 수납 정리"]
+  },
+  kitchen_organization: {
+    ruleId: "kitchen-organization-v5", priority: 145,
+    positiveTerms: ["싱크대 정리", "주방 수납", "냉장고 정리", "팬트리 정리", "주방 정리"], negativeTerms: ["차량", "세탁", "캠핑"],
+    categoryAllowlist: ["주방"], categoryBlocklist: ["식품", "건강기능", "자동차"],
+    keywords: ["싱크대 정리함", "주방 수납 선반", "냉장고 정리 용기"]
+  },
+  camping_storage: {
+    ruleId: "camping-storage-v5", priority: 140,
+    positiveTerms: ["캠핑 수납", "캠핑 정리", "아웃도어 수납", "차박 수납"], negativeTerms: ["세탁", "싱크대", "주방"],
+    categoryAllowlist: ["스포츠/레저", "캠핑"], categoryBlocklist: ["식품", "건강기능"],
+    keywords: ["캠핑 수납 가방", "캠핑용품 정리함", "아웃도어 수납 박스"]
+  },
   vehicle_console_organization: {
     ruleId: "vehicle-console-v2", priority: 120,
     positiveTerms: ["컵홀더", "콘솔", "차량 틈새"], negativeTerms: ["세탁", "책상"],
@@ -46,6 +64,22 @@ export const SUPPORTED_USAGE_EVIDENCE_USE_CASES = {
 export type SupportedUsageEvidenceUseCase = keyof typeof SUPPORTED_USAGE_EVIDENCE_USE_CASES;
 export type UsageEvidenceUseCase = SupportedUsageEvidenceUseCase | "unsupported";
 
+export const GENERIC_USAGE_EVIDENCE_USE_CASES = Object.freeze([
+  "vehicle_console_organization",
+  "vehicle_cabin_storage",
+  "cable_organization",
+  "laundry_space_organization",
+  "vehicle_organization",
+  "desk_organization",
+  "laundry_drying"
+] as const);
+
+export const PRODUCT_BOUND_SYNTHETIC_USE_CASES = Object.freeze([
+  "home_storage",
+  "kitchen_organization",
+  "camping_storage"
+] as const);
+
 export function definitionForUseCase(useCase: UsageEvidenceUseCase) {
   return useCase === "unsupported" ? null : SUPPORTED_USAGE_EVIDENCE_USE_CASES[useCase];
 }
@@ -55,11 +89,17 @@ export function anchorsForUseCase(useCase: UsageEvidenceUseCase): string[] {
   if (!definition) return ["상품", "사용", "공간", "확인"];
   if (useCase.startsWith("vehicle")) return ["차량", "정리", "수납", "공간", ...definition.positiveTerms];
   if (useCase === "cable_organization" || useCase === "desk_organization") return ["정리", "책상", "공간", "고정", ...definition.positiveTerms];
+  if (useCase === "home_storage") return ["수납", "정리", "공간", "옷장", "현관", ...definition.positiveTerms];
+  if (useCase === "kitchen_organization") return ["주방", "수납", "정리", "선반", "싱크대", ...definition.positiveTerms];
+  if (useCase === "camping_storage") return ["캠핑", "수납", "정리", "휴대", "보관", ...definition.positiveTerms];
   return ["빨래", "건조", "공간", "접이식", ...definition.positiveTerms];
 }
 
 export function aliasForUseCase(useCase: UsageEvidenceUseCase): string {
   const aliases: Record<SupportedUsageEvidenceUseCase, string> = {
+    home_storage: "홈 수납 정리용품",
+    kitchen_organization: "주방 수납 정리용품",
+    camping_storage: "캠핑 수납 정리용품",
     vehicle_console_organization: "차량 콘솔 정리용품",
     vehicle_cabin_storage: "차량 실내 수납용품",
     cable_organization: "케이블 정리용품",

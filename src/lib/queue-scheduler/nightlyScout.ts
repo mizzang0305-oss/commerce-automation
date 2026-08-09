@@ -1,11 +1,11 @@
 import { performance } from "node:perf_hooks";
-import { buildDaily69KeywordContexts, buildLiveProductKeywordContexts, normalizeLiveProduct, rankLiveProducts, searchLiveCoupangProducts, supportsUsageEvidence, type LiveCoupangProviderResult } from "@/lib/live-product-video";
+import { buildDaily69KeywordContexts, buildLiveProductKeywordContexts, normalizeLiveProduct, rankLiveProducts, searchLiveCoupangProducts, supportsUsageEvidence, type LiveCoupangProviderResult, type LiveProductKeywordContext } from "@/lib/live-product-video";
 import { readCoupangPartnersEnv } from "@/lib/coupang/partnersAuthConfig";
 import { eligiblePacksForUseCase, loadUsageEvidenceRegistry, planUsageEvidenceCapacity, type SupportedUsageEvidenceUseCase, type UsageCapacityPlan, type UsageEvidenceRegistry } from "@/lib/usage-evidence";
 import { LocalQueueRepository, kstDate } from "./repository";
 import { QUEUE_SCHEDULER_FLAGS, type LocalRun } from "./types";
 
-export async function runNightlyScout(input: { repository?: LocalQueueRepository; now?: Date; dueNow?: boolean; search?: typeof searchLiveCoupangProducts; providerReady?: boolean; usageEvidenceRegistry?: UsageEvidenceRegistry; shadowMode?: boolean } = {}) {
+export async function runNightlyScout(input: { repository?: LocalQueueRepository; now?: Date; dueNow?: boolean; search?: typeof searchLiveCoupangProducts; providerReady?: boolean; usageEvidenceRegistry?: UsageEvidenceRegistry; shadowMode?: boolean; keywordContexts?: LiveProductKeywordContext[]; exhaustKeywordContexts?: boolean } = {}) {
   const repository = input.repository ?? new LocalQueueRepository();
   const now = input.now ?? new Date();
   const started = performance.now();
@@ -15,6 +15,7 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   if (input.shadowMode && settings.mode !== "no_upload_daily_69") throw new Error("DAILY_69_SHADOW_MODE_REQUIRED");
   if (!settings.enabled && !input.shadowMode) return recordNoop(repository, runId, startedAt, "QUEUE_SCHEDULER_DISABLED");
   if (settings.isPaused && !input.shadowMode) return recordNoop(repository, runId, startedAt, "QUEUE_SCHEDULER_PAUSED");
+  if ((input.keywordContexts || input.exhaustKeywordContexts) && !input.shadowMode) throw new Error("SHADOW_KEYWORD_OVERRIDE_REQUIRED");
   const queueDate = kstDate(now);
   const existing = (await repository.items()).filter((item) => item.queueDate === queueDate);
   if (existing.length >= settings.dailyTargetCount) return recordNoop(repository, runId, startedAt, "DAILY_QUEUE_ALREADY_FILLED", { queued: existing.length, apiCallCount: 0, reserveCount: (await repository.reserveCandidates()).length });
@@ -26,7 +27,8 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   const providerReady = input.search ? (input.providerReady ?? sharedEnvReady) : sharedEnvReady;
   if (!providerReady) throw new Error("COUPANG_PROVIDER_NOT_CONFIGURED");
   const supportedUseCases = registry ? [...new Set(registry.packs.map((pack) => pack.useCase))].filter((useCase): useCase is SupportedUsageEvidenceUseCase => eligiblePacksForUseCase(registry, useCase).length >= 2) : [];
-  const { contexts } = settings.mode === "no_upload_daily_69" ? buildDaily69KeywordContexts(now, settings.maxProviderCalls, supportedUseCases) : buildLiveProductKeywordContexts(now);
+  const { contexts: plannedContexts } = settings.mode === "no_upload_daily_69" ? buildDaily69KeywordContexts(now, settings.maxProviderCalls, supportedUseCases) : buildLiveProductKeywordContexts(now);
+  const contexts = input.keywordContexts?.length ? input.keywordContexts.slice(0, settings.maxProviderCalls) : plannedContexts;
   const providerResults: LiveCoupangProviderResult[] = [];
   const search = input.search ?? searchLiveCoupangProducts;
   let apiCallCount = 0;
@@ -46,7 +48,7 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
     if (isTerminalProviderFailure(result)) break;
     if (registry) {
       capacityPlan = planUsageEvidenceCapacity({ ranked, registry, settings, existing, rawCount: raw.length, normalizedCount: candidates.length });
-      if (capacityPlan.diagnostics.activeShortfall === 0 && capacityPlan.diagnostics.reserveShortfall === 0) break;
+      if (!input.exhaustKeywordContexts && capacityPlan.diagnostics.activeShortfall === 0 && capacityPlan.diagnostics.reserveShortfall === 0) break;
     }
   }
   if (registry) capacityPlan = planUsageEvidenceCapacity({ ranked, registry, settings, existing, rawCount: raw.length, normalizedCount: candidates.length });

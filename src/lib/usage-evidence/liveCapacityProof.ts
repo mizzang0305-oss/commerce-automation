@@ -316,12 +316,16 @@ export function validateLiveCapacityAcceptance(input: {
   const assetUses = new Map<string, number>();
   const sourceUses = new Map<string, number>();
   const assetById = new Map(input.registry.assets.map((asset) => [asset.assetId, asset]));
+  const packById = new Map(input.registry.packs.map((pack) => [pack.packId, pack]));
   for (const item of input.active) {
     increment(categoryCounts, categoryKey(item.candidate.categoryPath, item.candidate.category));
     increment(familyCounts, familyKey(item.candidate.canonicalProductName, item.candidate.categoryPath, item.candidate.category));
   }
   const allocations = [...input.active.map((item) => item.usageEvidenceAllocation), ...input.reserve.map((entry) => entry.usageEvidenceAllocation)].filter((value): value is UsageEvidenceAllocation => Boolean(value));
+  let productBoundMismatch = 0;
   for (const allocation of allocations) {
+    const pack = packById.get(allocation.packId);
+    if (pack?.packKind === "product_bound_synthetic_pack" && pack.boundProductKey !== allocation.productKey) productBoundMismatch += 1;
     increment(packUses, allocation.packId);
     for (const assetId of allocation.assetIds) increment(assetUses, assetId);
     const sources = new Set(allocation.assetIds.map((assetId) => assetById.get(assetId)?.sourceId).filter((value): value is string => Boolean(value)));
@@ -360,7 +364,8 @@ export function validateLiveCapacityAcceptance(input: {
     unsupported: input.active.filter((item) => item.candidate.useCase === "unsupported").length,
     activeAllocationCount: input.active.filter((item) => item.usageEvidenceAllocation).length,
     reserveAllocationCount: input.reserve.filter((entry) => entry.usageEvidenceAllocation).length,
-    reserveDuplicatesWithActive: [...reserveKeys].filter((key) => activeKeys.has(key)).length
+    reserveDuplicatesWithActive: [...reserveKeys].filter((key) => activeKeys.has(key)).length,
+    productBoundMismatch
   };
   return {
     ...details,
@@ -382,6 +387,7 @@ export function validateLiveCapacityAcceptance(input: {
       && details.activeAllocationCount === input.settings.dailyTargetCount
       && details.reserveAllocationCount === input.reserve.length
       && details.reserveDuplicatesWithActive === 0
+      && details.productBoundMismatch === 0
   };
 }
 
