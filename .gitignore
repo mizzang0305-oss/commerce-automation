@@ -12,6 +12,10 @@ node_modules
 /data/daily69-asset-capacity-*/
 /data/usage-evidence-source-packs-v3/
 /data/daily69-source-packs-v3-*/
+/data/daily69-v3-live-marginal-*/
+/data/daily69-v3-selected-proof-*/
+/data/v3-live-capacity-proof-*/
+/data/v3-live-capacity-offline-analysis-*/
 .next
 out
 coverage

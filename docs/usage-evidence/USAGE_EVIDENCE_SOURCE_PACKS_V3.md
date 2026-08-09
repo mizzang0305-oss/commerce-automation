@@ -68,6 +68,49 @@ Round 1은 총 12개 pack을 생성한다.
 
 12개 후보 pack과 24개 clip은 생성·검수됐지만, full live candidate snapshot 없이 final registry pack을 임의 선택하지 않는다.
 
+## Configured Live V3 Capacity Proof
+
+기존 `providerCalls=0 / BLOCKED_LIVE_PROVIDER_NOT_CONFIGURED` namespace는 수정하지 않고 보존했다. 이후 승인된 외부 local env file에서 Coupang provider whitelist만 child process에 주입하고 shared `readCoupangPartnersEnv(process.env)`와 signing request의 safe `toJSON()` 결과로 readiness를 검증했다.
+
+- provider enabled/access/secret/customer-or-partner presence: pass
+- signing preflight: pass, network call 0
+- raw credential/auth header/signature/env path stored: no
+- V3 artifact rebuild: no
+- artifact hash/manifest mismatches: 0
+- configured RUN 1 search calls: 21
+- deeplink calls: 0
+- raw/normalized/unique: 210/210/174
+- policy eligible: 122
+- baseline active/reserve/distinct: 58/14/72
+- V3 packs evaluated: 12
+- selected packs: 0
+- zero-gain packs: 12
+- predicted active/reserve/distinct: 58/14/72
+- RUN 1 result: `POSITIVE_GAIN_EXHAUSTED`
+- RUN 2: not run because RUN 1 did not reach target
+- second scout: not run
+- task provider calls including the fail-closed security repair cycle: 42/60
+- final artifact security findings: 0
+- threshold changes: 0
+
+12개 V3 pack은 allocator에서 실제 사용되어 asset-capacity rejection을 355에서 244로 줄였지만, active 또는 distinct 수를 늘리지는 못했다. `자동차용품`과 `생활용품`이 각각 unchanged category limit 24에 도달했고, 나머지 policy-eligible 후보 중 pack/category compatibility가 있는 후보가 11개 shortfall을 닫기에 부족했다. 현재 판정은 `V3_USAGE_PACKS_LIVE_MARGINAL_INSUFFICIENT`다.
+
+### Read-only provider wrapper
+
+Wrapper는 모든 경로를 mandatory runtime argument로 받고 absolute default를 저장하지 않는다. Env file에서는 Coupang provider whitelist만 Node child process에 주입하며 종료 시 context가 소멸한다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts\usage-evidence\run-v3-live-capacity-proof-no-upload.ps1 `
+  -WorktreeRoot <worktree-root> `
+  -EnvFile <approved-external-env-file> `
+  -BaselineRegistry <baseline-registry> `
+  -CandidateRegistry <candidate-registry> `
+  -OutputRoot <ignored-data-root>
+```
+
+`common-no-upload.ps1`은 사용하지 않으며 wrapper와 Node runtime 양쪽에서 scheduler/upload/writer flags를 마지막에 false/0으로 강제한다.
+
 ## 재현 명령
 
 ```powershell

@@ -25,6 +25,7 @@ export type V3MarginalEvaluation = {
   target: { active: number; reserve: number; distinct: number };
   selectedPackIds: string[];
   steps: V3MarginalPackGain[];
+  packEvaluations: Array<V3MarginalPackGain & { selected: boolean; zeroGainReason: string | null }>;
   zeroGainPackIds: string[];
   unselectedAfterTargetPackIds: string[];
   result: "TARGET_REACHED" | "POSITIVE_GAIN_EXHAUSTED";
@@ -32,9 +33,12 @@ export type V3MarginalEvaluation = {
 
 export function selectV3Registry(candidateRegistry: UsageEvidenceRegistry, selectedPackIds: string[]): UsageEvidenceRegistry {
   const selected = new Set(selectedPackIds);
+  const packs = candidateRegistry.packs.filter((pack) => pack.packGeneration !== "v3_motion" || selected.has(pack.packId));
+  const selectedAssetIds = new Set(packs.flatMap((pack) => pack.assetIds));
   return validateUsageEvidenceRegistry({
     ...candidateRegistry,
-    packs: candidateRegistry.packs.filter((pack) => pack.packGeneration !== "v3_motion" || selected.has(pack.packId))
+    assets: candidateRegistry.assets.filter((asset) => selectedAssetIds.has(asset.assetId)),
+    packs
   });
 }
 
@@ -62,6 +66,15 @@ export function evaluateV3MarginalPacks(input: {
     normalizedCount: input.normalizedCount
   });
   const baselinePlan = plan(baselineRegistry);
+  const standaloneEvaluations = candidatePacks.map((pack) => {
+    const registry = selectV3Registry(candidateRegistry, [pack.packId]);
+    const gain = marginalGain(pack.packId, pack.useCase, baselinePlan, plan(registry), baselineRegistry, registry);
+    return {
+      ...gain,
+      selected: false,
+      zeroGainReason: gain.allocatableGain > 0 ? null : "NO_INCREMENTAL_ALLOCATABLE_CANDIDATE_FOR_PACK"
+    };
+  });
   let currentPlan = baselinePlan;
   let currentRegistry = baselineRegistry;
   const selectedPackIds: string[] = [];
@@ -102,12 +115,20 @@ export function evaluateV3MarginalPacks(input: {
   }
 
   const reached = currentPlan.active.length >= input.settings.dailyTargetCount && currentPlan.reserve.length >= input.settings.minimumReserveCount;
+  const selectedGains = new Map(steps.map((step) => [step.packId, step]));
+  const packEvaluations = standaloneEvaluations.map((evaluation) => {
+    const selectedGain = selectedGains.get(evaluation.packId);
+    return selectedGain
+      ? { ...selectedGain, selected: true, zeroGainReason: null }
+      : { ...evaluation, selected: false };
+  });
   return {
     baseline: summarizePlan(baselinePlan),
     final: summarizePlan(currentPlan),
     target: { active: input.settings.dailyTargetCount, reserve: input.settings.minimumReserveCount, distinct: input.settings.dailyTargetCount + input.settings.minimumReserveCount },
     selectedPackIds,
     steps,
+    packEvaluations,
     zeroGainPackIds,
     unselectedAfterTargetPackIds,
     result: reached ? "TARGET_REACHED" : "POSITIVE_GAIN_EXHAUSTED"

@@ -54,7 +54,7 @@ async function main() {
   await repository.writeSettings({ ...DAILY_69_NO_UPLOAD_SETTINGS, enabled: false, isPaused: true });
 
   const discoveryStarted = performance.now();
-  const first = await runNightlyScout({ repository, now, providerReady: true, usageEvidenceRegistry: registry, shadowMode: true });
+  const first = await runNightlyScout({ repository, now, usageEvidenceRegistry: registry, shadowMode: true });
   const discoverySeconds = Math.round((performance.now() - discoveryStarted) / 10) / 100;
   const firstItems = await repository.items();
   const firstReserve = await repository.reserveCandidates();
@@ -167,7 +167,7 @@ async function main() {
   let secondApiCallCount: number | null = null;
   let secondSnapshotDigest: string | null = null;
   if (ready) {
-    const second = await runNightlyScout({ repository, now, providerReady: true, usageEvidenceRegistry: registry, shadowMode: true });
+    const second = await runNightlyScout({ repository, now, usageEvidenceRegistry: registry, shadowMode: true });
     secondApiCallCount = Number(second.run.metrics.apiCallCount ?? -1);
     const secondItems = await repository.items();
     const secondReserve = await repository.reserveCandidates();

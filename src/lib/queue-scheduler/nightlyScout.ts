@@ -20,7 +20,10 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   if (existing.length >= settings.dailyTargetCount) return recordNoop(repository, runId, startedAt, "DAILY_QUEUE_ALREADY_FILLED", { queued: existing.length, apiCallCount: 0, reserveCount: (await repository.reserveCandidates()).length });
   const registry = settings.mode === "no_upload_daily_69" ? (input.usageEvidenceRegistry ?? await loadUsageEvidenceRegistry()) : null;
   const readiness = readCoupangPartnersEnv(process.env).readiness;
-  const providerReady = input.providerReady ?? (readiness.provider_enabled && readiness.access_key_present && readiness.secret_key_present && readiness.customer_id_or_partner_id_present);
+  const sharedEnvReady = readiness.provider_enabled && readiness.access_key_present && readiness.secret_key_present && readiness.customer_id_or_partner_id_present;
+  // A readiness override is test-only and requires an injected search adapter.
+  // The real provider path must always use the authoritative process.env reader.
+  const providerReady = input.search ? (input.providerReady ?? sharedEnvReady) : sharedEnvReady;
   if (!providerReady) throw new Error("COUPANG_PROVIDER_NOT_CONFIGURED");
   const supportedUseCases = registry ? [...new Set(registry.packs.map((pack) => pack.useCase))].filter((useCase): useCase is SupportedUsageEvidenceUseCase => eligiblePacksForUseCase(registry, useCase).length >= 2) : [];
   const { contexts } = settings.mode === "no_upload_daily_69" ? buildDaily69KeywordContexts(now, settings.maxProviderCalls, supportedUseCases) : buildLiveProductKeywordContexts(now);
@@ -40,6 +43,7 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
     raw = providerResults.flatMap((entry) => entry.products).slice(0, settings.maxRawDiscoveries);
     candidates = raw.map(normalizeLiveProduct);
     ranked = rankLiveProducts({ candidates, keywordContexts: contexts, usageEvidenceAvailable });
+    if (isTerminalProviderFailure(result)) break;
     if (registry) {
       capacityPlan = planUsageEvidenceCapacity({ ranked, registry, settings, existing, rawCount: raw.length, normalizedCount: candidates.length });
       if (capacityPlan.diagnostics.activeShortfall === 0 && capacityPlan.diagnostics.reserveShortfall === 0) break;
@@ -50,7 +54,11 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   const capacityReady = insertion.queued.length + existing.length === settings.dailyTargetCount && insertion.reserveCount >= settings.minimumReserveCount;
   const run: LocalRun = { runId, type: "nightly_discovery", status: capacityReady ? "success" : "partial", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: insertion.queued.length, failed: 0, retried: 0, safeMessage: capacityReady ? "NIGHTLY_QUEUE_CREATED" : insertion.queued.length ? "DAILY_69_DIVERSITY_CAPACITY_INSUFFICIENT" : "NIGHTLY_NO_NEW_ITEMS", metrics: { queueDate, apiCallCount, providerQueryCount: providerResults.length, discovered: raw.length, normalized: candidates.length, eligible: ranked.filter((entry) => entry.score.eligible).length, selected: insertion.queued.length, reserveAdded: insertion.reserveAdded, reserveCount: insertion.reserveCount, requiredReserveCount: settings.minimumReserveCount, duplicateSkipped: insertion.duplicateSkipped, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...(capacityPlan?.diagnostics ?? {}), ...QUEUE_SCHEDULER_FLAGS } };
   await repository.addRun(run);
-  return { run, queued: insertion.queued, ranked, providerResults };
+  return { run, queued: insertion.queued, ranked, providerResults, rawCandidates: raw, normalizedCandidates: candidates };
 }
 
-async function recordNoop(repository: LocalQueueRepository, runId: string, startedAt: string, safeMessage: string, metrics: Record<string, number> = {}) { const run: LocalRun = { runId, type: "nightly_discovery", status: "noop", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: 0, failed: 0, retried: 0, safeMessage, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, queued: [], ranked: [], providerResults: [] }; }
+async function recordNoop(repository: LocalQueueRepository, runId: string, startedAt: string, safeMessage: string, metrics: Record<string, number> = {}) { const run: LocalRun = { runId, type: "nightly_discovery", status: "noop", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: 0, failed: 0, retried: 0, safeMessage, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, queued: [], ranked: [], providerResults: [], rawCandidates: [], normalizedCandidates: [] }; }
+
+function isTerminalProviderFailure(result: LiveCoupangProviderResult) {
+  return Boolean(result.blocker && /(HTTP_401|HTTP_403|HTTP_429|NETWORK_FAILED|RESPONSE_INVALID)$/u.test(result.blocker));
+}

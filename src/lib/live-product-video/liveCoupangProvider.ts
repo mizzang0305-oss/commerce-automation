@@ -30,7 +30,8 @@ export async function searchLiveCoupangProducts(input: {
   allowDeeplink?: boolean;
 }): Promise<LiveCoupangProviderResult> {
   const env = input.env ?? process.env;
-  const readiness = readCoupangPartnersEnv(env).readiness;
+  const resolvedEnv = readCoupangPartnersEnv(env);
+  const readiness = resolvedEnv.readiness;
   const configured = readiness.provider_enabled && readiness.access_key_present && readiness.secret_key_present && readiness.customer_id_or_partner_id_present;
   const request = buildCoupangPartnersSearchRequest({ env, keyword: input.context.keyword, limit: input.limit });
   if (!request.ok) return blocked(request.blocker, configured, 0, false, false);
@@ -59,7 +60,8 @@ export async function searchLiveCoupangProducts(input: {
   const pending = rows.slice(0, Math.max(1, Math.min(10, input.limit))).map((row) => normalizeProviderRow(row, {
     context: input.context,
     requestMarker,
-    discoveredAt
+    discoveredAt,
+    providerIdentifier: resolvedEnv.customerOrPartnerId ?? ""
   })).filter((value): value is LiveCoupangProviderProduct => Boolean(value));
   const missingAffiliate = pending.filter((product) => !product.selectedAffiliateUrl && isLikelyCoupangProductUrl(product.rawProductUrl));
   let deeplinkApiCalled = false;
@@ -73,7 +75,9 @@ export async function searchLiveCoupangProducts(input: {
     deeplinkApiCalled = deeplink.external_api_called;
     if (deeplink.external_api_called) apiCallCount += 1;
     if (deeplink.ok) {
-      for (const [index, product] of missingAffiliate.entries()) product.selectedAffiliateUrl = deeplink.affiliateUrls[index] ?? "";
+      for (const [index, product] of missingAffiliate.entries()) {
+        product.selectedAffiliateUrl = sanitizeProviderIdentifierFromUrl(deeplink.affiliateUrls[index] ?? "", resolvedEnv.customerOrPartnerId ?? "");
+      }
     }
   }
   return {
@@ -91,10 +95,10 @@ export async function searchLiveCoupangProducts(input: {
 
 function normalizeProviderRow(
   row: Record<string, unknown>,
-  input: { context: LiveProductKeywordContext; requestMarker: string; discoveredAt: string }
+  input: { context: LiveProductKeywordContext; requestMarker: string; discoveredAt: string; providerIdentifier: string }
 ): LiveCoupangProviderProduct | null {
   const rawProductName = readString(row, ["productName", "product_name", "title", "name"]);
-  const productUrl = readString(row, ["productUrl", "product_url", "landingUrl", "landing_url", "url"]);
+  const productUrl = sanitizeProviderIdentifierFromUrl(readString(row, ["productUrl", "product_url", "landingUrl", "landing_url", "url"]), input.providerIdentifier);
   const affiliate = validateAffiliateUrl(productUrl);
   const rawProductUrl = isLikelyCoupangProductUrl(productUrl)
     ? productUrl
@@ -117,6 +121,21 @@ function normalizeProviderRow(
     sourceKeyword: input.context.keyword,
     eventContext: { eventId: input.context.eventId, eventName: input.context.eventName }
   };
+}
+
+function sanitizeProviderIdentifierFromUrl(value: string, providerIdentifier: string) {
+  const trimmed = value.trim();
+  if (!trimmed || !providerIdentifier) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    for (const [key, parameter] of [...url.searchParams.entries()]) {
+      if (parameter.includes(providerIdentifier)) url.searchParams.delete(key);
+    }
+    const sanitized = url.toString();
+    return sanitized.includes(providerIdentifier) ? "" : sanitized;
+  } catch {
+    return trimmed.includes(providerIdentifier) ? "" : trimmed;
+  }
 }
 
 function extractProductRows(payload: unknown): Record<string, unknown>[] {
