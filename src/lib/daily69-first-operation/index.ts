@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
+import { buildAffiliateReadinessReport, type AffiliateReadinessReport } from "@/lib/affiliate-readiness";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { LocalQueueRepository } from "@/lib/queue-scheduler/repository";
 import type { LocalQueueItem, QueueSchedulerSettings, ReserveCandidate } from "@/lib/queue-scheduler/types";
@@ -33,6 +34,7 @@ export type FirstOperationManifest = {
   reserve: 14;
   distinct: 83;
   schedule: Array<{ hourKst: number; slots: [string, string, string] }>;
+  affiliateReadiness?: AffiliateReadinessReport;
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
   closeout?: { closedAt: string; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
@@ -50,7 +52,7 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
 
   const sourceRoot = resolve(input.sourceRoot);
   const source = await readSource(sourceRoot);
-  assertSource(source);
+  const affiliateReadiness = assertSource(source);
   const before = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
   const armedAt = input.now.toISOString();
   const schedule = scheduleGroups();
@@ -110,6 +112,7 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
     reserve: 14,
     distinct: 83,
     schedule,
+    affiliateReadiness,
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
@@ -136,6 +139,7 @@ export async function firstOperationStatus(operationRoot: string) {
   const unresolvedLeases = items.filter((item) => Boolean(item.leaseOwner || item.leaseExpiresAt)).length;
   const duplicateRenders = duplicateNonEmpty(items.map((item) => item.videoPath));
   const unionProducts = new Set([...items.map((item) => item.productKey), ...reserve.map((item) => item.candidate.productKey)]);
+  const affiliateReadiness = buildAffiliateReadinessReport(items);
   const status = {
     namespace: manifest.namespace,
     operationDate: manifest.operationDate,
@@ -155,6 +159,10 @@ export async function firstOperationStatus(operationRoot: string) {
     duplicateRenders,
     codexReviews: items.filter((item) => item.reviewMetadata.codexReview === "pass").length,
     productBindingMismatches: items.filter((item) => item.usageEvidenceAllocation?.productKey !== item.productKey).length,
+    affiliateReady: affiliateReadiness.affiliateReady,
+    affiliateMissing: affiliateReadiness.affiliateMissing,
+    affiliateInvalid: affiliateReadiness.affiliateInvalid,
+    affiliateReadyForArm: affiliateReadiness.readyForArm,
     localRevision: state.localRevision,
     projectionRevision: state.projectionRevision,
     hashPresent: Boolean(state.snapshotHash),
@@ -175,7 +183,8 @@ export async function closeoutFirstOperation(operationRoot: string) {
   const refreshed = await firstOperationStatus(root);
   const firstOperationReady = refreshed.status.total === 69 && refreshed.status.ready === 69 && refreshed.status.machineOnly === 0 && refreshed.status.reviewPending === 0
     && refreshed.status.scheduled === 0 && refreshed.status.processing === 0 && refreshed.status.retry === 0 && refreshed.status.blocked === 0 && refreshed.status.failed === 0
-    && refreshed.status.unresolvedLeases === 0 && refreshed.status.duplicateRenders === 0 && refreshed.status.productBindingMismatches === 0;
+    && refreshed.status.unresolvedLeases === 0 && refreshed.status.duplicateRenders === 0 && refreshed.status.productBindingMismatches === 0
+    && refreshed.status.affiliateReady === 69 && refreshed.status.affiliateMissing === 0 && refreshed.status.affiliateInvalid === 0;
   let continuousDaily69Ready = false;
   if (firstOperationReady) {
     continuousDaily69Ready = refreshed.status.reserve >= 14 && refreshed.status.distinct >= 83;
@@ -265,6 +274,11 @@ function assertSource(source: Awaited<ReturnType<typeof readSource>>) {
   if (new Set(source.queue.map((item) => item.id)).size !== 69 || new Set(source.queue.map((item) => item.slotId)).size !== 69 || new Set(source.queue.map((item) => item.queueRank)).size !== 69) throw new Error("FIRST_OPERATION_SOURCE_SLOT_INVALID");
   if (source.queue.some((item) => item.usageEvidenceAllocation?.productKey !== item.productKey)) throw new Error("FIRST_OPERATION_SOURCE_BINDING_INVALID");
   if (source.settings.uploadEnabled !== false || source.settings.enabled !== false || source.settings.isPaused !== true) throw new Error("FIRST_OPERATION_SOURCE_SAFETY_INVALID");
+  const affiliateReadiness = buildAffiliateReadinessReport(source.queue);
+  if (!affiliateReadiness.readyForArm || affiliateReadiness.affiliateMissing !== 0 || affiliateReadiness.affiliateInvalid !== 0) {
+    throw new Error("DAILY69_AFFILIATE_READINESS_INCOMPLETE");
+  }
+  return affiliateReadiness;
 }
 
 async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundaryRoot = process.cwd()) {

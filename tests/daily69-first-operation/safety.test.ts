@@ -23,4 +23,14 @@ describe("first operation task safety", () => {
     expect(closeout).not.toContain("Enable-ScheduledTask");
     expect(closeout).not.toContain("run-nightly-scout");
   });
+
+  it("keeps readiness preparation and arm gates outside external mutation paths", async () => {
+    const readiness = await readFile("src/lib/affiliate-readiness/index.ts", "utf8");
+    const firstOperation = await readFile("src/lib/daily69-first-operation/index.ts", "utf8");
+    const videoExecutor = await readFile("src/lib/queue-scheduler/videoExecutor.ts", "utf8");
+    expect(readiness).not.toMatch(/\b(?:fetch|spawn|execFile|Register-ScheduledTask|Enable-ScheduledTask|videos\.insert)\b/u);
+    expect(firstOperation.indexOf("const affiliateReadiness = assertSource(source)")).toBeLessThan(firstOperation.indexOf("await mkdir(resolve(input.operationBase)"));
+    expect(videoExecutor).not.toMatch(/youtubeUploadAdapter|TikTok|Threads|videos\.insert/u);
+    expect([readiness, firstOperation, videoExecutor].join("\n")).not.toContain("operation-2026-08-11");
+  });
 });

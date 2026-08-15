@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
 import { CHANNEL_KEYS, type ChannelKey } from "./channelProfiles";
 import type { V049AffiliateUrls } from "./threeChannelUploadPreflight";
 import type { V051MutationBlocker } from "./v051MutationSafetyGate";
@@ -11,8 +12,6 @@ export const V057_AFFILIATE_URL_ENV_KEYS: Record<ChannelKey, string> = {
   neoman_moleulgeol: "V051_NEOMAN_MOLEULGEOL_AFFILIATE_URL",
   lets_buy: "V051_LETS_BUY_AFFILIATE_URL"
 };
-
-const ALLOWED_COUPANG_AFFILIATE_HOSTS = new Set(["link.coupang.com"]);
 
 export type V057AffiliateUrlEvidence = {
   channel_key: ChannelKey;
@@ -81,7 +80,8 @@ export function validateV057AffiliateUrlsForExecution(input: {
     const key = V057_AFFILIATE_URL_ENV_KEYS[channelKey];
     const rawValue = safeTrim(input.affiliateUrls?.[channelKey]);
     const parsed = parseHttpsUrl(rawValue);
-    const hostAllowed = Boolean(parsed && (!strictCoupangHost || ALLOWED_COUPANG_AFFILIATE_HOSTS.has(parsed.hostname)));
+    const canonical = validateCoupangAffiliateUrl(rawValue);
+    const hostAllowed = strictCoupangHost ? canonical.affiliateReady : Boolean(parsed);
     return {
       channel_key: channelKey,
       env_key: key,
