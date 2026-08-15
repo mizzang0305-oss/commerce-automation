@@ -1,10 +1,12 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { processOneCommand, type AllowlistedAutomationExecutor } from "@/lib/commerce-control/commandRunner";
 import { createCommerceControlRepository } from "@/lib/google-sheets/commerceControlRepository";
 import { SHEET_NAMES } from "@/lib/google-sheets/sheetSchemas";
 import { MemorySheetsGateway, commandRow } from "./helpers/googleSheetsControl";
 
 describe("Google Sheets local command runner", () => {
+  beforeEach(() => { process.env.QUEUE_CONTROL_NAMESPACE = "test-active"; });
+  afterEach(() => { delete process.env.QUEUE_CONTROL_NAMESPACE; });
   test("claims one pending command, applies hold, updates command and appends a log", async () => {
     const gateway = new MemorySheetsGateway();
     gateway.sheets.get(SHEET_NAMES.commands)!.push(commandRow());

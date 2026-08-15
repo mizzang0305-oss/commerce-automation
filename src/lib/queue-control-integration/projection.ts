@@ -4,11 +4,14 @@ import type { SheetsGateway } from "@/lib/google-sheets/googleSheetsClient";
 import { COMMAND_HEADERS, QUEUE_HEADERS, SHEET_NAMES, assertHeaders, rowValue, type SheetRow } from "@/lib/google-sheets/sheetSchemas";
 import { LocalQueueRepository } from "@/lib/queue-scheduler";
 import { QUEUE_PROJECTION_EXTRA_HEADERS, RESERVE_HEADERS, RESERVE_SHEET_NAME, SYNC_HEADERS, SYNC_SHEET_NAME, type QueueProjectionSnapshot } from "./contracts";
+import { projectionIdentity } from "./projectionIdentity";
 
 const QUEUE_PROJECTION_HEADERS = [...QUEUE_HEADERS, ...QUEUE_PROJECTION_EXTRA_HEADERS] as const;
 
 export class QueueProjectionService {
-  constructor(private readonly gateway: SheetsGateway, private readonly repository: LocalQueueRepository, private readonly namespace: string) {}
+  constructor(private readonly gateway: SheetsGateway, private readonly repository: LocalQueueRepository, readonly namespace: string) {
+    projectionIdentity(namespace, "namespace-validation");
+  }
 
   async snapshot(): Promise<QueueProjectionSnapshot> {
     const [settings, items, reserve, state] = await Promise.all([
@@ -18,46 +21,101 @@ export class QueueProjectionService {
   }
 
   async project() {
+    const prepared = await this.buildProjectionPlan();
+    const unsafe = prepared.plans.find((plan) => plan.diff.unrelatedRowsWouldChange !== 0);
+    if (unsafe) throw new Error(`SHEETS_PROJECTION_UNRELATED_ROWS_WOULD_CHANGE:${unsafe.sheetName}`);
+    for (const plan of prepared.plans) await this.applyPlan(plan);
+    const state = await this.repository.recordProjection({ localRevision: prepared.localRevision, snapshotHash: prepared.snapshotHash, projectedAt: prepared.projectedAt });
+    return {
+      state,
+      queueCount: prepared.queueCount,
+      reserveCount: prepared.reserveCount,
+      snapshotHash: prepared.snapshotHash,
+      projectedAt: prepared.projectedAt,
+      diff: projectionDiff(prepared.plans),
+    };
+  }
+
+  async planProjectionDiff() {
+    const prepared = await this.buildProjectionPlan();
+    return projectionDiff(prepared.plans);
+  }
+
+  private async buildProjectionPlan() {
     const snapshot = await this.snapshot();
     const localRevision = snapshot.state.localRevision;
     const queueRows = snapshot.items.map((item) => queueRow(item, localRevision, this.namespace));
     const reserveRows = snapshot.reserve.map((item, index) => reserveRow(item, index + 1, localRevision, this.namespace));
     const snapshotHash = hashRows([queueRows, reserveRows, [[snapshot.settings.enabled, snapshot.settings.isPaused, snapshot.settings.uploadEnabled]]]);
-    await this.upsertRows(SHEET_NAMES.commands, "A1:O1000", COMMAND_HEADERS, [], "명령 ID", (row) => String(row[0] ?? ""));
-    await this.upsertRows(SHEET_NAMES.queue, "A1:AH1000", QUEUE_PROJECTION_HEADERS, queueRows, "Queue ID", (row) => String(row[0] ?? ""));
-    await this.upsertRows(RESERVE_SHEET_NAME, "A1:L1000", RESERVE_HEADERS, reserveRows, "Product Key Hash", (row) => String(row[6] ?? ""));
     const projectedAt = new Date().toISOString();
     const syncRow: SheetRow = [this.namespace, "local_queue_scheduler", localRevision, localRevision, snapshotHash, projectedAt, snapshot.items.length, snapshot.reserve.length, snapshot.settings.isPaused, snapshot.settings.enabled, false, "completed"];
-    await this.upsertRows(SYNC_SHEET_NAME, "A1:L100", SYNC_HEADERS, [syncRow], "Namespace", (row) => String(row[0] ?? ""));
-    const state = await this.repository.recordProjection({ localRevision, snapshotHash, projectedAt });
-    return { state, queueCount: queueRows.length, reserveCount: reserveRows.length, snapshotHash, projectedAt };
+    const plans = await Promise.all([
+      this.planRows(SHEET_NAMES.commands, "A1:O1000", COMMAND_HEADERS, [], (row, columns) => rowValue(row, columns, "명령 ID")),
+      this.planRows(SHEET_NAMES.queue, "A1:AH1000", QUEUE_PROJECTION_HEADERS, queueRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Queue ID"))),
+      this.planRows(RESERVE_SHEET_NAME, "A1:L1000", RESERVE_HEADERS, reserveRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Product Key Hash"))),
+      this.planRows(SYNC_SHEET_NAME, "A1:L100", SYNC_HEADERS, [syncRow], (row, columns) => rowValue(row, columns, "Namespace")),
+    ]);
+    return { plans, localRevision, snapshotHash, projectedAt, queueCount: queueRows.length, reserveCount: reserveRows.length };
   }
 
-  private async upsertRows(sheetName: string, range: string, headers: readonly string[], incoming: SheetRow[], keyHeader: string, incomingKey: (row: SheetRow) => string) {
+  private async planRows(
+    sheetName: string,
+    range: string,
+    headers: readonly string[],
+    incoming: SheetRow[],
+    identity: (row: SheetRow, columns: Map<string, number>) => string,
+  ): Promise<InternalProjectionPlan> {
     const rows = await this.gateway.getValues(sheetName, range);
-    if (rows.length === 0) {
-      await this.gateway.updateValues(sheetName, `A1:${columnName(headers.length)}1`, [[...headers]]);
-    } else {
-      const current = rows[0] ?? [];
-      const missing = headers.filter((header) => !current.map(String).includes(header));
-      if (missing.length > 0) {
-        const next = [...current];
-        for (const header of missing) next.push(header);
-        await this.gateway.updateValues(sheetName, `A1:${columnName(next.length)}1`, [next]);
-      }
+    const currentHeaders = rows[0] ?? [];
+    const missing = headers.filter((header) => !currentHeaders.map(String).includes(header));
+    const plannedHeaders = rows.length === 0 ? [...headers] : [...currentHeaders, ...missing];
+    const columns = assertHeaders(plannedHeaders, headers, sheetName);
+    const canonicalHeaders = new Set<string>(headers);
+    const existing = new Map<string, number[]>();
+    for (const [index, row] of rows.slice(1).entries()) {
+      let key = "";
+      try { key = identity(row, columns); } catch { key = ""; }
+      if (key) existing.set(key, [...(existing.get(key) ?? []), index + 2]);
     }
-    const refreshed = await this.gateway.getValues(sheetName, range);
-    const columns = assertHeaders(refreshed[0] ?? [], headers, sheetName);
-    const existing = new Map(refreshed.slice(1).map((row, index) => [rowValue(row, columns, keyHeader), index + 2] as const).filter(([key]) => Boolean(key)));
+    const incomingKeys = new Set<string>();
     const updates: Array<{ rowNumber: number; row: SheetRow }> = [];
     const additions: SheetRow[] = [];
-    for (const row of incoming) {
-      const key = incomingKey(row);
-      const rowNumber = existing.get(key);
-      if (rowNumber) updates.push({ rowNumber, row });
-      else additions.push(row);
+    for (const incomingRow of incoming) {
+      const aligned = plannedHeaders.map((header) => incomingRow[headers.indexOf(String(header))] ?? "");
+      const key = identity(aligned, columns);
+      if (incomingKeys.has(key)) throw new Error(`SHEETS_PROJECTION_INCOMING_IDENTITY_DUPLICATE:${sheetName}`);
+      incomingKeys.add(key);
+      const rowNumbers = existing.get(key) ?? [];
+      if (rowNumbers.length > 1) throw new Error(`SHEETS_PROJECTION_EXISTING_IDENTITY_DUPLICATE:${sheetName}`);
+      if (rowNumbers[0]) {
+        const current = rows[rowNumbers[0] - 1] ?? [];
+        const row = plannedHeaders.map((header, index) => canonicalHeaders.has(String(header)) ? aligned[index] : current[index] ?? "");
+        updates.push({ rowNumber: rowNumbers[0], row });
+      } else additions.push(aligned);
     }
-    const orderedUpdates = updates.sort((left, right) => left.rowNumber - right.rowNumber);
+    const unrelatedRows = rows.slice(1).filter((row) => {
+      try { return !incomingKeys.has(identity(row, columns)); } catch { return true; }
+    }).length;
+    return {
+      sheetName,
+      range,
+      headers: plannedHeaders,
+      sourceRowsHash: hashRows(rows),
+      headerWriteRequired: rows.length === 0 || missing.length > 0,
+      sourceRowCount: rows.length,
+      updates,
+      additions,
+      diff: { rowsToUpdate: updates.length, rowsToAppend: additions.length, rowsUnrelated: unrelatedRows, unrelatedRowsWouldChange: 0 },
+    };
+  }
+
+  private async applyPlan(plan: InternalProjectionPlan) {
+    const current = await this.gateway.getValues(plan.sheetName, plan.range);
+    if (hashRows(current) !== plan.sourceRowsHash) throw new Error(`SHEETS_PROJECTION_PLAN_STALE:${plan.sheetName}`);
+    if (plan.headerWriteRequired) {
+      await this.gateway.updateValues(plan.sheetName, `A1:${columnName(plan.headers.length)}1`, [plan.headers]);
+    }
+    const orderedUpdates = plan.updates.sort((left, right) => left.rowNumber - right.rowNumber);
     for (let index = 0; index < orderedUpdates.length;) {
       const group = [orderedUpdates[index]];
       index += 1;
@@ -66,17 +124,40 @@ export class QueueProjectionService {
         index += 1;
       }
       await this.gateway.updateValues(
-        sheetName,
-        `A${group[0].rowNumber}:${columnName(headers.length)}${group[group.length - 1].rowNumber}`,
+        plan.sheetName,
+        `A${group[0].rowNumber}:${columnName(plan.headers.length)}${group[group.length - 1].rowNumber}`,
         group.map((entry) => entry.row)
       );
     }
-    if (additions.length > 0) {
-      const startRow = refreshed.length + 1;
-      const endRow = startRow + additions.length - 1;
-      await this.gateway.updateValues(sheetName, `A${startRow}:${columnName(headers.length)}${endRow}`, additions);
+    if (plan.additions.length > 0) {
+      const startRow = Math.max(plan.sourceRowCount, 1) + 1;
+      const endRow = startRow + plan.additions.length - 1;
+      await this.gateway.updateValues(plan.sheetName, `A${startRow}:${columnName(plan.headers.length)}${endRow}`, plan.additions);
     }
   }
+}
+
+type InternalProjectionPlan = {
+  sheetName: string;
+  range: string;
+  headers: SheetRow;
+  sourceRowsHash: string;
+  headerWriteRequired: boolean;
+  sourceRowCount: number;
+  updates: Array<{ rowNumber: number; row: SheetRow }>;
+  additions: SheetRow[];
+  diff: ProjectionSheetDiff;
+};
+
+export type ProjectionSheetDiff = {
+  rowsToUpdate: number;
+  rowsToAppend: number;
+  rowsUnrelated: number;
+  unrelatedRowsWouldChange: 0;
+};
+
+function projectionDiff(plans: readonly InternalProjectionPlan[]) {
+  return Object.fromEntries(plans.map((plan) => [plan.sheetName, plan.diff])) as Record<string, ProjectionSheetDiff>;
 }
 
 function queueRow(item: Awaited<ReturnType<LocalQueueRepository["items"]>>[number], projectionRevision: number, namespace: string): SheetRow {

@@ -40,20 +40,21 @@ export class SheetsQueueRepository {
     return { rows, columns };
   }
 
-  async list() {
+  async list(namespace?: string) {
     const { rows, columns } = await this.readRows();
     return rows.slice(1)
       .map((row) => parseQueueRow(row, columns))
-      .filter((item) => item.queueId && !isExampleQueueId(item.queueId));
+      .filter((item) => item.queueId && !isExampleQueueId(item.queueId))
+      .filter((item) => !namespace || item.namespace === namespace);
   }
 
-  async find(queueId: string) {
-    return (await this.list()).find((item) => item.queueId === queueId) ?? null;
+  async find(queueId: string, namespace?: string) {
+    return (await this.list(namespace)).find((item) => item.queueId === queueId) ?? null;
   }
 
-  async update(queueId: string, patch: QueuePatch, expectedLastModified: string) {
+  async update(queueId: string, patch: QueuePatch, expectedLastModified: string, namespace?: string) {
     const { rows, columns } = await this.readRows();
-    const rowOffset = rows.slice(1).findIndex((row) => rowValue(row, columns, "Queue ID") === queueId);
+    const rowOffset = rows.slice(1).findIndex((row) => rowValue(row, columns, "Queue ID") === queueId && (!namespace || rowValue(row, columns, "Namespace") === namespace));
     if (rowOffset < 0) throw new SheetsControlError("GOOGLE_SHEETS_ROW_NOT_FOUND", "상품을 찾을 수 없습니다.", 404);
     const rowNumber = rowOffset + 2;
     const row = [...rows[rowOffset + 1]];
@@ -73,13 +74,20 @@ export class SheetsQueueRepository {
   }
 
   async append(item: SheetQueueItem) {
-    const row: SheetRow = [
+    if (!item.namespace) throw new SheetsControlError("QUEUE_NAMESPACE_REQUIRED", "현재 operation Namespace가 필요합니다.", 400);
+    const { rows, columns } = await this.readRows();
+    const namespaceColumn = columns.get("Namespace");
+    if (namespaceColumn === undefined) throw new SheetsControlError("SHEETS_QUEUE_NAMESPACE_HEADER_REQUIRED", "상품큐 Namespace 열이 필요합니다.", 503);
+    const base: SheetRow = [
       item.queueId, item.registeredDate, item.slot, item.progressStatus, item.productName, item.category, item.price,
       item.rawCoupangUrl, item.affiliateUrl, item.imageOrUsageScene, item.videoUrl, item.voiceStatus,
       item.asrScore ?? "", item.usageSceneConfirmed, item.humanReview, item.qualityDecision, item.uploadStatus,
       item.youtubeUrl, item.errorMemo, item.lastModified || toKstTimestamp()
     ];
-    await this.gateway.appendValues(SHEET_NAMES.queue, "A:T", [row]);
+    const row: SheetRow = Array.from({ length: Math.max(rows[0]?.length ?? 0, namespaceColumn + 1) }, () => "");
+    QUEUE_HEADERS.forEach((header, index) => { row[columns.get(header)!] = base[index]; });
+    row[namespaceColumn] = item.namespace;
+    await this.gateway.appendValues(SHEET_NAMES.queue, "A:AH", [row]);
     return item;
   }
 }

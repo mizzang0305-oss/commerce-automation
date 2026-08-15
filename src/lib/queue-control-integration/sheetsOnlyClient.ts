@@ -29,8 +29,8 @@ export class NoUploadGoogleSheetsClient implements SheetsGateway {
   }
 
   async metadata() {
-    return this.request<{ sheets?: Array<{ properties?: { title?: string; sheetId?: number; rowCount?: number; columnCount?: number } }> }>(
-      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))`,
+    return this.request<{ sheets?: Array<{ properties?: { title?: string; sheetId?: number; gridProperties?: { rowCount?: number; columnCount?: number; frozenRowCount?: number } } }> }>(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount,frozenRowCount))`,
       { method: "GET" }, false
     );
   }

@@ -10,9 +10,10 @@ export async function GET(request: Request, context: { params: Promise<{ queueId
   try {
     const { queueId } = await context.params;
     const repository = getCommerceControlRepository();
-    const item = await repository.queue.find(queueId);
+    const namespace = await repository.activeNamespace();
+    const item = await repository.queue.find(queueId, namespace);
     if (!item) return NextResponse.json({ ok: false, code: "GOOGLE_SHEETS_ROW_NOT_FOUND", message: "상품을 찾을 수 없습니다." }, { status: 404 });
-    const [commands, logs] = await Promise.all([repository.commands.list(), repository.logs.list()]);
+    const [commands, logs] = await Promise.all([repository.commands.list(namespace), repository.logs.list()]);
     return NextResponse.json({ ok: true, item, commands: commands.filter((entry) => entry.queueId === queueId), logs: logs.filter((entry) => entry.queueId === queueId) });
   } catch (error) { return safeApiError(error); }
 }
@@ -28,7 +29,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ queue
     if (typeof body.expectedLastModified !== "string") {
       return NextResponse.json({ ok: false, code: "EXPECTED_LAST_MODIFIED_REQUIRED", message: "최종수정 값이 필요합니다." }, { status: 400 });
     }
-    const item = await getCommerceControlRepository().queue.update(queueId, patch, body.expectedLastModified);
+    const repository = getCommerceControlRepository();
+    const namespace = await repository.activeNamespace();
+    const item = await repository.queue.update(queueId, patch, body.expectedLastModified, namespace);
     return NextResponse.json({ ok: true, item });
   } catch (error) { return safeApiError(error); }
 }

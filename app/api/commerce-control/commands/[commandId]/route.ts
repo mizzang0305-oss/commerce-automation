@@ -10,7 +10,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ comma
     if (body.action !== "retry" && body.action !== "cancel") {
       return NextResponse.json({ ok: false, code: "COMMAND_ACTION_INVALID", message: "cancel 또는 retry만 허용됩니다." }, { status: 400 });
     }
-    const command = body.action === "retry" ? await getCommerceControlRepository().commands.retryOnce(commandId) : await getCommerceControlRepository().commands.cancel(commandId);
+    const repository = getCommerceControlRepository();
+    const namespace = await repository.activeNamespace();
+    const command = body.action === "retry" ? await repository.commands.retryOnce(commandId, namespace) : await repository.commands.cancel(commandId, namespace);
     return NextResponse.json({ ok: true, command });
   } catch (error) { return safeApiError(error); }
 }

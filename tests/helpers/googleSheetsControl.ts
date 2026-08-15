@@ -10,9 +10,9 @@ export class MemorySheetsGateway implements SheetsGateway {
 
   constructor() {
     this.sheets.set(SHEET_NAMES.queue, [
-      [...QUEUE_HEADERS],
-      ["예시-001", "2026-08-01", "07:30", "신규", "예시 상품", "생활", "", "", "", "", "", "대기", "0", "미확인", "미검토", "검토필요", "대기", "", "example", "2026-08-01 09:13:00"],
-      ["queue-001", "2026-08-01", "12:20", "검토대기", "테스트 상품", "생활", "12900", "https://example.invalid/raw", "https://example.invalid/affiliate", "usage", "https://drive.google.com/file/d/synthetic/preview", "완료", "0.91", "확인", "미검토", "검토필요", "대기", "", "", "2026-08-01 10:00:00"]
+      [...QUEUE_HEADERS, "Namespace"],
+      ["예시-001", "2026-08-01", "07:30", "신규", "예시 상품", "생활", "", "", "", "", "", "대기", "0", "미확인", "미검토", "검토필요", "대기", "", "example", "2026-08-01 09:13:00", "legacy-example"],
+      ["queue-001", "2026-08-01", "12:20", "검토대기", "테스트 상품", "생활", "12900", "https://example.invalid/raw", "https://example.invalid/affiliate", "usage", "https://drive.google.com/file/d/synthetic/preview", "완료", "0.91", "확인", "미검토", "검토필요", "대기", "", "", "2026-08-01 10:00:00", "test-active"]
     ]);
     this.sheets.set(SHEET_NAMES.commands, [[...COMMAND_HEADERS]]);
     this.sheets.set(SHEET_NAMES.logs, [[...LOG_HEADERS]]);
@@ -56,7 +56,7 @@ export function freshQueueLastModified(gateway: MemorySheetsGateway) {
 }
 
 export function commandRow(input: Partial<Record<number, string | number>> = {}): SheetRow {
-  const row: SheetRow = ["command-001", "queue-001", "보류", "", "web-owner", toKstTimestamp(), "대기", "", "", "", 0, "request-001"];
+  const row: SheetRow = ["command-001", "queue-001", "보류", "", "web-owner", toKstTimestamp(), "대기", "", "", "", 0, "request-001", "", "", "test-active"];
   for (const [key, value] of Object.entries(input)) row[Number(key)] = value;
   return row;
 }

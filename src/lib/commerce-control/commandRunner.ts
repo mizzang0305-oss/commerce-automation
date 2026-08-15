@@ -54,10 +54,12 @@ export async function processOneCommand(input: {
   runnerId: string;
   executor?: AllowlistedAutomationExecutor;
 }) {
-  const command = await input.repository.commands.claimOldest(input.runnerId);
+  const namespace = await input.repository.activeNamespace();
+  const command = await input.repository.commands.claimOldest(input.runnerId, namespace);
   if (!command) return { processed: false as const };
+  if (!command.namespace || command.namespace !== namespace) throw new Error("COMMAND_NAMESPACE_MISMATCH");
   const startedAt = toKstTimestamp();
-  const queueBefore = command.queueId ? await input.repository.queue.find(command.queueId) : null;
+  const queueBefore = command.queueId ? await input.repository.queue.find(command.queueId, namespace) : null;
   let result: AutomationExecutionResult;
 
   try {
@@ -76,13 +78,13 @@ export async function processOneCommand(input: {
         patch.youtubeUrl = request.youtubeUrl;
         patch.uploadStatus = "완료";
       }
-      await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified);
+      await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified, namespace);
       result = { status: "완료", safeMessage: `${command.command}_APPLIED`, externalCall: false };
     } else if (command.command === "메타데이터수정") {
       if (!queueBefore) throw new Error("QUEUE_NOT_FOUND");
       const patch = allowedQueuePatch(parseRequestObject(command.requestValue));
       if (Object.keys(patch).length > 0) {
-        await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified);
+        await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified, namespace);
         result = { status: "완료", safeMessage: "메타데이터수정_APPLIED", externalCall: false };
       } else {
         result = await (input.executor ?? new DisabledAutomationExecutor()).execute(command);
@@ -91,7 +93,7 @@ export async function processOneCommand(input: {
       result = await (input.executor ?? new DisabledAutomationExecutor()).execute(command);
       if (result.queuePatch && queueBefore) {
         const patch = allowedQueuePatch(result.queuePatch);
-        if (Object.keys(patch).length > 0) await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified);
+        if (Object.keys(patch).length > 0) await input.repository.queue.update(command.queueId, patch, queueBefore.lastModified, namespace);
       }
     }
   } catch (error) {
@@ -99,7 +101,7 @@ export async function processOneCommand(input: {
   }
 
   const completedAt = toKstTimestamp();
-  const queueAfter = command.queueId ? await input.repository.queue.find(command.queueId) : null;
+  const queueAfter = command.queueId ? await input.repository.queue.find(command.queueId, namespace) : null;
   await input.repository.logs.append({
     commandId: command.commandId, queueId: command.queueId, command: command.command, status: result.status,
     safeMessage: result.safeMessage, before: safeJson(queueBefore), after: safeJson(queueAfter), startedAt, completedAt,

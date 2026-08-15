@@ -105,6 +105,7 @@
     "queue-control:project": "node --conditions=react-server --import tsx scripts/queue-control-integration/project.ts",
     "queue-control:run-once": "node --conditions=react-server --import tsx scripts/queue-control-integration/run-control-runner.ts",
     "daily69:first-day:arm": "tsx scripts/daily69-first-operation/arm.ts",
+    "daily69:first-day:arm-status": "tsx scripts/daily69-first-operation/arm-status.ts",
     "daily69:first-day:preflight": "node --conditions=react-server --import tsx scripts/daily69-first-operation/preflight.ts",
     "daily69:first-day:status": "tsx scripts/daily69-first-operation/status.ts",
     "daily69:first-day:closeout": "tsx scripts/daily69-first-operation/closeout.ts",

@@ -7,7 +7,7 @@ import { SheetsQueueRepository } from "./sheetsQueueRepository";
 import { SheetsSettingsRepository } from "./sheetsSettingsRepository";
 import { assertHeaders, rowValue, toKstDate } from "./sheetSchemas";
 import { MockCommerceControlGateway } from "./mockCommerceControlGateway";
-import { RESERVE_HEADERS, RESERVE_SHEET_NAME, SYNC_SHEET_NAME } from "@/lib/queue-control-integration/contracts";
+import { RESERVE_HEADERS, RESERVE_SHEET_NAME, SYNC_HEADERS, SYNC_SHEET_NAME } from "@/lib/queue-control-integration/contracts";
 
 export class CommerceControlRepository {
   readonly queue: SheetsQueueRepository;
@@ -23,7 +23,12 @@ export class CommerceControlRepository {
   }
 
   async dashboard() {
-    const [items, commands, logs, integration] = await Promise.all([this.queue.list(), this.commands.list(), this.logs.list(), this.integrationDashboard()]);
+    const integration = await this.integrationDashboard();
+    const [items, commands, logs] = await Promise.all([
+      integration.namespace ? this.queue.list(integration.namespace) : Promise.resolve([]),
+      integration.namespace ? this.commands.list(integration.namespace) : Promise.resolve([]),
+      this.logs.list(),
+    ]);
     const today = toKstDate();
     return {
       counts: {
@@ -41,10 +46,25 @@ export class CommerceControlRepository {
     };
   }
 
-  async queueControlReserve() {
+  async activeNamespace() {
+    const configured = process.env.QUEUE_CONTROL_NAMESPACE?.trim() ?? "";
+    if (configured) {
+      if (!/^[A-Za-z0-9_-]{1,96}$/u.test(configured)) throw new Error("QUEUE_CONTROL_NAMESPACE_INVALID");
+      return configured;
+    }
+    const rows = await this.gateway.getValues(SYNC_SHEET_NAME, "A1:L100");
+    const columns = assertHeaders(rows[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
+    const completed = rows.slice(1).filter((row) => rowValue(row, columns, "Projection Status") === "completed" && rowValue(row, columns, "Namespace"));
+    if (completed.length === 0) throw new Error("ACTIVE_OPERATION_NAMESPACE_NOT_FOUND");
+    return rowValue(completed[completed.length - 1], columns, "Namespace");
+  }
+
+  async queueControlReserve(namespace?: string) {
+    const activeNamespace = namespace ?? await this.activeNamespace();
+    if (!activeNamespace) throw new Error("ACTIVE_OPERATION_NAMESPACE_NOT_FOUND");
     const rows = await this.gateway.getValues(RESERVE_SHEET_NAME, "A1:L1000");
     const columns = assertHeaders(rows[0] ?? [], RESERVE_HEADERS, RESERVE_SHEET_NAME);
-    return rows.slice(1).filter((row) => rowValue(row, columns, "Product Key Hash")).map((row) => ({
+    return rows.slice(1).filter((row) => rowValue(row, columns, "Product Key Hash") && (!activeNamespace || rowValue(row, columns, "Namespace") === activeNamespace)).map((row) => ({
       queueDate: rowValue(row, columns, "Queue Date"), rank: Number(rowValue(row, columns, "Reserve Rank") || 0),
       productName: rowValue(row, columns, "Product Name"), useCase: rowValue(row, columns, "Use Case"), category: rowValue(row, columns, "Category"),
       score: Number(rowValue(row, columns, "Score") || 0), productKeyHash: rowValue(row, columns, "Product Key Hash"),
@@ -55,9 +75,10 @@ export class CommerceControlRepository {
   private async integrationDashboard() {
     try {
       const [reserveRows, syncRows] = await Promise.all([this.gateway.getValues(RESERVE_SHEET_NAME, "A1:L1000"), this.gateway.getValues(SYNC_SHEET_NAME, "A1:L100")]);
-      const sync = syncRows.length > 1 ? syncRows[syncRows.length - 1] : [];
-      const namespace = String(sync?.[0] ?? "");
-      const projected = (await this.queue.list()).filter((item) => item.projectionSource === "local_queue_scheduler" && (!namespace || item.namespace === namespace));
+      const namespace = await this.activeNamespace();
+      const syncColumns = assertHeaders(syncRows[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
+      const sync = [...syncRows.slice(1)].reverse().find((row) => rowValue(row, syncColumns, "Namespace") === namespace) ?? [];
+      const projected = namespace ? (await this.queue.list(namespace)).filter((item) => item.projectionSource === "local_queue_scheduler") : [];
       const statusCount = (status: string) => projected.filter((item) => item.progressStatus === status).length;
       return {
         namespace, activeCount: projected.length, reserveCount: reserveRows.slice(1).filter((row) => !namespace || String(row[11] ?? "") === namespace).length,
