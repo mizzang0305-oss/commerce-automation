@@ -7,5 +7,6 @@ export * from "./engine";
 export * from "./localStore";
 export * from "./providers";
 export * from "./source";
+export * from "./sourcePolicy";
 export * from "./syntheticFixtures";
 export * from "./types";

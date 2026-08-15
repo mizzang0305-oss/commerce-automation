@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "youtube-owner-observation-packets-v2",
+  "decision": "OWNER_OBSERVATION_REQUIRED",
+  "confidenceScope": "BOUNDED_EXTERNAL_OBSERVATION",
+  "automatedTranscriptRecoveryAllowed": false,
+  "rawMediaReuseAllowed": false,
+  "packets": [
+    {
+      "videoId": "o5pWTuI-qvc",
+      "sourceUrl": "https://www.youtube.com/watch?v=o5pWTuI-qvc",
+      "sourceMode": "owner_provided_external_evidence",
+      "status": "OWNER_OBSERVATION_REQUIRED",
+      "observation": {
+        "observedBy": "owner",
+        "observedAt": "",
+        "hookFamily": "",
+        "hookParaphrase": "",
+        "hookStartSeconds": null,
+        "structure": [],
+        "ctaObserved": null,
+        "ctaStartSeconds": null,
+        "visualPatterns": [],
+        "topicTags": [],
+        "notes": "",
+        "rawMediaReuseAllowed": false
+      }
+    },
+    {
+      "videoId": "NB07HjOa1nc",
+      "sourceUrl": "https://www.youtube.com/watch?v=NB07HjOa1nc",
+      "sourceMode": "owner_provided_external_evidence",
+      "status": "OWNER_OBSERVATION_REQUIRED",
+      "observation": {
+        "observedBy": "owner",
+        "observedAt": "",
+        "hookFamily": "",
+        "hookParaphrase": "",
+        "hookStartSeconds": null,
+        "structure": [],
+        "ctaObserved": null,
+        "ctaStartSeconds": null,
+        "visualPatterns": [],
+        "topicTags": [],
+        "notes": "",
+        "rawMediaReuseAllowed": false
+      }
+    },
+    {
+      "videoId": "SK3acCvnq1c",
+      "sourceUrl": "https://www.youtube.com/watch?v=SK3acCvnq1c",
+      "sourceMode": "owner_provided_external_evidence",
+      "status": "OWNER_OBSERVATION_REQUIRED",
+      "observation": {
+        "observedBy": "owner",
+        "observedAt": "",
+        "hookFamily": "",
+        "hookParaphrase": "",
+        "hookStartSeconds": null,
+        "structure": [],
+        "ctaObserved": null,
+        "ctaStartSeconds": null,
+        "visualPatterns": [],
+        "topicTags": [],
+        "notes": "",
+        "rawMediaReuseAllowed": false
+      }
+    },
+    {
+      "videoId": "TnrWoaTbhD8",
+      "sourceUrl": "https://www.youtube.com/watch?v=TnrWoaTbhD8",
+      "sourceMode": "owner_provided_external_evidence",
+      "status": "OWNER_OBSERVATION_REQUIRED",
+      "observation": {
+        "observedBy": "owner",
+        "observedAt": "",
+        "hookFamily": "",
+        "hookParaphrase": "",
+        "hookStartSeconds": null,
+        "structure": [],
+        "ctaObserved": null,
+        "ctaStartSeconds": null,
+        "visualPatterns": [],
+        "topicTags": [],
+        "notes": "",
+        "rawMediaReuseAllowed": false
+      }
+    },
+    {
+      "videoId": "tDa7j2Ll8YM",
+      "sourceUrl": "https://www.youtube.com/watch?v=tDa7j2Ll8YM",
+      "sourceMode": "owner_provided_external_evidence",
+      "status": "OWNER_OBSERVATION_REQUIRED",
+      "observation": {
+        "observedBy": "owner",
+        "observedAt": "",
+        "hookFamily": "",
+        "hookParaphrase": "",
+        "hookStartSeconds": null,
+        "structure": [],
+        "ctaObserved": null,
+        "ctaStartSeconds": null,
+        "visualPatterns": [],
+        "topicTags": [],
+        "notes": "",
+        "rawMediaReuseAllowed": false
+      }
+    }
+  ],
+  "networkAccounting": {
+    "youtubeRequests": 0,
+    "timedtext": 0,
+    "captions": 0,
+    "metadata": 0,
+    "ytDlp": 0,
+    "cookies": 0,
+    "videoDownload": 0,
+    "audioDownload": 0,
+    "llm": 0,
+    "vision": 0,
+    "mcp": 0
+  }
+}
