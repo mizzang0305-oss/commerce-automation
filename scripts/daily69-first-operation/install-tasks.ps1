@@ -17,6 +17,10 @@ $envPath = (Resolve-Path -LiteralPath $EnvFile).Path
 $backupRoot = Join-Path $queue "task-definitions"
 $operationLocal = [DateTime]::ParseExact($OperationDate, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
 if ($operationLocal -le (Get-Date).Date) { throw "FIRST_OPERATION_DATE_MUST_BE_FUTURE" }
+$manifestPath = Join-Path $queue "operation-manifest.json"
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+if ([string]$manifest.schemaVersion -ne "daily69-first-operation-v2" -or [string]$manifest.armStatus -ne "projection_verified") { throw "FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED" }
+if ([string]$manifest.namespace -ne $Namespace -or [string]$manifest.operationDate -ne $OperationDate -or [string]$manifest.expectedGitHead -ne $ExpectedGitHead) { throw "FIRST_OPERATION_TASK_BINDING_MISMATCH" }
 
 function Assert-OwnedNoUploadTask([string]$Name) {
     $task = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
@@ -31,6 +35,15 @@ function Quote([string]$Value) { return '"' + $Value.Replace('"', '\"') + '"' }
 function New-OperationAction([string]$Script) {
     $arguments = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $(Quote $Script) -WorktreeRoot $(Quote $root) -QueueRoot $(Quote $queue) -Namespace $(Quote $Namespace) -SourceRoot $(Quote $source) -ExpectedGitHead $(Quote $ExpectedGitHead) -EnvFile $(Quote $envPath)"
     return New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments -WorkingDirectory $root
+}
+
+function Assert-TaskBinding([string]$Name) {
+    $task = Get-ScheduledTask -TaskName $Name -ErrorAction Stop
+    $actionText = (@($task.Actions) | ForEach-Object { [string]$_.Execute + " " + [string]$_.Arguments }) -join " "
+    foreach ($required in @($queue, $Namespace, $ExpectedGitHead)) {
+        if ($actionText -notlike "*$required*") { throw "FIRST_OPERATION_TASK_BINDING_VERIFY_FAILED:$Name" }
+    }
+    if ([string]$task.State -eq "Disabled") { throw "FIRST_OPERATION_TASK_DISABLED:$Name" }
 }
 
 $backups = @{}
@@ -61,9 +74,19 @@ try {
     if ($PSCmdlet.ShouldProcess($names[2], "Register first-operation no-upload control runner")) { Register-ScheduledTask -TaskName $names[2] -Action (New-OperationAction $controlScript) -Trigger $controlTrigger -Settings $controlSettings -Principal $principal -Description "First operation day local queue command runner and Sheets projection only; no upload." | Out-Null }
     if ($PSCmdlet.ShouldProcess($names[3], "Register first-operation no-upload closeout")) { Register-ScheduledTask -TaskName $names[3] -Action (New-OperationAction $closeoutScript) -Trigger $closeoutTrigger -Settings $closeoutSettings -Principal $principal -Description "First operation day pause, projection, and local closeout only; no upload." | Out-Null }
     Disable-ScheduledTask -TaskName $names[0] | Out-Null
+    foreach ($name in $names[1..3]) { Assert-TaskBinding $name }
+    if ([string](Get-ScheduledTask -TaskName $names[0] -ErrorAction Stop).State -ne "Disabled") { throw "FIRST_OPERATION_SCOUT_NOT_DISABLED" }
+    Push-Location $root
+    try {
+        & npm.cmd run daily69:first-day:arm-status --silent -- --operation-root $queue --status tasks_armed --promote
+        if ($LASTEXITCODE -ne 0) { throw "FIRST_OPERATION_ACTIVE_POINTER_PROMOTION_FAILED" }
+    } finally { Pop-Location }
 } catch {
     foreach ($name in $names[1..3]) { if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $name -Confirm:$false } }
     foreach ($name in $backups.Keys) { Register-ScheduledTask -TaskName $name -Xml $backups[$name] | Out-Null }
+    Push-Location $root
+    try { & npm.cmd run daily69:first-day:arm-status --silent -- --operation-root $queue --status held | Out-Null } catch { }
+    finally { Pop-Location }
     throw
 }
 

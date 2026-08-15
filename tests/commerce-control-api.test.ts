@@ -24,12 +24,14 @@ describe("commerce control API", () => {
     process.env.COMMERCE_CONTROL_PASSWORD = "owner-password-123";
     process.env.COMMERCE_CONTROL_SESSION_SECRET = "session-secret-at-least-thirty-two-characters";
     gateway = new MemorySheetsGateway();
+    process.env.QUEUE_CONTROL_NAMESPACE = "test-active";
     setCommerceControlRepositoryForTests(createCommerceControlRepository(gateway));
   });
   afterEach(() => {
     resetCommerceControlRepositoryForTests();
     delete process.env.COMMERCE_CONTROL_PASSWORD;
     delete process.env.COMMERCE_CONTROL_SESSION_SECRET;
+    delete process.env.QUEUE_CONTROL_NAMESPACE;
   });
 
   test("rejects unauthenticated requests on every control API surface", async () => {

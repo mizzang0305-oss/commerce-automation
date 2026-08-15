@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { armFirstOperation, closeoutFirstOperation, firstOperationStatus, verifySourceBundle } from "../../src/lib/daily69-first-operation";
+import { armFirstOperation, closeoutFirstOperation, firstOperationStatus, promoteFirstOperationActivePointer, transitionFirstOperationArmStatus, verifySourceBundle } from "../../src/lib/daily69-first-operation";
 import { DAILY_69_NO_UPLOAD_SETTINGS, LocalQueueRepository } from "../../src/lib/queue-scheduler";
 import { rankedProducts } from "../daily-69-control/fixtures";
 
@@ -17,6 +17,8 @@ describe("first no-upload Daily69 operation", () => {
     const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "a".repeat(40) });
     const snapshot = await firstOperationStatus(armed.operationRoot);
     expect(armed.manifest.operationDate).toBe("2026-08-11");
+    expect(armed.manifest).toMatchObject({ schemaVersion: "daily69-first-operation-v2", attemptNumber: 1, previousAttemptNamespace: "", armStatus: "prepared" });
+    await expect(readFile(join(fixture.operationBase, "active-operation.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     expect(armed.manifest.schedule).toHaveLength(20);
     expect(armed.manifest.schedule[0]).toEqual({ hourKst: 4, slots: ["slot-010", "slot-011", "slot-012"] });
     expect(armed.manifest.schedule[19]).toEqual({ hourKst: 23, slots: ["slot-067", "slot-068", "slot-069"] });
@@ -39,6 +41,35 @@ describe("first no-upload Daily69 operation", () => {
     expect(second.idempotent).toBe(true);
     await writeFile(join(fixture.sourceRoot, "source-proof.json"), "{}\n");
     await expect(verifySourceBundle(fixture.sourceRoot, first.manifest, fixture.parent)).rejects.toThrow("SOURCE_PROOF_HASH_MISMATCH");
+  });
+
+  it("promotes the active pointer only after projection and task verification", async () => {
+    const fixture = await sourceFixture();
+    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "e".repeat(40) });
+    await expect(promoteFirstOperationActivePointer(armed.operationRoot)).rejects.toThrow("FIRST_OPERATION_ACTIVE_POINTER_PROMOTION_FORBIDDEN");
+    await transitionFirstOperationArmStatus(armed.operationRoot, "projection_verified");
+    await expect(readFile(join(fixture.operationBase, "active-operation.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await transitionFirstOperationArmStatus(armed.operationRoot, "tasks_armed");
+    const pointer = await promoteFirstOperationActivePointer(armed.operationRoot);
+    expect(pointer).toMatchObject({ namespace: "operation-2026-08-11", operationDate: "2026-08-11", attemptNumber: 1, armStatus: "tasks_armed", SAFE_TO_UPLOAD: false });
+  });
+
+  it("separates operation date from attempt namespace and rejects a missed target window", async () => {
+    const fixture = await sourceFixture();
+    const armed = await armFirstOperation({
+      sourceRoot: fixture.sourceRoot,
+      operationBase: fixture.operationBase,
+      assetBoundaryRoot: fixture.parent,
+      now: new Date("2026-08-16T00:00:00.000Z"),
+      operationDate: "2026-08-17",
+      namespace: "operation-2026-08-17-attempt-2",
+      attemptNumber: 2,
+      previousAttemptNamespace: "operation-2026-08-17",
+      expectedGitHead: "f".repeat(40),
+    });
+    expect(armed.manifest).toMatchObject({ operationDate: "2026-08-17", namespace: "operation-2026-08-17-attempt-2", attemptNumber: 2, previousAttemptNamespace: "operation-2026-08-17", armStatus: "prepared" });
+    await expect(armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: join(fixture.parent, "missed"), assetBoundaryRoot: fixture.parent, now: new Date("2026-08-17T00:00:00+09:00"), operationDate: "2026-08-17", attemptNumber: 2, previousAttemptNamespace: "operation-2026-08-17", expectedGitHead: "f".repeat(40) }))
+      .rejects.toThrow("TARGET_OPERATION_DATE_WINDOW_MISSED");
   });
 
   it("rejects a 68/69 affiliate-ready source before creating an operation or active pointer", async () => {

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const denied = requireApiAuth(request); if (denied) return denied;
-  try { return NextResponse.json({ ok: true, commands: (await getCommerceControlRepository().commands.list()).reverse() }); }
+  try { const repository = getCommerceControlRepository(); const namespace = await repository.activeNamespace(); return NextResponse.json({ ok: true, namespace, commands: (await repository.commands.list(namespace)).reverse() }); }
   catch (error) { return safeApiError(error); }
 }
 
@@ -36,8 +36,14 @@ export async function POST(request: Request) {
     }
     const expectedRevision = typeof body.expectedRevision === "number" && Number.isInteger(body.expectedRevision) && body.expectedRevision >= 0 ? body.expectedRevision : null;
     if (isQueueControlCommand(command) && !globalCommands.has(command) && expectedRevision === null) return NextResponse.json({ ok: false, code: "EXPECTED_REVISION_REQUIRED", message: "Local Revision이 필요합니다." }, { status: 400 });
-    const namespace = typeof body.namespace === "string" && /^[A-Za-z0-9_-]{1,96}$/u.test(body.namespace) ? body.namespace : process.env.QUEUE_CONTROL_NAMESPACE?.trim() ?? "";
-    const result = await getCommerceControlRepository().commands.create({
+    const repository = getCommerceControlRepository();
+    const activeNamespace = await repository.activeNamespace();
+    const suppliedNamespace = typeof body.namespace === "string" ? body.namespace.trim() : "";
+    if (isQueueControlCommand(command) && (!activeNamespace || (suppliedNamespace && suppliedNamespace !== activeNamespace))) {
+      return NextResponse.json({ ok: false, code: "COMMAND_NAMESPACE_MISMATCH", message: "현재 operation namespace와 일치하는 명령만 허용됩니다." }, { status: 409 });
+    }
+    const namespace = activeNamespace || suppliedNamespace;
+    const result = await repository.commands.create({
       queueId, command, requestValue,
       requester: "web-owner", webRequestKey: suppliedWebRequestKey || randomUUID(), expectedRevision, namespace
     });

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { buildAffiliateReadinessReport, type AffiliateReadinessReport } from "@/lib/affiliate-readiness";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { LocalQueueRepository } from "@/lib/queue-scheduler/repository";
@@ -9,6 +9,8 @@ import type { LocalQueueItem, QueueSchedulerSettings, ReserveCandidate } from "@
 export const FIRST_OPERATION_DECISION = "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED" as const;
 export const FIRST_OPERATION_MODE = "no_upload_daily69_first_operation" as const;
 export const FIRST_OPERATION_SOURCE_DECISION = "COUPANG_IMAGE_SKILL_USAGE_SCENES_V5_PROVEN_DAILY69_CAPACITY" as const;
+export const FIRST_OPERATION_ARM_STATUSES = ["prepared", "projection_verified", "tasks_armed", "held", "closed"] as const;
+export type FirstOperationArmStatus = typeof FIRST_OPERATION_ARM_STATUSES[number];
 
 const SOURCE_FILES = [
   "queue.json", "reserve-pool.json", "settings.json", "runs.json", "control-state.json",
@@ -16,12 +18,15 @@ const SOURCE_FILES = [
 ] as const;
 
 export type FirstOperationManifest = {
-  schemaVersion: "daily69-first-operation-v1";
+  schemaVersion: "daily69-first-operation-v1" | "daily69-first-operation-v2";
   decision: typeof FIRST_OPERATION_DECISION | "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_CLOSEOUT_PENDING" | "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_PROVEN";
   operationDate: string;
   armedAt: string;
   expectedGitHead: string;
   namespace: string;
+  attemptNumber?: number;
+  previousAttemptNamespace?: string;
+  armStatus?: FirstOperationArmStatus;
   sourceNamespace: string;
   sourceDecision: typeof FIRST_OPERATION_SOURCE_DECISION;
   sourceFileHashes: Record<string, string>;
@@ -39,13 +44,34 @@ export type FirstOperationManifest = {
   closeout?: { closedAt: string; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
 
-export async function armFirstOperation(input: { sourceRoot: string; operationBase: string; now: Date; expectedGitHead: string; assetBoundaryRoot?: string }) {
-  const operationDate = nextKstDate(input.now);
-  const namespace = `operation-${operationDate}`;
+export async function armFirstOperation(input: {
+  sourceRoot: string;
+  operationBase: string;
+  now: Date;
+  expectedGitHead: string;
+  assetBoundaryRoot?: string;
+  operationDate?: string;
+  namespace?: string;
+  attemptNumber?: number;
+  previousAttemptNamespace?: string;
+}) {
+  const operationDate = input.operationDate ?? nextKstDate(input.now);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(operationDate)) throw new Error("FIRST_OPERATION_DATE_INVALID");
+  if (operationDate <= kstDate(input.now)) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
+  const attemptNumber = input.attemptNumber ?? 1;
+  if (!Number.isInteger(attemptNumber) || attemptNumber < 1) throw new Error("FIRST_OPERATION_ATTEMPT_INVALID");
+  const canonicalNamespace = attemptNumber === 1 ? `operation-${operationDate}` : `operation-${operationDate}-attempt-${attemptNumber}`;
+  const namespace = input.namespace ?? canonicalNamespace;
+  if (namespace !== canonicalNamespace) throw new Error("FIRST_OPERATION_NAMESPACE_ATTEMPT_MISMATCH");
+  const previousAttemptNamespace = input.previousAttemptNamespace?.trim() ?? "";
+  if ((attemptNumber === 1 && previousAttemptNamespace) || (attemptNumber > 1 && !previousAttemptNamespace)) throw new Error("FIRST_OPERATION_PREVIOUS_ATTEMPT_INVALID");
   const operationRoot = resolve(input.operationBase, namespace);
   const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
   if (existing) {
-    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead) throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
+    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
+      || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace) {
+      throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
+    }
     await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
     return { operationRoot, manifest: existing, idempotent: true };
   }
@@ -94,12 +120,15 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
   const after = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
   if (after.bundleHash !== before.bundleHash) throw new Error("SOURCE_PROOF_MUTATED_DURING_CLONE");
   const manifest: FirstOperationManifest = {
-    schemaVersion: "daily69-first-operation-v1",
+    schemaVersion: "daily69-first-operation-v2",
     decision: FIRST_OPERATION_DECISION,
     operationDate,
     armedAt,
     expectedGitHead: input.expectedGitHead,
     namespace,
+    attemptNumber,
+    previousAttemptNamespace,
+    armStatus: "prepared",
     sourceNamespace: basename(sourceRoot),
     sourceDecision: FIRST_OPERATION_SOURCE_DECISION,
     sourceFileHashes: before.fileHashes,
@@ -116,8 +145,44 @@ export async function armFirstOperation(input: { sourceRoot: string; operationBa
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
-  await atomicWriteJson(join(input.operationBase, "active-operation.json"), { schemaVersion: "daily69-first-operation-pointer-v1", namespace, operationDate, expectedGitHead: input.expectedGitHead, SAFE_TO_UPLOAD: false });
   return { operationRoot, manifest, idempotent: false };
+}
+
+export async function transitionFirstOperationArmStatus(operationRoot: string, next: FirstOperationArmStatus) {
+  const root = resolve(operationRoot);
+  const manifestPath = join(root, "operation-manifest.json");
+  const manifest = await readJson<FirstOperationManifest | null>(manifestPath, null);
+  if (!manifest || manifest.schemaVersion !== "daily69-first-operation-v2" || !manifest.armStatus) throw new Error("FIRST_OPERATION_ARM_CONTRACT_NOT_FOUND");
+  const allowed: Record<FirstOperationArmStatus, readonly FirstOperationArmStatus[]> = {
+    prepared: ["projection_verified", "held"],
+    projection_verified: ["tasks_armed", "held"],
+    tasks_armed: ["held", "closed"],
+    held: [],
+    closed: [],
+  };
+  if (manifest.armStatus === next) return manifest;
+  if (!allowed[manifest.armStatus].includes(next)) throw new Error(`FIRST_OPERATION_ARM_STATUS_TRANSITION_INVALID:${manifest.armStatus}:${next}`);
+  const updated: FirstOperationManifest = { ...manifest, armStatus: next };
+  await atomicWriteJson(manifestPath, updated);
+  return updated;
+}
+
+export async function promoteFirstOperationActivePointer(operationRoot: string) {
+  const root = resolve(operationRoot);
+  const manifest = await readJson<FirstOperationManifest | null>(join(root, "operation-manifest.json"), null);
+  if (!manifest || manifest.schemaVersion !== "daily69-first-operation-v2" || manifest.armStatus !== "tasks_armed") throw new Error("FIRST_OPERATION_ACTIVE_POINTER_PROMOTION_FORBIDDEN");
+  if (basename(root) !== manifest.namespace) throw new Error("FIRST_OPERATION_ROOT_NAMESPACE_MISMATCH");
+  const pointer = {
+    schemaVersion: "daily69-first-operation-pointer-v2",
+    namespace: manifest.namespace,
+    operationDate: manifest.operationDate,
+    attemptNumber: manifest.attemptNumber,
+    expectedGitHead: manifest.expectedGitHead,
+    armStatus: manifest.armStatus,
+    SAFE_TO_UPLOAD: false,
+  } as const;
+  await atomicWriteJson(join(dirname(root), "active-operation.json"), pointer);
+  return pointer;
 }
 
 export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot = process.cwd()) {
@@ -197,7 +262,7 @@ export async function closeoutFirstOperation(operationRoot: string) {
   }
   const decision = firstOperationReady ? "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_PROVEN" : "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_CLOSEOUT_PENDING";
   const closedAt = snapshot.manifest.closeout?.closedAt || new Date().toISOString();
-  const manifest: FirstOperationManifest = { ...refreshed.manifest, decision, closeout: { closedAt, firstOperationReady, continuousDaily69Ready, reviewPending: refreshed.status.reviewPending, decision } };
+  const manifest: FirstOperationManifest = { ...refreshed.manifest, decision, armStatus: refreshed.manifest.armStatus === "tasks_armed" ? "closed" : refreshed.manifest.armStatus, closeout: { closedAt, firstOperationReady, continuousDaily69Ready, reviewPending: refreshed.status.reviewPending, decision } };
   await atomicWriteJson(join(root, "operation-manifest.json"), manifest);
   await atomicWriteJson(join(root, "closeout", "closeout-report.json"), { decision, firstOperationReady, continuousDaily69Ready, status: refreshed.status, tasksMustBeDisabled: true, uploadCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0, platformCalls: 0 });
   return { decision, firstOperationReady, continuousDaily69Ready, status: refreshed.status };
@@ -205,6 +270,10 @@ export async function closeoutFirstOperation(operationRoot: string) {
 
 export function nextKstDate(now: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now.getTime() + 24 * 60 * 60_000));
+}
+
+function kstDate(now: Date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
 function scheduleGroups(): FirstOperationManifest["schedule"] {

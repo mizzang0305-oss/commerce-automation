@@ -41,7 +41,7 @@ export async function processOneQueueControlCommand(input: {
     safeMessage = await executeStaticCommand(claimed, input.repository, input.projection, commands, input.now ?? new Date());
   } catch (error) {
     safeMessage = safeError(error);
-    status = safeMessage === "STALE_CONTROL_COMMAND" ? "stale_rejected" : "failed";
+    status = safeMessage === "STALE_CONTROL_COMMAND" || safeMessage === "COMMAND_NAMESPACE_MISMATCH" ? "stale_rejected" : "failed";
   }
   const state = await input.repository.controlState();
   const entry: JournalEntry = { commandId: claimed.commandId, status, safeMessage, localRevision: state.localRevision, completedAt: toKstTimestamp() };
@@ -58,6 +58,7 @@ export async function processOneQueueControlCommand(input: {
 
 async function executeStaticCommand(command: SheetCommand, repository: LocalQueueRepository, projection: QueueProjectionService, commands: SheetsCommandRepository, now: Date) {
   if (!isQueueControlCommand(command.command)) throw new Error("COMMAND_NOT_ALLOWED");
+  if (!command.namespace || command.namespace !== projection.namespace) throw new Error("COMMAND_NAMESPACE_MISMATCH");
   if (ITEM_COMMANDS.has(command.command)) {
     if (!command.queueId) throw new Error("QUEUE_ID_REQUIRED");
     if (command.expectedRevision === null) throw new Error("EXPECTED_REVISION_REQUIRED");
@@ -80,7 +81,7 @@ async function executeStaticCommand(command: SheetCommand, repository: LocalQueu
     case "CANCEL_COMMAND": {
       const targetId = command.requestValue.trim();
       if (!targetId || targetId === command.commandId) throw new Error("CANCEL_TARGET_INVALID");
-      await commands.cancel(targetId); message = "COMMAND_CANCELLED"; break;
+      await commands.cancel(targetId, projection.namespace); message = "COMMAND_CANCELLED"; break;
     }
     case "REFRESH_PROJECTION": await projection.project(); return "PROJECTION_REFRESHED";
   }

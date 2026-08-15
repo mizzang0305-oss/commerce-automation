@@ -31,9 +31,10 @@ export class SheetsCommandRepository {
     return { rows, columns };
   }
 
-  async list() {
+  async list(namespace?: string) {
     const { rows, columns } = await this.readRows();
-    return rows.slice(1).map((row) => parseCommand(row, columns)).filter((item): item is SheetCommand => Boolean(item?.commandId));
+    return rows.slice(1).map((row) => parseCommand(row, columns)).filter((item): item is SheetCommand => Boolean(item?.commandId))
+      .filter((item) => !namespace || item.namespace === namespace);
   }
 
   async create(input: { queueId?: string; command: AllowedCommand; requestValue?: string; requester?: string; webRequestKey: string; expectedRevision?: number | null; namespace?: string }) {
@@ -69,27 +70,29 @@ export class SheetsCommandRepository {
     return parseCommand(row, columns)!;
   }
 
-  async claimOldest(runnerId: string) {
-    const commands = (await this.list()).filter((item) => item.status === "대기")
+  async claimOldest(runnerId: string, namespace?: string) {
+    const commands = (await this.list(namespace)).filter((item) => item.status === "대기")
       .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
     const selected = commands[0];
     if (!selected) return null;
     const marker = `runner:${runnerId}`;
     await this.update(selected.commandId, { status: "처리중", result: marker, errorMemo: "" });
-    const verified = (await this.list()).find((item) => item.commandId === selected.commandId);
+    const verified = (await this.list(namespace)).find((item) => item.commandId === selected.commandId);
     return verified?.status === "처리중" && verified.result === marker ? verified : null;
   }
 
-  async cancel(commandId: string) {
+  async cancel(commandId: string, namespace?: string) {
     const command = (await this.list()).find((item) => item.commandId === commandId);
     if (!command) throw new SheetsControlError("GOOGLE_SHEETS_ROW_NOT_FOUND", "명령을 찾을 수 없습니다.", 404);
+    if (namespace && command.namespace !== namespace) throw new SheetsControlError("COMMAND_NAMESPACE_MISMATCH", "현재 operation의 명령만 취소할 수 있습니다.", 409);
     if (command.status !== "대기" && command.status !== "pending") throw new SheetsControlError("COMMAND_STATE_CONFLICT", "대기 명령만 취소할 수 있습니다.", 409);
     return this.update(commandId, { status: command.status === "pending" ? "cancelled" : "취소", completedAt: toKstTimestamp(), result: "owner_cancelled" });
   }
 
-  async retryOnce(commandId: string) {
+  async retryOnce(commandId: string, namespace?: string) {
     const command = (await this.list()).find((item) => item.commandId === commandId);
     if (!command) throw new SheetsControlError("GOOGLE_SHEETS_ROW_NOT_FOUND", "명령을 찾을 수 없습니다.", 404);
+    if (namespace && command.namespace !== namespace) throw new SheetsControlError("COMMAND_NAMESPACE_MISMATCH", "현재 operation의 명령만 재시도할 수 있습니다.", 409);
     if ((command.status !== "실패" && command.status !== "failed") || command.retryCount >= 1) {
       throw new SheetsControlError("COMMAND_STATE_CONFLICT", "실패한 명령은 한 번만 재시도할 수 있습니다.", 409);
     }

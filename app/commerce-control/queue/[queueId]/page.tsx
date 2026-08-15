@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function CommerceQueueDetailPage({ params }: { params: Promise<{ queueId: string }> }) {
   await requireCommerceControlPageAuth();
   const { queueId } = await params;
-  let item; try { item = await getCommerceControlRepository().queue.find(queueId); } catch { item = undefined; }
+  const repository = getCommerceControlRepository();
+  let namespace = ""; let item; try { namespace = await repository.activeNamespace(); item = await repository.queue.find(queueId, namespace); } catch { item = undefined; }
   if (item === null) notFound();
   const history = item ? await Promise.all([
-    getCommerceControlRepository().commands.list(), getCommerceControlRepository().logs.list()
+    repository.commands.list(namespace), repository.logs.list()
   ]).catch(() => [[], []] as const) : [[], []] as const;
   const commands = history[0].filter((entry) => entry.queueId === queueId).slice(-10).reverse();
   const logs = history[1].filter((entry) => entry.queueId === queueId).slice(-10).reverse();

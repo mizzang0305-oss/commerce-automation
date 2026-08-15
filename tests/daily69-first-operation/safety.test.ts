@@ -12,6 +12,8 @@ describe("first operation task safety", () => {
     expect(install).toContain("4..23");
     expect(install).toContain("-MultipleInstances IgnoreNew");
     expect(install).toContain("-StartWhenAvailable");
+    expect(install).toContain("FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED");
+    expect(install).toContain("daily69:first-day:arm-status");
     expect(common).toContain("RUNTIME_GIT_HEAD_MISMATCH");
     expect(common).toContain('$env:SAFE_TO_UPLOAD = "false"');
     expect(common).not.toMatch(/(?:YOUTUBE_AUTO_UPLOAD|TIKTOK_AUTO_POST|THREADS_AUTO_POST)\s*=\s*["']true["']/iu);
