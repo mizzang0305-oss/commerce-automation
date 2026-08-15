@@ -71,6 +71,7 @@ export type LocalRun = {
   finishedAt: string;
   claimed: number;
   completed: number;
+  blocked: number;
   failed: number;
   retried: number;
   safeMessage: string;

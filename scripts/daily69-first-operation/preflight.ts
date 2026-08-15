@@ -19,6 +19,9 @@ async function main() {
   if (process.env.GOOGLE_DRIVE_VIDEO_FOLDER_ID?.trim()) throw new Error("DRIVE_SCOPE_MUST_REMAIN_DISABLED");
   await verifySourceBundle(sourceRoot, snapshot.manifest);
   if (snapshot.status.total !== 69 || snapshot.status.productBindingMismatches !== 0 || snapshot.status.duplicateRenders !== 0) throw new Error("FIRST_OPERATION_QUEUE_INVARIANT_FAILED");
+  if (!snapshot.status.affiliateReadyForArm || snapshot.status.affiliateReady !== 69 || snapshot.status.affiliateMissing !== 0 || snapshot.status.affiliateInvalid !== 0) {
+    throw new Error("DAILY69_AFFILIATE_READINESS_INCOMPLETE");
+  }
   const disk = await statfs(operationRoot);
   const freeGb = Math.round(Number(disk.bavail * disk.bsize) / 1024 / 1024 / 1024 * 100) / 100;
   if (freeGb < 20) throw new Error("DISK_SPACE_GUARD_BLOCKED");
@@ -28,7 +31,7 @@ async function main() {
   let sheetsReady = true;
   if (process.argv.includes("--sheets")) { const metadata = await new NoUploadGoogleSheetsClient().metadata(); sheetsReady = Boolean(metadata.sheets?.length); }
   if (!sheetsReady) throw new Error("GOOGLE_SHEETS_READ_FAILED");
-  process.stdout.write(`${JSON.stringify({ event: "daily69_first_operation_preflight", ready: true, gitHeadMatch: true, sourceProofMatch: true, queueCount: 69, productBindingMismatch: 0, diskReady: true, freeGb, runtimeReady, sheetsReady, driveScope: false, SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: "daily69_first_operation_preflight", ready: true, gitHeadMatch: true, sourceProofMatch: true, queueCount: 69, affiliateReady: 69, affiliateMissing: 0, affiliateInvalid: 0, productBindingMismatch: 0, diskReady: true, freeGb, runtimeReady, sheetsReady, driveScope: false, SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 })}\n`);
 }
 
 function unsafeUploadFlagPresent(env: NodeJS.ProcessEnv) { return ["SAFE_TO_UPLOAD", "SAFE_TO_PUBLIC_UPLOAD", "YOUTUBE_AUTO_UPLOAD", "PUBLIC_UPLOAD", "UNLISTED_UPLOAD", "TIKTOK_AUTO_UPLOAD", "THREADS_AUTO_POST", "COMMENT_AUTOMATION", "GOOGLE_DRIVE_VIDEO_UPLOAD"].some((name) => env[name]?.trim().toLowerCase() === "true"); }

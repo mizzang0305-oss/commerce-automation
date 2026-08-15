@@ -1,3 +1,4 @@
+import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
 import type { OwnerReviewedRealUseAsset } from "@/lib/video-automation/types";
 import type { LiveProductCandidate, LiveVideoInput, ResolvedExactProductReference } from "./types";
 
@@ -10,7 +11,7 @@ export function adaptLiveProductToVideoInput(input: {
   runId: string;
 }): LiveVideoInput {
   const { candidate } = input;
-  if (!candidate.selectedAffiliateUrl) throw new Error("AFFILIATE_NOT_READY");
+  if (!validateCoupangAffiliateUrl(candidate.selectedAffiliateUrl).affiliateReady) throw new Error("AFFILIATE_NOT_READY");
   if (input.exactReference.identityType !== "product_reference") throw new Error("EXACT_PRODUCT_REFERENCE_REQUIRED");
   if (input.usageEvidence.identityType !== "generic_usage_example" || input.usageEvidence.ownerReviewStatus !== "pass") throw new Error("USAGE_EVIDENCE_NOT_AVAILABLE");
   return {

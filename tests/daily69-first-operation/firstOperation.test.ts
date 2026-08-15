@@ -21,6 +21,8 @@ describe("first no-upload Daily69 operation", () => {
     expect(armed.manifest.schedule[0]).toEqual({ hourKst: 4, slots: ["slot-010", "slot-011", "slot-012"] });
     expect(armed.manifest.schedule[19]).toEqual({ hourKst: 23, slots: ["slot-067", "slot-068", "slot-069"] });
     expect(snapshot.status).toMatchObject({ total: 69, ready: 9, machineOnly: 0, scheduled: 60, reserve: 14, distinct: 83, unresolvedLeases: 0, productBindingMismatches: 0 });
+    expect(snapshot.status).toMatchObject({ affiliateReady: 69, affiliateMissing: 0, affiliateInvalid: 0, affiliateReadyForArm: true });
+    expect(armed.manifest.affiliateReadiness).toMatchObject({ total: 69, affiliateReady: 69, readyForArm: true, rawUrlsPrinted: false });
     expect(snapshot.settings).toMatchObject({ mode: "no_upload_daily69_first_operation", processingDailyCap: 69, batchSize: 3, startHour: 4, endHour: 23, enabled: true, isPaused: false, observationMode: true, autoPauseAfterObservation: true, uploadEnabled: false });
     const carried = snapshot.items.slice(0, 9);
     expect(carried.every((item) => item.operationCarryover?.prevalidatedCanary === true && item.status === "video_ready_autoqa")).toBe(true);
@@ -39,6 +41,16 @@ describe("first no-upload Daily69 operation", () => {
     await expect(verifySourceBundle(fixture.sourceRoot, first.manifest, fixture.parent)).rejects.toThrow("SOURCE_PROOF_HASH_MISMATCH");
   });
 
+  it("rejects a 68/69 affiliate-ready source before creating an operation or active pointer", async () => {
+    const fixture = await sourceFixture({ missingAffiliateRanks: [69] });
+    const sourceHash = await hashFile(join(fixture.sourceRoot, "queue.json"));
+    await expect(armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "d".repeat(40) }))
+      .rejects.toThrow("DAILY69_AFFILIATE_READINESS_INCOMPLETE");
+    await expect(readFile(join(fixture.operationBase, "active-operation.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(fixture.operationBase, "operation-2026-08-11", "operation-manifest.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await hashFile(join(fixture.sourceRoot, "queue.json"))).toBe(sourceHash);
+  });
+
   it("pauses idempotently and does not arm day two while review is pending", async () => {
     const fixture = await sourceFixture();
     const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "c".repeat(40) });
@@ -51,7 +63,7 @@ describe("first no-upload Daily69 operation", () => {
   });
 });
 
-async function sourceFixture() {
+async function sourceFixture(options: { missingAffiliateRanks?: number[] } = {}) {
   const parent = await mkdtemp(join(tmpdir(), "daily69-first-operation-")); roots.push(parent);
   const sourceRoot = join(parent, "canary-source"); const operationBase = join(parent, "operations");
   await mkdir(sourceRoot); await mkdir(join(sourceRoot, "artifacts"));
@@ -59,7 +71,13 @@ async function sourceFixture() {
   await repository.writeSettings({ ...DAILY_69_NO_UPLOAD_SETTINGS, enabled: true, isPaused: false });
   const now = new Date("2026-08-09T00:00:00.000Z");
   await repository.insertRanked({ ranked: rankedProducts(83), queueDate: "2026-08-09", now, dueNow: true });
-  const queueWithAllocations = (await repository.items()).map((item) => ({ ...item, usageEvidenceAllocation: allocation(item.productKey, item.candidate.useCase) }));
+  const queueWithAllocations = (await repository.items()).map((item) => ({
+    ...item,
+    candidate: options.missingAffiliateRanks?.includes(item.queueRank)
+      ? { ...item.candidate, selectedAffiliateUrl: "" }
+      : item.candidate,
+    usageEvidenceAllocation: allocation(item.productKey, item.candidate.useCase)
+  }));
   const reserveWithAllocations = (await repository.reserveCandidates()).map((item) => ({ ...item, usageEvidenceAllocation: allocation(item.candidate.productKey, item.candidate.useCase) }));
   await writeFile(repository.queuePath, `${JSON.stringify(queueWithAllocations)}\n`);
   await writeFile(repository.reservePath, `${JSON.stringify(reserveWithAllocations)}\n`);

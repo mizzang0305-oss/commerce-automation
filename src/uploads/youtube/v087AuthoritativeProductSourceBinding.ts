@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
 import { CHANNEL_KEYS, isChannelKey, type ChannelKey } from "../multi-channel/channelProfiles";
 import {
   V057_CORRECTED_REUPLOAD_EXPECTED_PRODUCTS,
@@ -165,7 +166,7 @@ export async function buildV087AuthoritativeProductSourceBinding(input: {
     channelKey: selectedChannelKey,
     firstFramePath: normalized.firstFramePath
   });
-  const affiliateEvidenceReady = isHttpsCoupangUrl(normalized.selectedAffiliateUrl);
+  const affiliateEvidenceReady = isReadyAffiliateUrl(normalized.selectedAffiliateUrl);
   const disclosureEvidenceReady = hasCoupangDisclosure(normalized.coupangPartnersDisclosureText);
   const duplicateGuardReady = Boolean(normalized.duplicateGuardKey);
   const targetChannelEvidenceReady = isChannelKey(normalized.targetChannelKey);
@@ -512,10 +513,14 @@ function isHttpsCoupangUrl(value: string | null) {
     const url = new URL(value);
     return url.protocol === "https:" &&
       (url.hostname === "coupang.com" || url.hostname.endsWith(".coupang.com")) &&
-      !url.hostname.includes("example");
+      !url.hostname.includes("example") && !url.username && !url.password;
   } catch {
     return false;
   }
+}
+
+function isReadyAffiliateUrl(value: string | null) {
+  return validateCoupangAffiliateUrl(value).affiliateReady;
 }
 
 function trimOrNull(value: unknown) {

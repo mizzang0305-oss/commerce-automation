@@ -35,7 +35,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     const executor = input.executor ?? executeQueueVideoBatch;
     const results = await executeSafely(executor, claimed, runId, repository.root);
     const allResults: QueueVideoResult[] = [...results];
-    let completed = 0; let failed = 0; let retried = 0;
+    let completed = 0; let blocked = 0; let failed = 0; let retried = 0;
     let fallbacks = 0; let fallbackSuccess = 0;
     for (const initialResult of results) {
       let result = initialResult;
@@ -50,10 +50,10 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
         if (result.passed) fallbackSuccess += 1;
       }
       if (result.passed) { await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: new Date() }); completed += 1; }
-      else { const status = await repository.fail({ id: result.queueId, code: result.errorCode, retryable: result.retryable && !isProductFallbackCode(result.errorCode), now: new Date(), settings }); if (status === "retry_wait") retried += 1; else failed += 1; }
+      else { const status = await repository.fail({ id: result.queueId, code: result.errorCode, retryable: result.retryable && !isProductFallbackCode(result.errorCode), now: new Date(), settings }); if (status === "retry_wait") retried += 1; else if (status === "blocked") blocked += 1; else failed += 1; }
     }
     const status = completed === claimed.length ? "success" : completed > 0 ? "partial" : "failed";
-    const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, failed, retried, safeMessage: status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
+    const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, blocked, failed, retried, safeMessage: status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, blocked, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
     await repository.addRun(run); return { run, results: allResults };
   } finally { await release(); }
 }
@@ -63,7 +63,7 @@ function unsafeUploadFlagPresent(env: NodeJS.ProcessEnv) {
     .some((name) => env[name]?.trim().toLowerCase() === "true");
 }
 
-async function recordNoop(repository: LocalQueueRepository, runId: string, now: Date, message: string, metrics: Record<string, number> = {}, status: LocalRun["status"] = "noop") { const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: Number(metrics.claimed ?? 0), completed: 0, failed: 0, retried: 0, safeMessage: message, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, results: [] }; }
+async function recordNoop(repository: LocalQueueRepository, runId: string, now: Date, message: string, metrics: Record<string, number> = {}, status: LocalRun["status"] = "noop") { const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: Number(metrics.claimed ?? 0), completed: 0, blocked: 0, failed: 0, retried: 0, safeMessage: message, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, results: [] }; }
 async function diskFreeGb(path: string) { const value = await statfs(path); return Math.round(Number(value.bavail * value.bsize) / 1024 / 1024 / 1024 * 100) / 100; }
 function safeCode(error: unknown) { const value = error instanceof Error ? error.message : String(error); return /^[A-Z0-9_:-]+$/u.test(value) ? value : "VIDEO_BATCH_SUBPROCESS_FAILED"; }
 function isRetryable(code: string) { return /TEMPORARY|TIMEOUT|SUBPROCESS|FILESYSTEM|EACCES|EBUSY|LOCAL_RUNTIME_NOT_CONFIGURED/u.test(code); }
