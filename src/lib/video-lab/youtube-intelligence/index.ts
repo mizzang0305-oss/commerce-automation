@@ -5,6 +5,8 @@ export * from "./cli";
 export * from "./config";
 export * from "./engine";
 export * from "./localStore";
+export * from "./ownerObservation";
+export * from "./firstPartyLineage";
 export * from "./providers";
 export * from "./source";
 export * from "./sourcePolicy";

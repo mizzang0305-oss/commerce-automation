@@ -29,12 +29,41 @@ export const EXACT_FIVE_OWNER_OBSERVATION_VIDEO_IDS = [
   "tDa7j2Ll8YM",
 ] as const;
 
+export const OWNER_OBSERVATION_STATUSES = [
+  "OWNER_OBSERVATION_REQUIRED",
+  "OWNER_OBSERVATION_DRAFT",
+  "OWNER_OBSERVATION_VALIDATED",
+] as const;
+export type OwnerObservationStatus = typeof OWNER_OBSERVATION_STATUSES[number];
+
+export const OWNER_OBSERVATION_HOOK_FAMILIES = [
+  "problem",
+  "benefit",
+  "curiosity",
+  "comparison",
+  "demonstration",
+  "social_proof",
+  "urgency",
+] as const;
+export type OwnerObservationHookFamily = typeof OWNER_OBSERVATION_HOOK_FAMILIES[number];
+
+export const OWNER_OBSERVATION_STRUCTURE_STEPS = [
+  "HOOK",
+  "PROBLEM",
+  "BENEFIT",
+  "DEMONSTRATION",
+  "PROOF",
+  "COMPARISON",
+  "CTA",
+] as const;
+export type OwnerObservationStructureStep = typeof OWNER_OBSERVATION_STRUCTURE_STEPS[number];
+
 export interface ExternalCreativeObservation {
   sourceUrl: string;
   videoId: string;
   observedBy: "owner";
   observedAt: string;
-  hookFamily?: string;
+  hookFamily?: OwnerObservationHookFamily;
   hookParaphrase?: string;
   hookStartSeconds?: number;
   structure: string[];
@@ -50,7 +79,7 @@ export interface OwnerObservationPacket {
   videoId: string;
   sourceUrl: string;
   sourceMode: "owner_provided_external_evidence";
-  status: "OWNER_OBSERVATION_REQUIRED";
+  status: OwnerObservationStatus;
   rawMediaReuseAllowed: false;
 }
 
@@ -110,11 +139,26 @@ export function validateExternalCreativeObservation(input: ExternalCreativeObser
   if ((input as { rawMediaReuseAllowed?: unknown }).rawMediaReuseAllowed !== false) {
     throw new YouTubeSourcePolicyError("RAW_MEDIA_REUSE_FORBIDDEN");
   }
+  if (input.hookFamily !== undefined && !(OWNER_OBSERVATION_HOOK_FAMILIES as readonly string[]).includes(input.hookFamily)) {
+    throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_HOOK_FAMILY_INVALID");
+  }
+  if (input.hookParaphrase !== undefined && (!input.hookParaphrase.trim() || input.hookParaphrase.length > 500)) {
+    throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_HOOK_PARAPHRASE_INVALID");
+  }
+  if (input.notes !== undefined && input.notes.length > 2_000) throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_NOTES_TOO_LONG");
   if (!Array.isArray(input.structure) || !Array.isArray(input.visualPatterns) || !Array.isArray(input.topicTags)) {
     throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_STRUCTURE_INVALID");
   }
+  if (input.structure.some((step) => !(OWNER_OBSERVATION_STRUCTURE_STEPS as readonly string[]).includes(step))) {
+    throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_STRUCTURE_STEP_INVALID");
+  }
   for (const seconds of [input.hookStartSeconds, input.ctaStartSeconds]) {
     if (seconds !== undefined && (!Number.isFinite(seconds) || seconds < 0)) throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_TIMESTAMP_RANGE_INVALID");
+  }
+  if (input.ctaObserved === true && input.ctaStartSeconds === undefined) throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_CTA_TIMING_REQUIRED");
+  if (input.ctaObserved === false && input.ctaStartSeconds !== undefined) throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_CTA_TIMING_UNEXPECTED");
+  if (input.visualPatterns.some((value) => value.length > 160) || input.topicTags.some((value) => value.length > 80)) {
+    throw new YouTubeSourcePolicyError("EXTERNAL_OBSERVATION_LABEL_TOO_LONG");
   }
   return {
     ...input,
