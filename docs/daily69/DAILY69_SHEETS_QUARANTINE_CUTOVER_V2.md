@@ -4,7 +4,7 @@
 
 The local evidence for `operation-2026-08-11` remains canonical and immutable. Its contaminated Google Sheets projection is not repaired, reconstructed, deleted, or used as authoritative history.
 
-`operation-2026-08-17` is recorded as a held attempt whose Sheet projection is `quarantined_legacy_projection`. The fresh namespace is `operation-2026-08-17-attempt-2`, with logical `operationDate=2026-08-17` and `attemptNumber=2`.
+`operation-2026-08-17` is recorded as a held attempt whose Sheet projection is `quarantined_legacy_projection`; `operation-2026-08-17-attempt-2` is also frozen held evidence. Neither namespace may be reused. A new operation day uses its canonical attempt-1 namespace, such as `operation-2026-08-18` with `attemptNumber=1` and no previous-attempt binding.
 
 ## Fail-closed cutover
 

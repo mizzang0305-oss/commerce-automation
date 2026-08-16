@@ -31,6 +31,24 @@ describe("Daily69 Sheets quarantine cutover", () => {
       attemptNumber: 2,
       previousAttemptNamespace: "operation-2026-08-17",
     })).toMatchObject({ namespace: "operation-2026-08-17" });
+    expect(assertFreshAttemptCutover({
+      namespace: "operation-2026-08-18",
+      operationDate: "2026-08-18",
+      attemptNumber: 1,
+      previousAttemptNamespace: "",
+    })).toBeNull();
+    expect(() => assertFreshAttemptCutover({
+      namespace: "operation-2026-08-17",
+      operationDate: "2026-08-17",
+      attemptNumber: 1,
+      previousAttemptNamespace: "",
+    })).toThrow("CUTOVER_NAMESPACE_QUARANTINED");
+    expect(() => assertFreshAttemptCutover({
+      namespace: "operation-2026-08-18",
+      operationDate: "2026-08-18",
+      attemptNumber: 1,
+      previousAttemptNamespace: "operation-2026-08-17-attempt-2",
+    })).toThrow("CUTOVER_PREVIOUS_ATTEMPT_INVALID");
   });
 
   it("stores sanitized fingerprints and proves preexisting rows remain unchanged after appends", async () => {

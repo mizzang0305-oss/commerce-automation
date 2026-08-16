@@ -35,7 +35,14 @@ export function assertFreshAttemptCutover(input: {
   const canonical = input.attemptNumber === 1
     ? `operation-${input.operationDate}`
     : `operation-${input.operationDate}-attempt-${input.attemptNumber}`;
-  if (input.namespace !== canonical || input.attemptNumber < 2) throw new Error("CUTOVER_ATTEMPT_NAMESPACE_INVALID");
+  if (!Number.isInteger(input.attemptNumber) || input.attemptNumber < 1 || input.namespace !== canonical) {
+    throw new Error("CUTOVER_ATTEMPT_NAMESPACE_INVALID");
+  }
+  if (input.attemptNumber === 1) {
+    if (input.previousAttemptNamespace) throw new Error("CUTOVER_PREVIOUS_ATTEMPT_INVALID");
+    if (projectionNamespaceRegistryEntry(input.namespace)) throw new Error("CUTOVER_NAMESPACE_QUARANTINED");
+    return null;
+  }
   const previous = projectionNamespaceRegistryEntry(input.previousAttemptNamespace);
   if (!previous
     || previous.operationDate !== input.operationDate
