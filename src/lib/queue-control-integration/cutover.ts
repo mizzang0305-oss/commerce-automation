@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import type { SheetsGateway } from "@/lib/google-sheets/googleSheetsClient";
+import type {
+  SheetsGateway,
+  SheetUserEnteredCell,
+  UserEnteredSheetsGateway,
+} from "@/lib/google-sheets/googleSheetsClient";
 import { COMMAND_HEADERS, QUEUE_HEADERS, SHEET_NAMES, assertHeaders, rowValue, type SheetRow } from "@/lib/google-sheets/sheetSchemas";
 import {
   QUEUE_PROJECTION_EXTRA_HEADERS,
@@ -19,6 +23,12 @@ const CUTOVER_RANGES = {
 } as const;
 
 type FingerprintedRow = { rowNumber: number; rowHash: string };
+type CutoverSheetsGateway = SheetsGateway & UserEnteredSheetsGateway;
+
+export type CellSemanticFingerprint = {
+  kind: SheetUserEnteredCell["kind"];
+  valueHash: string;
+};
 export type QueueCutoverFingerprint = FingerprintedRow & {
   namespace: string;
   queueIdHash: string;
@@ -37,7 +47,7 @@ export type SyncCutoverFingerprint = FingerprintedRow & {
   snapshotHash: string;
 };
 
-export type PreCutoverSheetBaseline = {
+export type PreCutoverSheetBaselineV1 = {
   schemaVersion: "daily69-sheets-pre-cutover-baseline-v1";
   capturedAt: string;
   queue: QueueCutoverFingerprint[];
@@ -49,63 +59,107 @@ export type PreCutoverSheetBaseline = {
   SAFE_TO_UPLOAD: false;
 };
 
-export async function capturePreCutoverSheetBaseline(gateway: SheetsGateway, now = new Date()): Promise<PreCutoverSheetBaseline> {
+export type PreCutoverSheetBaselineV2 = {
+  schemaVersion: "daily69-sheets-pre-cutover-baseline-v2";
+  fingerprintMode: "USER_ENTERED_VALUE";
+  capturedAt: string;
+  queue: QueueCutoverFingerprint[];
+  reserve: ReserveCutoverFingerprint[];
+  sync: SyncCutoverFingerprint[];
+  aggregateHash: string;
+  rawValuesStored: false;
+  formulaTextStored: false;
+  effectiveValuesStored: false;
+  formattedValuesStored: false;
+  credentialIdentifiersStored: false;
+  SAFE_TO_UPLOAD: false;
+};
+
+export type PreCutoverSheetBaseline = PreCutoverSheetBaselineV1 | PreCutoverSheetBaselineV2;
+
+export async function capturePreCutoverSheetBaseline(gateway: CutoverSheetsGateway, now = new Date()): Promise<PreCutoverSheetBaselineV2> {
   const [queueRows, reserveRows, syncRows] = await Promise.all([
-    gateway.getValues(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-    gateway.getValues(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-    gateway.getValues(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+    gateway.getUserEnteredCells(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
+    gateway.getUserEnteredCells(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
+    gateway.getUserEnteredCells(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
   ]);
-  const queueColumns = assertHeaders(queueRows[0] ?? [], QUEUE_CUTOVER_HEADERS, SHEET_NAMES.queue);
-  const reserveColumns = assertHeaders(reserveRows[0] ?? [], RESERVE_HEADERS, RESERVE_SHEET_NAME);
-  const syncColumns = assertHeaders(syncRows[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
+  const queueValues = semanticRowsToValues(queueRows);
+  const reserveValues = semanticRowsToValues(reserveRows);
+  const syncValues = semanticRowsToValues(syncRows);
+  const queueColumns = assertHeaders(queueValues[0] ?? [], QUEUE_CUTOVER_HEADERS, SHEET_NAMES.queue);
+  const reserveColumns = assertHeaders(reserveValues[0] ?? [], RESERVE_HEADERS, RESERVE_SHEET_NAME);
+  const syncColumns = assertHeaders(syncValues[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
   const queue = queueRows.slice(1).map((row, index) => ({
     rowNumber: index + 2,
-    namespace: rowValue(row, queueColumns, "Namespace"),
-    queueIdHash: hash(rowValue(row, queueColumns, "Queue ID")),
-    slotId: rowValue(row, queueColumns, "Slot ID"),
-    queueDate: rowValue(row, queueColumns, "Queue Date"),
-    queueRank: Number(rowValue(row, queueColumns, "Queue Rank") || 0),
-    status: rowValue(row, queueColumns, "진행상태"),
-    rowHash: hashCanonicalRow(row, queueRows[0]?.length ?? 0),
+    namespace: rowValue(queueValues[index + 1] ?? [], queueColumns, "Namespace"),
+    queueIdHash: hash(rowValue(queueValues[index + 1] ?? [], queueColumns, "Queue ID")),
+    slotId: rowValue(queueValues[index + 1] ?? [], queueColumns, "Slot ID"),
+    queueDate: rowValue(queueValues[index + 1] ?? [], queueColumns, "Queue Date"),
+    queueRank: Number(rowValue(queueValues[index + 1] ?? [], queueColumns, "Queue Rank") || 0),
+    status: rowValue(queueValues[index + 1] ?? [], queueColumns, "진행상태"),
+    rowHash: hashSemanticRow(row, queueRows[0]?.length ?? 0),
   }));
   const reserve = reserveRows.slice(1).map((row, index) => ({
     rowNumber: index + 2,
-    namespace: rowValue(row, reserveColumns, "Namespace"),
-    productKeyHash: rowValue(row, reserveColumns, "Product Key Hash"),
-    rowHash: hashCanonicalRow(row, reserveRows[0]?.length ?? 0),
+    namespace: rowValue(reserveValues[index + 1] ?? [], reserveColumns, "Namespace"),
+    productKeyHash: rowValue(reserveValues[index + 1] ?? [], reserveColumns, "Product Key Hash"),
+    rowHash: hashSemanticRow(row, reserveRows[0]?.length ?? 0),
   }));
   const sync = syncRows.slice(1).map((row, index) => ({
     rowNumber: index + 2,
-    namespace: rowValue(row, syncColumns, "Namespace"),
-    revision: Number(rowValue(row, syncColumns, "Projection Revision") || 0),
-    snapshotHash: rowValue(row, syncColumns, "Snapshot Hash"),
-    rowHash: hashCanonicalRow(row, syncRows[0]?.length ?? 0),
+    namespace: rowValue(syncValues[index + 1] ?? [], syncColumns, "Namespace"),
+    revision: Number(rowValue(syncValues[index + 1] ?? [], syncColumns, "Projection Revision") || 0),
+    snapshotHash: rowValue(syncValues[index + 1] ?? [], syncColumns, "Snapshot Hash"),
+    rowHash: hashSemanticRow(row, syncRows[0]?.length ?? 0),
   }));
   return {
-    schemaVersion: "daily69-sheets-pre-cutover-baseline-v1",
+    schemaVersion: "daily69-sheets-pre-cutover-baseline-v2",
+    fingerprintMode: "USER_ENTERED_VALUE",
     capturedAt: now.toISOString(),
     queue,
     reserve,
     sync,
-    aggregateHash: aggregateFingerprintHash({ queue, reserve, sync }),
+    aggregateHash: aggregateFingerprintHashV2({ queue, reserve, sync }),
     rawValuesStored: false,
+    formulaTextStored: false,
+    effectiveValuesStored: false,
+    formattedValuesStored: false,
     credentialIdentifiersStored: false,
     SAFE_TO_UPLOAD: false,
   };
 }
 
-export async function verifyPreexistingRowsUnchanged(gateway: SheetsGateway, baseline: PreCutoverSheetBaseline) {
-  if (baseline.schemaVersion !== "daily69-sheets-pre-cutover-baseline-v1") throw new Error("CUTOVER_BASELINE_SCHEMA_INVALID");
-  if (aggregateFingerprintHash(baseline) !== baseline.aggregateHash) throw new Error("CUTOVER_BASELINE_HASH_INVALID");
-  const [queueRows, reserveRows, syncRows] = await Promise.all([
-    gateway.getValues(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-    gateway.getValues(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-    gateway.getValues(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
-  ]);
-  const queue = compareRows(queueRows, baseline.queue);
-  const reserve = compareRows(reserveRows, baseline.reserve);
-  const sync = compareRows(syncRows, baseline.sync);
+export async function verifyPreexistingRowsUnchanged(gateway: CutoverSheetsGateway, baseline: PreCutoverSheetBaseline) {
+  const fingerprintMode = baseline.schemaVersion === "daily69-sheets-pre-cutover-baseline-v2"
+    ? "USER_ENTERED_VALUE" as const
+    : "FORMATTED_VALUE" as const;
+  if (baseline.schemaVersion === "daily69-sheets-pre-cutover-baseline-v2") {
+    if (baseline.fingerprintMode !== "USER_ENTERED_VALUE") throw new Error("CUTOVER_BASELINE_FINGERPRINT_MODE_INVALID");
+    if (aggregateFingerprintHashV2(baseline) !== baseline.aggregateHash) throw new Error("CUTOVER_BASELINE_HASH_INVALID");
+  } else if (baseline.schemaVersion === "daily69-sheets-pre-cutover-baseline-v1") {
+    if (aggregateFingerprintHashV1(baseline) !== baseline.aggregateHash) throw new Error("CUTOVER_BASELINE_HASH_INVALID");
+  } else throw new Error("CUTOVER_BASELINE_SCHEMA_INVALID");
+  let currentHashes: { queue: string[]; reserve: string[]; sync: string[] };
+  if (baseline.schemaVersion === "daily69-sheets-pre-cutover-baseline-v2") {
+    const [queueRows, reserveRows, syncRows] = await Promise.all([
+      gateway.getUserEnteredCells(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
+      gateway.getUserEnteredCells(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
+      gateway.getUserEnteredCells(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+    ]);
+    currentHashes = { queue: semanticRowHashes(queueRows), reserve: semanticRowHashes(reserveRows), sync: semanticRowHashes(syncRows) };
+  } else {
+    const [queueRows, reserveRows, syncRows] = await Promise.all([
+      gateway.getValues(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
+      gateway.getValues(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
+      gateway.getValues(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+    ]);
+    currentHashes = { queue: formattedRowHashes(queueRows), reserve: formattedRowHashes(reserveRows), sync: formattedRowHashes(syncRows) };
+  }
+  const queue = compareRowHashes(currentHashes.queue, baseline.queue);
+  const reserve = compareRowHashes(currentHashes.reserve, baseline.reserve);
+  const sync = compareRowHashes(currentHashes.sync, baseline.sync);
   return {
+    fingerprintMode,
     queue,
     reserve,
     sync,
@@ -156,9 +210,7 @@ export async function verifyFreshNamespaceRows(gateway: SheetsGateway, namespace
   return { queue: queue.length, reserve: reserve.length, sync: sync.length, duplicateQueueIdentities, duplicateReserveIdentities, pass };
 }
 
-function compareRows(rows: SheetRow[], baseline: FingerprintedRow[]) {
-  const width = rows[0]?.length ?? 0;
-  const currentHashes = rows.slice(1).map((row) => hashCanonicalRow(row, width));
+function compareRowHashes(currentHashes: string[], baseline: FingerprintedRow[]) {
   let changed = 0;
   let deleted = 0;
   let reordered = 0;
@@ -172,11 +224,32 @@ function compareRows(rows: SheetRow[], baseline: FingerprintedRow[]) {
   return { baselineRows: baseline.length, changed, deleted, reordered };
 }
 
+function formattedRowHashes(rows: SheetRow[]) {
+  const width = rows[0]?.length ?? 0;
+  return rows.slice(1).map((row) => hashCanonicalRow(row, width));
+}
+function semanticRowHashes(rows: SheetUserEnteredCell[][]) {
+  const width = rows[0]?.length ?? 0;
+  return rows.slice(1).map((row) => hashSemanticRow(row, width));
+}
 function hashCanonicalRow(row: SheetRow, width: number) {
   return hash(JSON.stringify(Array.from({ length: width }, (_, index) => row[index] ?? "")));
 }
-function aggregateFingerprintHash(value: Pick<PreCutoverSheetBaseline, "queue" | "reserve" | "sync">) {
+function hashSemanticRow(row: SheetUserEnteredCell[], width: number) {
+  return hash(JSON.stringify(Array.from({ length: width }, (_, index) => semanticFingerprint(row[index] ?? { kind: "blank" }))));
+}
+function semanticFingerprint(cell: SheetUserEnteredCell): CellSemanticFingerprint {
+  if (cell.kind === "blank") return { kind: "blank", valueHash: hash("blank") };
+  return { kind: cell.kind, valueHash: hash(`${cell.kind}\0${JSON.stringify(cell.value)}`) };
+}
+function semanticRowsToValues(rows: SheetUserEnteredCell[][]): SheetRow[] {
+  return rows.map((row) => row.map((cell) => cell.kind === "blank" || cell.kind === "formula" ? "" : cell.value));
+}
+function aggregateFingerprintHashV1(value: Pick<PreCutoverSheetBaselineV1, "queue" | "reserve" | "sync">) {
   return hash(JSON.stringify({ queue: value.queue, reserve: value.reserve, sync: value.sync }));
+}
+function aggregateFingerprintHashV2(value: Pick<PreCutoverSheetBaselineV2, "queue" | "reserve" | "sync">) {
+  return hash(JSON.stringify({ fingerprintMode: "USER_ENTERED_VALUE", queue: value.queue, reserve: value.reserve, sync: value.sync }));
 }
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 

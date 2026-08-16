@@ -1,14 +1,20 @@
 import "server-only";
 
 import { GoogleAuth } from "google-auth-library";
-import { readGoogleSheetsConfig, type GoogleSheetsConfig, type SheetsGateway } from "@/lib/google-sheets/googleSheetsClient";
+import {
+  readGoogleSheetsConfig,
+  type GoogleSheetsConfig,
+  type SheetsGateway,
+  type SheetUserEnteredCell,
+  type UserEnteredSheetsGateway,
+} from "@/lib/google-sheets/googleSheetsClient";
 import { SheetsControlError, type SheetRow } from "@/lib/google-sheets/sheetSchemas";
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 function a1(sheetName: string, range: string) { return `'${sheetName.replace(/'/gu, "''")}'!${range}`; }
 
-export class NoUploadGoogleSheetsClient implements SheetsGateway {
+export class NoUploadGoogleSheetsClient implements SheetsGateway, UserEnteredSheetsGateway {
   private readonly auth: GoogleAuth;
   constructor(private readonly config: GoogleSheetsConfig = readGoogleSheetsConfig()) {
     this.auth = new GoogleAuth({ credentials: { client_email: config.serviceAccountEmail, private_key: config.privateKey }, scopes: [SHEETS_SCOPE] });
@@ -53,6 +59,18 @@ export class NoUploadGoogleSheetsClient implements SheetsGateway {
     return result.values ?? [];
   }
 
+  async getUserEnteredCells(sheetName: string, range: string) {
+    const result = await this.request<{
+      sheets?: Array<{ data?: Array<{ rowData?: Array<{ values?: Array<{ userEnteredValue?: GoogleExtendedValue }> }> }> }>;
+    }>(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}?ranges=${encodeURIComponent(a1(sheetName, range))}&includeGridData=true&fields=${encodeURIComponent("sheets(data(rowData(values(userEnteredValue))))")}`,
+      { method: "GET" }, false
+    );
+    return (result.sheets?.[0]?.data?.[0]?.rowData ?? []).map((row) =>
+      (row.values ?? []).map((cell) => userEnteredCell(cell.userEnteredValue))
+    );
+  }
+
   async updateValues(sheetName: string, range: string, values: SheetRow[]) {
     await this.request(
       `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}/values/${encodeURIComponent(a1(sheetName, range))}?valueInputOption=RAW`,
@@ -73,4 +91,20 @@ export class NoUploadGoogleSheetsClient implements SheetsGateway {
       { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }, true
     );
   }
+}
+
+type GoogleExtendedValue = {
+  stringValue?: string;
+  numberValue?: number;
+  boolValue?: boolean;
+  formulaValue?: string;
+};
+
+function userEnteredCell(value?: GoogleExtendedValue): SheetUserEnteredCell {
+  if (!value) return { kind: "blank" };
+  if (typeof value.formulaValue === "string") return { kind: "formula", value: value.formulaValue };
+  if (typeof value.stringValue === "string") return { kind: "literal_string", value: value.stringValue };
+  if (typeof value.numberValue === "number") return { kind: "literal_number", value: value.numberValue };
+  if (typeof value.boolValue === "boolean") return { kind: "literal_boolean", value: value.boolValue };
+  return { kind: "blank" };
 }

@@ -1,11 +1,15 @@
-import type { SheetsGateway } from "@/lib/google-sheets/googleSheetsClient";
+import type {
+  SheetsGateway,
+  SheetUserEnteredCell,
+  UserEnteredSheetsGateway,
+} from "@/lib/google-sheets/googleSheetsClient";
 import { COMMAND_HEADERS, LOG_HEADERS, QUEUE_HEADERS, SHEET_NAMES, toKstTimestamp, type SheetRow } from "@/lib/google-sheets/sheetSchemas";
 
 function columnIndex(letter: string) {
   return letter.split("").reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1;
 }
 
-export class MemorySheetsGateway implements SheetsGateway {
+export class MemorySheetsGateway implements SheetsGateway, UserEnteredSheetsGateway {
   readonly sheets = new Map<string, SheetRow[]>();
 
   constructor() {
@@ -25,6 +29,10 @@ export class MemorySheetsGateway implements SheetsGateway {
 
   async getValues(sheetName: string) {
     return structuredClone(this.sheets.get(sheetName) ?? []);
+  }
+
+  async getUserEnteredCells(sheetName: string) {
+    return structuredClone(this.sheets.get(sheetName) ?? []).map((row) => row.map(toUserEnteredCell));
   }
 
   async updateValues(sheetName: string, range: string, values: SheetRow[]) {
@@ -49,6 +57,14 @@ export class MemorySheetsGateway implements SheetsGateway {
   async clearValues(sheetName: string, range: string) {
     await this.updateValues(sheetName, range, [[]]);
   }
+}
+
+function toUserEnteredCell(value: SheetRow[number]): SheetUserEnteredCell {
+  if (value === "" || value === null || value === undefined) return { kind: "blank" };
+  if (typeof value === "number") return { kind: "literal_number", value };
+  if (typeof value === "boolean") return { kind: "literal_boolean", value };
+  const text = String(value);
+  return text.startsWith("=") ? { kind: "formula", value: text } : { kind: "literal_string", value: text };
 }
 
 export function freshQueueLastModified(gateway: MemorySheetsGateway) {
