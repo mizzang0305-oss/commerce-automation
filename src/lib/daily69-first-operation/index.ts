@@ -185,7 +185,7 @@ export async function promoteFirstOperationActivePointer(operationRoot: string) 
   return pointer;
 }
 
-export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot = process.cwd()) {
+export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot = sourceRoot) {
   const source = await readSource(resolve(sourceRoot));
   const actual = await sourceBundle(resolve(sourceRoot), source.queue, assetBoundaryRoot);
   if (actual.bundleHash !== manifest.sourceBundleHash) throw new Error("SOURCE_PROOF_HASH_MISMATCH");
@@ -350,7 +350,7 @@ function assertSource(source: Awaited<ReturnType<typeof readSource>>) {
   return affiliateReadiness;
 }
 
-async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundaryRoot = process.cwd()) {
+async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundaryRoot = root) {
   const fileHashes: Record<string, string> = {};
   for (const name of SOURCE_FILES) fileHashes[name] = await hashFile(join(root, name));
   const assetHashes: Record<string, string> = {};

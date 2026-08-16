@@ -14,7 +14,7 @@ describe("first no-upload Daily69 operation", () => {
   it("carries the prevalidated nine without rerendering and schedules exactly 20 hourly groups of three", async () => {
     const fixture = await sourceFixture();
     const before = await hashFile(join(fixture.sourceRoot, "queue.json"));
-    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "a".repeat(40) });
+    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "a".repeat(40) });
     const snapshot = await firstOperationStatus(armed.operationRoot);
     expect(armed.manifest.operationDate).toBe("2026-08-11");
     expect(armed.manifest).toMatchObject({ schemaVersion: "daily69-first-operation-v2", attemptNumber: 1, previousAttemptNamespace: "", armStatus: "prepared" });

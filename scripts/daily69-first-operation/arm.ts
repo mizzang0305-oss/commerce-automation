@@ -2,11 +2,12 @@ import { resolve } from "node:path";
 import { armFirstOperation } from "../../src/lib/daily69-first-operation";
 
 async function main() {
+  const sourceRoot = resolve(requiredArg("--source-root"));
   const result = await armFirstOperation({
-    sourceRoot: resolve(requiredArg("--source-root")),
+    sourceRoot,
     operationBase: resolve(requiredArg("--operation-base")),
     expectedGitHead: requiredArg("--expected-head"),
-    assetBoundaryRoot: process.cwd(),
+    assetBoundaryRoot: sourceRoot,
     now: new Date(),
     operationDate: optionalArg("--operation-date"),
     namespace: optionalArg("--namespace"),
