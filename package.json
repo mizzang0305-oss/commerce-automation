@@ -111,6 +111,8 @@
     "daily69:first-day:closeout": "tsx scripts/daily69-first-operation/closeout.ts",
     "daily69:first-day:emergency-pause": "tsx scripts/daily69-first-operation/emergency-pause.ts",
     "daily69:first-day:sheets-snapshot": "node --conditions=react-server --import tsx scripts/daily69-first-operation/capture-sheets-snapshot.ts",
+    "daily69:first-day:cutover-baseline": "node --conditions=react-server --import tsx scripts/daily69-first-operation/capture-cutover-baseline.ts",
+    "daily69:first-day:cutover": "node --conditions=react-server --import tsx scripts/daily69-first-operation/cutover.ts",
     "usage-evidence:focused": "vitest run tests/usage-evidence tests/daily-69-control/nightlyScout.test.ts",
     "usage-evidence:shadow": "tsx scripts/usage-evidence/run-daily69-capacity-shadow.ts",
     "usage-evidence:v3:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/daily-69-control/nightlyScout.test.ts",

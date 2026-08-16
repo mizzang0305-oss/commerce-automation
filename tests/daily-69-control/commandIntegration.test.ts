@@ -14,14 +14,14 @@ afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recur
 async function setup() { const root = await mkdtemp(join(tmpdir(), "queue-control-")); roots.push(root); const repository = new LocalQueueRepository(root); await repository.writeSettings({ ...DEFAULT_QUEUE_SCHEDULER_SETTINGS, enabled: true }); const now = new Date("2026-08-09T00:00:00.000Z"); await repository.insertRanked({ ranked: rankedProducts(12), queueDate: "2026-08-09", now, dueNow: true }); return { repository, now }; }
 
 describe("Sheets command bus over local authority", () => {
-  test("rejects an old namespace command without local or projection mutation, then processes the active namespace", async () => {
+  test("rejects old and held namespace commands without local mutation, then processes attempt-2", async () => {
     const { repository, now } = await setup();
     const gateway = new MemorySheetsGateway();
     const commands = new SheetsCommandRepository(gateway);
     const item = (await repository.items())[0];
     const revisionBefore = (await repository.controlState()).localRevision;
-    await commands.create({ queueId: item.id, command: "HOLD_SLOT", expectedRevision: item.localRevision, namespace: "operation-A", webRequestKey: crypto.randomUUID() });
-    const projection = new QueueProjectionService(gateway, repository, "operation-B");
+    await commands.create({ queueId: item.id, command: "HOLD_SLOT", expectedRevision: item.localRevision, namespace: "operation-2026-08-11", webRequestKey: crypto.randomUUID() });
+    const projection = new QueueProjectionService(gateway, repository, "operation-2026-08-17-attempt-2");
     const rejected = await processOneQueueControlCommand({ gateway, repository, projection, runnerId: "runner-test", now });
     expect(rejected).toMatchObject({ status: "stale_rejected", safeMessage: "COMMAND_NAMESPACE_MISMATCH", localApplied: false });
     expect((await repository.controlState()).localRevision).toBe(revisionBefore);
@@ -29,7 +29,12 @@ describe("Sheets command bus over local authority", () => {
     expect(gateway.sheets.has(SHEET_NAMES.queue)).toBe(true);
     expect(gateway.sheets.get(SHEET_NAMES.queue)!.slice(1).filter((row) => String(row[0]).startsWith("queue-")).length).toBe(1);
 
-    await commands.create({ queueId: item.id, command: "HOLD_SLOT", expectedRevision: item.localRevision, namespace: "operation-B", webRequestKey: crypto.randomUUID() });
+    await commands.create({ queueId: item.id, command: "HOLD_SLOT", expectedRevision: item.localRevision, namespace: "operation-2026-08-17", webRequestKey: crypto.randomUUID() });
+    const heldRejected = await processOneQueueControlCommand({ gateway, repository, projection, runnerId: "runner-test", now });
+    expect(heldRejected).toMatchObject({ status: "stale_rejected", safeMessage: "COMMAND_NAMESPACE_MISMATCH", localApplied: false });
+    expect((await repository.controlState()).localRevision).toBe(revisionBefore);
+
+    await commands.create({ queueId: item.id, command: "HOLD_SLOT", expectedRevision: item.localRevision, namespace: "operation-2026-08-17-attempt-2", webRequestKey: crypto.randomUUID() });
     const accepted = await processOneQueueControlCommand({ gateway, repository, projection, runnerId: "runner-test", now });
     expect(accepted).toMatchObject({ status: "completed", localApplied: true });
     expect((await repository.items()).find((entry) => entry.id === item.id)!.status).toBe("hold");

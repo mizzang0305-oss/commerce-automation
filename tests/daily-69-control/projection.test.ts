@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { DAILY_69_NO_UPLOAD_SETTINGS, LocalQueueRepository } from "@/lib/queue-scheduler";
 import { projectionIdentity, QueueProjectionService, RESERVE_SHEET_NAME, SYNC_SHEET_NAME } from "@/lib/queue-control-integration";
 import { SHEET_NAMES } from "@/lib/google-sheets/sheetSchemas";
+import { createCommerceControlRepository } from "@/lib/google-sheets/commerceControlRepository";
 import { MemorySheetsGateway } from "../helpers/googleSheetsControl";
 import { rankedProducts } from "./fixtures";
 
@@ -89,13 +90,17 @@ describe("local queue to Sheets projection", () => {
     const planB = await projectionB.planProjectionDiff();
     expect(planB[SHEET_NAMES.queue]).toMatchObject({ rowsToUpdate: 0, rowsToAppend: 69, unrelatedRowsWouldChange: 0 });
     expect(planB[RESERVE_SHEET_NAME]).toMatchObject({ rowsToUpdate: 0, rowsToAppend: 14, unrelatedRowsWouldChange: 0 });
-    await projectionB.project();
+    await projectionB.projectAppendOnly();
     const queueRows = gateway.sheets.get(SHEET_NAMES.queue)!;
     expect(queueRows.slice(1).filter((row) => row[queueNamespace] === "operation-2026-08-11")).toHaveLength(69);
     expect(queueRows.slice(1).filter((row) => row[queueNamespace] === "operation-2026-08-17-attempt-2")).toHaveLength(69);
     expect(JSON.stringify(queueRows.slice(1).filter((row) => row[queueNamespace] === "operation-2026-08-11"))).toBe(queueABefore);
     expect(JSON.stringify(gateway.sheets.get(RESERVE_SHEET_NAME)!.slice(1).filter((row) => row[reserveNamespace] === "operation-2026-08-11"))).toBe(reserveABefore);
     expect(gateway.sheets.get(RESERVE_SHEET_NAME)!.slice(1).filter((row) => row[reserveNamespace] === "operation-2026-08-17-attempt-2")).toHaveLength(14);
+    await expect(projectionB.projectAppendOnly()).rejects.toThrow("CUTOVER_WOULD_MUTATE_EXISTING_ROWS");
+
+    const dashboard = await createCommerceControlRepository(gateway).dashboard();
+    expect(dashboard.daily69).toMatchObject({ namespace: "operation-2026-08-17-attempt-2", activeCount: 69, reserveCount: 14 });
 
     const repeatPlan = await projectionB.planProjectionDiff();
     expect(repeatPlan[SHEET_NAMES.queue]).toMatchObject({ rowsToUpdate: 69, rowsToAppend: 0, unrelatedRowsWouldChange: 0 });

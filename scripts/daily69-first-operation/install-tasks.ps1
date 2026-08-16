@@ -37,13 +37,22 @@ function New-OperationAction([string]$Script) {
     return New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments -WorkingDirectory $root
 }
 
-function Assert-TaskBinding([string]$Name) {
+function Assert-TaskBinding([string]$Name, [string]$Role) {
     $task = Get-ScheduledTask -TaskName $Name -ErrorAction Stop
     $actionText = (@($task.Actions) | ForEach-Object { [string]$_.Execute + " " + [string]$_.Arguments }) -join " "
-    foreach ($required in @($queue, $Namespace, $ExpectedGitHead)) {
+    foreach ($required in @($root, $queue, $source, $envPath, $Namespace, $ExpectedGitHead)) {
         if ($actionText -notlike "*$required*") { throw "FIRST_OPERATION_TASK_BINDING_VERIFY_FAILED:$Name" }
     }
     if ([string]$task.State -eq "Disabled") { throw "FIRST_OPERATION_TASK_DISABLED:$Name" }
+    if ([string]$task.Settings.MultipleInstances -ne "IgnoreNew" -or -not [bool]$task.Settings.StartWhenAvailable) { throw "FIRST_OPERATION_TASK_SETTINGS_VERIFY_FAILED:$Name" }
+    $starts = @($task.Triggers | ForEach-Object { [DateTime]::Parse([string]$_.StartBoundary) })
+    if ($starts | Where-Object { $_.Date -ne $operationLocal.Date }) { throw "FIRST_OPERATION_TASK_DATE_VERIFY_FAILED:$Name" }
+    if ($Role -eq "batch") {
+        $hours = @($starts | Sort-Object | ForEach-Object { $_.Hour })
+        if ($hours.Count -ne 20 -or (Compare-Object -ReferenceObject @(4..23) -DifferenceObject $hours)) { throw "FIRST_OPERATION_BATCH_TRIGGERS_VERIFY_FAILED:$Name" }
+    }
+    if ($Role -eq "control" -and ($starts.Count -ne 1 -or $starts[0].Hour -ne 0 -or $starts[0].Minute -ne 1)) { throw "FIRST_OPERATION_CONTROL_TRIGGER_VERIFY_FAILED:$Name" }
+    if ($Role -eq "closeout" -and ($starts.Count -ne 1 -or $starts[0].Hour -ne 23 -or $starts[0].Minute -ne 55)) { throw "FIRST_OPERATION_CLOSEOUT_TRIGGER_VERIFY_FAILED:$Name" }
 }
 
 $backups = @{}
@@ -74,7 +83,9 @@ try {
     if ($PSCmdlet.ShouldProcess($names[2], "Register first-operation no-upload control runner")) { Register-ScheduledTask -TaskName $names[2] -Action (New-OperationAction $controlScript) -Trigger $controlTrigger -Settings $controlSettings -Principal $principal -Description "First operation day local queue command runner and Sheets projection only; no upload." | Out-Null }
     if ($PSCmdlet.ShouldProcess($names[3], "Register first-operation no-upload closeout")) { Register-ScheduledTask -TaskName $names[3] -Action (New-OperationAction $closeoutScript) -Trigger $closeoutTrigger -Settings $closeoutSettings -Principal $principal -Description "First operation day pause, projection, and local closeout only; no upload." | Out-Null }
     Disable-ScheduledTask -TaskName $names[0] | Out-Null
-    foreach ($name in $names[1..3]) { Assert-TaskBinding $name }
+    Assert-TaskBinding $names[1] "batch"
+    Assert-TaskBinding $names[2] "control"
+    Assert-TaskBinding $names[3] "closeout"
     if ([string](Get-ScheduledTask -TaskName $names[0] -ErrorAction Stop).State -ne "Disabled") { throw "FIRST_OPERATION_SCOUT_NOT_DISABLED" }
     Push-Location $root
     try {
