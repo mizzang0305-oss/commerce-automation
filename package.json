@@ -94,6 +94,8 @@
     "youtube-intelligence:fixture": "tsx scripts/youtube-intelligence/run.ts fixture",
     "youtube-intelligence:analyze": "tsx scripts/youtube-intelligence/run.ts analyze",
     "youtube-intelligence:report": "tsx scripts/youtube-intelligence/run.ts report",
+    "youtube-intelligence:owner-observation:validate": "tsx scripts/youtube-intelligence/owner-observation.ts validate",
+    "youtube-intelligence:owner-observation:report": "tsx scripts/youtube-intelligence/owner-observation.ts report",
     "video-automation:e2e": "tsx scripts/video-automation/run-product-to-video-v1.ts",
     "video-automation:e2e:v2": "tsx scripts/video-automation/run-autonomous-video-review-v2.ts",
     "live-product-video:e2e": "tsx scripts/live-product-video/run-live-product-video-v1.ts",
