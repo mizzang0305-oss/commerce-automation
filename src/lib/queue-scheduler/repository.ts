@@ -5,6 +5,7 @@ import { atomicWriteJson, readJson } from "./atomicJson";
 import { acquireProcessLock } from "./lock";
 import { DEFAULT_QUEUE_SCHEDULER_SETTINGS, validateSettings } from "./settings";
 import type { LocalQueueItem, LocalRun, QueueControlState, QueueSchedulerSettings, ReserveCandidate } from "./types";
+import { assertCodexReviewEvidence, isCodexReviewEvidenceV2, type CodexReviewSubmission } from "./codexReviewEvidence";
 import type { RankedLiveProduct } from "@/lib/live-product-video";
 import type { UsageCapacityPlan } from "@/lib/usage-evidence";
 
@@ -112,21 +113,37 @@ export class LocalQueueRepository {
 
   async markProcessing(ids: string[], now: Date): Promise<void> { await this.patch(ids, (item) => { item.status = "processing"; item.startedAt ||= now.toISOString(); }); }
   async complete(input: { id: string; videoPath: string; reviewPath: string; creativeScore: number; videoQualityScore: number; now: Date }): Promise<void> { await this.patch([input.id], (item) => { item.status = "video_ready_machine_qa"; item.finishedAt = input.now.toISOString(); item.videoPath = input.videoPath; item.reviewPath = input.reviewPath; item.creativeScore = input.creativeScore; item.videoQualityScore = input.videoQualityScore; item.errorCode = ""; item.safeMessage = "MACHINE_QA_PASSED_CODEX_NOT_EXECUTED"; item.leaseOwner = ""; item.leaseAcquiredAt = ""; item.leaseExpiresAt = ""; const active = [...(item.candidateHistory ?? [])].reverse().find((entry) => entry.outcome === "active"); if (active) { active.outcome = "passed"; active.finishedAt = input.now.toISOString(); active.schedulerAttempts = item.attemptCount; } }); }
-  async recordCodexVisualReviews(input: { reviews: Array<{ productKey: string; passed: boolean }>; now: Date }): Promise<number> {
+  async recordCodexVisualReviews(input: { reviews: CodexReviewSubmission[]; now: Date }): Promise<number> {
+    if (input.reviews.length === 0) throw new Error("CODEX_VISUAL_REVIEW_INPUT_INVALID");
+    if (input.reviews.some((review) => !isCodexReviewEvidenceV2(review) && review.passed)) {
+      throw new Error("CODEX_VISUAL_REVIEW_EXACT_EVIDENCE_REQUIRED");
+    }
     return this.mutate(async (items) => {
-      const reviews = new Map(input.reviews.map((review) => [review.productKey, review.passed]));
-      if (reviews.size !== input.reviews.length || reviews.size === 0) throw new Error("CODEX_VISUAL_REVIEW_INPUT_INVALID");
-      const matched = items.filter((item) => reviews.has(item.productKey));
-      if (matched.length !== reviews.size) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
-      if (matched.some((item) => !["video_ready_machine_qa", "video_ready_autoqa"].includes(item.status))) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_STATE_CONFLICT");
-      for (const item of matched) {
-        const passed = reviews.get(item.productKey) === true;
-        item.reviewMetadata.codexReview = passed ? "pass" : "block";
+      const identities = input.reviews.map((review) => isCodexReviewEvidenceV2(review) ? review.queueId : `legacy:${review.productKey}`);
+      if (new Set(identities).size !== identities.length) throw new Error("CODEX_VISUAL_REVIEW_DUPLICATE_QUEUE_ITEM");
+      const planned: Array<{ item: LocalQueueItem; review: CodexReviewSubmission }> = [];
+      for (const review of input.reviews) {
+        const matches = isCodexReviewEvidenceV2(review)
+          ? items.filter((item) => item.id === review.queueId)
+          : items.filter((item) => item.productKey === review.productKey && ["video_ready_machine_qa", "video_ready_autoqa", "manual_review"].includes(item.status));
+        if (matches.length === 0) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
+        if (matches.length !== 1) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ITEM_AMBIGUOUS");
+        const [item] = matches;
+        if (!["video_ready_machine_qa", "video_ready_autoqa", "manual_review"].includes(item.status)) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_STATE_CONFLICT");
+        if (isCodexReviewEvidenceV2(review)) await assertCodexReviewEvidence({ evidence: review, item, queueRoot: this.root, now: input.now });
+        planned.push({ item, review });
+      }
+      for (const { item, review } of planned) {
+        const passed = isCodexReviewEvidenceV2(review) ? review.reviewResult === "pass" : false;
+        item.reviewMetadata = {
+          codexReview: passed ? "pass" : "block",
+          ...(isCodexReviewEvidenceV2(review) ? { evidence: structuredClone(review) } : {})
+        };
         item.status = passed ? "video_ready_autoqa" : "manual_review";
         item.safeMessage = passed ? "CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD" : "CODEX_VISUAL_REVIEW_BLOCKED";
         item.updatedAt = input.now.toISOString();
       }
-      return { value: matched.length, items };
+      return { value: planned.length, items };
     });
   }
   async fail(input: { id: string; code: string; retryable: boolean; now: Date; settings: QueueSchedulerSettings }): Promise<"retry_wait" | "failed" | "blocked"> { let result: "retry_wait" | "failed" | "blocked" = "blocked"; await this.patch([input.id], (item) => { if (input.retryable && item.attemptCount < input.settings.maxAttempts) { result = "retry_wait"; item.status = result; item.nextAttemptAt = new Date(input.now.getTime() + input.settings.retryBackoffMinutes * 60_000).toISOString(); } else { result = input.retryable ? "failed" : "blocked"; item.status = result; item.finishedAt = input.now.toISOString(); } item.errorCode = safeCode(input.code); item.safeMessage = safeCode(input.code); item.leaseOwner = ""; item.leaseExpiresAt = ""; }); return result; }
