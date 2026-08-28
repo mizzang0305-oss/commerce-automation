@@ -4,9 +4,10 @@ import { join, resolve } from "node:path";
 import { adaptLiveProductToVideoInput, resolveExactProductReference, resolveOwnerReviewedUsageEvidence } from "@/lib/live-product-video";
 import { generateDeterministicCreativeCandidates } from "@/lib/video-automation/creativeCandidates";
 import { rankCreativeCandidates } from "@/lib/video-lab/creativeRanker";
+import { executeAuthenticatedCodexReview, type CodexReviewExecution } from "./codexCliReviewExecutor";
 import type { LocalQueueItem } from "./types";
 
-export type QueueVideoResult = { queueId: string; productKey: string; passed: boolean; errorCode: string; finalVideo: string; reviewPath: string; creativeScore: number; videoQualityScore: number; retryable: boolean };
+export type QueueVideoResult = { queueId: string; productKey: string; passed: boolean; errorCode: string; finalVideo: string; reviewPath: string; creativeScore: number; videoQualityScore: number; retryable: boolean; machineQaFinishedAt?: string; codexReview?: CodexReviewExecution };
 
 export async function prepareQueueVideoItemsIndependently<T>(input: {
   items: LocalQueueItem[];
@@ -25,7 +26,7 @@ export async function prepareQueueVideoItemsIndependently<T>(input: {
   return { prepared, failures };
 }
 
-export async function executeQueueVideoBatch(input: { items: LocalQueueItem[]; runId: string; root: string }): Promise<QueueVideoResult[]> {
+export async function executeQueueVideoBatch(input: { items: LocalQueueItem[]; runId: string; root: string; reviewExecutor?: typeof executeAuthenticatedCodexReview }): Promise<QueueVideoResult[]> {
   if (input.items.length < 1 || input.items.length > 3) throw new Error("QUEUE_VIDEO_ONE_TO_THREE_ITEMS_REQUIRED");
   const runtime = runtimeConfig();
   const runRoot = join(input.root, "artifacts", input.runId);
@@ -43,20 +44,49 @@ export async function executeQueueVideoBatch(input: { items: LocalQueueItem[]; r
   const videoRunId = prepared.length > 0 ? `${input.runId}-video` : null;
 
   if (prepared.length > 0 && videoRunId) {
-    const manifestPath = join(runRoot, "video-inputs.json");
-    await writeFile(manifestPath, `${JSON.stringify({ version: "queue-video-input-v1", queueBindings: prepared.map(({ queueId, productKey }) => ({ queueId, productKey })), products: prepared.map((value) => value.input), SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 }, null, 2)}\n`, "utf8");
+    const videoInputManifestPath = join(runRoot, "video-inputs.json");
+    await writeFile(videoInputManifestPath, `${JSON.stringify({ version: "queue-video-input-v1", queueBindings: prepared.map(({ queueId, productKey }) => ({ queueId, productKey })), products: prepared.map((value) => value.input), SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 }, null, 2)}\n`, "utf8");
     const videoRoot = resolve("data", "video-automation", videoRunId);
     try {
-      await spawnProcess(process.execPath, ["--import", "tsx", "scripts/video-automation/run-autonomous-video-review-v2.ts"], { ...process.env, LIVE_PRODUCT_VIDEO_INPUT_MANIFEST: manifestPath, VIDEO_AUTOMATION_RUN_ID: videoRunId, VIDEO_AUTOMATION_V2_MODE: "batch" }, 3_600_000);
-      const manifest = JSON.parse(await readFile(join(videoRoot, "run-manifest.json"), "utf8")) as { items?: Array<Record<string, unknown>> };
+      await spawnProcess(process.execPath, ["--import", "tsx", "scripts/video-automation/run-autonomous-video-review-v2.ts"], { ...process.env, LIVE_PRODUCT_VIDEO_INPUT_MANIFEST: videoInputManifestPath, VIDEO_AUTOMATION_RUN_ID: videoRunId, VIDEO_AUTOMATION_V2_MODE: "batch" }, 3_600_000);
+      const runManifestPath = join(videoRoot, "run-manifest.json");
+      const manifest = JSON.parse(await readFile(runManifestPath, "utf8")) as { completedAt?: string; items?: Array<Record<string, unknown>> };
       for (const binding of prepared) {
-        const item = (manifest.items ?? []).find((value) => value.productKey === binding.productKey);
+        const itemIndex = (manifest.items ?? []).findIndex((value) => value.productKey === binding.productKey);
+        const item = itemIndex >= 0 ? manifest.items?.[itemIndex] : undefined;
         if (!item || item.productKey !== binding.productKey) { byQueueId.set(binding.queueId, failed(binding, "QUEUE_PRODUCT_BINDING_MISMATCH", false)); continue; }
         if (item.machineQaPassed !== true || typeof item.finalVideo !== "string") { const blocker = Array.isArray(item.blockers) ? String(item.blockers[0] ?? "VIDEO_AUTO_QA_FAILED") : "VIDEO_AUTO_QA_FAILED"; byQueueId.set(binding.queueId, failed(binding, safeCode(blocker), isRetryable(blocker))); continue; }
         try {
           const media = await inspectMedia(item.finalVideo);
           if (!media.passed) { byQueueId.set(binding.queueId, failed(binding, media.errorCode, false)); continue; }
-          byQueueId.set(binding.queueId, { queueId: binding.queueId, productKey: binding.productKey, passed: true, errorCode: "", finalVideo: resolve(item.finalVideo), reviewPath: join(videoRoot, "run-manifest.json"), creativeScore: Number(item.creativeScore ?? 0), videoQualityScore: Number(item.score ?? 0), retryable: false });
+          const visualEvidencePaths = [item.firstFramePath, item.firstThreeSecondsContactSheetPath, item.contactSheetPath]
+            .filter((value): value is string => typeof value === "string" && value.length > 0);
+          const finalReviewArtifact = join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final", "codex-review-source.json");
+          const codexReview = await (input.reviewExecutor ?? executeAuthenticatedCodexReview)({
+            operationNamespace: basenameSafe(input.root),
+            queueId: binding.queueId,
+            productKey: binding.productKey,
+            videoPath: resolve(item.finalVideo),
+            machineQaSourceArtifact: runManifestPath,
+            finalReviewArtifact,
+            visualEvidencePaths,
+            receiptRoot: join(input.root, "codex-review-executor"),
+            provenance: "natural",
+            regenerationCount: Math.max(0, (input.items.find((entry) => entry.id === binding.queueId)?.attemptCount ?? 1) - 1),
+          });
+          byQueueId.set(binding.queueId, {
+            queueId: binding.queueId,
+            productKey: binding.productKey,
+            passed: true,
+            errorCode: "",
+            finalVideo: resolve(item.finalVideo),
+            reviewPath: codexReview.evidence?.sourceReviewArtifact ?? runManifestPath,
+            creativeScore: Number(item.creativeScore ?? 0),
+            videoQualityScore: Number(item.score ?? 0),
+            retryable: false,
+            machineQaFinishedAt: validDate(manifest.completedAt) ? manifest.completedAt : new Date().toISOString(),
+            codexReview,
+          });
         } catch (error) {
           const code = safeCode(error instanceof Error ? error.message : String(error));
           byQueueId.set(binding.queueId, failed(binding, code, isRetryable(code)));
@@ -68,7 +98,7 @@ export async function executeQueueVideoBatch(input: { items: LocalQueueItem[]; r
     }
   }
   const results = orderedItems.map((item) => byQueueId.get(item.id) ?? failed({ queueId: item.id, productKey: item.productKey }, "QUEUE_ITEM_RESULT_MISSING", false));
-  await writeFile(join(runRoot, "batch-result.json"), `${JSON.stringify({ runId: input.runId, videoRunId, results, codexScheduledVisualReview: "unavailable", SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 }, null, 2)}\n`, "utf8");
+  await writeFile(join(runRoot, "batch-result.json"), `${JSON.stringify({ runId: input.runId, videoRunId, results, codexScheduledVisualReview: "authenticated_codex_cli", SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 }, null, 2)}\n`, "utf8");
   return results;
 }
 
@@ -79,5 +109,7 @@ async function capture(command: string, args: string[], timeoutMs: number): Prom
 function failed(binding: { queueId: string; productKey: string }, errorCode: string, retryable: boolean): QueueVideoResult { return { queueId: binding.queueId, productKey: binding.productKey, passed: false, errorCode, finalVideo: "", reviewPath: "", creativeScore: 0, videoQualityScore: 0, retryable }; }
 function safeCode(value: string) { return /^[A-Z0-9_:-]+$/u.test(value) ? value : "VIDEO_AUTO_QA_FAILED"; }
 function isRetryable(code: string) { return /TEMPORARY|TIMEOUT|SUBPROCESS|FILESYSTEM|EACCES|EBUSY/u.test(code); }
+function basenameSafe(path: string) { const normalized = resolve(path); return normalized.slice(Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\")) + 1); }
+function validDate(value: unknown): value is string { return typeof value === "string" && Number.isFinite(Date.parse(value)); }
 function passingCreativeCount(item: LocalQueueItem) { const candidate = item.candidate; return rankCreativeCandidates(generateDeterministicCreativeCandidates({ runId: "queue-preflight", product: { productKey: candidate.productKey, rawProductName: candidate.rawProductName, canonicalProductName: candidate.canonicalProductName, aliases: candidate.productAliases, anchors: candidate.productAnchors, category: candidate.categoryPath || candidate.category, imagePaths: [] }, creative: { candidateCount: 3, language: "ko" }, mode: "local_review_only" })).filter((entry) => entry.score.passed).length; }
 export function orderQueueItemsForCreativeDiversity(items: LocalQueueItem[]) { return [...items].sort((a, b) => passingCreativeCount(a) - passingCreativeCount(b) || a.queueRank - b.queueRank); }

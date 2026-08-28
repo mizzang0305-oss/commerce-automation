@@ -16,9 +16,15 @@ export type CodexReviewEvidenceV2 = {
   videoSize: number;
   reviewedAt: string;
   reviewerType: "codex";
+  executorType: "authenticated_codex_cli";
+  reviewProvenance: "natural" | "carry_forward_revalidation";
   reviewResult: "pass" | "block";
+  hardBlockers: string[];
+  safeSummary: string;
   machineQaDigest: string;
   sourceReviewArtifact: string;
+  reviewReceiptPath: string;
+  reviewReceiptSha256: string;
   notes: string;
   regenerationCount: number;
   originOperationNamespace?: string;

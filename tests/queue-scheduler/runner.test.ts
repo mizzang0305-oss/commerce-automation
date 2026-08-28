@@ -1,9 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { acquireProcessLock, DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository, QUEUE_SCHEDULER_FLAGS, runNextBatch, type QueueVideoRuntimeReadiness } from "../../src/lib/queue-scheduler";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
+import { createTestCodexEvidence } from "./testCodexEvidence";
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -18,6 +19,21 @@ describe("queue batch runner", () => {
   it("replaces a product-specific hard failure from reserve without changing the logical slot", async () => { const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(12), queueDate: kst(now), now, dueNow: true }); const calls: string[][] = []; const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => { calls.push(items.map((item) => item.productKey)); return items.map((item, index) => ({ queueId: item.id, productKey: item.productKey, passed: calls.length > 1 || index !== 0, errorCode: calls.length === 1 && index === 0 ? "ASR_FAILED_AFTER_REPAIR" : "", finalVideo: `${item.id}.mp4`, reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false })); } }); expect(result.run.claimed).toBe(3); expect(result.run.completed).toBe(3); expect(result.run.metrics.fallbacks).toBe(1); expect(calls[1]).toHaveLength(1); const slot = (await repo.items()).find((item) => item.queueRank === 1)!; expect(slot.slotId).toBe("slot-001"); expect(slot.productCandidateAttempt).toBe(2); expect(slot.candidateHistory).toHaveLength(2); expect(slot.candidateHistory[0].outcome).toBe("replaced"); expect(slot.candidateHistory[1].replacementOfProductKey).toBe("p0"); });
   it("isolates hook-family exhaustion to one slot and recovers only that slot", async () => { const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(12), queueDate: kst(now), now, dueNow: true }); const calls: number[] = []; const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => { calls.push(items.length); return items.map((item, index) => ({ queueId: item.id, productKey: item.productKey, passed: items.length === 1 || index !== 1, errorCode: items.length === 3 && index === 1 ? "CREATIVE_SELECTION_FAILED" : "", finalVideo: `${item.id}.mp4`, reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false })); } }); expect(calls).toEqual([3, 1]); expect(result.run.completed).toBe(3); expect(result.run.metrics.fallbacks).toBe(1); });
   it("returns overlap safe no-op", async () => { const repo = await repository(); const release = await acquireProcessLock(join(repo.root, "runner.lock"), "other", 60_000); try { const result = await runNextBatch({ repository: repo }); expect(result.run.safeMessage).toBe("SCHEDULER_ALREADY_RUNNING"); } finally { await release(); } });
+  it("promotes only exact executor-receipt evidence and reports terminal Codex completion", async () => {
+    const repo = await repository(); const now = new Date();
+    await repo.insertRanked({ ranked: ranked(9), queueDate: kst(now), now, dueNow: true });
+    const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => {
+      const reviewPath = join(repo.root, "batch-review.json");
+      await writeFile(reviewPath, `${JSON.stringify({ version: "autonomous-video-review-v2", visualReviewExecuted: true, finalAutomatedQaPassed: items.length, items: items.map((item) => ({ productKey: item.productKey, status: "AUTO_QA_PASS", machineQaPassed: true, finalAutomatedQaPassed: true, visualReviewExecuted: true, blockers: [], publishReady: false, SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false })) })}\n`);
+      return Promise.all(items.map(async (item) => {
+        const videoPath = join(repo.root, `${item.id}.mp4`); await writeFile(videoPath, `video-${item.id}`);
+        const evidence = await createTestCodexEvidence({ operationNamespace: basename(repo.root), queueId: item.id, productKey: item.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh authenticated executor review passed the exact bound visual evidence.", receiptRoot: join(repo.root, "receipts") });
+        return { queueId: item.id, productKey: item.productKey, passed: true, errorCode: "", finalVideo: videoPath, reviewPath, creativeScore: 90, videoQualityScore: 92, retryable: false, machineQaFinishedAt: now.toISOString(), codexReview: { status: "pass" as const, errorCode: "", retryable: false, attempts: 1, deduplicated: false, receiptPath: evidence.reviewReceiptPath, evidence } };
+      }));
+    } });
+    expect(result.run).toMatchObject({ status: "success", completed: 3, safeMessage: "BATCH_CODEX_REVIEW_COMPLETE" });
+    expect((await repo.items()).filter((item) => item.status === "video_ready_autoqa")).toHaveLength(3);
+  });
 });
 function kst(date: Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date); }
 async function readyPreflight(): Promise<QueueVideoRuntimeReadiness> { return { ready: true, assetRoot: true, python: true, pythonVersion: "Python 3.10", whisperXRuntime: true, ttsCommand: true, asrPython: true, asrScript: true, asrModel: true, ffmpeg: true, ffprobe: true, diskSpace: true, durationMs: 1, blockers: [], configured: { assetRoot: true, python: true, ttsCommand: true, asrPython: true, asrScript: true, asrModel: true }, SAFE_TO_UPLOAD: false }; }

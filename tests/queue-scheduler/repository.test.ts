@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalQueueRepository, DEFAULT_QUEUE_SCHEDULER_SETTINGS } from "../../src/lib/queue-scheduler";
-import { captureCodexReviewEvidence } from "../../src/lib/queue-scheduler/codexReviewEvidence";
+import { createTestCodexEvidence } from "./testCodexEvidence";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 
 const roots: string[] = [];
@@ -49,7 +49,7 @@ describe("local durable queue", () => {
     expect((await repository.items()).find((item) => item.id === claimed.id)?.status).toBe("video_ready_machine_qa");
     await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: true }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_EXACT_EVIDENCE_REQUIRED");
     expect((await repository.items()).find((item) => item.id === claimed.id)?.status).toBe("video_ready_machine_qa");
-    const passEvidence = await captureCodexReviewEvidence({ operationNamespace: basename(repository.root), queueId: claimed.id, productKey: claimed.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh Codex inspection verified the exact bound video.", regenerationCount: 0 });
+    const passEvidence = await createTestCodexEvidence({ operationNamespace: basename(repository.root), queueId: claimed.id, productKey: claimed.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh Codex inspection verified the exact bound video.", receiptRoot: join(repository.root, "receipts"), regenerationCount: 0 });
     expect(await repository.recordCodexVisualReviews({ reviews: [passEvidence], now })).toBe(1);
     const reviewed = (await repository.items()).find((item) => item.id === claimed.id)!;
     expect(reviewed.status).toBe("video_ready_autoqa");

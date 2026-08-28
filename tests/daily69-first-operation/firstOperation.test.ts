@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { armFirstOperation, closeoutFirstOperation, firstOperationStatus, promoteFirstOperationActivePointer, transitionFirstOperationArmStatus, verifySourceBundle } from "../../src/lib/daily69-first-operation";
 import { DAILY_69_NO_UPLOAD_SETTINGS, LocalQueueRepository } from "../../src/lib/queue-scheduler";
-import { captureCodexReviewEvidence } from "../../src/lib/queue-scheduler/codexReviewEvidence";
+import { createTestCodexEvidence } from "../queue-scheduler/testCodexEvidence";
 import type { CodexReviewEvidenceV2 } from "../../src/lib/queue-scheduler/types";
 import { rankedProducts } from "../daily-69-control/fixtures";
 
@@ -154,7 +154,7 @@ async function sourceFixture(options: { missingAffiliateRanks?: number[]; readyC
     for (const item of claimed) {
       const videoPath = join(sourceRoot, "artifacts", `${item.slotId}.mp4`); await writeFile(videoPath, `video-${item.slotId}`);
       await repository.complete({ id: item.id, videoPath, reviewPath, creativeScore: 90, videoQualityScore: 92, now });
-      reviewed.push(await captureCodexReviewEvidence({
+      reviewed.push(await createTestCodexEvidence({
         operationNamespace: "canary-source",
         queueId: item.id,
         productKey: item.productKey,
@@ -163,6 +163,7 @@ async function sourceFixture(options: { missingAffiliateRanks?: number[]; readyC
         reviewResult: "pass",
         sourceReviewArtifact: reviewPath,
         notes: `fixture exact review evidence for ${item.productKey}`,
+        receiptRoot: join(sourceRoot, "artifacts", "receipts"),
       }));
     }
   }

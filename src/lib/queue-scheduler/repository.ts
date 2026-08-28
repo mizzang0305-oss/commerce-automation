@@ -146,6 +146,16 @@ export class LocalQueueRepository {
       return { value: planned.length, items };
     });
   }
+  async markCodexReviewExecutorFailed(input: { id: string; code: string; now: Date }): Promise<void> {
+    await this.patch([input.id], (item) => {
+      if (item.status !== "video_ready_machine_qa" || item.reviewMetadata.codexReview !== "not_executed") throw new Error("CODEX_REVIEW_FAILURE_STATE_CONFLICT");
+      item.status = "blocked";
+      item.errorCode = safeCode(input.code);
+      item.safeMessage = `CODEX_REVIEW_EXECUTOR_BLOCKED:${safeCode(input.code)}`;
+      item.finishedAt = input.now.toISOString();
+      item.updatedAt = input.now.toISOString();
+    });
+  }
   async fail(input: { id: string; code: string; retryable: boolean; now: Date; settings: QueueSchedulerSettings }): Promise<"retry_wait" | "failed" | "blocked"> { let result: "retry_wait" | "failed" | "blocked" = "blocked"; await this.patch([input.id], (item) => { if (input.retryable && item.attemptCount < input.settings.maxAttempts) { result = "retry_wait"; item.status = result; item.nextAttemptAt = new Date(input.now.getTime() + input.settings.retryBackoffMinutes * 60_000).toISOString(); } else { result = input.retryable ? "failed" : "blocked"; item.status = result; item.finishedAt = input.now.toISOString(); } item.errorCode = safeCode(input.code); item.safeMessage = safeCode(input.code); item.leaseOwner = ""; item.leaseExpiresAt = ""; }); return result; }
 
   async replaceWithReserve(input: { id: string; reason: string; now: Date; expectedRevision?: number }): Promise<LocalQueueItem | null> {

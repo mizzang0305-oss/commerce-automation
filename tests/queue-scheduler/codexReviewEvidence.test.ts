@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository } from "../../src/lib/queue-scheduler";
-import { captureCodexReviewEvidence } from "../../src/lib/queue-scheduler/codexReviewEvidence";
+import { createTestCodexEvidence } from "./testCodexEvidence";
 import type { CodexReviewEvidenceV2 } from "../../src/lib/queue-scheduler/types";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 
@@ -63,7 +63,7 @@ describe("Codex review evidence v2", () => {
   it("rejects digest-valid review files whose machine QA semantics are not passed", async () => {
     const fixture = await readyFixture();
     await writeFile(fixture.reviewPath, qaArtifact(fixture.item.productKey, false));
-    const evidence = await captureCodexReviewEvidence({ operationNamespace: basename(fixture.repository.root), queueId: fixture.item.id, productKey: fixture.item.productKey, videoPath: fixture.videoPath, reviewedAt: fixture.now, reviewResult: "pass", sourceReviewArtifact: fixture.reviewPath, notes: "Fresh Codex inspection verified exact visual evidence.", regenerationCount: 0 });
+    const evidence = await createTestCodexEvidence({ operationNamespace: basename(fixture.repository.root), queueId: fixture.item.id, productKey: fixture.item.productKey, videoPath: fixture.videoPath, reviewedAt: fixture.now, reviewResult: "pass", sourceReviewArtifact: fixture.reviewPath, notes: "Fresh Codex inspection verified exact visual evidence.", receiptRoot: join(fixture.repository.root, "receipts"), regenerationCount: 0 });
     await expect(fixture.repository.recordCodexVisualReviews({ reviews: [evidence], now: fixture.now })).rejects.toThrow("CODEX_VISUAL_REVIEW_MACHINE_QA_NOT_PASSED");
   });
 });
@@ -79,7 +79,7 @@ async function readyFixture() {
   await writeFile(videoPath, "exact-video"); await writeFile(otherVideoPath, "exact-video");
   await writeFile(reviewPath, qaArtifact(item.productKey, true));
   await repository.complete({ id: item.id, videoPath, reviewPath, creativeScore: 90, videoQualityScore: 92, now });
-  const evidence = await captureCodexReviewEvidence({ operationNamespace: basename(root), queueId: item.id, productKey: item.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh Codex inspection verified exact visual evidence.", regenerationCount: 0 });
+  const evidence = await createTestCodexEvidence({ operationNamespace: basename(root), queueId: item.id, productKey: item.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh Codex inspection verified exact visual evidence.", receiptRoot: join(root, "receipts"), regenerationCount: 0 });
   return { repository, item, now, videoPath, otherVideoPath, reviewPath, evidence };
 }
 

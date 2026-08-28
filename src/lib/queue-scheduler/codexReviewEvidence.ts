@@ -18,13 +18,20 @@ export async function captureCodexReviewEvidence(input: {
   reviewResult: "pass" | "block";
   sourceReviewArtifact: string;
   notes: string;
+  hardBlockers: string[];
+  safeSummary: string;
+  executorType: "authenticated_codex_cli";
+  reviewProvenance: "natural" | "carry_forward_revalidation" | "diagnostic";
+  reviewReceiptPath: string;
   regenerationCount?: number;
   originOperationNamespace?: string;
   originQueueId?: string;
   originVideoSha256?: string;
 }): Promise<CodexReviewEvidenceV2> {
+  if (input.reviewProvenance === "diagnostic") throw new Error("CODEX_VISUAL_REVIEW_DIAGNOSTIC_PROMOTION_FORBIDDEN");
   const video = await inspectFile(input.videoPath, "CODEX_VISUAL_REVIEW_VIDEO_NOT_FOUND");
   const machineQa = await inspectFile(input.sourceReviewArtifact, "CODEX_VISUAL_REVIEW_SOURCE_ARTIFACT_NOT_FOUND");
+  const receipt = await inspectFile(input.reviewReceiptPath, "CODEX_VISUAL_REVIEW_RECEIPT_NOT_FOUND");
   return {
     schemaVersion: CODEX_REVIEW_EVIDENCE_SCHEMA_VERSION,
     operationNamespace: input.operationNamespace,
@@ -35,9 +42,15 @@ export async function captureCodexReviewEvidence(input: {
     videoSize: video.size,
     reviewedAt: input.reviewedAt.toISOString(),
     reviewerType: "codex",
+    executorType: input.executorType,
+    reviewProvenance: input.reviewProvenance,
     reviewResult: input.reviewResult,
+    hardBlockers: [...input.hardBlockers],
+    safeSummary: input.safeSummary,
     machineQaDigest: machineQa.sha256,
     sourceReviewArtifact: machineQa.path,
+    reviewReceiptPath: receipt.path,
+    reviewReceiptSha256: receipt.sha256,
     notes: input.notes,
     regenerationCount: input.regenerationCount ?? 0,
     ...(input.originOperationNamespace ? { originOperationNamespace: input.originOperationNamespace } : {}),
@@ -57,9 +70,13 @@ export async function assertCodexReviewEvidence(input: {
   if (evidence.operationNamespace !== basename(resolve(input.queueRoot))) throw new Error("CODEX_VISUAL_REVIEW_NAMESPACE_MISMATCH");
   if (evidence.queueId !== item.id) throw new Error("CODEX_VISUAL_REVIEW_QUEUE_ID_MISMATCH");
   if (evidence.productKey !== item.productKey) throw new Error("CODEX_VISUAL_REVIEW_PRODUCT_MISMATCH");
+  if (evidence.executorType !== "authenticated_codex_cli") throw new Error("CODEX_VISUAL_REVIEW_EXECUTOR_INVALID");
+  if (evidence.reviewProvenance !== "natural" && evidence.reviewProvenance !== "carry_forward_revalidation") throw new Error("CODEX_VISUAL_REVIEW_PROVENANCE_INVALID");
+  if ((evidence.reviewResult === "pass" && evidence.hardBlockers.length !== 0) || (evidence.reviewResult === "block" && evidence.hardBlockers.length === 0)) throw new Error("CODEX_VISUAL_REVIEW_BLOCKER_CONFLICT");
+  if (evidence.safeSummary.trim().length < 20 || evidence.safeSummary !== evidence.notes) throw new Error("CODEX_VISUAL_REVIEW_SUMMARY_INVALID");
   if (!Number.isSafeInteger(evidence.regenerationCount) || evidence.regenerationCount !== Math.max(0, item.attemptCount - 1)) throw new Error("CODEX_VISUAL_REVIEW_REGENERATION_COUNT_INVALID");
   if (evidence.notes.trim().length < 20) throw new Error("CODEX_VISUAL_REVIEW_NOTES_INVALID");
-  assertFreshTimestamp(evidence.reviewedAt, item.finishedAt, input.now);
+  assertFreshTimestamp(evidence.reviewedAt, item.finishedAt, input.now, evidence.reviewProvenance === "carry_forward_revalidation" ? 60 * 60_000 : 5 * 60_000);
   assertCarryForwardProvenance(evidence, item);
 
   const video = await inspectFile(item.videoPath, "CODEX_VISUAL_REVIEW_VIDEO_NOT_FOUND");
@@ -72,6 +89,7 @@ export async function assertCodexReviewEvidence(input: {
   const evidenceReviewArtifact = await inspectFile(evidence.sourceReviewArtifact, "CODEX_VISUAL_REVIEW_SOURCE_ARTIFACT_NOT_FOUND");
   if (!samePath(itemReviewArtifact, evidenceReviewArtifact.path)) throw new Error("CODEX_VISUAL_REVIEW_SOURCE_ARTIFACT_MISMATCH");
   if (evidenceReviewArtifact.sha256 !== evidence.machineQaDigest) throw new Error("CODEX_VISUAL_REVIEW_MACHINE_QA_DIGEST_MISMATCH");
+  await assertCodexExecutorReceipt(evidence);
   if (evidence.reviewResult === "pass") await assertMachineQaArtifact(evidenceReviewArtifact.path, item.productKey);
 }
 
@@ -79,7 +97,11 @@ export function isCodexReviewEvidenceV2(value: CodexReviewSubmission): value is 
   const candidate = value as Partial<CodexReviewEvidenceV2>;
   return candidate.schemaVersion === CODEX_REVIEW_EVIDENCE_SCHEMA_VERSION
     && candidate.reviewerType === "codex"
+    && candidate.executorType === "authenticated_codex_cli"
+    && (candidate.reviewProvenance === "natural" || candidate.reviewProvenance === "carry_forward_revalidation")
     && (candidate.reviewResult === "pass" || candidate.reviewResult === "block")
+    && Array.isArray(candidate.hardBlockers) && candidate.hardBlockers.every((entry) => typeof entry === "string" && /^[A-Z0-9_:-]{1,96}$/u.test(entry))
+    && typeof candidate.safeSummary === "string" && candidate.safeSummary.length >= 20
     && typeof candidate.operationNamespace === "string" && candidate.operationNamespace.length > 0
     && typeof candidate.queueId === "string" && candidate.queueId.length > 0
     && typeof candidate.productKey === "string" && candidate.productKey.length > 0
@@ -89,8 +111,27 @@ export function isCodexReviewEvidenceV2(value: CodexReviewSubmission): value is 
     && typeof candidate.reviewedAt === "string" && candidate.reviewedAt.length > 0
     && isSha256(candidate.machineQaDigest)
     && typeof candidate.sourceReviewArtifact === "string" && candidate.sourceReviewArtifact.length > 0
+    && typeof candidate.reviewReceiptPath === "string" && candidate.reviewReceiptPath.length > 0
+    && isSha256(candidate.reviewReceiptSha256)
     && typeof candidate.notes === "string"
     && typeof candidate.regenerationCount === "number";
+}
+
+export async function assertCodexExecutorReceipt(evidence: CodexReviewEvidenceV2): Promise<void> {
+  const receipt = await inspectFile(evidence.reviewReceiptPath, "CODEX_VISUAL_REVIEW_RECEIPT_NOT_FOUND");
+  if (receipt.sha256 !== evidence.reviewReceiptSha256) throw new Error("CODEX_VISUAL_REVIEW_RECEIPT_DIGEST_MISMATCH");
+  let value: Record<string, unknown>;
+  try { value = JSON.parse(await readFile(receipt.path, "utf8")) as Record<string, unknown>; }
+  catch { throw new Error("CODEX_VISUAL_REVIEW_RECEIPT_INVALID"); }
+  if (value.schemaVersion !== "queue-codex-review-executor-receipt-v1" || value.status !== "completed" || value.invoked !== true
+    || value.operationNamespace !== evidence.operationNamespace || value.queueId !== evidence.queueId || value.productKey !== evidence.productKey
+    || value.videoSha256 !== evidence.videoSha256 || value.reviewResult !== evidence.reviewResult || value.reviewedAt !== evidence.reviewedAt
+    || value.reviewerType !== "codex" || value.executorType !== evidence.executorType || value.provenance !== evidence.reviewProvenance
+    || value.finalReviewArtifactSha256 !== evidence.machineQaDigest || !samePath(String(value.finalReviewArtifact ?? ""), evidence.sourceReviewArtifact)
+    || JSON.stringify(value.hardBlockers) !== JSON.stringify(evidence.hardBlockers) || value.safeSummary !== evidence.safeSummary
+    || value.SAFE_TO_UPLOAD !== false || value.SAFE_TO_PUBLIC_UPLOAD !== false || value.PLATFORM_UPLOAD !== 0) {
+    throw new Error("CODEX_VISUAL_REVIEW_RECEIPT_BINDING_INVALID");
+  }
 }
 
 async function inspectFile(path: string, missingCode: string): Promise<{ path: string; size: number; sha256: string }> {
@@ -141,11 +182,11 @@ async function sha256File(path: string): Promise<string> {
   });
 }
 
-function assertFreshTimestamp(reviewedAt: string, machineFinishedAt: string, now: Date): void {
+function assertFreshTimestamp(reviewedAt: string, machineFinishedAt: string, now: Date, maxAgeMs: number): void {
   const reviewedMs = Date.parse(reviewedAt);
   if (!Number.isFinite(reviewedMs)) throw new Error("CODEX_VISUAL_REVIEW_TIMESTAMP_INVALID");
   const nowMs = now.getTime();
-  if (reviewedMs > nowMs + 5_000 || nowMs - reviewedMs > 5 * 60_000) throw new Error("CODEX_VISUAL_REVIEW_TIMESTAMP_NOT_FRESH");
+  if (reviewedMs > nowMs + 5_000 || nowMs - reviewedMs > maxAgeMs) throw new Error("CODEX_VISUAL_REVIEW_TIMESTAMP_NOT_FRESH");
   const machineFinishedMs = Date.parse(machineFinishedAt);
   if (Number.isFinite(machineFinishedMs) && reviewedMs < machineFinishedMs) throw new Error("CODEX_VISUAL_REVIEW_PREDATES_MACHINE_QA");
 }

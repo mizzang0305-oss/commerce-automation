@@ -25,6 +25,10 @@ async function main(): Promise<void> {
       originOperationNamespace?: unknown;
       originQueueId?: unknown;
       originVideoSha256?: unknown;
+      reviewReceiptPath?: unknown;
+      hardBlockers?: unknown;
+      safeSummary?: unknown;
+      reviewProvenance?: unknown;
     }>;
   };
   if (manifest.visualReviewExecuted !== true || !Array.isArray(manifest.items)) {
@@ -40,7 +44,7 @@ async function main(): Promise<void> {
   }
   const repository = new LocalQueueRepository(queueRoot);
   const queueItems = await repository.items();
-  const reviewedAt = new Date();
+  const appliedAt = new Date();
   const reviews = await Promise.all(notes.products.map(async (note) => {
     const queueId = String(note.queueId ?? "");
     const productKey = String(note.productKey ?? "");
@@ -53,31 +57,38 @@ async function main(): Promise<void> {
       throw new Error("CODEX_VISUAL_REVIEW_BINDING_MISMATCH");
     }
     if (manifestResults.get(productKey) !== note.passed) throw new Error("CODEX_VISUAL_REVIEW_NOTE_MISMATCH");
-    const reviewNotes = exactNotes(note);
+    if (typeof note.reviewReceiptPath !== "string" || !Array.isArray(note.hardBlockers) || typeof note.safeSummary !== "string"
+      || (note.reviewProvenance !== "natural" && note.reviewProvenance !== "carry_forward_revalidation")) {
+      throw new Error("CODEX_VISUAL_REVIEW_EXECUTOR_RECEIPT_REQUIRED");
+    }
+    const reviewNotes = note.safeSummary.trim();
+    if (reviewNotes.length < 20) throw new Error("CODEX_VISUAL_REVIEW_NOTES_INVALID");
+    const receipt = JSON.parse(await readFile(resolve(note.reviewReceiptPath), "utf8")) as { status?: unknown; reviewedAt?: unknown };
+    if (receipt.status !== "completed" || typeof receipt.reviewedAt !== "string" || !Number.isFinite(Date.parse(receipt.reviewedAt))) {
+      throw new Error("CODEX_VISUAL_REVIEW_EXECUTOR_RECEIPT_INVALID");
+    }
     return captureCodexReviewEvidence({
       operationNamespace: basename(queueRoot),
       queueId,
       productKey,
       videoPath: manifestItem.finalVideo,
-      reviewedAt,
+      reviewedAt: new Date(receipt.reviewedAt),
       reviewResult: note.passed ? "pass" : "block",
       sourceReviewArtifact: queueItem.reviewPath,
       notes: reviewNotes,
+      hardBlockers: note.hardBlockers.filter((value): value is string => typeof value === "string"),
+      safeSummary: reviewNotes,
+      executorType: "authenticated_codex_cli",
+      reviewProvenance: note.reviewProvenance,
+      reviewReceiptPath: note.reviewReceiptPath,
       regenerationCount: Math.max(0, queueItem.attemptCount - 1),
       ...(typeof note.originOperationNamespace === "string" ? { originOperationNamespace: note.originOperationNamespace } : {}),
       ...(typeof note.originQueueId === "string" ? { originQueueId: note.originQueueId } : {}),
       ...(typeof note.originVideoSha256 === "string" ? { originVideoSha256: note.originVideoSha256 } : {})
     });
   }));
-  const updated = await repository.recordCodexVisualReviews({ reviews, now: reviewedAt });
+  const updated = await repository.recordCodexVisualReviews({ reviews, now: appliedAt });
   console.log(JSON.stringify({ event: "queue_codex_visual_review_applied", reviewed: updated, passed: reviews.filter((review) => review.reviewResult === "pass").length, evidenceSchemaVersion: "queue-codex-review-evidence-v2", historicalTimestampAccepted: false, humanOwnerReviewStatus: "not_requested", publishReady: false, SAFE_TO_UPLOAD: false }));
-}
-
-function exactNotes(note: { notes?: unknown; firstFrameNote?: unknown; firstThreeSecondsNote?: unknown; contactSheetNote?: unknown }): string {
-  if (typeof note.notes === "string" && note.notes.trim().length >= 20) return note.notes.trim();
-  const values = [note.firstFrameNote, note.firstThreeSecondsNote, note.contactSheetNote];
-  if (values.some((value) => typeof value !== "string" || value.trim().length < 20)) throw new Error("CODEX_VISUAL_REVIEW_NOTES_INVALID");
-  return JSON.stringify({ firstFrameNote: values[0], firstThreeSecondsNote: values[1], contactSheetNote: values[2] });
 }
 
 function requiredArg(name: string): string {

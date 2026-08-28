@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, open, readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
+import { assertCodexExecutorReceipt, isCodexReviewEvidenceV2 } from "@/lib/queue-scheduler/codexReviewEvidence";
 import { inspectQueueMediaEvidence, sha256File, type QueueMediaEvidence } from "@/lib/queue-scheduler/mediaEvidence";
 import type { CodexReviewEvidenceV2, LocalQueueItem } from "@/lib/queue-scheduler/types";
 import {
@@ -384,9 +385,12 @@ async function inspectReviewArtifact(item: LocalQueueItem, media: QueueMediaEvid
 
 async function inspectCodexBinding(operationRoot: string, item: LocalQueueItem, media: QueueMediaEvidence) {
   const evidence = item.reviewMetadata.evidence as CodexReviewEvidenceV2 | undefined;
-  if (!evidence) return { status: "MISSING" as const, codexBound: false, hashBound: false };
+  if (!evidence || !isCodexReviewEvidenceV2(evidence)) return { status: "MISSING" as const, codexBound: false, hashBound: false };
   let artifactHash = "";
-  try { artifactHash = await sha256File(evidence.sourceReviewArtifact); } catch { return { status: "INVALID" as const, codexBound: false, hashBound: false }; }
+  try {
+    artifactHash = await sha256File(evidence.sourceReviewArtifact);
+    await assertCodexExecutorReceipt(evidence);
+  } catch { return { status: "INVALID" as const, codexBound: false, hashBound: false }; }
   const samePath = (left: string, right: string) => process.platform === "win32" ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right);
   const reviewedAt = Date.parse(evidence.reviewedAt);
   const finishedAt = Date.parse(item.finishedAt);
@@ -399,7 +403,9 @@ async function inspectCodexBinding(operationRoot: string, item: LocalQueueItem, 
   const codexBound = evidence.schemaVersion === "queue-codex-review-evidence-v2"
     && evidence.operationNamespace === basename(resolve(operationRoot))
     && evidence.queueId === item.id && evidence.productKey === item.productKey
-    && evidence.reviewerType === "codex" && evidence.reviewResult === "pass"
+    && evidence.reviewerType === "codex" && evidence.executorType === "authenticated_codex_cli"
+    && (evidence.reviewProvenance === "natural" || evidence.reviewProvenance === "carry_forward_revalidation")
+    && evidence.reviewResult === "pass" && evidence.hardBlockers.length === 0 && evidence.safeSummary === evidence.notes
     && item.reviewMetadata.codexReview === "pass" && hashBound
     && /^[a-f0-9]{64}$/u.test(evidence.machineQaDigest) && evidence.machineQaDigest === artifactHash
     && samePath(evidence.sourceReviewArtifact, item.reviewPath)

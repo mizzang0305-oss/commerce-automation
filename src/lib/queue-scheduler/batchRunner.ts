@@ -6,9 +6,10 @@ import { atomicWriteJson } from "./atomicJson";
 import { LocalQueueRepository, kstDate } from "./repository";
 import { inspectQueueVideoRuntime, type QueueVideoRuntimeReadiness } from "./runtimePreflight";
 import { executeQueueVideoBatch, type QueueVideoResult } from "./videoExecutor";
+import { executeAuthenticatedCodexReview } from "./codexCliReviewExecutor";
 import { QUEUE_SCHEDULER_FLAGS, type LocalRun } from "./types";
 
-export async function runNextBatch(input: { repository?: LocalQueueRepository; now?: Date; executor?: typeof executeQueueVideoBatch; preflight?: () => Promise<QueueVideoRuntimeReadiness>; env?: NodeJS.ProcessEnv } = {}) {
+export async function runNextBatch(input: { repository?: LocalQueueRepository; now?: Date; executor?: typeof executeQueueVideoBatch; reviewExecutor?: typeof executeAuthenticatedCodexReview; preflight?: () => Promise<QueueVideoRuntimeReadiness>; env?: NodeJS.ProcessEnv } = {}) {
   const repository = input.repository ?? new LocalQueueRepository(); const now = input.now ?? new Date(); const started = performance.now();
   const runId = `batch-${now.toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}`;
   let release: (() => Promise<void>) | null = null;
@@ -32,7 +33,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     if (claimed.length === 0) return recordNoop(repository, runId, now, "NO_DUE_ITEMS", { freeGb });
     if (claimed.length !== settings.batchSize) { for (const item of claimed) await repository.fail({ id: item.id, code: "INCOMPLETE_BATCH_CLAIM", retryable: true, now, settings }); return recordNoop(repository, runId, now, "INCOMPLETE_BATCH_CLAIM", { claimed: claimed.length }); }
     await repository.markProcessing(claimed.map((item) => item.id), now);
-    const executor = input.executor ?? executeQueueVideoBatch;
+    const executor: typeof executeQueueVideoBatch = input.executor ?? ((request) => executeQueueVideoBatch({ ...request, reviewExecutor: input.reviewExecutor }));
     const results = await executeSafely(executor, claimed, runId, repository.root);
     const allResults: QueueVideoResult[] = [...results];
     let completed = 0; let blocked = 0; let failed = 0; let retried = 0;
@@ -49,11 +50,24 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
         allResults.push(result);
         if (result.passed) fallbackSuccess += 1;
       }
-      if (result.passed) { await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: new Date() }); completed += 1; }
+      if (result.passed) {
+        const machineQaFinishedAt = result.machineQaFinishedAt && Number.isFinite(Date.parse(result.machineQaFinishedAt)) ? new Date(result.machineQaFinishedAt) : new Date();
+        await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: machineQaFinishedAt });
+        if (result.codexReview?.evidence) {
+          await repository.recordCodexVisualReviews({ reviews: [result.codexReview.evidence], now: new Date() });
+          if (result.codexReview.status === "pass") completed += 1; else blocked += 1;
+        } else if (result.codexReview?.status === "error") {
+          await repository.markCodexReviewExecutorFailed({ id: result.queueId, code: result.codexReview.errorCode, now: new Date() });
+          blocked += 1;
+        } else {
+          completed += 1;
+        }
+      }
       else { const status = await repository.fail({ id: result.queueId, code: result.errorCode, retryable: result.retryable && !isProductFallbackCode(result.errorCode), now: new Date(), settings }); if (status === "retry_wait") retried += 1; else if (status === "blocked") blocked += 1; else failed += 1; }
     }
     const status = completed === claimed.length ? "success" : completed > 0 ? "partial" : "failed";
-    const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, blocked, failed, retried, safeMessage: status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, blocked, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
+    const codexReviewed = allResults.filter((entry) => entry.codexReview?.evidence).length;
+    const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, blocked, failed, retried, safeMessage: status === "success" && codexReviewed === claimed.length ? "BATCH_CODEX_REVIEW_COMPLETE" : status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, blocked, codexReviewed, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
     await repository.addRun(run); return { run, results: allResults };
   } finally { await release(); }
 }
