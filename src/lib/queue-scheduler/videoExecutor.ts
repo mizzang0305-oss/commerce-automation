@@ -29,6 +29,16 @@ export async function prepareQueueVideoItemsIndependently<T>(input: {
   return { prepared, failures };
 }
 
+export function bindPreparedItemsToManifestOrder<T extends { productKey: string }, U extends Record<string, unknown>>(prepared: T[], manifestItems: U[]) {
+  const preparedByProductKey = new Map(prepared.map((binding) => [binding.productKey, binding]));
+  const manifestProductKeys = manifestItems.map((item) => typeof item.productKey === "string" ? item.productKey : "");
+  if (manifestItems.length !== prepared.length
+    || preparedByProductKey.size !== prepared.length
+    || new Set(manifestProductKeys).size !== manifestItems.length
+    || manifestProductKeys.some((productKey) => !preparedByProductKey.has(productKey))) throw new Error("QUEUE_PRODUCT_BINDING_MISMATCH");
+  return manifestItems.map((item, itemIndex) => ({ binding: preparedByProductKey.get(manifestProductKeys[itemIndex]!)!, item, itemIndex }));
+}
+
 export async function executeQueueVideoBatch(input: {
   items: LocalQueueItem[];
   runId: string;
@@ -98,11 +108,7 @@ export async function executeQueueVideoBatch(input: {
       const runManifestPath = join(videoRoot, "run-manifest.json");
       const manifest = JSON.parse(await readFile(runManifestPath, "utf8")) as { completedAt?: string; items?: Array<Record<string, unknown>> };
       const manifestItems = manifest.items ?? [];
-      if (manifestItems.length !== prepared.length || manifestItems.some((item, index) => item.productKey !== prepared[index]?.productKey)
-        || new Set(manifestItems.map((item) => item.productKey)).size !== manifestItems.length) throw new Error("QUEUE_PRODUCT_BINDING_MISMATCH");
-      for (const [itemIndex, binding] of prepared.entries()) {
-        const item = manifestItems[itemIndex];
-        if (!item || item.productKey !== binding.productKey) { byQueueId.set(binding.queueId, failed(binding, "QUEUE_PRODUCT_BINDING_MISMATCH", false)); continue; }
+      for (const { binding, item, itemIndex } of bindPreparedItemsToManifestOrder(prepared, manifestItems)) {
         if (item.machineQaPassed !== true || typeof item.finalVideo !== "string") { const blocker = Array.isArray(item.blockers) ? String(item.blockers[0] ?? "VIDEO_AUTO_QA_FAILED") : "VIDEO_AUTO_QA_FAILED"; byQueueId.set(binding.queueId, failed(binding, safeCode(blocker), isRetryable(blocker))); continue; }
         try {
           const productBoundary = await realpath(join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final"));
