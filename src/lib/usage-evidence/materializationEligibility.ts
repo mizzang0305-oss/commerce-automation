@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve } from "node:path";
+import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
 import type { UsageEvidenceAllocation, UsageEvidenceAsset, UsageEvidencePack, UsageEvidenceRegistry } from "./contracts";
 import { isEligibleAsset, isEligiblePack } from "./registry";
 
@@ -90,7 +91,7 @@ export function validateGeneratedUsageSourceReviewManifest(value: unknown): Gene
 type OperationalAllocation = {
   id?: string;
   productKey?: string;
-  candidate: { productKey: string; useCase: string };
+  candidate: { productKey: string; useCase: string; selectedAffiliateUrl: string };
   usageEvidenceAllocation?: UsageEvidenceAllocation;
 };
 
@@ -243,6 +244,10 @@ export async function preflightDaily69MaterializationEligibility(input: {
     const allocation = entry.usageEvidenceAllocation;
     if (!validIdentifier(productKey) || entry.candidate.productKey !== productKey) {
       recordBlock("ALLOCATED_USAGE_PRODUCT_BINDING_MISMATCH", [], entry, productKey, kind);
+      return false;
+    }
+    if (!validateCoupangAffiliateUrl(entry.candidate.selectedAffiliateUrl).affiliateReady) {
+      recordBlock("AFFILIATE_NOT_READY", [], entry, productKey, kind);
       return false;
     }
     if (!allocation) {

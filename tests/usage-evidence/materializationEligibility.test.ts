@@ -92,6 +92,22 @@ describe("production usage materialization eligibility", () => {
     expect(report).toMatchObject({ pass: false, safeCode: "MATERIALIZABLE_CAPACITY_SHORTFALL" });
     expect(blockedSide === "active" ? report.activeBlocked : report.reserveBlocked).toBe(1);
   });
+
+  it("rejects a materializable reserve allocation whose affiliate destination is not operational", async () => {
+    const fixture = await materializableFixture();
+    fixture.reserve.candidate.selectedAffiliateUrl = "";
+    const report = await preflightDaily69MaterializationEligibility({
+      active: [fixture.active], reserve: [fixture.reserve], registry: fixture.registry, assetRoot: fixture.root,
+      requiredActive: 1, requiredReserve: 1,
+    });
+    expect(report).toMatchObject({
+      pass: false,
+      activeMaterializable: 1,
+      reserveMaterializable: 0,
+      reserveBlocked: 1,
+      safeReasonCodes: ["AFFILIATE_NOT_READY"],
+    });
+  });
 });
 
 async function materializableFixture() {
@@ -108,6 +124,7 @@ async function materializableFixture() {
     asset.derivedSha256 = sha256(bytes);
   }
   const ranked = makeRankedProducts(30).filter(({ candidate }) => candidate.useCase === registry.packs[0].useCase);
+  ranked.forEach(({ candidate }, index) => { candidate.selectedAffiliateUrl = `https://link.coupang.com/a/materialization-${index}`; });
   const state = createUsageAllocationState();
   const activeAllocation = allocateUsageEvidence({ candidate: ranked[0], registry, state }).allocation!;
   const reserveAllocation = allocateUsageEvidence({ candidate: ranked[1], registry, state }).allocation!;
