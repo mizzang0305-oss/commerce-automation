@@ -122,7 +122,10 @@ export async function armFirstOperation(input: {
   const batchSize = 3;
   const schedule = scheduleGroups(sourceReadiness.scheduled, batchSize, 4);
   const scheduledHourBySlot = new Map(schedule.flatMap((group) => group.slots.map((slotId) => [slotId, group.hourKst] as const)));
-  const queue = source.queue.map((item) => cloneQueueItem(item, operationDate, armedAt, basename(sourceRoot), before.assetHashes, sourceReadiness.readyIds, scheduledHourBySlot));
+  const sourceNamespace = basename(sourceRoot);
+  const carryForwardOriginNamespace = source.proof.parentSourceNamespace?.trim() || sourceNamespace;
+  if (!/^[A-Za-z0-9_-]{1,128}$/u.test(carryForwardOriginNamespace)) throw new Error("FIRST_OPERATION_SOURCE_PARENT_NAMESPACE_INVALID");
+  const queue = source.queue.map((item) => cloneQueueItem(item, operationDate, armedAt, carryForwardOriginNamespace, before.assetHashes, sourceReadiness.readyIds, scheduledHourBySlot));
   const reserve = source.reserve.map((item) => ({ ...item, queueDate: operationDate, claimedBySlot: "", claimedAt: "" }));
   const settings: QueueSchedulerSettings = {
     ...source.settings,
@@ -169,7 +172,7 @@ export async function armFirstOperation(input: {
     attemptNumber,
     previousAttemptNamespace,
     armStatus: "prepared",
-    sourceNamespace: basename(sourceRoot),
+    sourceNamespace,
     sourceAssetBoundaryRoot,
     usageMaterializationAssetRoot,
     sourceDecision: FIRST_OPERATION_SOURCE_DECISION,
@@ -396,14 +399,14 @@ function cloneQueueItem(
   item: LocalQueueItem,
   operationDate: string,
   armedAt: string,
-  sourceNamespace: string,
+  carryForwardOriginNamespace: string,
   assetHashes: Record<string, string>,
   readyIds: Set<string>,
   scheduledHourBySlot: Map<string, number>,
 ): LocalQueueItem {
   if (readyIds.has(item.id)) {
     const priorCarryover = item.operationCarryover;
-    const originOperationNamespace = priorCarryover?.originOperationNamespace || sourceNamespace;
+    const originOperationNamespace = priorCarryover?.originOperationNamespace || carryForwardOriginNamespace;
     const originQueueId = priorCarryover?.originQueueId || item.id;
     const originVideoSha256 = priorCarryover?.originVideoSha256 || assetHashes[`${item.slotId}:video`] || "";
     return {
@@ -416,7 +419,7 @@ function cloneQueueItem(
       localRevision: 1,
       operationCarryover: {
         prevalidatedCanary: true,
-        sourceCanaryRunId: priorCarryover?.sourceCanaryRunId || sourceNamespace,
+        sourceCanaryRunId: priorCarryover?.sourceCanaryRunId || carryForwardOriginNamespace,
         originOperationNamespace,
         originQueueId,
         sourceVideoHash: assetHashes[`${item.slotId}:video`] ?? "",
@@ -461,7 +464,7 @@ async function readSource(root: string) {
     queue: await readRequired<LocalQueueItem[]>(join(root, "queue.json")),
     reserve: await readRequired<ReserveCandidate[]>(join(root, "reserve-pool.json")),
     settings: await readRequired<QueueSchedulerSettings>(join(root, "settings.json")),
-    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number }>(join(root, "source-proof.json")),
+    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number; parentSourceNamespace?: string }>(join(root, "source-proof.json")),
     registry: validateUsageEvidenceRegistry(await readRequired<UsageEvidenceRegistry>(join(root, "selected-registry.json"))),
   };
 }

@@ -161,6 +161,25 @@ describe("first no-upload Daily69 operation", () => {
     await expect(readFile(join(fixture.operationBase, "operation-2026-08-11", "operation-manifest.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("uses a derived source parent namespace as the immutable carry-forward origin fallback", async () => {
+    const fixture = await sourceFixture();
+    const proofPath = join(fixture.sourceRoot, "source-proof.json");
+    const proof = JSON.parse(await readFile(proofPath, "utf8"));
+    await writeFile(proofPath, `${JSON.stringify({ ...proof, parentSourceNamespace: "origin-source" })}\n`);
+    const armed = await armFirstOperation({
+      sourceRoot: fixture.sourceRoot,
+      operationBase: fixture.operationBase,
+      assetBoundaryRoot: fixture.parent,
+      usageMaterializationAssetRoot: fixture.sourceRoot,
+      now: new Date("2026-08-09T17:00:00.000Z"),
+      expectedGitHead: "2".repeat(40),
+    });
+    const snapshot = await firstOperationStatus(armed.operationRoot);
+    expect(snapshot.items.slice(0, 9).every((item) => item.operationCarryover?.originOperationNamespace === "origin-source"
+      && item.operationCarryover.sourceCanaryRunId === "origin-source")).toBe(true);
+    expect(armed.manifest.sourceNamespace).toBe("canary-source");
+  });
+
   it("pauses idempotently and does not arm day two while review is pending", async () => {
     const fixture = await sourceFixture();
     const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, usageMaterializationAssetRoot: fixture.sourceRoot, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "c".repeat(40) });
