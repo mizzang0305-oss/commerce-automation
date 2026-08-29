@@ -30,6 +30,17 @@ export interface SheetsGateway {
   clearValues(sheetName: string, range: string): Promise<void>;
 }
 
+export type SheetUserEnteredCell =
+  | { kind: "blank" }
+  | { kind: "literal_string"; value: string }
+  | { kind: "literal_number"; value: number }
+  | { kind: "literal_boolean"; value: boolean }
+  | { kind: "formula"; value: string };
+
+export interface UserEnteredSheetsGateway {
+  getUserEnteredCells(sheetName: string, range: string): Promise<SheetUserEnteredCell[][]>;
+}
+
 export function buildGoogleAuthScopes(config: Pick<GoogleSheetsConfig, "driveVideoFolderId">): string[] {
   return config.driveVideoFolderId.trim() ? [SHEETS_SCOPE, DRIVE_FILE_SCOPE] : [SHEETS_SCOPE];
 }

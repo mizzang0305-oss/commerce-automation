@@ -87,7 +87,9 @@ async function main(): Promise<void> {
       genericImagePaths = frames.image_paths.map(String);
       const exactReference = input.product.exactProductReference;
       if (exactReference) await stat(exactReference.localPath);
-      input.product.imagePaths = exactReference ? [exactReference.localPath, ...genericImagePaths] : genericImagePaths;
+      input.product.imagePaths = exactReference
+        ? identitySafeImageSequence(exactReference.localPath, genericImagePaths)
+        : genericImagePaths;
       validateProductVideoInput(input);
     } else if (!input.product.canonicalProductName.trim() || input.product.anchors.length < 3) {
       throw new Error("VOICE_DIAGNOSTIC_PRODUCT_IDENTITY_REQUIRED");
@@ -148,7 +150,9 @@ async function main(): Promise<void> {
         const renderStarted = performance.now();
         const render = await runJsonProcess(required.python, [mediaBridge], {
           operation: renderOperation, output: outputPath, audio_path: value.audioPath, image_paths: input.product.imagePaths,
-          scene_roles: input.product.exactProductReference ? ["product_reference", ...value.genericImagePaths.map(() => "generic_usage_example")] : value.genericImagePaths.map(() => "generic_usage_example"),
+          scene_roles: input.product.exactProductReference
+            ? input.product.imagePaths.map((path) => path === input.product.exactProductReference?.localPath ? "product_reference" : "generic_usage_example")
+            : value.genericImagePaths.map(() => "generic_usage_example"),
           captions, hook: value.selected.candidate.hook, title: input.product.canonicalProductName, usage_label: USAGE_LABEL,
           layout_plan: bridgeLayout, caption_font_px: profile.captionFontPx, caption_animation: profile.captionAnimation,
           primary_visual_width_ratio: profile.primaryVisualWidthRatio, canvas_fill_ratio: profile.canvasFillRatio
@@ -221,6 +225,10 @@ type PreparedProduct = {
   audioRepair: Record<string, unknown>; asrAttempts: number; asrRecovered: boolean; ttsRecovery: TtsRecoveryDiagnostic;
   genericImagePaths: string[];
 };
+
+function identitySafeImageSequence(exactProductReference: string, genericImagePaths: string[]) {
+  return [exactProductReference, ...genericImagePaths.flatMap((path) => [path, exactProductReference])];
+}
 
 async function loadLiveProductInputs(path: string, runId: string): Promise<ReturnType<typeof loadApprovedProductFixtures>> {
   const value = JSON.parse(await readFile(resolve(path), "utf8")) as { products?: unknown };

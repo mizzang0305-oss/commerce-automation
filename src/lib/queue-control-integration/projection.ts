@@ -36,6 +36,24 @@ export class QueueProjectionService {
     };
   }
 
+  async projectAppendOnly() {
+    const prepared = await this.buildProjectionPlan();
+    const unsafe = prepared.plans.find((plan) => plan.diff.unrelatedRowsWouldChange !== 0);
+    if (unsafe) throw new Error(`SHEETS_PROJECTION_UNRELATED_ROWS_WOULD_CHANGE:${unsafe.sheetName}`);
+    const existingMutation = prepared.plans.find((plan) => plan.headerWriteRequired || plan.updates.length > 0);
+    if (existingMutation) throw new Error(`CUTOVER_WOULD_MUTATE_EXISTING_ROWS:${existingMutation.sheetName}`);
+    for (const plan of prepared.plans) await this.applyPlan(plan);
+    const state = await this.repository.recordProjection({ localRevision: prepared.localRevision, snapshotHash: prepared.snapshotHash, projectedAt: prepared.projectedAt });
+    return {
+      state,
+      queueCount: prepared.queueCount,
+      reserveCount: prepared.reserveCount,
+      snapshotHash: prepared.snapshotHash,
+      projectedAt: prepared.projectedAt,
+      diff: projectionDiff(prepared.plans),
+    };
+  }
+
   async planProjectionDiff() {
     const prepared = await this.buildProjectionPlan();
     return projectionDiff(prepared.plans);
@@ -105,7 +123,7 @@ export class QueueProjectionService {
       sourceRowCount: rows.length,
       updates,
       additions,
-      diff: { rowsToUpdate: updates.length, rowsToAppend: additions.length, rowsUnrelated: unrelatedRows, unrelatedRowsWouldChange: 0 },
+      diff: { rowsToUpdate: updates.length, rowsToAppend: additions.length, rowsUnrelated: unrelatedRows, unrelatedRowsWouldChange: 0, headerWriteRequired: rows.length === 0 || missing.length > 0 },
     };
   }
 
@@ -154,6 +172,7 @@ export type ProjectionSheetDiff = {
   rowsToAppend: number;
   rowsUnrelated: number;
   unrelatedRowsWouldChange: 0;
+  headerWriteRequired: boolean;
 };
 
 function projectionDiff(plans: readonly InternalProjectionPlan[]) {

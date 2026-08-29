@@ -6,6 +6,45 @@ export type LocalQueueStatus =
   | "video_ready_machine_qa" | "video_ready_autoqa" | "retry_wait" | "manual_review"
   | "blocked" | "failed" | "hold" | "skipped";
 
+export type CodexReviewEvidenceV2 = {
+  schemaVersion: "queue-codex-review-evidence-v2";
+  operationNamespace: string;
+  slotId?: string;
+  queueId: string;
+  productKey: string;
+  productName?: string;
+  videoPath: string;
+  videoSha256: string;
+  videoSize: number;
+  reviewedAt: string;
+  reviewerType: "codex";
+  executorType: "authenticated_codex_cli";
+  reviewProvenance: "natural" | "carry_forward_revalidation";
+  reviewResult: "pass" | "block";
+  hardBlockers: string[];
+  safeSummary: string;
+  machineQaDigest: string;
+  sourceReviewArtifact: string;
+  reviewReceiptPath: string;
+  reviewReceiptSha256: string;
+  notes: string;
+  regenerationCount: number;
+  productReferenceSha256?: string;
+  visualEvidenceDigest?: string;
+  usageEvidenceDigest?: string;
+  machineQaSourceArtifact?: string;
+  machineQaSourceSha256?: string;
+  visualEvidenceBindingSha256?: string;
+  originOperationNamespace?: string;
+  originQueueId?: string;
+  originVideoSha256?: string;
+};
+
+export type CodexReviewMetadata = {
+  codexReview: "not_executed" | "pass" | "block";
+  evidence?: CodexReviewEvidenceV2;
+};
+
 export type LocalQueueItem = {
   id: string;
   slotId: string;
@@ -46,13 +85,17 @@ export type LocalQueueItem = {
   reviewPath: string;
   errorCode: string;
   safeMessage: string;
-  reviewMetadata: { codexReview: "not_executed" | "pass" | "block" };
+  reviewMetadata: CodexReviewMetadata;
   operationCarryover?: {
     prevalidatedCanary: true;
     sourceCanaryRunId: string;
     sourceVideoHash: string;
     sourceReviewHash: string;
     carriedIntoOperationDate: string;
+    originOperationNamespace?: string;
+    originQueueId?: string;
+    originVideoSha256?: string;
+    regenerationCount?: number;
   };
   candidate: LiveProductCandidate;
   usageEvidenceAllocation?: UsageEvidenceAllocation;

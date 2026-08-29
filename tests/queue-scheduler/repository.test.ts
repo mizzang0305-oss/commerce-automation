@@ -1,8 +1,9 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalQueueRepository, DEFAULT_QUEUE_SCHEDULER_SETTINGS } from "../../src/lib/queue-scheduler";
+import { createTestCodexEvidence } from "./testCodexEvidence";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 
 const roots: string[] = [];
@@ -41,19 +42,27 @@ describe("local durable queue", () => {
     const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z");
     await repository.insertRanked({ ranked: ranked(2), queueDate: "2026-08-08", now, dueNow: true });
     const [claimed] = await repository.claimDue({ now, runId: "review", limit: 1, leaseMinutes: 10, pilotMax: 9 });
-    await repository.complete({ id: claimed.id, videoPath: "x.mp4", reviewPath: "review.json", creativeScore: 90, videoQualityScore: 90, now });
+    const videoPath = join(repository.root, "x.mp4"); const reviewPath = join(repository.root, "review.json");
+    await writeFile(videoPath, "exact-video");
+    await writeFile(reviewPath, `${JSON.stringify({ version: "autonomous-video-review-v2", visualReviewExecuted: true, finalAutomatedQaPassed: 1, items: [{ productKey: claimed.productKey, status: "AUTO_QA_PASS", machineQaPassed: true, finalAutomatedQaPassed: true, visualReviewExecuted: true, blockers: [], publishReady: false, SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false }] })}\n`);
+    await repository.complete({ id: claimed.id, videoPath, reviewPath, creativeScore: 90, videoQualityScore: 90, now });
     expect((await repository.items()).find((item) => item.id === claimed.id)?.status).toBe("video_ready_machine_qa");
-    expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: true }], now })).toBe(1);
+    await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: true }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_EXACT_EVIDENCE_REQUIRED");
+    expect((await repository.items()).find((item) => item.id === claimed.id)?.status).toBe("video_ready_machine_qa");
+    const passEvidence = await createTestCodexEvidence({ operationNamespace: basename(repository.root), slotId: claimed.slotId, queueId: claimed.id, productKey: claimed.productKey, videoPath, reviewedAt: now, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Fresh Codex inspection verified the exact bound video.", receiptRoot: join(repository.root, "receipts"), regenerationCount: 0 });
+    expect(await repository.recordCodexVisualReviews({ reviews: [passEvidence], now })).toBe(1);
     const reviewed = (await repository.items()).find((item) => item.id === claimed.id)!;
     expect(reviewed.status).toBe("video_ready_autoqa");
     expect(reviewed.reviewMetadata.codexReview).toBe("pass");
+    expect(reviewed.reviewMetadata.evidence).toEqual(passEvidence);
     expect(reviewed.safeMessage).toBe("CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD");
     expect(await repository.recordCodexVisualReviews({ reviews: [{ productKey: claimed.productKey, passed: false }], now })).toBe(1);
     const blocked = (await repository.items()).find((item) => item.id === claimed.id)!;
     expect(blocked.reviewMetadata.codexReview).toBe("block");
+    expect(blocked.reviewMetadata.evidence).toBeUndefined();
     expect(blocked.status).toBe("manual_review");
     expect(blocked.safeMessage).toBe("CODEX_VISUAL_REVIEW_BLOCKED");
-    await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: "missing-product", passed: true }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
+    await expect(repository.recordCodexVisualReviews({ reviews: [{ productKey: "missing-product", passed: false }], now })).rejects.toThrow("CODEX_VISUAL_REVIEW_QUEUE_ITEM_NOT_FOUND");
   });
 
   it("recovers stale leases and enforces max two attempts", async () => {
