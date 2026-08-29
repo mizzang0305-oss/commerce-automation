@@ -4,7 +4,7 @@ import { evaluateV3MarginalPacks, selectV3Registry, validateUsageEvidenceRegistr
 import { makeRankedProducts, makeUsageEvidenceRegistry, withV3MotionPack } from "../usage-evidence/fixture";
 
 describe("V3 marginal pack selection", () => {
-  test("keeps every baseline pack and selects only the minimum positive-gain packs", () => {
+  test("rejects every V3 motion pack until the production materializer supports that source kind", () => {
     const baseline = validateUsageEvidenceRegistry(makeUsageEvidenceRegistry({ packsPerUseCase: 2 }));
     let candidate = baseline;
     for (const useCase of ["cable_organization", "desk_organization", "laundry_space_organization", "laundry_drying"] as const) {
@@ -12,13 +12,14 @@ describe("V3 marginal pack selection", () => {
     }
     candidate = validateUsageEvidenceRegistry(candidate);
     const result = evaluateV3MarginalPacks({ ranked: makeRankedProducts(180), baselineRegistry: baseline, candidateRegistry: candidate, settings: DAILY_69_NO_UPLOAD_SETTINGS });
-    expect(result.result).toBe("TARGET_REACHED");
-    expect(result.selectedPackIds.length).toBeLessThan(12);
+    expect(result.result).toBe("POSITIVE_GAIN_EXHAUSTED");
+    expect(result.selectedPackIds).toHaveLength(0);
+    expect(result.zeroGainPackIds).toHaveLength(12);
     expect(result.steps.every((step) => step.allocatableGain > 0)).toBe(true);
     expect(result.steps.every((step) => Number.isFinite(step.categoryCapImpact) && Number.isFinite(step.familyCapImpact))).toBe(true);
     const selected = selectV3Registry(candidate, result.selectedPackIds);
     expect(baseline.packs.every((pack) => selected.packs.some((value) => value.packId === pack.packId))).toBe(true);
-    expect(selected.packs.filter((pack) => pack.packGeneration === "v3_motion")).toHaveLength(result.selectedPackIds.length);
+    expect(selected.packs.filter((pack) => pack.packGeneration === "v3_motion")).toHaveLength(0);
   });
 
   test("reports a vehicle pack as zero gain when the candidate set has no vehicle demand", () => {

@@ -125,6 +125,7 @@
     "daily69:first-day:cutover": "node --conditions=react-server --import tsx scripts/daily69-first-operation/cutover.ts",
     "usage-evidence:focused": "vitest run tests/usage-evidence tests/daily-69-control/nightlyScout.test.ts",
     "usage-evidence:shadow": "tsx scripts/usage-evidence/run-daily69-capacity-shadow.ts",
+    "usage-evidence:build-materializable-source": "tsx scripts/usage-evidence/build-daily69-materializable-source.ts",
     "usage-evidence:v3:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/daily-69-control/nightlyScout.test.ts",
     "usage-evidence:v3:simulate": "tsx scripts/usage-evidence/run-v3-capacity-simulation.ts",
     "usage-evidence:v4:focused": "vitest run tests/usage-evidence tests/usage-evidence-v3 tests/usage-evidence-v4 tests/daily-69-control",

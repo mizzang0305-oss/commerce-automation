@@ -6,6 +6,12 @@ import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { inspectQueueMediaEvidence } from "@/lib/queue-scheduler/mediaEvidence";
 import { LocalQueueRepository } from "@/lib/queue-scheduler/repository";
 import type { LocalQueueItem, QueueSchedulerSettings, ReserveCandidate } from "@/lib/queue-scheduler/types";
+import {
+  preflightDaily69MaterializationEligibility,
+  validateUsageEvidenceRegistry,
+  type Daily69MaterializationPreflight,
+  type UsageEvidenceRegistry,
+} from "@/lib/usage-evidence";
 import { normalizeFirstOperationLifecycleStatus, validateLevel3Completion, type FirstOperationLifecycleStatus, type LegacyFirstOperationLifecycleStatus, type Level3RetainedEvidence } from "./level3";
 import type { Level3SheetsAuditGateway } from "./postCloseout";
 
@@ -32,6 +38,7 @@ export type FirstOperationManifest = {
   armStatus?: FirstOperationArmStatus | LegacyFirstOperationLifecycleStatus;
   sourceNamespace: string;
   sourceAssetBoundaryRoot?: string;
+  usageMaterializationAssetRoot?: string;
   sourceDecision: typeof FIRST_OPERATION_SOURCE_DECISION;
   sourceFileHashes: Record<string, string>;
   sourceAssetHashes: Record<string, string>;
@@ -54,6 +61,7 @@ export type FirstOperationManifest = {
     fakeReviewedAtMutations: 0;
     aiReviewExecutions: 0;
   };
+  materializationEligibility?: Daily69MaterializationPreflight;
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
   closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
@@ -64,6 +72,7 @@ export async function armFirstOperation(input: {
   now: Date;
   expectedGitHead: string;
   assetBoundaryRoot?: string;
+  usageMaterializationAssetRoot: string;
   operationDate?: string;
   namespace?: string;
   attemptNumber?: number;
@@ -80,21 +89,33 @@ export async function armFirstOperation(input: {
   const previousAttemptNamespace = input.previousAttemptNamespace?.trim() ?? "";
   if ((attemptNumber === 1 && previousAttemptNamespace) || (attemptNumber > 1 && !previousAttemptNamespace)) throw new Error("FIRST_OPERATION_PREVIOUS_ATTEMPT_INVALID");
   const operationRoot = resolve(input.operationBase, namespace);
-  const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
-  if (existing) {
-    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
-      || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace) {
-      throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
-    }
-    await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
-    return { operationRoot, manifest: existing, idempotent: true };
-  }
-
   const sourceRoot = resolve(input.sourceRoot);
   const sourceAssetBoundaryRoot = resolve(input.assetBoundaryRoot ?? sourceRoot);
   if (escapesRoot(sourceAssetBoundaryRoot, sourceRoot)) throw new Error("FIRST_OPERATION_SOURCE_BOUNDARY_INVALID");
+  const usageMaterializationAssetRoot = resolve(input.usageMaterializationAssetRoot);
   const source = await readSource(sourceRoot);
   const sourceReadiness = assertSource(source);
+  const materializationEligibility = await preflightDaily69MaterializationEligibility({
+    active: source.queue,
+    reserve: source.reserve,
+    registry: source.registry,
+    assetRoot: usageMaterializationAssetRoot,
+    requiredActive: 69,
+    requiredReserve: 14,
+  });
+  if (!materializationEligibility.pass) throw new Error(materializationEligibility.safeCode);
+  const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
+  if (existing) {
+    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
+      || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace
+      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot) {
+      throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
+    }
+    await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
+    await verifyFirstOperationMaterializationEligibility(operationRoot);
+    return { operationRoot, manifest: existing, idempotent: true };
+  }
+
   const affiliateReadiness = sourceReadiness.affiliateReadiness;
   const before = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
   const armedAt = input.now.toISOString();
@@ -150,6 +171,7 @@ export async function armFirstOperation(input: {
     armStatus: "prepared",
     sourceNamespace: basename(sourceRoot),
     sourceAssetBoundaryRoot,
+    usageMaterializationAssetRoot,
     sourceDecision: FIRST_OPERATION_SOURCE_DECISION,
     sourceFileHashes: before.fileHashes,
     sourceAssetHashes: before.assetHashes,
@@ -165,6 +187,7 @@ export async function armFirstOperation(input: {
     distinct: source.proof.distinct ?? new Set([...source.queue.map((item) => item.productKey), ...source.reserve.map((item) => item.candidate.productKey)]).size,
     schedule,
     affiliateReadiness,
+    materializationEligibility,
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
@@ -270,6 +293,22 @@ export async function firstOperationStatus(operationRoot: string) {
     PLATFORM_UPLOAD: 0 as const
   };
   return { manifest, items, reserve, settings, state, runs, status };
+}
+
+export async function verifyFirstOperationMaterializationEligibility(operationRoot: string) {
+  const snapshot = await firstOperationStatus(operationRoot);
+  if (!snapshot.manifest.usageMaterializationAssetRoot) throw new Error("USAGE_MATERIALIZATION_ASSET_ROOT_REQUIRED");
+  const registry = validateUsageEvidenceRegistry(await readRequired<UsageEvidenceRegistry>(join(resolve(operationRoot), "selected-registry.json")));
+  const preflight = await preflightDaily69MaterializationEligibility({
+    active: snapshot.items,
+    reserve: snapshot.reserve,
+    registry,
+    assetRoot: resolve(snapshot.manifest.usageMaterializationAssetRoot),
+    requiredActive: 69,
+    requiredReserve: snapshot.settings.minimumReserveCount,
+  });
+  if (!preflight.pass) throw new Error(preflight.safeCode);
+  return preflight;
 }
 
 export async function closeoutFirstOperation(operationRoot: string, dependencies: {
@@ -422,7 +461,8 @@ async function readSource(root: string) {
     queue: await readRequired<LocalQueueItem[]>(join(root, "queue.json")),
     reserve: await readRequired<ReserveCandidate[]>(join(root, "reserve-pool.json")),
     settings: await readRequired<QueueSchedulerSettings>(join(root, "settings.json")),
-    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number }>(join(root, "source-proof.json"))
+    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number }>(join(root, "source-proof.json")),
+    registry: validateUsageEvidenceRegistry(await readRequired<UsageEvidenceRegistry>(join(root, "selected-registry.json"))),
   };
 }
 

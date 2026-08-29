@@ -1,5 +1,6 @@
 import type { RankedLiveProduct } from "@/lib/live-product-video";
 import type { UsageEvidenceAllocation, UsageEvidenceAllocationDiagnostics, UsageEvidenceAsset, UsageEvidencePack, UsageEvidenceRegistry } from "./contracts";
+import { isUsageEvidenceAssetProductionMaterializable } from "./materializationEligibility";
 import { eligiblePacksForUseCase } from "./registry";
 
 type AllocationState = {
@@ -84,9 +85,10 @@ export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; reg
 }
 
 function selectPackOption(pack: UsageEvidencePack, assets: Map<string, UsageEvidenceAsset>, state: AllocationState, sourceDailyLimit: number): PackOption | null {
-  const problemAssets = resolveAssets(pack.problemAssetIds, assets);
-  const usageAssets = resolveAssets([...new Set([...pack.usageAssetIds, ...pack.actionAssetIds])], assets);
-  const afterAssets = resolveAssets(pack.afterAssetIds, assets);
+  const productionAssets = new Map([...assets].filter(([, asset]) => isUsageEvidenceAssetProductionMaterializable(asset, pack.useCase)));
+  const problemAssets = resolveAssets(pack.problemAssetIds, productionAssets);
+  const usageAssets = resolveAssets([...new Set([...pack.usageAssetIds, ...pack.actionAssetIds])], productionAssets);
+  const afterAssets = resolveAssets(pack.afterAssetIds, productionAssets);
   const options: PackOption[] = [];
   for (const problem of problemAssets) {
     for (const usage of usageAssets) {

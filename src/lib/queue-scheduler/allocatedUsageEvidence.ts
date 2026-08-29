@@ -6,22 +6,24 @@ import {
   mkdir,
   mkdtemp,
   readFile,
-  realpath,
   rm,
   stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { LiveProductCandidate } from "@/lib/live-product-video/types";
 import type {
   UsageEvidenceAllocation,
   UsageEvidenceAsset,
-  UsageEvidencePack,
   UsageEvidenceRegistry,
 } from "@/lib/usage-evidence/contracts";
-import { isEligibleAsset, isEligiblePack, validateUsageEvidenceRegistry } from "@/lib/usage-evidence/registry";
+import {
+  assertUsageAllocationProductionMaterializable,
+  resolveProductionMaterializableUsageAssets,
+} from "@/lib/usage-evidence/materializationEligibility";
+import { validateUsageEvidenceRegistry } from "@/lib/usage-evidence/registry";
 import { sha256File } from "./mediaEvidence";
 
 const execFileAsync = promisify(execFile);
@@ -152,9 +154,13 @@ export async function materializeAllocatedUsageEvidence(input: {
   }
 
   const { registry, registrySha256 } = await readValidatedRegistry(input.selectedRegistryPath);
-  const pack = selectExactPack(registry, input.allocation, input.productKey, input.candidate.useCase);
-  const assets = selectExactAssets(registry, pack, input.allocation, input.productKey);
-  const selected = await resolveAndVerifyAssets(assets, input.assetRoot);
+  const { assets } = assertUsageAllocationProductionMaterializable({
+    registry,
+    allocation: input.allocation,
+    productKey: input.productKey,
+    useCase: input.candidate.useCase,
+  });
+  const selected: SelectedAsset[] = await resolveProductionMaterializableUsageAssets({ assets, assetRoot: input.assetRoot });
   const reviewClass = classifyReview(selected.map(({ asset }) => asset));
   const rendererSpecSha256 = sha256Text(stableJson(RENDERER_SPEC));
   const allocationSha256 = sha256Text(stableJson({
@@ -269,115 +275,6 @@ async function readValidatedRegistry(path: string): Promise<{ registry: UsageEvi
     registry: validateUsageEvidenceRegistry(parsed),
     registrySha256: createHash("sha256").update(bytes).digest("hex"),
   };
-}
-
-function selectExactPack(
-  registry: UsageEvidenceRegistry,
-  allocation: UsageEvidenceAllocation,
-  productKey: string,
-  useCase: string,
-): UsageEvidencePack {
-  const matches = registry.packs.filter(({ packId }) => packId === allocation.packId);
-  if (matches.length !== 1) fail("ALLOCATED_USAGE_PACK_NOT_FOUND");
-  const pack = matches[0];
-  if (pack.useCase !== useCase || allocation.useCase !== useCase) fail("ALLOCATED_USAGE_USE_CASE_MISMATCH");
-  if (pack.boundProductKey && pack.boundProductKey !== productKey) fail("ALLOCATED_USAGE_PRODUCT_BINDING_MISMATCH");
-  if (
-    allocation.assetIds.length !== RENDERER_SPEC.imageCount
-    || new Set(allocation.assetIds).size !== RENDERER_SPEC.imageCount
-    || !allocation.assetIds.every((assetId) => pack.assetIds.includes(assetId))
-    || !pack.problemAssetIds.includes(allocation.assetIds[0])
-    || ![...pack.usageAssetIds, ...pack.actionAssetIds].includes(allocation.assetIds[1])
-    || !pack.afterAssetIds.includes(allocation.assetIds[2])
-    || allocation.sequenceFingerprint !== `${pack.sequenceFingerprint}:${allocation.assetIds.join(":")}`
-  ) {
-    fail("ALLOCATED_USAGE_ALLOCATION_MISMATCH");
-  }
-  return pack;
-}
-
-function selectExactAssets(
-  registry: UsageEvidenceRegistry,
-  pack: UsageEvidencePack,
-  allocation: UsageEvidenceAllocation,
-  productKey: string,
-): UsageEvidenceAsset[] {
-  const assetsById = new Map<string, UsageEvidenceAsset>();
-  for (const asset of registry.assets) {
-    if (assetsById.has(asset.assetId)) fail("ALLOCATED_USAGE_ALLOCATION_MISMATCH");
-    assetsById.set(asset.assetId, asset);
-  }
-  const selected = allocation.assetIds.map((assetId) => assetsById.get(assetId));
-  if (selected.some((asset) => !asset)) fail("ALLOCATED_USAGE_ALLOCATION_MISMATCH");
-  const exact = selected as UsageEvidenceAsset[];
-  if (!sameStrings(allocation.sourceIds, [...new Set(exact.map(({ sourceId }) => sourceId))])) {
-    fail("ALLOCATED_USAGE_ALLOCATION_MISMATCH");
-  }
-  const eligibleAssets = registry.assets.filter(isEligibleAsset);
-  const eligibleIds = new Set(eligibleAssets.map(({ assetId }) => assetId));
-  const allAssets = new Map(eligibleAssets.map((asset) => [asset.assetId, asset]));
-  if (!isEligiblePack(pack, eligibleIds, allAssets)) fail("ALLOCATED_USAGE_PACK_NOT_ELIGIBLE");
-  for (const asset of exact) {
-    validateIdentifier(asset.assetId, "ALLOCATED_USAGE_ASSET_NOT_ELIGIBLE");
-    validateIdentifier(asset.sourceId, "ALLOCATED_USAGE_ASSET_NOT_ELIGIBLE");
-    if (
-      !isEligibleAsset(asset)
-      || asset.sourceKind !== "sanitized_local_image"
-      || asset.identityType !== "generic_usage_example"
-      || asset.derivedMachineQaStatus !== "pass"
-      || asset.derivedCodexVisualReviewStatus !== "pass"
-      || !asset.noUploadAutomationEligible
-      || asset.publishEligible !== false
-      || asset.blockCodes.length !== 0
-      || !asset.useCases.includes(allocation.useCase)
-    ) {
-      fail("ALLOCATED_USAGE_ASSET_NOT_ELIGIBLE");
-    }
-    if (asset.boundProductKey && asset.boundProductKey !== productKey) {
-      fail("ALLOCATED_USAGE_PRODUCT_BINDING_MISMATCH");
-    }
-  }
-  return exact;
-}
-
-async function resolveAndVerifyAssets(assets: UsageEvidenceAsset[], assetRoot: string): Promise<SelectedAsset[]> {
-  let approvedRoot: string;
-  try {
-    approvedRoot = await realpath(resolve(assetRoot));
-    if (!(await stat(approvedRoot)).isDirectory()) fail("ALLOCATED_USAGE_ASSET_ROOT_NOT_AVAILABLE");
-  } catch (error) {
-    if (isKnownFailure(error)) throw error;
-    fail("ALLOCATED_USAGE_ASSET_ROOT_NOT_AVAILABLE");
-  }
-  const selected: SelectedAsset[] = [];
-  for (const asset of assets) {
-    if (!asset.sourceRelativeReference || isAbsolute(asset.sourceRelativeReference)) {
-      fail("ALLOCATED_USAGE_ASSET_PATH_OUTSIDE_ROOT");
-    }
-    const lexicalPath = resolve(approvedRoot, asset.sourceRelativeReference);
-    assertContained(approvedRoot, lexicalPath);
-    let sourcePath: string;
-    try {
-      sourcePath = await realpath(lexicalPath);
-      assertContained(approvedRoot, sourcePath);
-      if (!(await stat(sourcePath)).isFile()) fail("ALLOCATED_USAGE_ASSET_NOT_AVAILABLE");
-    } catch (error) {
-      if (isKnownFailure(error)) throw error;
-      fail("ALLOCATED_USAGE_ASSET_NOT_AVAILABLE");
-    }
-    const sha256 = await sha256File(sourcePath).catch(() => fail("ALLOCATED_USAGE_ASSET_NOT_AVAILABLE"));
-    if (!isSha256(asset.derivedSha256) || sha256 !== asset.derivedSha256) {
-      fail("ALLOCATED_USAGE_ASSET_HASH_MISMATCH");
-    }
-    selected.push({ asset, sourcePath, sha256 });
-  }
-  return selected;
-}
-
-function assertContained(root: string, target: string): void {
-  const fromRoot = relative(root, target);
-  if (fromRoot === "" || (!fromRoot.startsWith("..\\") && fromRoot !== ".." && !fromRoot.startsWith("../") && !isAbsolute(fromRoot))) return;
-  fail("ALLOCATED_USAGE_ASSET_PATH_OUTSIDE_ROOT");
 }
 
 function buildFfmpegArgs(inputPaths: string[], outputPath: string): string[] {
@@ -613,7 +510,7 @@ function toApprovedEvidence(
       useCase: manifest.useCase,
       sequenceFingerprint: manifest.sequenceFingerprint,
       assetIds: manifest.assets.map(({ assetId }) => assetId),
-      sourceIds: manifest.assets.map(({ sourceId }) => sourceId),
+      sourceIds: [...new Set(manifest.assets.map(({ sourceId }) => sourceId))],
       sourceImageSha256s: manifest.assets.map(({ localImageSha256 }) => localImageSha256),
       outputSha256: manifest.output.sha256,
     },
@@ -645,10 +542,6 @@ function parseFrameRate(value: string): number {
   const [numerator, denominator] = value.split("/").map(Number);
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return Number.NaN;
   return numerator / denominator;
-}
-
-function sameStrings(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function isSha256(value: string): boolean {

@@ -33,12 +33,21 @@ describe("first operation task safety", () => {
     expect(install).toContain("FIRST_OPERATION_TASK_BINDING_MISMATCH");
     expect(arm).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
     expect(preflight).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+    expect(arm).toContain('requiredArg("--usage-asset-root")');
+    expect(preflight).toContain("verifyFirstOperationMaterializationEligibility");
+    expect(install).toContain("daily69:first-day:preflight");
+    expect(install.indexOf("daily69:first-day:preflight")).toBeLessThan(install.indexOf("Register-ScheduledTask"));
     expect(finalizer).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
     expect(install).toContain("$names[1..4]");
     expect(arm).toContain('resolve(operationBase, ".locks", `${namespace}.lock`)');
     expect(recovery).toContain('join(operationBase, ".locks", `${targetNamespace}.lock`)');
     expect(common).toContain('$env:SAFE_TO_UPLOAD = "false"');
     expect(common).not.toMatch(/(?:YOUTUBE_AUTO_UPLOAD|TIKTOK_AUTO_POST|THREADS_AUTO_POST)\s*=\s*["']true["']/iu);
+  });
+
+  it("checks materialization before any Sheets projection call", async () => {
+    const cutover = await readFile("scripts/daily69-first-operation/cutover.ts", "utf8");
+    expect(cutover.indexOf("verifyFirstOperationMaterializationEligibility")).toBeLessThan(cutover.indexOf("projectAppendOnly"));
   });
 
   it("keeps day-two execution out of the closeout wrapper", async () => {

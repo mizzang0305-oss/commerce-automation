@@ -3,11 +3,11 @@ import { allocateUsageEvidence, createUsageAllocationState } from "@/lib/usage-e
 import { makeV5Ranked, makeV5Registry } from "./fixture";
 
 describe("V5 exact product allocation", () => {
-  test("allocates only the exact bound pack and enforces daily reuse one", () => {
+  test("does not allocate an exact-product pack unsupported by the production materializer", () => {
     const registry = makeV5Registry([{ productKey: "exact", useCase: "home_storage" }]);
     const state = createUsageAllocationState();
     const first = allocateUsageEvidence({ candidate: makeV5Ranked("exact", "home_storage"), registry, state });
-    expect(first.allocation?.packId).toBe("pack-v5-exact");
+    expect(first).toEqual({ allocation: null, reason: "assetCapacityRejected" });
     const second = allocateUsageEvidence({ candidate: makeV5Ranked("exact", "home_storage", 2), registry, state });
     expect(second.allocation).toBeNull();
   });
