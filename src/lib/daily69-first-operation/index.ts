@@ -31,6 +31,7 @@ export type FirstOperationManifest = {
   previousAttemptNamespace?: string;
   armStatus?: FirstOperationArmStatus | LegacyFirstOperationLifecycleStatus;
   sourceNamespace: string;
+  sourceAssetBoundaryRoot?: string;
   sourceDecision: typeof FIRST_OPERATION_SOURCE_DECISION;
   sourceFileHashes: Record<string, string>;
   sourceAssetHashes: Record<string, string>;
@@ -83,10 +84,12 @@ export async function armFirstOperation(input: {
   }
 
   const sourceRoot = resolve(input.sourceRoot);
+  const sourceAssetBoundaryRoot = resolve(input.assetBoundaryRoot ?? sourceRoot);
+  if (escapesRoot(sourceAssetBoundaryRoot, sourceRoot)) throw new Error("FIRST_OPERATION_SOURCE_BOUNDARY_INVALID");
   const source = await readSource(sourceRoot);
   const sourceReadiness = assertSource(source);
   const affiliateReadiness = sourceReadiness.affiliateReadiness;
-  const before = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
+  const before = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
   const armedAt = input.now.toISOString();
   const batchSize = 3;
   const schedule = scheduleGroups(sourceReadiness.scheduled, batchSize, 4);
@@ -126,7 +129,7 @@ export async function armFirstOperation(input: {
     copyFile(join(sourceRoot, "selected-registry.json"), join(operationRoot, "selected-registry.json"))
   ]);
 
-  const after = await sourceBundle(sourceRoot, source.queue, input.assetBoundaryRoot);
+  const after = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
   if (after.bundleHash !== before.bundleHash) throw new Error("SOURCE_PROOF_MUTATED_DURING_CLONE");
   const manifest: FirstOperationManifest = {
     schemaVersion: "daily69-first-operation-v2",
@@ -139,6 +142,7 @@ export async function armFirstOperation(input: {
     previousAttemptNamespace,
     armStatus: "prepared",
     sourceNamespace: basename(sourceRoot),
+    sourceAssetBoundaryRoot,
     sourceDecision: FIRST_OPERATION_SOURCE_DECISION,
     sourceFileHashes: before.fileHashes,
     sourceAssetHashes: before.assetHashes,
@@ -195,9 +199,12 @@ export async function promoteFirstOperationActivePointer(operationRoot: string) 
   return writeActivePointer(root, manifest);
 }
 
-export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot = sourceRoot) {
+export async function verifySourceBundle(sourceRoot: string, manifest: FirstOperationManifest, assetBoundaryRoot?: string) {
+  const recordedBoundary = resolve(manifest.sourceAssetBoundaryRoot ?? sourceRoot);
+  if (assetBoundaryRoot && resolve(assetBoundaryRoot) !== recordedBoundary) throw new Error("FIRST_OPERATION_SOURCE_BOUNDARY_MISMATCH");
+  if (escapesRoot(recordedBoundary, sourceRoot)) throw new Error("FIRST_OPERATION_SOURCE_BOUNDARY_INVALID");
   const source = await readSource(resolve(sourceRoot));
-  const actual = await sourceBundle(resolve(sourceRoot), source.queue, assetBoundaryRoot);
+  const actual = await sourceBundle(resolve(sourceRoot), source.queue, recordedBoundary);
   if (actual.bundleHash !== manifest.sourceBundleHash) throw new Error("SOURCE_PROOF_HASH_MISMATCH");
   return actual;
 }
@@ -345,6 +352,10 @@ function cloneQueueItem(
   scheduledHourBySlot: Map<string, number>,
 ): LocalQueueItem {
   if (readyIds.has(item.id)) {
+    const priorCarryover = item.operationCarryover;
+    const originOperationNamespace = priorCarryover?.originOperationNamespace || sourceNamespace;
+    const originQueueId = priorCarryover?.originQueueId || item.id;
+    const originVideoSha256 = priorCarryover?.originVideoSha256 || assetHashes[`${item.slotId}:video`] || "";
     return {
       ...item,
       queueDate: operationDate,
@@ -355,14 +366,14 @@ function cloneQueueItem(
       localRevision: 1,
       operationCarryover: {
         prevalidatedCanary: true,
-        sourceCanaryRunId: sourceNamespace,
-        originOperationNamespace: sourceNamespace,
-        originQueueId: item.id,
+        sourceCanaryRunId: priorCarryover?.sourceCanaryRunId || sourceNamespace,
+        originOperationNamespace,
+        originQueueId,
         sourceVideoHash: assetHashes[`${item.slotId}:video`] ?? "",
-        originVideoSha256: assetHashes[`${item.slotId}:video`] ?? "",
+        originVideoSha256,
         sourceReviewHash: assetHashes[`${item.slotId}:review`] ?? "",
         carriedIntoOperationDate: operationDate,
-        regenerationCount: 0,
+        regenerationCount: priorCarryover?.regenerationCount ?? 0,
       } as LocalQueueItem["operationCarryover"]
     };
   }

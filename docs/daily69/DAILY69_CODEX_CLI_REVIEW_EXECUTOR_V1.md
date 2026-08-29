@@ -45,7 +45,7 @@ Closeout and the independent post-closeout auditor recompute the media, review a
 
 ```text
 npm run queue-video:codex-review-diagnostic -- --request <diagnostic-request.json> --output <diagnostic-result.json>
-npm run daily69:first-day:review-carry-forward -- --source-root <source> --target-namespace <namespace> --contact-root <contacts> --evidence-root <evidence> --output <registry.json>
+npm run daily69:first-day:review-carry-forward -- --source-root <source> --target-namespace <namespace> --evidence-root <evidence> --output <registry.json> [--existing-registry <four-slot-registry.json>]
 npm run daily69:first-day:apply-carry-forward-review -- --queue-root <prepared-operation> --registry <registry.json>
 ```
 

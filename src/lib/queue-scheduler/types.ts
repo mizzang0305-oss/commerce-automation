@@ -9,8 +9,10 @@ export type LocalQueueStatus =
 export type CodexReviewEvidenceV2 = {
   schemaVersion: "queue-codex-review-evidence-v2";
   operationNamespace: string;
+  slotId?: string;
   queueId: string;
   productKey: string;
+  productName?: string;
   videoPath: string;
   videoSha256: string;
   videoSize: number;
@@ -27,6 +29,12 @@ export type CodexReviewEvidenceV2 = {
   reviewReceiptSha256: string;
   notes: string;
   regenerationCount: number;
+  productReferenceSha256?: string;
+  visualEvidenceDigest?: string;
+  usageEvidenceDigest?: string;
+  machineQaSourceArtifact?: string;
+  machineQaSourceSha256?: string;
+  visualEvidenceBindingSha256?: string;
   originOperationNamespace?: string;
   originQueueId?: string;
   originVideoSha256?: string;

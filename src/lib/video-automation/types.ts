@@ -63,7 +63,7 @@ export type OwnerReviewedRealUseAsset = {
   productKey: string;
   sourcePath: string;
   reviewEvidencePath: string;
-  sourceType: "owner_reviewed_local_video";
+  sourceType: "owner_reviewed_local_video" | "allocated_sanitized_local_scene_pack";
   identityType: "generic_usage_example" | "exact_product_use";
   usageType: "real_use_context";
   ownerReviewStatus: "pass";

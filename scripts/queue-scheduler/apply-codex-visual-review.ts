@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { LocalQueueRepository } from "../../src/lib/queue-scheduler";
-import { captureCodexReviewEvidence } from "../../src/lib/queue-scheduler/codexReviewEvidence";
+import { loadCompletedCodexEvidenceFromReceipt } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
 
 async function main(): Promise<void> {
   const runRoot = resolve(requiredArg("--run"));
@@ -63,29 +63,14 @@ async function main(): Promise<void> {
     }
     const reviewNotes = note.safeSummary.trim();
     if (reviewNotes.length < 20) throw new Error("CODEX_VISUAL_REVIEW_NOTES_INVALID");
-    const receipt = JSON.parse(await readFile(resolve(note.reviewReceiptPath), "utf8")) as { status?: unknown; reviewedAt?: unknown };
-    if (receipt.status !== "completed" || typeof receipt.reviewedAt !== "string" || !Number.isFinite(Date.parse(receipt.reviewedAt))) {
+    const evidence = await loadCompletedCodexEvidenceFromReceipt(resolve(note.reviewReceiptPath));
+    if (evidence.operationNamespace !== basename(queueRoot) || evidence.slotId !== queueItem.slotId || evidence.queueId !== queueId
+      || evidence.productKey !== productKey || resolve(evidence.videoPath) !== resolve(manifestItem.finalVideo)
+      || evidence.reviewResult !== (note.passed ? "pass" : "block") || evidence.safeSummary !== reviewNotes
+      || evidence.reviewProvenance !== note.reviewProvenance || evidence.regenerationCount !== Math.max(0, queueItem.attemptCount - 1)) {
       throw new Error("CODEX_VISUAL_REVIEW_EXECUTOR_RECEIPT_INVALID");
     }
-    return captureCodexReviewEvidence({
-      operationNamespace: basename(queueRoot),
-      queueId,
-      productKey,
-      videoPath: manifestItem.finalVideo,
-      reviewedAt: new Date(receipt.reviewedAt),
-      reviewResult: note.passed ? "pass" : "block",
-      sourceReviewArtifact: queueItem.reviewPath,
-      notes: reviewNotes,
-      hardBlockers: note.hardBlockers.filter((value): value is string => typeof value === "string"),
-      safeSummary: reviewNotes,
-      executorType: "authenticated_codex_cli",
-      reviewProvenance: note.reviewProvenance,
-      reviewReceiptPath: note.reviewReceiptPath,
-      regenerationCount: Math.max(0, queueItem.attemptCount - 1),
-      ...(typeof note.originOperationNamespace === "string" ? { originOperationNamespace: note.originOperationNamespace } : {}),
-      ...(typeof note.originQueueId === "string" ? { originQueueId: note.originQueueId } : {}),
-      ...(typeof note.originVideoSha256 === "string" ? { originVideoSha256: note.originVideoSha256 } : {})
-    });
+    return evidence;
   }));
   const updated = await repository.recordCodexVisualReviews({ reviews, now: appliedAt });
   console.log(JSON.stringify({ event: "queue_codex_visual_review_applied", reviewed: updated, passed: reviews.filter((review) => review.reviewResult === "pass").length, evidenceSchemaVersion: "queue-codex-review-evidence-v2", historicalTimestampAccepted: false, humanOwnerReviewStatus: "not_requested", publishReady: false, SAFE_TO_UPLOAD: false }));

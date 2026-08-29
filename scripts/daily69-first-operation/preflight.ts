@@ -14,6 +14,8 @@ async function main() {
   const snapshot = await firstOperationStatus(operationRoot);
   const actualHead = (await exec("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
   if (actualHead !== snapshot.manifest.expectedGitHead) throw new Error("RUNTIME_GIT_HEAD_MISMATCH");
+  const dirty = (await exec("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
+  if (dirty) throw new Error("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
   if (!process.argv.includes("--arming") && kstDate(new Date()) !== snapshot.manifest.operationDate) throw new Error("FIRST_OPERATION_DATE_NOT_ACTIVE");
   if (unsafeUploadFlagPresent(process.env)) throw new Error("UPLOAD_SAFETY_FLAG_BLOCKED");
   if (process.env.GOOGLE_DRIVE_VIDEO_FOLDER_ID?.trim()) throw new Error("DRIVE_SCOPE_MUST_REMAIN_DISABLED");

@@ -5,6 +5,10 @@ describe("first operation task safety", () => {
   it("uses exact task names, 20 bounded triggers, expected-head guard, and no-upload wrappers", async () => {
     const install = await readFile("scripts/daily69-first-operation/install-tasks.ps1", "utf8");
     const common = await readFile("scripts/daily69-first-operation/common-first-operation-no-upload.ps1", "utf8");
+    const arm = await readFile("scripts/daily69-first-operation/arm.ts", "utf8");
+    const preflight = await readFile("scripts/daily69-first-operation/preflight.ts", "utf8");
+    const finalizer = await readFile("scripts/daily69-first-operation/run-finalizer-no-upload.ps1", "utf8");
+    const recovery = await readFile("scripts/daily69-first-operation/run-four-slot-recovery.ts", "utf8");
     expect(install).toContain("Minz-Commerce-Scout-NoUpload-V1");
     expect(install).toContain("Minz-Commerce-VideoBatch-NoUpload-V1");
     expect(install).toContain("Minz-Commerce-ControlRunner-NoUpload-V1");
@@ -15,8 +19,16 @@ describe("first operation task safety", () => {
     expect(install).toContain("-StartWhenAvailable");
     expect(install).toContain("FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED");
     expect(install).toContain("daily69:first-day:arm-status");
+    expect(install).toContain('$expectedTriggerDate = if ($Role -eq "finalizer") { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }');
     expect(common).toContain("RUNTIME_GIT_HEAD_MISMATCH");
     expect(common).toContain("BATCH_SLOT_ALREADY_CLAIMED");
+    expect(install).toContain("FIRST_OPERATION_TASK_BINDING_MISMATCH");
+    expect(arm).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+    expect(preflight).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+    expect(finalizer).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+    expect(install).toContain("$names[1..4]");
+    expect(arm).toContain('resolve(operationBase, ".locks", `${namespace}.lock`)');
+    expect(recovery).toContain('join(operationBase, ".locks", `${targetNamespace}.lock`)');
     expect(common).toContain('$env:SAFE_TO_UPLOAD = "false"');
     expect(common).not.toMatch(/(?:YOUTUBE_AUTO_UPLOAD|TIKTOK_AUTO_POST|THREADS_AUTO_POST)\s*=\s*["']true["']/iu);
   });

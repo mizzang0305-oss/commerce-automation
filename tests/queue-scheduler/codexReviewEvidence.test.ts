@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository } from "../../src/lib/queue-scheduler";
@@ -49,7 +50,7 @@ describe("Codex review evidence v2", () => {
     };
     await writeFile(fixture.repository.queuePath, `${JSON.stringify(items, null, 2)}\n`);
     await expect(fixture.repository.recordCodexVisualReviews({ reviews: [fixture.evidence], now: fixture.now })).rejects.toThrow("CODEX_VISUAL_REVIEW_CARRY_FORWARD_ORIGIN_REQUIRED");
-    const carried = { ...fixture.evidence, originOperationNamespace: "operation-2026-08-07", originQueueId: "origin-queue-id", originVideoSha256: fixture.evidence.videoSha256 };
+    const carried = await createTestCodexEvidence({ operationNamespace: basename(fixture.repository.root), queueId: fixture.item.id, productKey: fixture.item.productKey, videoPath: fixture.videoPath, reviewedAt: fixture.now, reviewResult: "pass", sourceReviewArtifact: fixture.reviewPath, notes: "Fresh Codex inspection verified exact visual evidence.", receiptRoot: join(fixture.repository.root, "receipts-carried"), regenerationCount: 0, reviewProvenance: "natural", originOperationNamespace: "operation-2026-08-07", originQueueId: "origin-queue-id", originVideoSha256: fixture.evidence.videoSha256 });
     await expect(fixture.repository.recordCodexVisualReviews({ reviews: [carried], now: fixture.now })).resolves.toBe(1);
   });
 
@@ -58,6 +59,14 @@ describe("Codex review evidence v2", () => {
     const historical = { ...fixture.evidence, reviewedAt: "2026-08-07T00:00:00.000Z" };
     await expect(fixture.repository.recordCodexVisualReviews({ reviews: [historical], now: fixture.now })).rejects.toThrow("CODEX_VISUAL_REVIEW_TIMESTAMP_NOT_FRESH");
     expect(JSON.parse(await readFile(fixture.repository.queuePath, "utf8"))[0].reviewMetadata.codexReview).toBe("not_executed");
+  });
+
+  it("rejects legacy v1 receipts for pass promotion", async () => {
+    const fixture = await readyFixture();
+    const receipt = JSON.parse(await readFile(fixture.evidence.reviewReceiptPath, "utf8"));
+    await writeFile(fixture.evidence.reviewReceiptPath, `${JSON.stringify({ ...receipt, schemaVersion: "queue-codex-review-executor-receipt-v1" }, null, 2)}\n`);
+    const bytes = await readFile(fixture.evidence.reviewReceiptPath);
+    await expect(fixture.repository.recordCodexVisualReviews({ reviews: [{ ...fixture.evidence, reviewReceiptSha256: createHash("sha256").update(bytes).digest("hex") }], now: fixture.now })).rejects.toThrow("CODEX_VISUAL_REVIEW_RECEIPT_BINDING_INVALID");
   });
 
   it("rejects digest-valid review files whose machine QA semantics are not passed", async () => {

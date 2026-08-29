@@ -32,7 +32,8 @@ describe("first no-upload Daily69 operation", () => {
     expect(carried.every((item) => item.operationCarryover?.prevalidatedCanary === true && item.status === "video_ready_machine_qa" && item.reviewMetadata.codexReview === "not_executed")).toBe(true);
     expect(snapshot.items.slice(9).every((item) => item.attemptCount === 0 && !item.videoPath && !item.reviewPath)).toBe(true);
     expect(await hashFile(join(fixture.sourceRoot, "queue.json"))).toBe(before);
-    await expect(verifySourceBundle(fixture.sourceRoot, armed.manifest, fixture.parent)).resolves.toMatchObject({ bundleHash: armed.manifest.sourceBundleHash });
+    expect(armed.manifest.sourceAssetBoundaryRoot).toBe(fixture.sourceRoot);
+    await expect(verifySourceBundle(fixture.sourceRoot, armed.manifest)).resolves.toMatchObject({ bundleHash: armed.manifest.sourceBundleHash });
   }, 30_000);
 
   it("is idempotent and fails closed when original evidence changes", async () => {
@@ -43,6 +44,35 @@ describe("first no-upload Daily69 operation", () => {
     expect(second.idempotent).toBe(true);
     await writeFile(join(fixture.sourceRoot, "source-proof.json"), "{}\n");
     await expect(verifySourceBundle(fixture.sourceRoot, first.manifest, fixture.parent)).rejects.toThrow("SOURCE_PROOF_HASH_MISMATCH");
+  });
+
+  it("preserves an explicit repaired-video origin and regeneration count across the operation clone", async () => {
+    const fixture = await sourceFixture();
+    const queuePath = join(fixture.sourceRoot, "queue.json");
+    const queue = JSON.parse(await readFile(queuePath, "utf8"));
+    const first = queue[0];
+    const videoSha256 = await hashFile(first.videoPath);
+    first.attemptCount = 2;
+    first.operationCarryover = {
+      prevalidatedCanary: true,
+      sourceCanaryRunId: "recovery-source",
+      sourceVideoHash: videoSha256,
+      sourceReviewHash: await hashFile(first.reviewPath),
+      carriedIntoOperationDate: "2026-08-11",
+      originOperationNamespace: "recovery-source",
+      originQueueId: first.id,
+      originVideoSha256: videoSha256,
+      regenerationCount: 1,
+    };
+    await writeFile(queuePath, `${JSON.stringify(queue)}\n`);
+    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: fixture.operationBase, assetBoundaryRoot: fixture.parent, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "1".repeat(40) });
+    const snapshot = await firstOperationStatus(armed.operationRoot);
+    expect(snapshot.items[0].operationCarryover).toMatchObject({
+      originOperationNamespace: "recovery-source",
+      originQueueId: first.id,
+      originVideoSha256: videoSha256,
+      regenerationCount: 1,
+    });
   });
 
   it("derives carry-forward, remaining, and schedule counts from an exact 12-ready source", async () => {
@@ -156,6 +186,7 @@ async function sourceFixture(options: { missingAffiliateRanks?: number[]; readyC
       await repository.complete({ id: item.id, videoPath, reviewPath, creativeScore: 90, videoQualityScore: 92, now });
       reviewed.push(await createTestCodexEvidence({
         operationNamespace: "canary-source",
+        slotId: item.slotId,
         queueId: item.id,
         productKey: item.productKey,
         videoPath,

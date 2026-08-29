@@ -36,6 +36,8 @@ try {
     $actualHead = (& git.exe -C $root rev-parse HEAD 2>$null | Out-String).Trim()
     $gitExitCode = $LASTEXITCODE
     if ($gitExitCode -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw 'RUNTIME_GIT_HEAD_MISMATCH' }
+    $dirty = (& git.exe -C $root status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
     $manifest = Get-Content -LiteralPath (Join-Path $queue 'operation-manifest.json') -Raw -Encoding utf8 | ConvertFrom-Json
     if ([string]$manifest.namespace -ne $Namespace -or [string]$manifest.expectedGitHead -ne $ExpectedGitHead) { throw 'FIRST_OPERATION_TASK_BINDING_MISMATCH' }
 

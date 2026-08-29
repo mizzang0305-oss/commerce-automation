@@ -5,23 +5,35 @@ import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { atomicWriteJson } from "./atomicJson";
 import { captureCodexReviewEvidence } from "./codexReviewEvidence";
+import { assertCodexUsageEvidenceBinding, type CodexUsageEvidenceProvenance } from "./codexUsageEvidence";
 import { acquireProcessLock } from "./lock";
 import type { CodexReviewEvidenceV2 } from "./types";
+import { assertCodexVisualEvidenceBinding, CODEX_VISUAL_EVIDENCE_ROLES, readCodexVisualEvidenceBinding, type CodexVisualEvidenceRole } from "./visualEvidenceBinding";
 
 export const CODEX_REVIEW_OUTPUT_SCHEMA_VERSION = "queue-codex-review-output-v1" as const;
-export const CODEX_REVIEW_RECEIPT_SCHEMA_VERSION = "queue-codex-review-executor-receipt-v1" as const;
+export const CODEX_REVIEW_RECEIPT_SCHEMA_VERSION = "queue-codex-review-executor-receipt-v2" as const;
 export const CODEX_REVIEW_EXECUTOR_TYPE = "authenticated_codex_cli" as const;
 
 export type CodexReviewProvenance = "natural" | "carry_forward_revalidation" | "diagnostic";
 
+export { CODEX_VISUAL_EVIDENCE_ROLES } from "./visualEvidenceBinding";
+export type { CodexVisualEvidenceRole } from "./visualEvidenceBinding";
+export type { CodexUsageEvidenceProvenance } from "./codexUsageEvidence";
+
 export type CodexReviewRequest = {
   operationNamespace: string;
+  slotId: string;
   queueId: string;
   productKey: string;
+  productName: string;
   videoPath: string;
   machineQaSourceArtifact: string;
   finalReviewArtifact: string;
+  productReferencePath: string;
   visualEvidencePaths: string[];
+  visualEvidenceRoles: readonly CodexVisualEvidenceRole[];
+  visualEvidenceBindingPath: string;
+  usageEvidenceProvenance: CodexUsageEvidenceProvenance;
   receiptRoot: string;
   provenance: CodexReviewProvenance;
   regenerationCount?: number;
@@ -82,8 +94,10 @@ type ExecutorReceipt = {
   invoked: boolean;
   provenance: CodexReviewProvenance;
   operationNamespace: string;
+  slotId: string;
   queueId: string;
   productKey: string;
+  productName: string;
   videoPath: string;
   videoSha256: string;
   videoSize: number;
@@ -91,7 +105,11 @@ type ExecutorReceipt = {
   machineQaSourceSha256: string;
   finalReviewArtifact: string;
   finalReviewArtifactSha256: string;
-  visualEvidence: Array<{ path: string; sha256: string; size: number }>;
+  productReference: { path: string; sha256: string; size: number; identityType: "product_reference" };
+  visualEvidence: Array<{ path: string; sha256: string; size: number; role: CodexVisualEvidenceRole }>;
+  usageEvidenceProvenance: CodexUsageEvidenceProvenance;
+  visualEvidenceBindingPath: string;
+  visualEvidenceBindingSha256: string;
   reviewResult?: "pass" | "block";
   hardBlockers?: string[];
   safeSummary?: string;
@@ -103,6 +121,10 @@ type ExecutorReceipt = {
   reviewerType: "codex";
   executorType: typeof CODEX_REVIEW_EXECUTOR_TYPE;
   attempt: number;
+  regenerationCount: number;
+  originOperationNamespace?: string;
+  originQueueId?: string;
+  originVideoSha256?: string;
   exitCode?: number;
   errorCode?: string;
   usage?: InvocationResult["usage"];
@@ -163,9 +185,9 @@ export async function executeAuthenticatedCodexReview(
     const sameSha = receipts.filter((receipt) => receipt.videoSha256 === validated.video.sha256);
     const completed = sameSha.find((receipt) => receipt.status === "completed");
     if (completed) {
-      if (!receiptBindingMatches(completed, input)) return failed("CODEX_REVIEW_DUPLICATE_SHA_BINDING_CONFLICT", false, sameSha.length, "");
+      if (!receiptBindingMatches(completed, input, validated)) return failed("CODEX_REVIEW_DUPLICATE_SHA_BINDING_CONFLICT", false, sameSha.length, "");
       const receiptPath = receiptFile(receiptsRoot, validated.video.sha256, completed.attempt);
-      const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completed, receiptPath, input);
+      const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completed, receiptPath);
       return { status: completed.reviewResult ?? "block", errorCode: "", retryable: false, attempts: sameSha.length, deduplicated: true, receiptPath, ...(evidence ? { evidence } : {}) };
     }
     const invokedCount = receipts.filter((receipt) => receipt.invoked).length;
@@ -193,8 +215,10 @@ export async function executeAuthenticatedCodexReview(
         invoked: true,
         provenance: input.provenance,
         operationNamespace: input.operationNamespace,
+        slotId: input.slotId,
         queueId: input.queueId,
         productKey: input.productKey,
+        productName: input.productName,
         videoPath: validated.video.path,
         videoSha256: validated.video.sha256,
         videoSize: validated.video.size,
@@ -202,10 +226,18 @@ export async function executeAuthenticatedCodexReview(
         machineQaSourceSha256: validated.machineQa.sha256,
         finalReviewArtifact: resolve(input.finalReviewArtifact),
         finalReviewArtifactSha256: "",
+        productReference: validated.productReference,
         visualEvidence: validated.visualEvidence,
+        usageEvidenceProvenance: input.usageEvidenceProvenance,
+        visualEvidenceBindingPath: validated.visualBinding.path,
+        visualEvidenceBindingSha256: validated.visualBinding.sha256,
         reviewerType: "codex",
         executorType: CODEX_REVIEW_EXECUTOR_TYPE,
         attempt,
+        regenerationCount: input.regenerationCount ?? 0,
+        ...(input.originOperationNamespace ? { originOperationNamespace: input.originOperationNamespace } : {}),
+        ...(input.originQueueId ? { originQueueId: input.originQueueId } : {}),
+        ...(input.originVideoSha256 ? { originVideoSha256: input.originVideoSha256 } : {}),
         SAFE_TO_UPLOAD: false,
         SAFE_TO_PUBLIC_UPLOAD: false,
         PLATFORM_UPLOAD: 0,
@@ -215,7 +247,7 @@ export async function executeAuthenticatedCodexReview(
       try {
         const result = await invoke({
           prompt: buildPrompt(input, validated.video.sha256, validated.machineSummary, now()),
-          imagePaths: validated.visualEvidence.map((entry) => entry.path),
+          imagePaths: [validated.productReference.path, ...validated.visualEvidence.map((entry) => entry.path)],
           schemaPath,
           outputPath,
           cwd: attemptRoot,
@@ -244,7 +276,7 @@ export async function executeAuthenticatedCodexReview(
           usage: result.usage,
         };
         await atomicWriteJson(receiptPath, completedReceipt);
-        const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completedReceipt, receiptPath, input);
+        const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completedReceipt, receiptPath);
         return { status: model.reviewResult, errorCode: "", retryable: false, attempts: attempt, deduplicated: false, receiptPath, ...(evidence ? { evidence } : {}) };
       } catch (error) {
         const errorCode = safeError(error);
@@ -281,15 +313,29 @@ export async function executeAuthenticatedCodexReview(
 
 async function validateRequest(input: CodexReviewRequest) {
   if (!/^[A-Za-z0-9_-]{1,128}$/u.test(input.operationNamespace)) throw new Error("CODEX_REVIEW_NAMESPACE_INVALID");
-  if (!input.queueId.trim() || !input.productKey.trim()) throw new Error("CODEX_REVIEW_BINDING_INVALID");
-  if (input.visualEvidencePaths.length < 1 || input.visualEvidencePaths.length > 3) throw new Error("CODEX_REVIEW_VISUAL_EVIDENCE_COUNT_INVALID");
+  if (!/^slot-\d{3}$/u.test(input.slotId) || !input.queueId.trim() || !input.productKey.trim() || input.productName.trim().length < 2) throw new Error("CODEX_REVIEW_BINDING_INVALID");
+  if (input.visualEvidencePaths.length !== CODEX_VISUAL_EVIDENCE_ROLES.length
+    || input.visualEvidenceRoles.length !== CODEX_VISUAL_EVIDENCE_ROLES.length
+    || input.visualEvidenceRoles.some((role, index) => role !== CODEX_VISUAL_EVIDENCE_ROLES[index])) {
+    throw new Error("CODEX_REVIEW_VISUAL_EVIDENCE_ROLES_INVALID");
+  }
   const video = await inspectFile(input.videoPath, "CODEX_REVIEW_VIDEO_NOT_FOUND");
   if (input.originVideoSha256 && input.originVideoSha256 !== video.sha256) throw new Error("CODEX_REVIEW_ORIGIN_VIDEO_SHA_MISMATCH");
   const machineQa = await inspectFile(input.machineQaSourceArtifact, "CODEX_REVIEW_MACHINE_QA_SOURCE_NOT_FOUND");
-  const visualEvidence = await Promise.all(input.visualEvidencePaths.map((path) => inspectFile(path, "CODEX_REVIEW_INPUT_VISUAL_EVIDENCE_NOT_FOUND")));
+  await assertCodexUsageEvidenceBinding(input.usageEvidenceProvenance, input.productKey, video, machineQa);
+  const productReference = {
+    ...await inspectFile(input.productReferencePath, "CODEX_REVIEW_PRODUCT_REFERENCE_NOT_FOUND"),
+    identityType: "product_reference" as const,
+  };
+  const visualEvidence = await Promise.all(input.visualEvidencePaths.map(async (path, index) => ({
+    ...await inspectFile(path, "CODEX_REVIEW_INPUT_VISUAL_EVIDENCE_NOT_FOUND"),
+    role: input.visualEvidenceRoles[index],
+  })));
+  const visualBinding = await readCodexVisualEvidenceBinding(input.visualEvidenceBindingPath);
+  await assertCodexVisualEvidenceBinding({ binding: visualBinding.binding, productKey: input.productKey, video, productReference, visualEvidence });
   const machineSummary = await readMachineSummary(machineQa.path, input.productKey);
   if (machineSummary.machineQaPassed !== true) throw new Error("CODEX_REVIEW_MACHINE_QA_NOT_PASSED");
-  return { video, machineQa, visualEvidence, machineSummary };
+  return { video, machineQa, productReference, visualEvidence, visualBinding, machineSummary };
 }
 
 async function readMachineSummary(path: string, productKey: string) {
@@ -315,14 +361,22 @@ function buildPrompt(input: CodexReviewRequest, videoSha256: string, machineSumm
     "Inspect only the attached local visual evidence. Do not use shell, web, network tools, or external services.",
     "Return only the strict JSON object required by the supplied schema.",
     "Block on obvious blank/corrupt frames, product identity inconsistency, unreadable or badly overlapping text, unsafe imagery, severe crop, or visible render defects.",
+    "The first attached image is the authoritative exact-product reference. The remaining images are labeled video evidence roles in the order supplied below.",
+    "Generic usage scenes are contextual examples only. They are not exact-product evidence and must not be treated as the selected product.",
+    "Do not block merely because a clearly labeled generic context scene differs from the exact product. Do block if the video presents that generic scene as the exact product, mixes another authoritative product, obscures the selected product identity, or makes product-specific claims unsupported by the exact reference.",
     "Do not claim to inspect audio or the MP4 directly; the attached frames/contact sheets plus machine QA are the evidence.",
     "If only one contact sheet is attached, use it to assess first frame, first three seconds, and full-video continuity separately.",
     "A pass requires hardBlockers to be empty. A block requires at least one uppercase safe blocker code.",
     `schemaVersion=${CODEX_REVIEW_OUTPUT_SCHEMA_VERSION}`,
     `operationNamespace=${input.operationNamespace}`,
+    `slotId=${input.slotId}`,
     `queueId=${input.queueId}`,
     `productKey=${input.productKey}`,
+    `productName=${JSON.stringify(input.productName)}`,
     `videoSha256=${videoSha256}`,
+    `productReference=${JSON.stringify({ path: resolve(input.productReferencePath), identityType: "product_reference" })}`,
+    `visualEvidence=${JSON.stringify(input.visualEvidencePaths.map((path, index) => ({ path: resolve(path), role: input.visualEvidenceRoles[index] })))}`,
+    `usageEvidenceProvenance=${JSON.stringify(input.usageEvidenceProvenance)}`,
     "reviewerType=codex",
     `executorType=${CODEX_REVIEW_EXECUTOR_TYPE}`,
     `requestedAt=${requestedAt.toISOString()}`,
@@ -376,6 +430,7 @@ async function materializeFinalReviewArtifact(input: {
     reviewedAt: input.reviewedAt,
     items: [{
       productKey: input.input.productKey,
+      productName: input.input.productName,
       status: passed ? "AUTO_QA_PASS" : "AUTO_QA_BLOCKED",
       machineQaPassed: true,
       finalAutomatedQaPassed: passed,
@@ -385,6 +440,9 @@ async function materializeFinalReviewArtifact(input: {
       firstFrameNote: input.model.firstFrameNote,
       firstThreeSecondsNote: input.model.firstThreeSecondsNote,
       contactSheetNote: input.model.contactSheetNote,
+      productReference: input.validated.productReference,
+      visualEvidence: input.validated.visualEvidence,
+      usageEvidenceProvenance: input.input.usageEvidenceProvenance,
       publishReady: false,
       SAFE_TO_UPLOAD: false,
       SAFE_TO_PUBLIC_UPLOAD: false,
@@ -398,14 +456,15 @@ async function materializeFinalReviewArtifact(input: {
   return inspectFile(target, "CODEX_REVIEW_FINAL_ARTIFACT_NOT_FOUND");
 }
 
-async function evidenceFromReceipt(receipt: ExecutorReceipt, receiptPath: string, input: CodexReviewRequest) {
+async function evidenceFromReceipt(receipt: ExecutorReceipt, receiptPath: string) {
   if (receipt.status !== "completed" || !receipt.reviewResult || !receipt.reviewedAt || !receipt.hardBlockers || !receipt.safeSummary) {
     throw new Error("CODEX_REVIEW_RECEIPT_INCOMPLETE");
   }
   return captureCodexReviewEvidence({
-    operationNamespace: input.operationNamespace,
-    queueId: input.queueId,
-    productKey: input.productKey,
+    operationNamespace: receipt.operationNamespace,
+    slotId: receipt.slotId,
+    queueId: receipt.queueId,
+    productKey: receipt.productKey,
     videoPath: receipt.videoPath,
     reviewedAt: new Date(receipt.reviewedAt),
     reviewResult: receipt.reviewResult,
@@ -414,13 +473,31 @@ async function evidenceFromReceipt(receipt: ExecutorReceipt, receiptPath: string
     hardBlockers: receipt.hardBlockers,
     safeSummary: receipt.safeSummary,
     executorType: CODEX_REVIEW_EXECUTOR_TYPE,
-    reviewProvenance: input.provenance,
+    reviewProvenance: receipt.provenance,
     reviewReceiptPath: receiptPath,
-    regenerationCount: input.regenerationCount ?? 0,
-    ...(input.originOperationNamespace ? { originOperationNamespace: input.originOperationNamespace } : {}),
-    ...(input.originQueueId ? { originQueueId: input.originQueueId } : {}),
-    ...(input.originVideoSha256 ? { originVideoSha256: input.originVideoSha256 } : {}),
+    regenerationCount: receipt.regenerationCount,
+    productName: receipt.productName,
+    productReferenceSha256: receipt.productReference.sha256,
+    visualEvidenceDigest: sha256Text(stableJson(receipt.visualEvidence)),
+    usageEvidenceDigest: sha256Text(stableJson(receipt.usageEvidenceProvenance)),
+    machineQaSourceArtifact: receipt.machineQaSourceArtifact,
+    machineQaSourceSha256: receipt.machineQaSourceSha256,
+    visualEvidenceBindingSha256: receipt.visualEvidenceBindingSha256,
+    ...(receipt.originOperationNamespace ? { originOperationNamespace: receipt.originOperationNamespace } : {}),
+    ...(receipt.originQueueId ? { originQueueId: receipt.originQueueId } : {}),
+    ...(receipt.originVideoSha256 ? { originVideoSha256: receipt.originVideoSha256 } : {}),
   });
+}
+
+export async function loadCompletedCodexEvidenceFromReceipt(receiptPath: string): Promise<CodexReviewEvidenceV2> {
+  const inspected = await inspectFile(receiptPath, "CODEX_REVIEW_RECEIPT_NOT_FOUND");
+  let receipt: ExecutorReceipt;
+  try { receipt = JSON.parse(await readFile(inspected.path, "utf8")) as ExecutorReceipt; }
+  catch { throw new Error("CODEX_REVIEW_RECEIPT_INVALID"); }
+  if (receipt.schemaVersion !== CODEX_REVIEW_RECEIPT_SCHEMA_VERSION || receipt.status !== "completed" || receipt.invoked !== true) {
+    throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
+  }
+  return evidenceFromReceipt(receipt, inspected.path);
 }
 
 async function invokeCodexCli(input: {
@@ -521,9 +598,22 @@ async function readReceipts(root: string): Promise<ExecutorReceipt[]> {
   return receipts;
 }
 
-function receiptBindingMatches(receipt: ExecutorReceipt, input: CodexReviewRequest) {
-  return receipt.operationNamespace === input.operationNamespace && receipt.queueId === input.queueId
-    && receipt.productKey === input.productKey && receipt.provenance === input.provenance;
+function receiptBindingMatches(receipt: ExecutorReceipt, input: CodexReviewRequest, validated: Awaited<ReturnType<typeof validateRequest>>) {
+  return receipt.operationNamespace === input.operationNamespace && receipt.slotId === input.slotId && receipt.queueId === input.queueId
+    && receipt.productKey === input.productKey && receipt.productName === input.productName
+    && receipt.provenance === input.provenance
+    && stableJson(receipt.usageEvidenceProvenance) === stableJson(input.usageEvidenceProvenance)
+    && receipt.productReference.sha256 === validated.productReference.sha256
+    && stableJson(receipt.visualEvidence) === stableJson(validated.visualEvidence)
+    && receipt.visualEvidenceBindingPath === validated.visualBinding.path
+    && receipt.visualEvidenceBindingSha256 === validated.visualBinding.sha256
+    && receipt.videoPath === validated.video.path && receipt.videoSha256 === validated.video.sha256 && receipt.videoSize === validated.video.size
+    && receipt.machineQaSourceArtifact === validated.machineQa.path && receipt.machineQaSourceSha256 === validated.machineQa.sha256
+    && samePath(receipt.finalReviewArtifact, input.finalReviewArtifact)
+    && receipt.regenerationCount === (input.regenerationCount ?? 0)
+    && (receipt.originOperationNamespace ?? "") === (input.originOperationNamespace ?? "")
+    && (receipt.originQueueId ?? "") === (input.originQueueId ?? "")
+    && (receipt.originVideoSha256 ?? "") === (input.originVideoSha256 ?? "");
 }
 
 function receiptFile(root: string, sha256: string, attempt: number) { return join(root, `${sha256}-attempt-${attempt}.json`); }
@@ -534,6 +624,8 @@ function safeIdentity(value: string) { return value.replace(/[^A-Za-z0-9_:.@/-]/
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0; }
 function samePath(left: string, right: string) { return process.platform === "win32" ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right); }
+function sha256Text(value: string) { return createHash("sha256").update(value).digest("hex"); }
+function stableJson(value: unknown): string { if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`; if (isRecord(value)) return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`).join(",")}}`; return JSON.stringify(value); }
 
 async function inspectFile(path: string, missingCode: string): Promise<{ path: string; size: number; sha256: string }> {
   try {

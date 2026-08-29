@@ -58,7 +58,8 @@ function Assert-TaskBinding([string]$Name, [string]$Role) {
     if (-not [bool]$task.Settings.Hidden -or [string]$task.Principal.RunLevel -ne "Limited" -or [string]$task.Principal.LogonType -ne "Interactive" -or [string]$task.Principal.UserId -ne $currentSid) { throw "FIRST_OPERATION_TASK_PRINCIPAL_VERIFY_FAILED:$Name" }
     if (@($task.Actions | Where-Object { [string]$_.WorkingDirectory -ne $root }).Count -gt 0) { throw "FIRST_OPERATION_TASK_WORKDIR_VERIFY_FAILED:$Name" }
     $starts = @($task.Triggers | ForEach-Object { [DateTime]::Parse([string]$_.StartBoundary) })
-    if ($starts | Where-Object { $_.Date -ne $operationLocal.Date }) { throw "FIRST_OPERATION_TASK_DATE_VERIFY_FAILED:$Name" }
+    $expectedTriggerDate = if ($Role -eq "finalizer") { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }
+    if ($starts | Where-Object { $_.Date -ne $expectedTriggerDate }) { throw "FIRST_OPERATION_TASK_DATE_VERIFY_FAILED:$Name" }
     if ($Role -eq "batch") {
         $hours = @($starts | Sort-Object | ForEach-Object { $_.Hour })
         if ($hours.Count -ne $expectedBatchHours.Count -or (Compare-Object -ReferenceObject @($expectedBatchHours | Sort-Object) -DifferenceObject $hours)) { throw "FIRST_OPERATION_BATCH_TRIGGERS_VERIFY_FAILED:$Name" }
@@ -69,10 +70,12 @@ function Assert-TaskBinding([string]$Name, [string]$Role) {
 }
 
 $backups = @{}
+$scoutOriginallyDisabled = $true
 foreach ($name in $names) {
     Assert-OwnedNoUploadTask $name
     $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if ($null -ne $task) {
+        if ($name -eq $names[0]) { $scoutOriginallyDisabled = ([string]$task.State -eq "Disabled") }
         $xml = Export-ScheduledTask -TaskName $name
         $backups[$name] = $xml
         if (-not $WhatIfPreference) { $xml | Set-Content -LiteralPath (Join-Path $backupRoot "$name.xml") -Encoding Unicode }
@@ -116,8 +119,15 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "FIRST_OPERATION_ACTIVE_POINTER_PROMOTION_FAILED" }
     } finally { Pop-Location }
 } catch {
-    foreach ($name in $names) { if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $name -Confirm:$false } }
-    foreach ($name in $backups.Keys) { Register-ScheduledTask -TaskName $name -Xml $backups[$name] -Force | Out-Null }
+    foreach ($name in $names[1..4]) { if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $name -Confirm:$false } }
+    foreach ($name in @($backups.Keys | Where-Object { $_ -ne $names[0] })) { Register-ScheduledTask -TaskName $name -Xml $backups[$name] -Force | Out-Null }
+    $scout = Get-ScheduledTask -TaskName $names[0] -ErrorAction SilentlyContinue
+    if ($null -eq $scout -and $backups.ContainsKey($names[0])) {
+        Register-ScheduledTask -TaskName $names[0] -Xml $backups[$names[0]] -Force | Out-Null
+    } elseif ($null -ne $scout) {
+        if ($scoutOriginallyDisabled) { Disable-ScheduledTask -TaskName $names[0] | Out-Null }
+        else { Enable-ScheduledTask -TaskName $names[0] | Out-Null }
+    }
     Push-Location $root
     try { & npm.cmd run daily69:first-day:arm-status --silent -- --operation-root $queue --status held | Out-Null } catch { }
     finally { Pop-Location }
