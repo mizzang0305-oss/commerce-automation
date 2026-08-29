@@ -12,7 +12,7 @@ import {
   verifyPreexistingRowsUnchanged,
   type PreCutoverSheetBaseline,
 } from "@/lib/queue-control-integration/cutover";
-import { firstOperationStatus, type FirstOperationManifest } from "./index";
+import { firstOperationStatus, verifyFirstOperationMaterializationEligibility, type FirstOperationManifest } from "./index";
 import { TASK_PROVENANCE_EVENT_IDS, classifyTaskInvocationProvenance, type SanitizedTaskSchedulerEvent } from "./taskProvenance";
 import {
   normalizeFirstOperationLifecycleStatus,
@@ -208,11 +208,12 @@ export async function collectLevel3CompletionInput(
 ): Promise<Level3CompletionInput> {
   const root = resolve(operationRoot);
   const expected = expectedCounts(snapshot.manifest, snapshot.settings.batchSize);
-  const [retainedFile, naturalExecution, pointer, media] = await Promise.all([
+  const [retainedFile, naturalExecution, pointer, media, materializationCapacity] = await Promise.all([
     readJson<Level3RetainedEvidence | null>(join(root, "closeout", "level3-retained-evidence.json"), null),
     scanRetainedExecution(root, snapshot.manifest),
     observeActivePointer(root, snapshot.manifest),
     inspectReadyEvidence(root, snapshot.items, expected.total, dependencies.inspectMedia ?? inspectQueueMediaEvidence),
+    observeMaterializationCapacity(root, snapshot).catch(() => null),
   ]);
   const retainedAggregate = Object.prototype.hasOwnProperty.call(dependencies, "retainedEvidenceOverride") ? dependencies.retainedEvidenceOverride ?? null : retainedFile;
   const retainedEvidence = retainedAggregate ? { ...retainedAggregate, media } : null;
@@ -223,15 +224,8 @@ export async function collectLevel3CompletionInput(
       operationDate: snapshot.manifest.operationDate,
       expectedGitHead: snapshot.manifest.expectedGitHead,
     },
-    ...(snapshot.manifest.materializationEligibility ? {
-      prearmCapacity: {
-        activeMaterializable: snapshot.manifest.materializationEligibility.activeMaterializable,
-        activeBlocked: snapshot.manifest.materializationEligibility.activeBlocked,
-        reserveMaterializable: snapshot.manifest.materializationEligibility.reserveMaterializable,
-        reserveBlocked: snapshot.manifest.materializationEligibility.reserveBlocked,
-        pass: snapshot.manifest.materializationEligibility.pass,
-      },
-    } : {}),
+    materializationCapacityRequired: snapshot.manifest.schemaVersion === "daily69-first-operation-v2",
+    materializationCapacity,
     lifecycleStatus: normalizeFirstOperationLifecycleStatus(snapshot.manifest.armStatus, snapshot.manifest.decision),
     pointer,
     queue: snapshot.status,
@@ -242,6 +236,36 @@ export async function collectLevel3CompletionInput(
     },
     retainedEvidence,
     naturalExecution,
+  };
+}
+
+async function observeMaterializationCapacity(
+  operationRoot: string,
+  snapshot: Awaited<ReturnType<typeof firstOperationStatus>>,
+): Promise<NonNullable<Level3CompletionInput["materializationCapacity"]>> {
+  const preflight = await verifyFirstOperationMaterializationEligibility(operationRoot);
+  const productKeys = new Set<string>();
+  for (const item of snapshot.items) {
+    productKeys.add(item.productKey);
+    for (const candidate of item.candidateHistory ?? []) productKeys.add(candidate.productKey);
+  }
+  for (const reserve of snapshot.reserve) productKeys.add(reserve.candidate.productKey);
+  const claimed = snapshot.reserve.filter((reserve) => Boolean(reserve.claimedBySlot));
+  const reconciled = claimed.filter((reserve) => {
+    const item = snapshot.items.find((candidate) => candidate.slotId === reserve.claimedBySlot);
+    if (!item || item.productKey !== reserve.candidate.productKey) return false;
+    return (item.candidateHistory ?? []).some((candidate) => candidate.productKey === reserve.candidate.productKey
+      && candidate.outcome === "passed" && candidate.reason === "RESERVE_FALLBACK" && Boolean(candidate.replacementOfProductKey));
+  });
+  const uniqueClaimedProducts = new Set(claimed.map((reserve) => reserve.candidate.productKey));
+  const uniqueClaimedSlots = new Set(claimed.map((reserve) => reserve.claimedBySlot));
+  return {
+    ...preflight,
+    observedDistinct: productKeys.size,
+    reserveConsumed: claimed.length,
+    reserveConsumptionReconciled: uniqueClaimedProducts.size === claimed.length && uniqueClaimedSlots.size === claimed.length
+      ? reconciled.length
+      : -1,
   };
 }
 

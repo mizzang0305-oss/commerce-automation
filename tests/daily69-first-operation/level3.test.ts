@@ -26,12 +26,27 @@ describe("Daily69 Level3 completion matrix", () => {
 
   it("uses exact prearm materialization capacity after valid reserve fallbacks are consumed", () => {
     const input = completeInput();
-    input.prearmCapacity = {
+    input.materializationCapacityRequired = true;
+    input.materializationCapacity = {
+      activeTotal: input.expected.total,
       activeMaterializable: input.expected.total,
       activeBlocked: 0,
+      reserveTotal: input.expected.reserve,
       reserveMaterializable: input.expected.reserve,
       reserveBlocked: 0,
+      requiredActive: input.expected.total,
+      requiredReserve: input.expected.reserve,
+      blockedQueueIds: [],
+      blockedProductKeys: [],
+      blockedEvidenceTypes: [],
+      safeReasonCodes: [],
       pass: true,
+      safeCode: "",
+      SAFE_TO_UPLOAD: false,
+      PLATFORM_UPLOAD: 0,
+      observedDistinct: input.expected.distinct,
+      reserveConsumed: input.expected.reserve - 1,
+      reserveConsumptionReconciled: input.expected.reserve - 1,
     };
     input.queue.reserve = 1;
     input.queue.distinct = input.expected.total + 1;
@@ -42,15 +57,39 @@ describe("Daily69 Level3 completion matrix", () => {
 
   it("fails prearm capacity closed when a materialization allocation was blocked", () => {
     const input = completeInput();
-    input.prearmCapacity = {
+    input.materializationCapacityRequired = true;
+    input.materializationCapacity = {
+      activeTotal: input.expected.total,
       activeMaterializable: input.expected.total - 1,
       activeBlocked: 1,
+      reserveTotal: input.expected.reserve,
       reserveMaterializable: input.expected.reserve,
       reserveBlocked: 0,
+      requiredActive: input.expected.total,
+      requiredReserve: input.expected.reserve,
+      blockedQueueIds: ["queue-blocked"],
+      blockedProductKeys: ["product-blocked"],
+      blockedEvidenceTypes: ["unsupported"],
+      safeReasonCodes: ["ALLOCATED_USAGE_ASSET_NOT_ELIGIBLE"],
       pass: false,
+      safeCode: "MATERIALIZABLE_CAPACITY_SHORTFALL",
+      SAFE_TO_UPLOAD: false,
+      PLATFORM_UPLOAD: 0,
+      observedDistinct: input.expected.distinct,
+      reserveConsumed: 0,
+      reserveConsumptionReconciled: 0,
     };
     const matrix = validateLevel3Completion(input);
     expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "UNPROVEN" });
+    expect(matrix.completion).toBe("PENDING");
+  });
+
+  it("requires fresh closeout materialization evidence for v2 operations", () => {
+    const input = completeInput();
+    input.materializationCapacityRequired = true;
+    input.materializationCapacity = null;
+    const matrix = validateLevel3Completion(input);
+    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "UNPROVEN", actual: "closeout_recomputation_missing" });
     expect(matrix.completion).toBe("PENDING");
   });
 

@@ -1,3 +1,5 @@
+import type { Daily69MaterializationPreflight } from "@/lib/usage-evidence/materializationEligibility";
+
 export const DAILY69_LEVEL3_RETAINED_EVIDENCE_SCHEMA = "daily69-level3-retained-evidence-v1" as const;
 
 export type Level3Completion = "PASS" | "PENDING" | "FAILED";
@@ -102,13 +104,12 @@ export type Level3CompletionInput = {
     operationDate: string;
     expectedGitHead: string;
   };
-  prearmCapacity?: {
-    activeMaterializable: number;
-    activeBlocked: number;
-    reserveMaterializable: number;
-    reserveBlocked: number;
-    pass: boolean;
-  };
+  materializationCapacityRequired?: boolean;
+  materializationCapacity?: (Daily69MaterializationPreflight & {
+    observedDistinct: number;
+    reserveConsumed: number;
+    reserveConsumptionReconciled: number;
+  }) | null;
   lifecycleStatus: FirstOperationLifecycleStatus;
   pointer: Level3PointerObservation;
   queue: {
@@ -195,20 +196,34 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
   `${input.queue.machineOnly}/${input.queue.reviewPending}/${input.queue.scheduled}/${input.queue.processing}/${input.queue.retry}/${input.queue.skipped}`,
   "DAILY69_QUEUE_NOT_TERMINAL");
   integrity("queue_failures", input.queue.blocked === 0 && input.queue.failed === 0, "blocked/failed=0", `${input.queue.blocked}/${input.queue.failed}`, "DAILY69_QUEUE_FAILURE_PRESENT");
-  const prearmCapacity = input.prearmCapacity;
-  const capacityPass = prearmCapacity
-    ? prearmCapacity.pass
-      && prearmCapacity.activeMaterializable === expected.total
-      && prearmCapacity.activeBlocked === 0
-      && prearmCapacity.reserveMaterializable >= expected.reserve
-      && prearmCapacity.reserveBlocked === 0
+  const materializationCapacity = input.materializationCapacity;
+  const capacityPass = materializationCapacity
+    ? materializationCapacity.pass
+      && materializationCapacity.activeTotal === expected.total
+      && materializationCapacity.activeMaterializable === expected.total
+      && materializationCapacity.activeBlocked === 0
+      && materializationCapacity.reserveTotal >= expected.reserve
+      && materializationCapacity.reserveMaterializable >= expected.reserve
+      && materializationCapacity.reserveBlocked === 0
+      && materializationCapacity.requiredActive === expected.total
+      && materializationCapacity.requiredReserve === expected.reserve
+      && materializationCapacity.blockedQueueIds.length === 0
+      && materializationCapacity.blockedProductKeys.length === 0
+      && materializationCapacity.blockedEvidenceTypes.length === 0
+      && materializationCapacity.safeReasonCodes.length === 0
+      && materializationCapacity.safeCode === ""
       && expected.distinct >= expected.total + expected.reserve
-    : input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct;
-  const capacityActual = prearmCapacity
-    ? `prearm=${prearmCapacity.activeMaterializable}/${prearmCapacity.reserveMaterializable}/${prearmCapacity.activeBlocked}/${prearmCapacity.reserveBlocked}/${expected.distinct} remaining=${input.queue.reserve}/${input.queue.distinct}`
-    : `${input.queue.reserve}/${input.queue.distinct}`;
+      && materializationCapacity.observedDistinct >= expected.distinct
+      && materializationCapacity.reserveConsumed === materializationCapacity.reserveConsumptionReconciled
+      && materializationCapacity.reserveConsumed + input.queue.reserve === materializationCapacity.reserveTotal
+    : input.materializationCapacityRequired
+      ? false
+      : input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct;
+  const capacityActual = materializationCapacity
+    ? `closeout=${materializationCapacity.activeMaterializable}/${materializationCapacity.reserveMaterializable}/${materializationCapacity.activeBlocked}/${materializationCapacity.reserveBlocked}/${materializationCapacity.observedDistinct} consumed=${materializationCapacity.reserveConsumed}/${materializationCapacity.reserveConsumptionReconciled} remaining=${input.queue.reserve}`
+    : input.materializationCapacityRequired ? "closeout_recomputation_missing" : `${input.queue.reserve}/${input.queue.distinct}`;
   completion("capacity", capacityPass,
-    `prearm active=${expected.total} reserve>=${expected.reserve} blocked=0/0 distinct>=${expected.total + expected.reserve}`,
+    `closeout active=${expected.total} reserve>=${expected.reserve} blocked=0/0 distinct>=${expected.distinct} consumed=reconciled`,
     capacityActual, "DAILY69_CAPACITY_INCOMPLETE");
   integrity("leases", input.queue.unresolvedLeases === 0, "0", input.queue.unresolvedLeases, "DAILY69_UNRESOLVED_LEASES");
   integrity("stale_locks", input.queue.staleLocks === 0, "0", input.queue.staleLocks, "DAILY69_STALE_LOCK_PRESENT");
