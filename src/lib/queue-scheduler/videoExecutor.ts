@@ -30,13 +30,13 @@ export async function prepareQueueVideoItemsIndependently<T>(input: {
 }
 
 export function bindPreparedItemsToManifestOrder<T extends { productKey: string }, U extends Record<string, unknown>>(prepared: T[], manifestItems: U[]) {
-  const preparedByProductKey = new Map(prepared.map((binding) => [binding.productKey, binding]));
+  const preparedByProductKey = new Map(prepared.map((binding, preparedIndex) => [binding.productKey, { binding, preparedIndex }]));
   const manifestProductKeys = manifestItems.map((item) => typeof item.productKey === "string" ? item.productKey : "");
   if (manifestItems.length !== prepared.length
     || preparedByProductKey.size !== prepared.length
     || new Set(manifestProductKeys).size !== manifestItems.length
     || manifestProductKeys.some((productKey) => !preparedByProductKey.has(productKey))) throw new Error("QUEUE_PRODUCT_BINDING_MISMATCH");
-  return manifestItems.map((item, itemIndex) => ({ binding: preparedByProductKey.get(manifestProductKeys[itemIndex]!)!, item, itemIndex }));
+  return manifestItems.map((item, itemIndex) => ({ ...preparedByProductKey.get(manifestProductKeys[itemIndex]!)!, item, itemIndex }));
 }
 
 export async function executeQueueVideoBatch(input: {
@@ -109,10 +109,10 @@ export async function executeQueueVideoBatch(input: {
       const runManifestPath = join(videoRoot, "run-manifest.json");
       const manifest = JSON.parse(await readFile(runManifestPath, "utf8")) as { completedAt?: string; items?: Array<Record<string, unknown>> };
       const manifestItems = manifest.items ?? [];
-      for (const { binding, item, itemIndex } of bindPreparedItemsToManifestOrder(prepared, manifestItems)) {
+      for (const { binding, item, preparedIndex } of bindPreparedItemsToManifestOrder(prepared, manifestItems)) {
         if (item.machineQaPassed !== true || typeof item.finalVideo !== "string") { const blocker = Array.isArray(item.blockers) ? String(item.blockers[0] ?? "VIDEO_AUTO_QA_FAILED") : "VIDEO_AUTO_QA_FAILED"; byQueueId.set(binding.queueId, failed(binding, safeCode(blocker), isRetryable(blocker))); continue; }
         try {
-          const productBoundary = await realpath(join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final"));
+          const productBoundary = await realpath(join(videoRoot, `product-${String(preparedIndex + 1).padStart(3, "0")}`, "final"));
           const finalVideo = await containedFile(productBoundary, item.finalVideo, "VIDEO_OUTPUT_PATH_OUTSIDE_PRODUCT_ROOT");
           const visualEvidencePaths = await Promise.all([
             item.firstFramePath,
@@ -130,7 +130,7 @@ export async function executeQueueVideoBatch(input: {
             derivation: "native_final_artifacts",
             outputPath: join(dirname(finalVideo), "codex-visual-evidence-binding.json"),
           });
-          const finalReviewArtifact = join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final", "codex-review-source.json");
+          const finalReviewArtifact = join(videoRoot, `product-${String(preparedIndex + 1).padStart(3, "0")}`, "final", "codex-review-source.json");
           const codexReview = await (input.reviewExecutor ?? executeAuthenticatedCodexReview)({
             queueId: binding.queueId,
             slotId: binding.slotId,

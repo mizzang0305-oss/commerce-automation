@@ -16,10 +16,10 @@ describe("queue video item preparation isolation", () => {
       { productKey: "product-c", finalVideo: "product-003/final/output.mp4" },
     ];
 
-    expect(bindPreparedItemsToManifestOrder(prepared, manifest).map(({ binding, itemIndex }) => ({ queueId: binding.queueId, itemIndex }))).toEqual([
-      { queueId: "queue-b", itemIndex: 0 },
-      { queueId: "queue-a", itemIndex: 1 },
-      { queueId: "queue-c", itemIndex: 2 },
+    expect(bindPreparedItemsToManifestOrder(prepared, manifest).map(({ binding, itemIndex, preparedIndex }) => ({ queueId: binding.queueId, itemIndex, preparedIndex }))).toEqual([
+      { queueId: "queue-b", itemIndex: 0, preparedIndex: 1 },
+      { queueId: "queue-a", itemIndex: 1, preparedIndex: 0 },
+      { queueId: "queue-c", itemIndex: 2, preparedIndex: 2 },
     ]);
   });
 
