@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("first operation task safety", () => {
   it("uses exact task names, 20 bounded triggers, expected-head guard, and no-upload wrappers", async () => {
     const install = await readFile("scripts/daily69-first-operation/install-tasks.ps1", "utf8");
+    const principal = await readFile("scripts/daily69-first-operation/principal-identity.ps1", "utf8");
     const common = await readFile("scripts/daily69-first-operation/common-first-operation-no-upload.ps1", "utf8");
     const arm = await readFile("scripts/daily69-first-operation/arm.ts", "utf8");
     const preflight = await readFile("scripts/daily69-first-operation/preflight.ts", "utf8");
@@ -15,6 +16,13 @@ describe("first operation task safety", () => {
     expect(install).toContain("Minz-Commerce-Daily69-Closeout-NoUpload-V1");
     expect(install).toContain("expectedBatchHours");
     expect(install).toContain("TASK_SCHEDULER_OPERATIONAL_LOG_REQUIRED");
+    expect(install).toContain('. (Join-Path $PSScriptRoot "principal-identity.ps1")');
+    expect(install).toContain("Assert-PrincipalSecurityIdentifier -ExpectedSid $currentSid");
+    expect(install).not.toMatch(/Principal\.UserId\s+-ne\s+\$currentSid/u);
+    expect(principal).toContain("Security.Principal.SecurityIdentifier");
+    expect(principal).toContain("Security.Principal.NTAccount");
+    expect(principal).toContain("PRINCIPAL_IDENTITY_UNRESOLVABLE");
+    expect(principal).not.toMatch(/EndsWith|Split\([^\n]+\\\\|ToLowerInvariant/u);
     expect(install).toContain("-MultipleInstances IgnoreNew");
     expect(install).toContain("-StartWhenAvailable");
     expect(install).toContain("FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED");

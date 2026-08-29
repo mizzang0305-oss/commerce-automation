@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory = $true)][string]$EnvFile
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "principal-identity.ps1")
 $names = @("Minz-Commerce-Scout-NoUpload-V1", "Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1", "Minz-Commerce-Daily69-Closeout-NoUpload-V1", "Minz-Commerce-Daily69-Finalizer-NoUpload-V1")
 $root = (Resolve-Path -LiteralPath $WorktreeRoot).Path
 $queue = (Resolve-Path -LiteralPath $QueueRoot).Path
@@ -55,7 +56,12 @@ function Assert-TaskBinding([string]$Name, [string]$Role) {
     }
     if ([string]$task.State -eq "Disabled") { throw "FIRST_OPERATION_TASK_DISABLED:$Name" }
     if ([string]$task.Settings.MultipleInstances -ne "IgnoreNew" -or -not [bool]$task.Settings.StartWhenAvailable) { throw "FIRST_OPERATION_TASK_SETTINGS_VERIFY_FAILED:$Name" }
-    if (-not [bool]$task.Settings.Hidden -or [string]$task.Principal.RunLevel -ne "Limited" -or [string]$task.Principal.LogonType -ne "Interactive" -or [string]$task.Principal.UserId -ne $currentSid) { throw "FIRST_OPERATION_TASK_PRINCIPAL_VERIFY_FAILED:$Name" }
+    try {
+        Assert-PrincipalSecurityIdentifier -ExpectedSid $currentSid -ReadbackIdentity ([string]$task.Principal.UserId) | Out-Null
+    } catch {
+        throw "FIRST_OPERATION_TASK_PRINCIPAL_VERIFY_FAILED:$Name"
+    }
+    if (-not [bool]$task.Settings.Hidden -or [string]$task.Principal.RunLevel -ne "Limited" -or [string]$task.Principal.LogonType -ne "Interactive") { throw "FIRST_OPERATION_TASK_PRINCIPAL_VERIFY_FAILED:$Name" }
     if (@($task.Actions | Where-Object { [string]$_.WorkingDirectory -ne $root }).Count -gt 0) { throw "FIRST_OPERATION_TASK_WORKDIR_VERIFY_FAILED:$Name" }
     $starts = @($task.Triggers | ForEach-Object { [DateTime]::Parse([string]$_.StartBoundary) })
     $expectedTriggerDate = if ($Role -eq "finalizer") { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }
