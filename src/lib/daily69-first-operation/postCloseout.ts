@@ -223,6 +223,15 @@ export async function collectLevel3CompletionInput(
       operationDate: snapshot.manifest.operationDate,
       expectedGitHead: snapshot.manifest.expectedGitHead,
     },
+    ...(snapshot.manifest.materializationEligibility ? {
+      prearmCapacity: {
+        activeMaterializable: snapshot.manifest.materializationEligibility.activeMaterializable,
+        activeBlocked: snapshot.manifest.materializationEligibility.activeBlocked,
+        reserveMaterializable: snapshot.manifest.materializationEligibility.reserveMaterializable,
+        reserveBlocked: snapshot.manifest.materializationEligibility.reserveBlocked,
+        pass: snapshot.manifest.materializationEligibility.pass,
+      },
+    } : {}),
     lifecycleStatus: normalizeFirstOperationLifecycleStatus(snapshot.manifest.armStatus, snapshot.manifest.decision),
     pointer,
     queue: snapshot.status,

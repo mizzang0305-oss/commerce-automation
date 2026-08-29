@@ -116,7 +116,11 @@ describe("Daily69 independent post-closeout audit", () => {
     await mkdir(join(operationRoot, "batch-results"), { recursive: true });
     const run = { runId: "batch-20990101040000", type: "scheduled_batch", status: "success", startedAt: "2099-01-01T04:00:00.000Z", finishedAt: "2099-01-01T04:01:00.000Z", claimed: 1, completed: 1, blocked: 0, failed: 0, retried: 0, safeMessage: "BATCH_MACHINE_QA_COMPLETE", metrics: { PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 } };
     await writeFile(join(operationRoot, "runs.json"), `${JSON.stringify([run])}\n`);
-    await writeFile(join(operationRoot, "batch-results", "batch-001.jsonl"), `${JSON.stringify({ event: "queue_batch_complete", run, results: [{ queueId: "queue-001", productKey: "product-001", passed: true }] })}\n`);
+    await writeFile(join(operationRoot, "batch-results", "batch-001.jsonl"), `${JSON.stringify({
+      event: "queue_batch_complete",
+      run: { runId: run.runId, claimed: run.claimed },
+      results: [{ queueId: "queue-001" }],
+    })}\n`);
     const gateway: Level3SheetsAuditGateway = { audit: async () => ({ exact: true, queueRows: 1, reserveRows: 0, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "c".repeat(64) }) };
     const evidence = await captureLevel3RetainedEvidence(operationRoot, gateway);
     expect(evidence.sheets).toMatchObject({ exact: true, queueRows: 1, reserveRows: 0, syncRows: 1 });

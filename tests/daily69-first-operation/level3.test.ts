@@ -24,6 +24,36 @@ describe("Daily69 Level3 completion matrix", () => {
     expect(matrix.gates.find((gate) => gate.id === "natural_execution")?.state).toBe("UNPROVEN");
   });
 
+  it("uses exact prearm materialization capacity after valid reserve fallbacks are consumed", () => {
+    const input = completeInput();
+    input.prearmCapacity = {
+      activeMaterializable: input.expected.total,
+      activeBlocked: 0,
+      reserveMaterializable: input.expected.reserve,
+      reserveBlocked: 0,
+      pass: true,
+    };
+    input.queue.reserve = 1;
+    input.queue.distinct = input.expected.total + 1;
+    const matrix = validateLevel3Completion(input);
+    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "PASS" });
+    expect(matrix.completion).toBe("PASS");
+  });
+
+  it("fails prearm capacity closed when a materialization allocation was blocked", () => {
+    const input = completeInput();
+    input.prearmCapacity = {
+      activeMaterializable: input.expected.total - 1,
+      activeBlocked: 1,
+      reserveMaterializable: input.expected.reserve,
+      reserveBlocked: 0,
+      pass: false,
+    };
+    const matrix = validateLevel3Completion(input);
+    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "UNPROVEN" });
+    expect(matrix.completion).toBe("PENDING");
+  });
+
   it("classifies explicit pointer, safety, and binding contradictions as failed", () => {
     const input = completeInput();
     input.pointer = { state: "MISMATCH", reason: "DAILY69_ACTIVE_POINTER_MISMATCH" };

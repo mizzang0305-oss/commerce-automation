@@ -102,6 +102,13 @@ export type Level3CompletionInput = {
     operationDate: string;
     expectedGitHead: string;
   };
+  prearmCapacity?: {
+    activeMaterializable: number;
+    activeBlocked: number;
+    reserveMaterializable: number;
+    reserveBlocked: number;
+    pass: boolean;
+  };
   lifecycleStatus: FirstOperationLifecycleStatus;
   pointer: Level3PointerObservation;
   queue: {
@@ -188,7 +195,21 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
   `${input.queue.machineOnly}/${input.queue.reviewPending}/${input.queue.scheduled}/${input.queue.processing}/${input.queue.retry}/${input.queue.skipped}`,
   "DAILY69_QUEUE_NOT_TERMINAL");
   integrity("queue_failures", input.queue.blocked === 0 && input.queue.failed === 0, "blocked/failed=0", `${input.queue.blocked}/${input.queue.failed}`, "DAILY69_QUEUE_FAILURE_PRESENT");
-  completion("capacity", input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct, `reserve>=${expected.reserve} distinct>=${expected.distinct}`, `${input.queue.reserve}/${input.queue.distinct}`, "DAILY69_CAPACITY_INCOMPLETE");
+  const prearmCapacity = input.prearmCapacity;
+  const capacityPass = prearmCapacity
+    ? prearmCapacity.pass
+      && prearmCapacity.activeMaterializable === expected.total
+      && prearmCapacity.activeBlocked === 0
+      && prearmCapacity.reserveMaterializable >= expected.reserve
+      && prearmCapacity.reserveBlocked === 0
+      && expected.distinct >= expected.total + expected.reserve
+    : input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct;
+  const capacityActual = prearmCapacity
+    ? `prearm=${prearmCapacity.activeMaterializable}/${prearmCapacity.reserveMaterializable}/${prearmCapacity.activeBlocked}/${prearmCapacity.reserveBlocked}/${expected.distinct} remaining=${input.queue.reserve}/${input.queue.distinct}`
+    : `${input.queue.reserve}/${input.queue.distinct}`;
+  completion("capacity", capacityPass,
+    `prearm active=${expected.total} reserve>=${expected.reserve} blocked=0/0 distinct>=${expected.total + expected.reserve}`,
+    capacityActual, "DAILY69_CAPACITY_INCOMPLETE");
   integrity("leases", input.queue.unresolvedLeases === 0, "0", input.queue.unresolvedLeases, "DAILY69_UNRESOLVED_LEASES");
   integrity("stale_locks", input.queue.staleLocks === 0, "0", input.queue.staleLocks, "DAILY69_STALE_LOCK_PRESENT");
   integrity("duplicate_renders", input.queue.duplicateRenders === 0, "0", input.queue.duplicateRenders, "DAILY69_DUPLICATE_RENDERS");
