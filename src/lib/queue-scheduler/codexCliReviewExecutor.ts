@@ -509,13 +509,9 @@ async function invokeCodexCli(input: {
   timeoutMs: number;
   env: NodeJS.ProcessEnv;
 }): Promise<InvocationResult> {
-  const command = resolveCodexCommand(input.env);
+  const launch = resolveCodexLaunch(input.env);
   const codexArgs = buildCodexCliArguments(input);
-  const executable = process.platform === "win32" ? resolvePowerShell(input.env) : command;
-  const args = process.platform === "win32"
-    ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", command, ...codexArgs]
-    : codexArgs;
-  const processResult = await spawnCaptured(executable, args, input.env, input.timeoutMs, input.prompt);
+  const processResult = await spawnCaptured(launch.executable, [...launch.argsPrefix, ...codexArgs], input.env, input.timeoutMs, input.prompt);
   if (processResult.exitCode !== 0) throw new Error(classifyCliFailure(`${processResult.stderr}\n${processResult.stdout}`));
   let output: unknown = null;
   try { output = JSON.parse(await readFile(input.outputPath, "utf8")); }
@@ -564,19 +560,21 @@ function classifyCliFailure(stderr: string) {
   return "CODEX_REVIEW_CLI_EXIT_NONZERO";
 }
 
-function resolveCodexCommand(env: NodeJS.ProcessEnv) {
+export function resolveCodexLaunch(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+  nodeExecutable: string = process.execPath,
+): { executable: string; argsPrefix: string[] } {
   const explicit = env.CODEX_REVIEW_CODEX_COMMAND?.trim();
-  if (explicit) return resolve(explicit);
-  if (process.platform !== "win32") return "codex";
+  if (platform !== "win32") return { executable: explicit ? resolve(explicit) : "codex", argsPrefix: [] };
   const appData = env.APPDATA?.trim();
   if (!appData) throw new Error("CODEX_REVIEW_CURRENT_USER_APPDATA_NOT_FOUND");
-  return join(appData, "npm", "codex.ps1");
-}
-
-function resolvePowerShell(env: NodeJS.ProcessEnv) {
-  const systemRoot = env.SystemRoot?.trim() || env.WINDIR?.trim();
-  if (!systemRoot) throw new Error("CODEX_REVIEW_POWERSHELL_NOT_FOUND");
-  return join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const configured = explicit ? resolve(explicit) : join(appData, "npm", "codex.ps1");
+  if (/\.exe$/iu.test(configured)) return { executable: configured, argsPrefix: [] };
+  const codexJs = /\.m?js$/iu.test(configured)
+    ? configured
+    : join(dirname(configured), "node_modules", "@openai", "codex", "bin", "codex.js");
+  return { executable: nodeExecutable, argsPrefix: [codexJs] };
 }
 
 function parseUsage(stdout: string) {

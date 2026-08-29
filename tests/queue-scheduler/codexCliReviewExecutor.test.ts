@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildCodexCliArguments, executeAuthenticatedCodexReview } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
+import { buildCodexCliArguments, executeAuthenticatedCodexReview, resolveCodexLaunch } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
 import { assertCodexExecutorReceipt } from "../../src/lib/queue-scheduler/codexReviewEvidence";
 import { createCodexVisualEvidenceBinding, readCodexVisualEvidenceBinding } from "../../src/lib/queue-scheduler/visualEvidenceBinding";
 
@@ -21,6 +21,18 @@ describe("authenticated Codex CLI review executor", () => {
     expect(args.slice(0, 2)).toEqual(["exec", "-"]);
     expect(args).toContain("--output-schema");
     expect(args.filter((value) => value === "--image")).toHaveLength(2);
+  });
+
+  it("bypasses the Windows PowerShell wrapper when stdin is required", () => {
+    const launch = resolveCodexLaunch(
+      { APPDATA: "C:\\Users\\reviewer\\AppData\\Roaming" },
+      "win32",
+      "C:\\Program Files\\nodejs\\node.exe",
+    );
+    expect(launch.executable).toBe("C:\\Program Files\\nodejs\\node.exe");
+    expect(launch.argsPrefix).toEqual([
+      "C:\\Users\\reviewer\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    ]);
   });
 
   it("creates exact structured evidence, immutable receipt binding, and deduplicates the same SHA", async () => {
