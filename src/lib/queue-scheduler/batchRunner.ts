@@ -33,8 +33,16 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     if (claimed.length === 0) return recordNoop(repository, runId, now, "NO_DUE_ITEMS", { freeGb });
     if (claimed.length !== settings.batchSize) { for (const item of claimed) await repository.fail({ id: item.id, code: "INCOMPLETE_BATCH_CLAIM", retryable: true, now, settings }); return recordNoop(repository, runId, now, "INCOMPLETE_BATCH_CLAIM", { claimed: claimed.length }); }
     await repository.markProcessing(claimed.map((item) => item.id), now);
-    const executor: typeof executeQueueVideoBatch = input.executor ?? ((request) => executeQueueVideoBatch({ ...request, reviewExecutor: input.reviewExecutor }));
-    const results = await executeSafely(executor, claimed, runId, repository.root);
+    const immediatelyAppliedCodexPasses = new Set<string>();
+    const applyFreshCodexPass = async (result: QueueVideoResult) => {
+      if (!result.passed || result.codexReview?.status !== "pass" || !result.codexReview.evidence) return;
+      const machineQaFinishedAt = result.machineQaFinishedAt && Number.isFinite(Date.parse(result.machineQaFinishedAt)) ? new Date(result.machineQaFinishedAt) : new Date();
+      await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: machineQaFinishedAt });
+      await repository.recordCodexVisualReviews({ reviews: [result.codexReview.evidence], now: new Date() });
+      immediatelyAppliedCodexPasses.add(result.queueId);
+    };
+    const executor: typeof executeQueueVideoBatch = input.executor ?? ((request) => executeQueueVideoBatch({ ...request, reviewExecutor: input.reviewExecutor, onCodexPassReady: applyFreshCodexPass }));
+    const results = await executeSafely(executor, claimed, runId, repository.root, applyFreshCodexPass);
     const allResults: QueueVideoResult[] = [...results];
     let completed = 0; let blocked = 0; let failed = 0; let retried = 0;
     let fallbacks = 0; let fallbackSuccess = 0;
@@ -45,12 +53,16 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
         if (!replacement) break;
         fallbacks += 1;
         await repository.markProcessing([replacement.id], new Date());
-        const [replacementResult] = await executeSafely(executor, [replacement], `${runId}-fallback-${fallbacks}`, repository.root);
+        const [replacementResult] = await executeSafely(executor, [replacement], `${runId}-fallback-${fallbacks}`, repository.root, applyFreshCodexPass);
         result = normalizeCodexBlockedResultForFallback(replacementResult);
         allResults.push(replacementResult);
         if (result.passed) fallbackSuccess += 1;
       }
       if (result.passed) {
+        if (immediatelyAppliedCodexPasses.has(result.queueId)) {
+          completed += 1;
+          continue;
+        }
         const machineQaFinishedAt = result.machineQaFinishedAt && Number.isFinite(Date.parse(result.machineQaFinishedAt)) ? new Date(result.machineQaFinishedAt) : new Date();
         await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: machineQaFinishedAt });
         if (result.codexReview?.evidence) {
@@ -90,7 +102,7 @@ export function normalizeCodexBlockedResultForFallback(result: QueueVideoResult)
     ? { ...result, passed: false, errorCode: "CODEX_VISUAL_REVIEW_BLOCKED", retryable: false }
     : result;
 }
-async function executeSafely(executor: typeof executeQueueVideoBatch, items: Parameters<typeof executeQueueVideoBatch>[0]["items"], runId: string, root: string): Promise<QueueVideoResult[]> {
-  try { return await executor({ items, runId, root }); }
+async function executeSafely(executor: typeof executeQueueVideoBatch, items: Parameters<typeof executeQueueVideoBatch>[0]["items"], runId: string, root: string, onCodexPassReady: NonNullable<Parameters<typeof executeQueueVideoBatch>[0]["onCodexPassReady"]>): Promise<QueueVideoResult[]> {
+  try { return await executor({ items, runId, root, onCodexPassReady }); }
   catch (error) { const code = safeCode(error); const retryable = isRetryable(code); return items.map((item) => ({ queueId: item.id, productKey: item.productKey, passed: false, errorCode: code, finalVideo: "", reviewPath: "", creativeScore: 0, videoQualityScore: 0, retryable })); }
 }

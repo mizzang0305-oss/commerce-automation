@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { acquireProcessLock, DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository, normalizeCodexBlockedResultForFallback, QUEUE_SCHEDULER_FLAGS, runNextBatch, type QueueVideoResult, type QueueVideoRuntimeReadiness } from "../../src/lib/queue-scheduler";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 import { createTestCodexEvidence } from "./testCodexEvidence";
@@ -54,6 +54,34 @@ describe("queue batch runner", () => {
     } });
     expect(result.run).toMatchObject({ status: "success", completed: 3, safeMessage: "BATCH_CODEX_REVIEW_COMPLETE" });
     expect((await repo.items()).filter((item) => item.status === "video_ready_autoqa")).toHaveLength(3);
+  });
+  it("applies each authenticated Codex PASS while its five-minute evidence window is fresh", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-08-30T00:00:00.000Z");
+    vi.setSystemTime(now);
+    try {
+      const repo = await repository();
+      await repo.insertRanked({ ranked: ranked(9), queueDate: kst(now), now, dueNow: true });
+      const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items, onCodexPassReady }) => {
+        const reviewPath = join(repo.root, "batch-review-immediate.json");
+        await writeFile(reviewPath, `${JSON.stringify({ version: "autonomous-video-review-v2", visualReviewExecuted: true, finalAutomatedQaPassed: items.length, items: items.map((item) => ({ productKey: item.productKey, status: "AUTO_QA_PASS", machineQaPassed: true, finalAutomatedQaPassed: true, visualReviewExecuted: true, blockers: [], publishReady: false, SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false })) })}\n`);
+        const results: QueueVideoResult[] = [];
+        for (const item of items) {
+          const videoPath = join(repo.root, `${item.id}-immediate.mp4`); await writeFile(videoPath, `video-${item.id}`);
+          const reviewedAt = new Date();
+          const evidence = await createTestCodexEvidence({ operationNamespace: basename(repo.root), slotId: item.slotId, queueId: item.id, productKey: item.productKey, videoPath, reviewedAt, reviewResult: "pass", sourceReviewArtifact: reviewPath, notes: "Immediate authenticated executor review passed the exact bound visual evidence.", receiptRoot: join(repo.root, "receipts-immediate") });
+          const queueResult: QueueVideoResult = { queueId: item.id, productKey: item.productKey, passed: true, errorCode: "", finalVideo: videoPath, reviewPath, creativeScore: 90, videoQualityScore: 92, retryable: false, machineQaFinishedAt: reviewedAt.toISOString(), codexReview: { status: "pass", errorCode: "", retryable: false, attempts: 1, deduplicated: false, receiptPath: evidence.reviewReceiptPath, evidence } };
+          await onCodexPassReady?.(queueResult);
+          results.push(queueResult);
+        }
+        vi.setSystemTime(new Date(now.getTime() + 6 * 60_000));
+        return results;
+      } });
+      expect(result.run).toMatchObject({ status: "success", completed: 3, safeMessage: "BATCH_CODEX_REVIEW_COMPLETE" });
+      expect((await repo.items()).filter((item) => item.status === "video_ready_autoqa")).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 function kst(date: Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date); }

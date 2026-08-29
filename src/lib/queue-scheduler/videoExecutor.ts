@@ -45,6 +45,7 @@ export async function executeQueueVideoBatch(input: {
   root: string;
   selectedRegistryPath?: string;
   reviewExecutor?: typeof executeAuthenticatedCodexReview;
+  onCodexPassReady?: (result: QueueVideoResult) => Promise<void>;
   reviewContext?: {
     provenance: Exclude<CodexReviewProvenance, "diagnostic">;
     operationNamespace: string;
@@ -153,7 +154,7 @@ export async function executeQueueVideoBatch(input: {
               originVideoSha256: media.sha256,
             } : {}),
           });
-          byQueueId.set(binding.queueId, {
+          const result: QueueVideoResult = {
             queueId: binding.queueId,
             productKey: binding.productKey,
             passed: true,
@@ -166,7 +167,9 @@ export async function executeQueueVideoBatch(input: {
             machineQaFinishedAt: validDate(manifest.completedAt) ? manifest.completedAt : new Date().toISOString(),
             codexReview,
             usageEvidenceProvenance: binding.usageEvidenceProvenance,
-          });
+          };
+          if (codexReview.status === "pass" && codexReview.evidence) await input.onCodexPassReady?.(result);
+          byQueueId.set(binding.queueId, result);
         } catch (error) {
           const code = safeCode(error instanceof Error ? error.message : String(error));
           byQueueId.set(binding.queueId, failed(binding, code, isRetryable(code)));
