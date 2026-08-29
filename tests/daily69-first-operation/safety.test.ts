@@ -73,6 +73,8 @@ describe("first operation task safety", () => {
     expect(builder).toContain("snapshotDirectoryFiles(sourceRoot)");
     expect(builder).toContain("sha256(evidencePoolBytes)");
     expect(builder).toContain("writeFile(join(staging, name), bytes, { flag: \"wx\" })");
+    expect(builder).toContain("const parentSourceNamespace = inheritedParentSourceNamespace || basename(sourceRoot)");
+    expect(builder).toContain("OPERATIONAL_SOURCE_PARENT_NAMESPACE_INVALID");
     expect(builder).not.toContain("copyFile(");
     expect(firstOperation).toContain("assertLoadedSourceFileHashes(source.loadedFileHashes, before.fileHashes)");
     expect(firstOperation).toContain("SOURCE_PROOF_MUTATED_BEFORE_CLONE");

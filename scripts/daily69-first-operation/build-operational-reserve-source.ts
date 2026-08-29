@@ -31,6 +31,9 @@ async function main() {
   const registry = validateUsageEvidenceRegistry(readSnapshotRequired<UsageEvidenceRegistry>(sourceSnapshot, "selected-registry.json"));
   const sourceProof = readSnapshotOptional<Record<string, unknown>>(sourceSnapshot, "source-proof.json", {});
   const finalSummary = readSnapshotOptional<Record<string, unknown>>(sourceSnapshot, "final-summary.json", {});
+  const inheritedParentSourceNamespace = typeof sourceProof.parentSourceNamespace === "string" ? sourceProof.parentSourceNamespace.trim() : "";
+  const parentSourceNamespace = inheritedParentSourceNamespace || basename(sourceRoot);
+  if (!/^[A-Za-z0-9_-]{1,128}$/u.test(parentSourceNamespace)) throw new Error("OPERATIONAL_SOURCE_PARENT_NAMESPACE_INVALID");
   if (queue.length !== 69 || reserve.length < 14) throw new Error("OPERATIONAL_SOURCE_CARDINALITY_INVALID");
 
   const evidenceByProduct = new Map<string, ReserveCandidate>();
@@ -76,7 +79,7 @@ async function main() {
       atomicWriteJson(join(staging, "source-proof.json"), {
         ...sourceProof,
         sourceNamespace: basename(outputRoot),
-        parentSourceNamespace: basename(sourceRoot),
+        parentSourceNamespace,
         operationalReserveAffiliateContract: "exact-product-local-evidence-v1",
         affiliateEvidenceReservePoolSha256: evidenceFileSha256,
         operationalReserveAffiliateRepairs: repaired,
@@ -88,7 +91,7 @@ async function main() {
       atomicWriteJson(join(staging, "final-summary.json"), {
         ...finalSummary,
         sourceNamespace: basename(outputRoot),
-        parentSourceNamespace: basename(sourceRoot),
+        parentSourceNamespace,
         materializationEligibility: materialization,
         operationalReserveAffiliateReady: operationalReserve.length,
         SAFE_TO_UPLOAD: false,
@@ -97,6 +100,7 @@ async function main() {
       atomicWriteJson(join(staging, "operational-reserve-affiliate-repair.json"), {
         schemaVersion: "daily69-operational-reserve-affiliate-repair-v1",
         sourceNamespace: basename(sourceRoot),
+        parentSourceNamespace,
         outputNamespace: basename(outputRoot),
         evidenceFileSha256,
         exactProductIdentityFields: ["productKey", "rawProductId", "rawProductName"],
