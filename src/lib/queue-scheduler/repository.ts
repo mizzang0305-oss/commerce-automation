@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import { atomicWriteJson, readJson } from "./atomicJson";
 import { acquireProcessLock } from "./lock";
 import { DEFAULT_QUEUE_SCHEDULER_SETTINGS, validateSettings } from "./settings";
-import type { LocalQueueItem, LocalRun, QueueControlState, QueueSchedulerSettings, ReserveCandidate } from "./types";
+import type { ImmutableCodexReviewOperationBindingRefV1, ImmutableCodexReviewOperationBindingV1, LocalQueueItem, LocalRun, QueueControlState, QueueSchedulerSettings, ReserveCandidate } from "./types";
 import { assertCodexReviewEvidence, isCodexReviewEvidenceV2, type CodexReviewSubmission } from "./codexReviewEvidence";
+import { loadAndAssertImmutableReviewOperationBinding, stableDigest } from "./immutableReviewBinding";
 import type { RankedLiveProduct } from "@/lib/live-product-video";
 import type { UsageCapacityPlan } from "@/lib/usage-evidence";
 
@@ -141,6 +142,42 @@ export class LocalQueueRepository {
         };
         item.status = passed ? "video_ready_autoqa" : "manual_review";
         item.safeMessage = passed ? "CODEX_VISUAL_REVIEW_PASSED_NO_UPLOAD" : "CODEX_VISUAL_REVIEW_BLOCKED";
+        item.updatedAt = input.now.toISOString();
+      }
+      return { value: planned.length, items };
+    });
+  }
+  async recordImmutableReviewOperationBindings(input: {
+    bindings: Array<{ binding: ImmutableCodexReviewOperationBindingV1; reference: ImmutableCodexReviewOperationBindingRefV1 }>;
+    now: Date;
+  }): Promise<number> {
+    if (input.bindings.length === 0 || new Set(input.bindings.map((entry) => entry.binding.targetQueueId)).size !== input.bindings.length) {
+      throw new Error("IMMUTABLE_REVIEW_BINDING_INPUT_INVALID");
+    }
+    return this.mutate(async (items) => {
+      const planned: Array<{ item: LocalQueueItem; reference: ImmutableCodexReviewOperationBindingRefV1 }> = [];
+      for (const entry of input.bindings) {
+        const matches = items.filter((item) => item.id === entry.binding.targetQueueId);
+        if (matches.length !== 1) throw new Error(matches.length === 0 ? "IMMUTABLE_REVIEW_BINDING_QUEUE_ITEM_NOT_FOUND" : "IMMUTABLE_REVIEW_BINDING_QUEUE_ITEM_AMBIGUOUS");
+        const [item] = matches;
+        if (item.status !== "video_ready_machine_qa" || item.reviewMetadata.codexReview !== "not_executed"
+          || item.reviewMetadata.evidence || item.reviewMetadata.operationBinding || !item.operationCarryover) {
+          throw new Error("IMMUTABLE_REVIEW_BINDING_QUEUE_STATE_CONFLICT");
+        }
+        const loaded = await loadAndAssertImmutableReviewOperationBinding({
+          reference: entry.reference,
+          item,
+          queueRoot: this.root,
+          now: input.now,
+          enforceApplicationFreshness: true,
+        });
+        if (stableDigest(loaded) !== stableDigest(entry.binding)) throw new Error("IMMUTABLE_REVIEW_BINDING_RECORD_MISMATCH");
+        planned.push({ item, reference: entry.reference });
+      }
+      for (const { item, reference } of planned) {
+        item.reviewMetadata = { codexReview: "pass", operationBinding: structuredClone(reference) };
+        item.status = "video_ready_autoqa";
+        item.safeMessage = "IMMUTABLE_CODEX_REVIEW_OPERATION_BINDING_PASSED_NO_UPLOAD";
         item.updatedAt = input.now.toISOString();
       }
       return { value: planned.length, items };

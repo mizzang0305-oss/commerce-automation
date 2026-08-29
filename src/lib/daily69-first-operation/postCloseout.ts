@@ -3,6 +3,7 @@ import { mkdir, open, readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { assertCodexExecutorReceipt, isCodexReviewEvidenceV2 } from "@/lib/queue-scheduler/codexReviewEvidence";
+import { loadAndAssertImmutableReviewOperationBinding } from "@/lib/queue-scheduler/immutableReviewBinding";
 import { inspectQueueMediaEvidence, sha256File, type QueueMediaEvidence } from "@/lib/queue-scheduler/mediaEvidence";
 import type { CodexReviewEvidenceV2, LocalQueueItem } from "@/lib/queue-scheduler/types";
 import {
@@ -159,7 +160,7 @@ export async function captureLevel3RetainedEvidence(operationRoot: string, sheet
     namespace: snapshot.manifest.namespace,
     operationDate: snapshot.manifest.operationDate,
     expectedGitHead: snapshot.manifest.expectedGitHead,
-    media: { validVideoArtifacts: 0, missingVideoArtifacts: Number(snapshot.manifest.prevalidatedReady) + Number(snapshot.manifest.scheduledRemaining), invalidVideoArtifacts: 0, machineQaPassed: 0, finalQaPassed: 0, codexReviewBindings: 0, exactVideoHashBindings: 0, invalidQaArtifacts: 0, invalidCodexReviewBindings: 0, duplicateVideoHashes: 0 },
+    media: { validVideoArtifacts: 0, missingVideoArtifacts: Number(snapshot.manifest.prevalidatedReady) + Number(snapshot.manifest.scheduledRemaining), invalidVideoArtifacts: 0, machineQaPassed: 0, finalQaPassed: 0, codexReviewBindings: 0, exactVideoHashBindings: 0, directReviewBindings: 0, immutableCarryForwardBindings: 0, invalidQaArtifacts: 0, invalidCodexReviewBindings: 0, duplicateVideoHashes: 0 },
     sheets,
     runs,
     safety: safetyCounters(snapshot.runs, rawValues),
@@ -359,6 +360,8 @@ async function inspectReadyEvidence(
     finalQaPassed: valid.filter((entry) => entry.review?.status === "PASS" && entry.review.finalAutomatedQaPassed).length,
     codexReviewBindings: valid.filter((entry) => entry.binding?.status === "PASS" && entry.binding.codexBound).length,
     exactVideoHashBindings: valid.filter((entry) => entry.binding?.status === "PASS" && entry.binding.hashBound).length,
+    directReviewBindings: valid.filter((entry) => entry.binding?.status === "PASS" && entry.binding.mode === "DIRECT_REVIEW").length,
+    immutableCarryForwardBindings: valid.filter((entry) => entry.binding?.status === "PASS" && entry.binding.mode === "IMMUTABLE_CARRY_FORWARD_BINDING").length,
     invalidQaArtifacts: valid.filter((entry) => entry.review?.status === "INVALID").length,
     invalidCodexReviewBindings: valid.filter((entry) => entry.binding?.status === "INVALID").length,
     duplicateVideoHashes: videoHashes.length - new Set(videoHashes).size,
@@ -385,12 +388,26 @@ async function inspectReviewArtifact(item: LocalQueueItem, media: QueueMediaEvid
 
 async function inspectCodexBinding(operationRoot: string, item: LocalQueueItem, media: QueueMediaEvidence) {
   const evidence = item.reviewMetadata.evidence as CodexReviewEvidenceV2 | undefined;
-  if (!evidence || !isCodexReviewEvidenceV2(evidence)) return { status: "MISSING" as const, codexBound: false, hashBound: false };
+  const operationBinding = item.reviewMetadata.operationBinding;
+  if (evidence && operationBinding) return { status: "INVALID" as const, codexBound: false, hashBound: false, mode: "CONFLICT" as const };
+  if (operationBinding) {
+    try {
+      const binding = await loadAndAssertImmutableReviewOperationBinding({ reference: operationBinding, item, queueRoot: operationRoot });
+      const samePath = (left: string, right: string) => process.platform === "win32" ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right);
+      const hashBound = binding.boundVideoSha256 === media.videoSha256 && binding.boundVideoSize === media.videoSize && samePath(binding.boundVideoPath, item.videoPath);
+      const codexBound = binding.bindingResult === "pass" && binding.targetQueueId === item.id && binding.targetProductKey === item.productKey
+        && binding.targetSlotId === item.slotId && item.reviewMetadata.codexReview === "pass" && hashBound;
+      return { status: codexBound ? "PASS" as const : "INVALID" as const, codexBound, hashBound, mode: "IMMUTABLE_CARRY_FORWARD_BINDING" as const };
+    } catch {
+      return { status: "INVALID" as const, codexBound: false, hashBound: false, mode: "IMMUTABLE_CARRY_FORWARD_BINDING" as const };
+    }
+  }
+  if (!evidence || !isCodexReviewEvidenceV2(evidence)) return { status: "MISSING" as const, codexBound: false, hashBound: false, mode: "MISSING" as const };
   let artifactHash = "";
   try {
     artifactHash = await sha256File(evidence.sourceReviewArtifact);
     await assertCodexExecutorReceipt(evidence);
-  } catch { return { status: "INVALID" as const, codexBound: false, hashBound: false }; }
+  } catch { return { status: "INVALID" as const, codexBound: false, hashBound: false, mode: "DIRECT_REVIEW" as const }; }
   const samePath = (left: string, right: string) => process.platform === "win32" ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right);
   const reviewedAt = Date.parse(evidence.reviewedAt);
   const finishedAt = Date.parse(item.finishedAt);
@@ -411,7 +428,7 @@ async function inspectCodexBinding(operationRoot: string, item: LocalQueueItem, 
     && samePath(evidence.sourceReviewArtifact, item.reviewPath)
     && Number.isFinite(reviewedAt) && (!Number.isFinite(finishedAt) || reviewedAt >= finishedAt)
     && carryoverBound;
-  return { status: codexBound ? "PASS" as const : "INVALID" as const, codexBound, hashBound };
+  return { status: codexBound ? "PASS" as const : "INVALID" as const, codexBound, hashBound, mode: "DIRECT_REVIEW" as const };
 }
 
 export async function observeActivePointer(operationRoot: string, manifest: FirstOperationManifest): Promise<Level3PointerObservation> {

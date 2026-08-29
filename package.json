@@ -109,6 +109,8 @@
     "daily69:first-day:recover-four-slots": "tsx scripts/daily69-first-operation/run-four-slot-recovery.ts",
     "daily69:first-day:review-carry-forward": "tsx scripts/daily69-first-operation/run-carry-forward-codex-reviews.ts",
     "daily69:first-day:apply-carry-forward-review": "tsx scripts/daily69-first-operation/apply-carry-forward-codex-reviews.ts",
+    "daily69:first-day:plan-immutable-review-bindings": "tsx scripts/daily69-first-operation/plan-immutable-review-bindings.ts",
+    "daily69:first-day:apply-immutable-review-bindings": "tsx scripts/daily69-first-operation/apply-immutable-review-bindings.ts",
     "daily69:first-day:arm-status": "tsx scripts/daily69-first-operation/arm-status.ts",
     "daily69:first-day:preflight": "node --conditions=react-server --import tsx scripts/daily69-first-operation/preflight.ts",
     "daily69:first-day:status": "tsx scripts/daily69-first-operation/status.ts",

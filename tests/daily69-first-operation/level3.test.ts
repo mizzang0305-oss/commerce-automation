@@ -68,6 +68,7 @@ function completeInput(): Level3CompletionInput {
     queue: {
       total, ready: total, machineOnly: 0, reviewPending: 0, scheduled: 0, processing: 0, retry: 0, blocked: 0, failed: 0, skipped: 0, staleLocks: 0,
       reserve: 4, distinct: 16, unresolvedLeases: 0, duplicateRenders: 0, codexReviews: total, productBindingMismatches: 0,
+      directReviewBindings: scheduledRemaining, immutableCarryForwardBindings: total - scheduledRemaining, reviewEvidenceModeConflicts: 0,
       affiliateReady: total, affiliateMissing: 0, affiliateInvalid: 0,
     },
     settings: { enabled: false, isPaused: true, uploadEnabled: false },
@@ -76,7 +77,7 @@ function completeInput(): Level3CompletionInput {
       namespace: "operation-2099-01-01",
       operationDate: "2099-01-01",
       expectedGitHead: "a".repeat(40),
-      media: { validVideoArtifacts: total, missingVideoArtifacts: 0, invalidVideoArtifacts: 0, machineQaPassed: total, finalQaPassed: total, codexReviewBindings: total, exactVideoHashBindings: total },
+      media: { validVideoArtifacts: total, missingVideoArtifacts: 0, invalidVideoArtifacts: 0, machineQaPassed: total, finalQaPassed: total, codexReviewBindings: total, exactVideoHashBindings: total, directReviewBindings: scheduledRemaining, immutableCarryForwardBindings: total - scheduledRemaining },
       sheets: { exact: true, queueRows: total, reserveRows: 4, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "b".repeat(64) },
       runs: { scheduledBatchRuns, batchResults: scheduledBatchRuns, claimed: scheduledRemaining, completed: scheduledRemaining, failed: 0, runIdsMatched: true, claimedIdsObserved: scheduledRemaining, resultIdsObserved: scheduledRemaining, duplicateClaimIds: 0, duplicateResultIds: 0 },
       safety: { uploadCalls: 0, platformCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0 },

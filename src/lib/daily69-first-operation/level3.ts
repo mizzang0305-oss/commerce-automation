@@ -28,6 +28,8 @@ export type Level3RetainedEvidence = {
     finalQaPassed: number;
     codexReviewBindings: number;
     exactVideoHashBindings: number;
+    directReviewBindings: number;
+    immutableCarryForwardBindings: number;
     invalidQaArtifacts?: number;
     invalidCodexReviewBindings?: number;
     duplicateVideoHashes?: number;
@@ -119,6 +121,9 @@ export type Level3CompletionInput = {
     staleLocks: number;
     duplicateRenders: number;
     codexReviews: number;
+    directReviewBindings: number;
+    immutableCarryForwardBindings: number;
+    reviewEvidenceModeConflicts: number;
     productBindingMismatches: number;
     affiliateReady: number;
     affiliateMissing: number;
@@ -189,6 +194,13 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
   integrity("duplicate_renders", input.queue.duplicateRenders === 0, "0", input.queue.duplicateRenders, "DAILY69_DUPLICATE_RENDERS");
   integrity("product_bindings", input.queue.productBindingMismatches === 0, "0", input.queue.productBindingMismatches, "DAILY69_PRODUCT_BINDING_MISMATCH");
   completion("codex_queue_reviews", input.queue.codexReviews === expected.total, String(expected.total), input.queue.codexReviews, "DAILY69_CODEX_REVIEW_INCOMPLETE");
+  integrity("review_evidence_mode_integrity", input.queue.reviewEvidenceModeConflicts === 0,
+    "direct/carry conflict=0", input.queue.reviewEvidenceModeConflicts, "DAILY69_REVIEW_EVIDENCE_MODE_CONFLICT");
+  completion("review_evidence_modes", input.queue.directReviewBindings === expected.scheduledRemaining
+    && input.queue.immutableCarryForwardBindings === expected.prevalidatedReady,
+  `direct/carry=${expected.scheduledRemaining}/${expected.prevalidatedReady}`,
+  `${input.queue.directReviewBindings}/${input.queue.immutableCarryForwardBindings}`,
+  "DAILY69_REVIEW_EVIDENCE_MODE_INCOMPLETE");
   const affiliateExact = input.queue.affiliateReady === expected.total && input.queue.affiliateMissing === 0 && input.queue.affiliateInvalid === 0;
   if (input.queue.total !== expected.total) {
     completion("affiliate_bindings", false, `ready/missing/invalid=${expected.total}/0/0`, `${input.queue.affiliateReady}/${input.queue.affiliateMissing}/${input.queue.affiliateInvalid}`, "DAILY69_AFFILIATE_BINDING_UNPROVEN");
@@ -223,9 +235,11 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
     "DAILY69_MEDIA_QA_REVIEW_INVALID");
     completion("media_qa_review", retained.media.validVideoArtifacts === expected.total && retained.media.missingVideoArtifacts === 0
       && retained.media.machineQaPassed === expected.total && retained.media.finalQaPassed === expected.total
-      && retained.media.codexReviewBindings === expected.total && retained.media.exactVideoHashBindings === expected.total,
-    `valid/missing/invalid/machine/final/codex/hash=${expected.total}/0/0/${expected.total}/${expected.total}/${expected.total}/${expected.total}`,
-    `${retained.media.validVideoArtifacts}/${retained.media.missingVideoArtifacts}/${retained.media.invalidVideoArtifacts}/${retained.media.machineQaPassed}/${retained.media.finalQaPassed}/${retained.media.codexReviewBindings}/${retained.media.exactVideoHashBindings}`,
+      && retained.media.codexReviewBindings === expected.total && retained.media.exactVideoHashBindings === expected.total
+      && retained.media.directReviewBindings === expected.scheduledRemaining
+      && retained.media.immutableCarryForwardBindings === expected.prevalidatedReady,
+    `valid/missing/invalid/machine/final/codex/hash/direct/carry=${expected.total}/0/0/${expected.total}/${expected.total}/${expected.total}/${expected.total}/${expected.scheduledRemaining}/${expected.prevalidatedReady}`,
+    `${retained.media.validVideoArtifacts}/${retained.media.missingVideoArtifacts}/${retained.media.invalidVideoArtifacts}/${retained.media.machineQaPassed}/${retained.media.finalQaPassed}/${retained.media.codexReviewBindings}/${retained.media.exactVideoHashBindings}/${retained.media.directReviewBindings}/${retained.media.immutableCarryForwardBindings}`,
     "DAILY69_MEDIA_QA_REVIEW_INCOMPLETE");
     integrity("sheets_integrity", retained.sheets.duplicateIdentities === 0 && retained.sheets.preexistingChanged === 0
       && retained.sheets.preexistingDeleted === 0 && retained.sheets.preexistingReordered === 0,
