@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { executeAuthenticatedCodexReview } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
+import { buildCodexCliArguments, executeAuthenticatedCodexReview } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
 import { assertCodexExecutorReceipt } from "../../src/lib/queue-scheduler/codexReviewEvidence";
 import { createCodexVisualEvidenceBinding, readCodexVisualEvidenceBinding } from "../../src/lib/queue-scheduler/visualEvidenceBinding";
 
@@ -11,6 +11,18 @@ const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("authenticated Codex CLI review executor", () => {
+  it("keeps the review prompt on stdin so Windows command-line limits cannot truncate it", () => {
+    const args = buildCodexCliArguments({
+      imagePaths: ["C:/very-long/image-1.jpg", "C:/very-long/image-2.jpg"],
+      schemaPath: "C:/attempt/output-schema.json",
+      outputPath: "C:/attempt/structured-output.json",
+      cwd: "C:/attempt",
+    });
+    expect(args.slice(0, 2)).toEqual(["exec", "-"]);
+    expect(args).toContain("--output-schema");
+    expect(args.filter((value) => value === "--image")).toHaveLength(2);
+  });
+
   it("creates exact structured evidence, immutable receipt binding, and deduplicates the same SHA", async () => {
     const fixture = await setup();
     const invoke = vi.fn(async () => ({ exitCode: 0, output: output(fixture, "pass"), usage: { inputTokens: 100, cachedInputTokens: 20, outputTokens: 40 } }));

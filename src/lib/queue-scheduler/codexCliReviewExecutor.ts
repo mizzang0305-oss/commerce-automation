@@ -510,32 +510,45 @@ async function invokeCodexCli(input: {
   env: NodeJS.ProcessEnv;
 }): Promise<InvocationResult> {
   const command = resolveCodexCommand(input.env);
-  const codexArgs = [
-    "exec", input.prompt, "--ephemeral", "--json", "--skip-git-repo-check", "--sandbox", "read-only",
-    "--output-schema", input.schemaPath, "--output-last-message", input.outputPath,
-    "--cd", input.cwd,
-    ...input.imagePaths.flatMap((path) => ["--image", path]),
-  ];
+  const codexArgs = buildCodexCliArguments(input);
   const executable = process.platform === "win32" ? resolvePowerShell(input.env) : command;
   const args = process.platform === "win32"
     ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", command, ...codexArgs]
     : codexArgs;
-  const processResult = await spawnCaptured(executable, args, input.env, input.timeoutMs);
-  if (processResult.exitCode !== 0) throw new Error(classifyCliFailure(processResult.stderr));
+  const processResult = await spawnCaptured(executable, args, input.env, input.timeoutMs, input.prompt);
+  if (processResult.exitCode !== 0) throw new Error(classifyCliFailure(`${processResult.stderr}\n${processResult.stdout}`));
   let output: unknown = null;
   try { output = JSON.parse(await readFile(input.outputPath, "utf8")); }
   catch { throw new Error("CODEX_REVIEW_STRUCTURED_OUTPUT_INVALID"); }
   return { exitCode: processResult.exitCode, output, usage: parseUsage(processResult.stdout) };
 }
 
-async function spawnCaptured(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number) {
+export function buildCodexCliArguments(input: {
+  imagePaths: readonly string[];
+  schemaPath: string;
+  outputPath: string;
+  cwd: string;
+}): string[] {
+  return [
+    "exec", "-", "--ephemeral", "--json", "--skip-git-repo-check", "--sandbox", "read-only",
+    "--output-schema", input.schemaPath, "--output-last-message", input.outputPath,
+    "--cd", input.cwd,
+    ...input.imagePaths.flatMap((path) => ["--image", path]),
+  ];
+}
+
+async function spawnCaptured(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number, stdin: string) {
   return new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const child = spawn(command, args, { cwd: process.cwd(), env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
     let stderr = "";
     let settled = false;
     const finish = (callback: () => void) => { if (settled) return; settled = true; clearTimeout(timer); callback(); };
     const timer = setTimeout(() => { child.kill(); finish(() => reject(new Error("CODEX_REVIEW_CLI_TIMEOUT"))); }, timeoutMs);
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") finish(() => reject(error));
+    });
+    child.stdin.end(stdin, "utf8");
     child.stdout.on("data", (chunk: Buffer) => { if (stdout.length < 2_000_000) stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => { if (stderr.length < 16_384) stderr += chunk.toString("utf8"); });
     child.once("error", (error) => finish(() => reject(error)));
