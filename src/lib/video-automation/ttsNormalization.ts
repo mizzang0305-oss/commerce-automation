@@ -15,6 +15,7 @@ export function normalizeSpokenNarration(value: string): string {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, " ")
     .replace(/[\u200B-\u200D\u2060\uFEFF]/gu, "")
     .replace(/https?:\/\/\S+|www\.\S+/giu, " 링크 ")
+    .replace(/(?:1\s*\+\s*)+1\s*=\s*(\d+)\s*개\s*구성/gu, "총 $1개 구성")
     .replace(/1\s*\+\s*1/gu, "원 플러스 원")
     .replace(/&/gu, " 앤드 ")
     .replace(/[×✕✖]/gu, " 곱하기 ")

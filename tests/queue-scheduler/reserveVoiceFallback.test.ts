@@ -5,6 +5,7 @@ import type { LocalQueueItem, ReserveCandidate } from "../../src/lib/queue-sched
 describe("reserve voice fallback", () => {
   it("allows product-specific voice failure but blocks environment failure", () => {
     expect(isProductFallbackCode("PRODUCT_SPECIFIC_VOICE_HARD_FAILURE")).toBe(true);
+    expect(isProductFallbackCode("TTS_NORMALIZATION_IDENTITY_GUARD_FAILED")).toBe(true);
     expect(isProductFallbackCode("TTS_COMMAND_NOT_READY")).toBe(false);
     expect(isProductFallbackCode("FFMPEG_NOT_READY")).toBe(false);
   });

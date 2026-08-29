@@ -129,7 +129,7 @@ export function inspectNarrationIdentity(canonicalProductName: string, anchors: 
   const compact = (value: string) => value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, "");
   const source = compact(spokenNarration);
   const recognizedAnchors = anchors.filter((anchor) => source.includes(compact(anchor)));
-  const identitySimilarity = bestKoreanSubstringSimilarity(canonicalProductName, spokenNarration);
+  const identitySimilarity = bestKoreanSubstringSimilarity(normalizeSpokenNarration(canonicalProductName), spokenNarration);
   const coreAnchorPreserved = Boolean(anchors[0]) && recognizedAnchors.includes(anchors[0]);
   return { passed: identitySimilarity >= 0.65 && coreAnchorPreserved && recognizedAnchors.length >= 2, identitySimilarity, coreAnchorPreserved, recognizedAnchors, contextAnchorMinimum: 2 };
 }

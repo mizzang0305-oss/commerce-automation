@@ -22,6 +22,15 @@ describe("spoken narration normalization", () => {
     expect(identity.coreAnchorPreserved).toBe(true);
     expect(identity.recognizedAnchors.length).toBeGreaterThanOrEqual(2);
   });
+  it("compares repeated bundle notation against the same spoken canonical contract", () => {
+    const canonical = "케이블선정리홀더(1+1+1+1+1=5개구성),";
+    const spoken = normalizeSpokenNarration(`상품명은 ${canonical}입니다. 책상 정리와 케이블 고정 조건을 확인하세요.`);
+    const identity = inspectNarrationIdentity(canonical, ["정리", "책상", "공간", "고정", "케이블"], spoken);
+    expect(spoken).toContain("총 5개 구성");
+    expect(spoken).not.toMatch(/[+=]/u);
+    expect(identity.identitySimilarity).toBe(1);
+    expect(identity.passed).toBe(true);
+  });
   it("keeps the 0.65 identity gate while comparing ASR to the spoken canonical contract", () => {
     const canonical = "슈브릭 멀티 폴딩박스 손잡이형+우드 캠핑 테이블 상판+전용 방수팩 구성, 트렁크 정리함 KS4002, 블랙";
     const transcript = "슈브립 멀티폴딩박스 손잡이용 플러스 오드캠핑 테이블 상판 플러스 전용 방수팩 고성, 트렁크 정리함, 블랙";
