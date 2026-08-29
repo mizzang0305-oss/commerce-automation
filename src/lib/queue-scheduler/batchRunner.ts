@@ -39,15 +39,15 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     let completed = 0; let blocked = 0; let failed = 0; let retried = 0;
     let fallbacks = 0; let fallbackSuccess = 0;
     for (const initialResult of results) {
-      let result = initialResult;
+      let result = normalizeCodexBlockedResultForFallback(initialResult);
       while (!result.passed && isProductFallbackCode(result.errorCode)) {
         const replacement = await repository.replaceWithReserve({ id: result.queueId, reason: result.errorCode, now: new Date() });
         if (!replacement) break;
         fallbacks += 1;
         await repository.markProcessing([replacement.id], new Date());
         const [replacementResult] = await executeSafely(executor, [replacement], `${runId}-fallback-${fallbacks}`, repository.root);
-        result = replacementResult;
-        allResults.push(result);
+        result = normalizeCodexBlockedResultForFallback(replacementResult);
+        allResults.push(replacementResult);
         if (result.passed) fallbackSuccess += 1;
       }
       if (result.passed) {
@@ -83,7 +83,12 @@ function safeCode(error: unknown) { const value = error instanceof Error ? error
 function isRetryable(code: string) { return /TEMPORARY|TIMEOUT|SUBPROCESS|FILESYSTEM|EACCES|EBUSY|LOCAL_RUNTIME_NOT_CONFIGURED/u.test(code); }
 export function isProductFallbackCode(code: string) {
   if (/NOT_READY|NOT_CONFIGURED|PYTHON|TTS_COMMAND|ASR_MODEL|FFMPEG|DISK|FILESYSTEM|SYSTEM_INVARIANT|RUNTIME_INVARIANT/u.test(code)) return false;
-  return /ASR_FAILED|PRODUCT_IDENTITY|VIDEO_AUTO_QA_FAILED|USAGE_EVIDENCE|PRODUCT_REFERENCE|POLICY|LONG_TTS_SILENCE|CREATIVE_SELECTION|HOOK_TEMPLATE_REPETITION|PRODUCT_SPECIFIC_VOICE_HARD_FAILURE|TTS_FRONTEND_INPUT_UNSUPPORTED_AFTER_NORMALIZATION|TTS_SEGMENT_SYNTHESIS_FAILED|TTS_MODEL_INFERENCE_FAILED_FOR_PRODUCT/u.test(code);
+  return /ASR_FAILED|PRODUCT_IDENTITY|VIDEO_AUTO_QA_FAILED|USAGE_EVIDENCE|PRODUCT_REFERENCE|POLICY|CODEX_VISUAL_REVIEW_BLOCKED|LONG_TTS_SILENCE|CREATIVE_SELECTION|HOOK_TEMPLATE_REPETITION|PRODUCT_SPECIFIC_VOICE_HARD_FAILURE|TTS_FRONTEND_INPUT_UNSUPPORTED_AFTER_NORMALIZATION|TTS_SEGMENT_SYNTHESIS_FAILED|TTS_MODEL_INFERENCE_FAILED_FOR_PRODUCT/u.test(code);
+}
+export function normalizeCodexBlockedResultForFallback(result: QueueVideoResult): QueueVideoResult {
+  return result.passed && result.codexReview?.status === "block"
+    ? { ...result, passed: false, errorCode: "CODEX_VISUAL_REVIEW_BLOCKED", retryable: false }
+    : result;
 }
 async function executeSafely(executor: typeof executeQueueVideoBatch, items: Parameters<typeof executeQueueVideoBatch>[0]["items"], runId: string, root: string): Promise<QueueVideoResult[]> {
   try { return await executor({ items, runId, root }); }

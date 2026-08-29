@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { acquireProcessLock, DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository, QUEUE_SCHEDULER_FLAGS, runNextBatch, type QueueVideoRuntimeReadiness } from "../../src/lib/queue-scheduler";
+import { acquireProcessLock, DEFAULT_QUEUE_SCHEDULER_SETTINGS, LocalQueueRepository, normalizeCodexBlockedResultForFallback, QUEUE_SCHEDULER_FLAGS, runNextBatch, type QueueVideoResult, type QueueVideoRuntimeReadiness } from "../../src/lib/queue-scheduler";
 import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 import { createTestCodexEvidence } from "./testCodexEvidence";
 
@@ -18,6 +18,27 @@ describe("queue batch runner", () => {
   it("blocks before claim when any upload safety flag is true", async () => { const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(9), queueDate: kst(now), now, dueNow: true }); const result = await runNextBatch({ repository: repo, now, env: { SAFE_TO_UPLOAD: "true" }, preflight: readyPreflight }); expect(result.run).toMatchObject({ status: "blocked_preflight", safeMessage: "UPLOAD_SAFETY_FLAG_BLOCKED", claimed: 0 }); expect((await repo.items()).every((item) => item.status === "scheduled" && item.attemptCount === 0)).toBe(true); });
   it("replaces a product-specific hard failure from reserve without changing the logical slot", async () => { const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(12), queueDate: kst(now), now, dueNow: true }); const calls: string[][] = []; const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => { calls.push(items.map((item) => item.productKey)); return items.map((item, index) => ({ queueId: item.id, productKey: item.productKey, passed: calls.length > 1 || index !== 0, errorCode: calls.length === 1 && index === 0 ? "ASR_FAILED_AFTER_REPAIR" : "", finalVideo: `${item.id}.mp4`, reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false })); } }); expect(result.run.claimed).toBe(3); expect(result.run.completed).toBe(3); expect(result.run.metrics.fallbacks).toBe(1); expect(calls[1]).toHaveLength(1); const slot = (await repo.items()).find((item) => item.queueRank === 1)!; expect(slot.slotId).toBe("slot-001"); expect(slot.productCandidateAttempt).toBe(2); expect(slot.candidateHistory).toHaveLength(2); expect(slot.candidateHistory[0].outcome).toBe("replaced"); expect(slot.candidateHistory[1].replacementOfProductKey).toBe("p0"); });
   it("isolates hook-family exhaustion to one slot and recovers only that slot", async () => { const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(12), queueDate: kst(now), now, dueNow: true }); const calls: number[] = []; const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => { calls.push(items.length); return items.map((item, index) => ({ queueId: item.id, productKey: item.productKey, passed: items.length === 1 || index !== 1, errorCode: items.length === 3 && index === 1 ? "CREATIVE_SELECTION_FAILED" : "", finalVideo: `${item.id}.mp4`, reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false })); } }); expect(calls).toEqual([3, 1]); expect(result.run.completed).toBe(3); expect(result.run.metrics.fallbacks).toBe(1); });
+  it("replaces a product when fresh Codex visual review blocks its rendered claim", async () => {
+    const repo = await repository(); const now = new Date(); await repo.insertRanked({ ranked: ranked(12), queueDate: kst(now), now, dueNow: true });
+    const calls: number[] = [];
+    const result = await runNextBatch({ repository: repo, now, preflight: readyPreflight, executor: async ({ items }) => {
+      calls.push(items.length);
+      return items.map((item, index): QueueVideoResult => ({
+        queueId: item.id, productKey: item.productKey, passed: true, errorCode: "", finalVideo: `${item.id}.mp4`, reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false,
+        ...(calls.length === 1 && index === 0 ? { codexReview: { status: "block", errorCode: "", retryable: false, attempts: 1, deduplicated: false, receiptPath: "receipt.json", evidence: { hardBlockers: ["PRODUCT_VARIANT_CLAIM_MISMATCH"] } as never } } : {}),
+      }));
+    } });
+    expect(calls).toEqual([3, 1]);
+    expect(result.run).toMatchObject({ status: "success", completed: 3, blocked: 0, metrics: { fallbacks: 1, fallbackSuccess: 1, productAttempts: 4 } });
+    const replaced = (await repo.items()).find((item) => item.queueRank === 1)!;
+    expect(replaced.productCandidateAttempt).toBe(2);
+    expect(replaced.candidateHistory[0]).toMatchObject({ outcome: "replaced", reason: "CODEX_VISUAL_REVIEW_BLOCKED" });
+  });
+  it("normalizes only a fresh Codex block into the bounded product fallback code", () => {
+    const base = { queueId: "queue-1", productKey: "product-1", passed: true, errorCode: "", finalVideo: "video.mp4", reviewPath: "review.json", creativeScore: 90, videoQualityScore: 92, retryable: false } satisfies QueueVideoResult;
+    expect(normalizeCodexBlockedResultForFallback({ ...base, codexReview: { status: "block", errorCode: "", retryable: false, attempts: 1, deduplicated: false, receiptPath: "receipt.json", evidence: { hardBlockers: ["PRODUCT_VARIANT_CLAIM_MISMATCH"] } as never } })).toMatchObject({ passed: false, errorCode: "CODEX_VISUAL_REVIEW_BLOCKED", retryable: false });
+    expect(normalizeCodexBlockedResultForFallback(base)).toBe(base);
+  });
   it("returns overlap safe no-op", async () => { const repo = await repository(); const release = await acquireProcessLock(join(repo.root, "runner.lock"), "other", 60_000); try { const result = await runNextBatch({ repository: repo }); expect(result.run.safeMessage).toBe("SCHEDULER_ALREADY_RUNNING"); } finally { await release(); } });
   it("promotes only exact executor-receipt evidence and reports terminal Codex completion", async () => {
     const repo = await repository(); const now = new Date();
