@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { validateCoupangAffiliateUrl } from "../../src/lib/affiliate-readiness";
-import { atomicWriteJson, readJson } from "../../src/lib/queue-scheduler/atomicJson";
+import { atomicWriteJson } from "../../src/lib/queue-scheduler/atomicJson";
 import type { LocalQueueItem, ReserveCandidate } from "../../src/lib/queue-scheduler/types";
 import {
   preflightDaily69MaterializationEligibility,
@@ -22,14 +21,16 @@ async function main() {
   await assertContainedExistingParent(outputRoot);
   await assertAbsent(outputRoot);
 
-  const [queue, reserve, evidencePool, registry, sourceProof, finalSummary] = await Promise.all([
-    readRequired<LocalQueueItem[]>(join(sourceRoot, "queue.json")),
-    readRequired<ReserveCandidate[]>(join(sourceRoot, "reserve-pool.json")),
-    readRequired<ReserveCandidate[]>(evidencePoolPath),
-    readRequired<UsageEvidenceRegistry>(join(sourceRoot, "selected-registry.json")).then(validateUsageEvidenceRegistry),
-    readJson<Record<string, unknown>>(join(sourceRoot, "source-proof.json"), {}),
-    readJson<Record<string, unknown>>(join(sourceRoot, "final-summary.json"), {}),
+  const [sourceSnapshot, evidencePoolBytes] = await Promise.all([
+    snapshotDirectoryFiles(sourceRoot),
+    readFile(evidencePoolPath),
   ]);
+  const queue = readSnapshotRequired<LocalQueueItem[]>(sourceSnapshot, "queue.json");
+  const reserve = readSnapshotRequired<ReserveCandidate[]>(sourceSnapshot, "reserve-pool.json");
+  const evidencePool = parseRequiredJson<ReserveCandidate[]>(evidencePoolBytes);
+  const registry = validateUsageEvidenceRegistry(readSnapshotRequired<UsageEvidenceRegistry>(sourceSnapshot, "selected-registry.json"));
+  const sourceProof = readSnapshotOptional<Record<string, unknown>>(sourceSnapshot, "source-proof.json", {});
+  const finalSummary = readSnapshotOptional<Record<string, unknown>>(sourceSnapshot, "final-summary.json", {});
   if (queue.length !== 69 || reserve.length < 14) throw new Error("OPERATIONAL_SOURCE_CARDINALITY_INVALID");
 
   const evidenceByProduct = new Map<string, ReserveCandidate>();
@@ -67,9 +68,8 @@ async function main() {
   await assertAbsent(staging);
   try {
     await mkdir(staging, { recursive: false });
-    const sourceFiles = (await readdir(sourceRoot, { withFileTypes: true })).filter((entry) => entry.isFile());
-    await Promise.all(sourceFiles.map((entry) => copyFile(join(sourceRoot, entry.name), join(staging, entry.name), constants.COPYFILE_EXCL)));
-    const evidenceFileSha256 = sha256(await readFile(evidencePoolPath));
+    await Promise.all([...sourceSnapshot.entries()].map(([name, bytes]) => writeFile(join(staging, name), bytes, { flag: "wx" })));
+    const evidenceFileSha256 = sha256(evidencePoolBytes);
     await Promise.all([
       atomicWriteJson(join(staging, "reserve-pool.json"), operationalReserve),
       atomicWriteJson(join(staging, "materialization-preflight.json"), materialization),
@@ -144,10 +144,21 @@ async function assertAbsent(path: string) {
   try { await stat(path); throw new Error("OPERATIONAL_SOURCE_OUTPUT_EXISTS"); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
 }
-async function readRequired<T>(path: string) {
-  const value = await readJson<T | null>(path, null);
-  if (value === null) throw new Error("OPERATIONAL_SOURCE_FILE_MISSING");
-  return value;
+async function snapshotDirectoryFiles(root: string) {
+  const entries = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isFile());
+  return new Map(await Promise.all(entries.map(async (entry) => [entry.name, await readFile(join(root, entry.name))] as const)));
+}
+function readSnapshotRequired<T>(snapshot: Map<string, Buffer>, name: string) {
+  const bytes = snapshot.get(name);
+  if (!bytes) throw new Error("OPERATIONAL_SOURCE_FILE_MISSING");
+  return parseRequiredJson<T>(bytes);
+}
+function readSnapshotOptional<T>(snapshot: Map<string, Buffer>, name: string, fallback: T) {
+  const bytes = snapshot.get(name);
+  return bytes ? parseRequiredJson<T>(bytes) : fallback;
+}
+function parseRequiredJson<T>(bytes: Buffer) {
+  return JSON.parse(bytes.toString("utf8")) as T;
 }
 function sha256(value: string | Buffer) { return createHash("sha256").update(value).digest("hex"); }
 function requiredArg(name: string) {

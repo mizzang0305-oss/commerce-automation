@@ -67,6 +67,19 @@ describe("first operation task safety", () => {
     expect([readiness, firstOperation, videoExecutor].join("\n")).not.toContain("operation-2026-08-11");
   });
 
+  it("binds derived-source and operation publication to the exact admitted bytes", async () => {
+    const builder = await readFile("scripts/daily69-first-operation/build-operational-reserve-source.ts", "utf8");
+    const firstOperation = await readFile("src/lib/daily69-first-operation/index.ts", "utf8");
+    expect(builder).toContain("snapshotDirectoryFiles(sourceRoot)");
+    expect(builder).toContain("sha256(evidencePoolBytes)");
+    expect(builder).toContain("writeFile(join(staging, name), bytes, { flag: \"wx\" })");
+    expect(builder).not.toContain("copyFile(");
+    expect(firstOperation).toContain("assertLoadedSourceFileHashes(source.loadedFileHashes, before.fileHashes)");
+    expect(firstOperation).toContain("SOURCE_PROOF_MUTATED_BEFORE_CLONE");
+    expect(firstOperation).toContain('atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry)');
+    expect(firstOperation).not.toContain('copyFile(join(sourceRoot, "selected-registry.json")');
+  });
+
   it("keeps immutable operation binding separate from direct-review freshness and external writers", async () => {
     const direct = await readFile("src/lib/queue-scheduler/codexReviewEvidence.ts", "utf8");
     const binding = await readFile("src/lib/queue-scheduler/immutableReviewBinding.ts", "utf8");

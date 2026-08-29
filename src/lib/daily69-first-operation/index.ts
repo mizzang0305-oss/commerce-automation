@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { buildAffiliateReadinessReport, type AffiliateReadinessReport } from "@/lib/affiliate-readiness";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
@@ -25,6 +25,7 @@ const SOURCE_FILES = [
   "queue.json", "reserve-pool.json", "settings.json", "runs.json", "control-state.json",
   "source-proof.json", "selected-registry.json", "final-summary.json"
 ] as const;
+const SOURCE_ADMISSION_FILES = ["queue.json", "reserve-pool.json", "settings.json", "source-proof.json", "selected-registry.json"] as const;
 
 export type FirstOperationManifest = {
   schemaVersion: "daily69-first-operation-v1" | "daily69-first-operation-v2";
@@ -118,6 +119,7 @@ export async function armFirstOperation(input: {
 
   const affiliateReadiness = sourceReadiness.affiliateReadiness;
   const before = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
+  assertLoadedSourceFileHashes(source.loadedFileHashes, before.fileHashes);
   const armedAt = input.now.toISOString();
   const batchSize = 3;
   const schedule = scheduleGroups(sourceReadiness.scheduled, batchSize, 4);
@@ -157,7 +159,7 @@ export async function armFirstOperation(input: {
     atomicWriteJson(join(operationRoot, "runs.json"), []),
     atomicWriteJson(join(operationRoot, "control-state.json"), { localRevision: 1, projectionRevision: 0, snapshotHash: "", projectedAt: "", source: "local_queue_scheduler" }),
     atomicWriteJson(join(operationRoot, "control-state-initial.json"), { enabled: true, isPaused: false, observationMode: true, uploadEnabled: false, SAFE_TO_UPLOAD: false }),
-    copyFile(join(sourceRoot, "selected-registry.json"), join(operationRoot, "selected-registry.json"))
+    atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry)
   ]);
 
   const after = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
@@ -460,13 +462,22 @@ function cloneQueueItem(
 }
 
 async function readSource(root: string) {
+  const loadedFiles = new Map(await Promise.all(SOURCE_ADMISSION_FILES.map(async (name) => [name, await readFile(join(root, name))] as const)));
+  const loadedFileHashes = Object.fromEntries([...loadedFiles].map(([name, bytes]) => [name, hash(bytes)]));
   return {
-    queue: await readRequired<LocalQueueItem[]>(join(root, "queue.json")),
-    reserve: await readRequired<ReserveCandidate[]>(join(root, "reserve-pool.json")),
-    settings: await readRequired<QueueSchedulerSettings>(join(root, "settings.json")),
-    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number; parentSourceNamespace?: string }>(join(root, "source-proof.json")),
-    registry: validateUsageEvidenceRegistry(await readRequired<UsageEvidenceRegistry>(join(root, "selected-registry.json"))),
+    queue: parseJson<LocalQueueItem[]>(loadedFiles.get("queue.json")!),
+    reserve: parseJson<ReserveCandidate[]>(loadedFiles.get("reserve-pool.json")!),
+    settings: parseJson<QueueSchedulerSettings>(loadedFiles.get("settings.json")!),
+    proof: parseJson<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number; parentSourceNamespace?: string }>(loadedFiles.get("source-proof.json")!),
+    registry: validateUsageEvidenceRegistry(parseJson<UsageEvidenceRegistry>(loadedFiles.get("selected-registry.json")!)),
+    loadedFileHashes,
   };
+}
+
+function assertLoadedSourceFileHashes(loaded: Record<string, string>, bundled: Record<string, string>) {
+  if (SOURCE_ADMISSION_FILES.some((name) => loaded[name] !== bundled[name])) {
+    throw new Error("SOURCE_PROOF_MUTATED_BEFORE_CLONE");
+  }
 }
 
 function assertSource(source: Awaited<ReturnType<typeof readSource>>) {
@@ -499,6 +510,7 @@ async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundary
 }
 
 async function readRequired<T>(path: string): Promise<T> { return JSON.parse(await readFile(path, "utf8")) as T; }
+function parseJson<T>(bytes: Buffer): T { return JSON.parse(bytes.toString("utf8")) as T; }
 async function hashFile(path: string) { return hash(await readFile(path)); }
 function hash(value: string | Buffer) { return createHash("sha256").update(value).digest("hex"); }
 function escapesRoot(root: string, path: string) { const value = relative(resolve(root), resolve(path)); return value.startsWith("..") || value.includes(":"); }
