@@ -108,7 +108,7 @@ export async function assertCodexReviewEvidence(input: {
   if (!samePath(itemReviewArtifact, evidenceReviewArtifact.path)) throw new Error("CODEX_VISUAL_REVIEW_SOURCE_ARTIFACT_MISMATCH");
   if (evidenceReviewArtifact.sha256 !== evidence.machineQaDigest) throw new Error("CODEX_VISUAL_REVIEW_MACHINE_QA_DIGEST_MISMATCH");
   await assertCodexExecutorReceipt(evidence);
-  if (evidence.reviewResult === "pass") await assertMachineQaArtifact(evidenceReviewArtifact.path, item.productKey);
+  if (evidence.reviewResult === "pass") await assertCodexMachineQaArtifact(evidenceReviewArtifact.path, item.productKey);
 }
 
 export function isCodexReviewEvidenceV2(value: CodexReviewSubmission): value is CodexReviewEvidenceV2 {
@@ -211,7 +211,7 @@ async function canonicalPath(path: string, missingCode: string): Promise<string>
   catch { throw new Error(missingCode); }
 }
 
-async function assertMachineQaArtifact(path: string, productKey: string): Promise<void> {
+export async function assertCodexMachineQaArtifact(path: string, productKey: string): Promise<void> {
   let value: Record<string, unknown>;
   try { value = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>; }
   catch { throw new Error("CODEX_VISUAL_REVIEW_MACHINE_QA_ARTIFACT_INVALID"); }

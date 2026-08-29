@@ -47,6 +47,13 @@ export type FirstOperationManifest = {
   distinct: number;
   schedule: Array<{ hourKst: number; slots: string[] }>;
   affiliateReadiness?: AffiliateReadinessReport;
+  reviewBindingContract?: {
+    schemaVersion: "daily69-immutable-review-operation-binding-registry-v1";
+    originRegistrySha256: string;
+    bindingsPassed: number;
+    fakeReviewedAtMutations: 0;
+    aiReviewExecutions: 0;
+  };
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
   closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
@@ -245,6 +252,10 @@ export async function firstOperationStatus(operationRoot: string) {
     staleLocks,
     duplicateRenders,
     codexReviews: items.filter((item) => item.reviewMetadata.codexReview === "pass").length,
+    directReviewBindings: items.filter((item) => item.reviewMetadata.codexReview === "pass" && Boolean(item.reviewMetadata.evidence) && !item.reviewMetadata.operationBinding).length,
+    immutableCarryForwardBindings: items.filter((item) => item.reviewMetadata.codexReview === "pass" && Boolean(item.reviewMetadata.operationBinding) && !item.reviewMetadata.evidence).length,
+    reviewEvidenceModeConflicts: items.filter((item) => item.reviewMetadata.codexReview === "pass"
+      && Boolean(item.reviewMetadata.evidence) === Boolean(item.reviewMetadata.operationBinding)).length,
     productBindingMismatches: items.filter((item) => item.usageEvidenceAllocation?.productKey !== item.productKey).length,
     affiliateReady: affiliateReadiness.affiliateReady,
     affiliateMissing: affiliateReadiness.affiliateMissing,

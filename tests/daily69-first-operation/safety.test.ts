@@ -57,4 +57,19 @@ describe("first operation task safety", () => {
     expect(videoExecutor).not.toMatch(/youtubeUploadAdapter|TikTok|Threads|videos\.insert/u);
     expect([readiness, firstOperation, videoExecutor].join("\n")).not.toContain("operation-2026-08-11");
   });
+
+  it("keeps immutable operation binding separate from direct-review freshness and external writers", async () => {
+    const direct = await readFile("src/lib/queue-scheduler/codexReviewEvidence.ts", "utf8");
+    const binding = await readFile("src/lib/queue-scheduler/immutableReviewBinding.ts", "utf8");
+    const planner = await readFile("scripts/daily69-first-operation/plan-immutable-review-bindings.ts", "utf8");
+    const apply = await readFile("scripts/daily69-first-operation/apply-immutable-review-bindings.ts", "utf8");
+    expect(direct).toContain('evidence.reviewProvenance === "carry_forward_revalidation" ? 60 * 60_000 : 5 * 60_000');
+    expect(binding).toContain("originReviewedAt");
+    expect(binding).toContain("boundToOperationAt");
+    expect(binding).not.toMatch(/\breviewedAt\s*:/u);
+    expect(binding).toContain("assertCodexExecutorReceipt");
+    expect(binding).toContain("originRegistrySha256");
+    expect(binding).toContain("currentBusinessEligibilityDigest");
+    expect([binding, planner, apply].join("\n")).not.toMatch(/executeAuthenticatedCodexReview|ffmpeg|videos\.insert|GOOGLE_SHEETS_WRITE\s*:\s*1|DRIVE_WRITE\s*:\s*1/u);
+  });
 });

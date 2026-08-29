@@ -40,9 +40,60 @@ export type CodexReviewEvidenceV2 = {
   originVideoSha256?: string;
 };
 
+export type ImmutableCodexReviewOperationBindingV1 = {
+  schemaVersion: "queue-codex-review-operation-binding-v1";
+  evidenceMode: "immutable_carry_forward_binding";
+  targetOperationNamespace: string;
+  targetOperationDate: string;
+  targetQueueId: string;
+  targetSlotId: string;
+  targetProductKey: string;
+  boundVideoPath: string;
+  boundVideoSha256: string;
+  boundVideoSize: number;
+  originRegistryPath: string;
+  originRegistrySha256: string;
+  originEvidenceDigest: string;
+  originReceiptPath: string;
+  originReceiptDigest: string;
+  originOperationNamespace: string;
+  originQueueId: string;
+  originProductKey: string;
+  originReviewedAt: string;
+  originSchemaVersion: "queue-codex-review-evidence-v2";
+  originSourceOperationNamespace: string;
+  originSourceQueueId: string;
+  originSourceVideoSha256: string;
+  originRegenerationCount: number;
+  boundToOperationAt: string;
+  bindingReason: "exact_immutable_media_carry_forward";
+  bindingValidatorVersion: "immutable-review-operation-binding-validator-v1";
+  bindingSchemaVersion: "queue-codex-review-operation-binding-v1";
+  compatibilityDecision: "COMPATIBLE";
+  machineQaDigest: string;
+  productReferenceSha256: string;
+  visualEvidenceDigest: string;
+  usageEvidenceDigest: string;
+  visualEvidenceBindingSha256: string;
+  currentProductBindingDigest: string;
+  currentBusinessEligibilityDigest: string;
+  currentArtifactDigest: string;
+  bindingResult: "pass" | "blocked";
+  SAFE_TO_UPLOAD: false;
+  SAFE_TO_PUBLIC_UPLOAD: false;
+  PLATFORM_UPLOAD: 0;
+};
+
+export type ImmutableCodexReviewOperationBindingRefV1 = {
+  schemaVersion: "queue-codex-review-operation-binding-ref-v1";
+  bindingPath: string;
+  bindingSha256: string;
+};
+
 export type CodexReviewMetadata = {
   codexReview: "not_executed" | "pass" | "block";
   evidence?: CodexReviewEvidenceV2;
+  operationBinding?: ImmutableCodexReviewOperationBindingRefV1;
 };
 
 export type LocalQueueItem = {
