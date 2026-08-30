@@ -86,6 +86,33 @@ describe("Daily69 independent post-closeout audit", () => {
     expect(binding.eventRecordIds).toEqual(matching.map((event) => event.eventRecordId));
   });
 
+  it("binds a verified launch event whose Windows schema omits TaskInstanceId", async () => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "control");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, { processId: 5151 });
+    await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
+    const chain = taskEventChain(receipt.taskName, "actual-instance", 5151, 4000, "2099-01-01T00:00:30.000Z")
+      .map((event) => event.eventId === 129 ? { ...event, taskInstanceId: "" } : event);
+    await expect(bindRetainedTaskEvents(operationRoot, chain)).resolves.toMatchObject({ receipts: 1, bound: 1, unproven: 0 });
+  });
+
+  it.each([
+    { name: "wrong PID", receipt: {}, eventTaskName: "Minz-Commerce-Control", eventPid: 9191 },
+    { name: "wrong task", receipt: {}, eventTaskName: "Other-Task", eventPid: 5151 },
+    { name: "wrong operation", receipt: { namespace: "operation-other" }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
+    { name: "wrong expectedGitHead", receipt: { expectedGitHead: "f".repeat(40) }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
+    { name: "receipt failure", receipt: { exitCode: 1 }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
+  ])("does not bind $name evidence", async ({ receipt: receiptOverride, eventTaskName, eventPid }) => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "control");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, receiptOverride);
+    await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
+    const chain = taskEventChain(eventTaskName, "rejected-instance", eventPid, 5000, "2099-01-01T00:00:30.000Z");
+    await expect(bindRetainedTaskEvents(operationRoot, chain)).resolves.toMatchObject({ receipts: 1, bound: 0, unproven: 1 });
+  });
+
   it("finalizes only after the prior closeout receipt has a completed natural event chain", async () => {
     const { operationRoot, manifest } = await operationFixture();
     const roleRoot = join(operationRoot, "retained-execution", "closeout");
@@ -163,8 +190,27 @@ function taskEventChain(taskName: string, taskInstanceId: string, processId: num
     taskName,
     taskInstanceId,
     ...([129, 200, 201].includes(eventId) ? { processId } : {}),
-    ...([201, 102].includes(eventId) ? { resultCode: 0 } : {}),
+    ...(eventId === 201 ? { resultCode: 0 } : {}),
   }));
+}
+
+function retainedReceipt(manifest: FirstOperationManifest, overrides: Partial<RetainedExecutionReceipt> = {}): RetainedExecutionReceipt {
+  return {
+    schemaVersion: "daily69-retained-execution-v1",
+    role: "control",
+    invocationId: "invocation-control-contract-0001",
+    namespace: manifest.namespace,
+    operationDate: manifest.operationDate,
+    expectedGitHead: manifest.expectedGitHead,
+    taskName: "Minz-Commerce-Control",
+    processId: 5151,
+    origin: "UNKNOWN",
+    startedAt: "2099-01-01T00:00:00.000Z",
+    completedAt: "2099-01-01T00:01:00.000Z",
+    exitCode: 0,
+    taskEvent: { correlated: false, startedEventId: 0, completedEventId: 0 },
+    ...overrides,
+  };
 }
 
 async function operationFixture() {

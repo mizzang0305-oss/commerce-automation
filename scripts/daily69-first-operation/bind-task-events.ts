@@ -38,8 +38,15 @@ function parseSanitizedEvents(content: string): SanitizedTaskSchedulerEvent[] {
   const parsed = JSON.parse(content) as unknown;
   const values = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray((parsed as { events?: unknown }).events)
     ? (parsed as { events: unknown[] }).events : parsed ? [parsed] : [];
-  if (!values.every(isSanitizedEvent)) throw new Error("TASK_SCHEDULER_OPERATIONAL_EVENTS_INVALID");
-  return values;
+  const normalized = values.map((value) => normalizeSanitizedEvent(value));
+  if (!normalized.every(isSanitizedEvent)) throw new Error("TASK_SCHEDULER_OPERATIONAL_EVENTS_INVALID");
+  return normalized;
+}
+
+function normalizeSanitizedEvent(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const event = value as Record<string, unknown>;
+  return event.taskInstanceId === null ? { ...event, taskInstanceId: "" } : event;
 }
 
 function isSanitizedEvent(value: unknown): value is SanitizedTaskSchedulerEvent {

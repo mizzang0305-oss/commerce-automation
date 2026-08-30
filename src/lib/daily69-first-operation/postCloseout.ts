@@ -75,6 +75,7 @@ export type Level3SheetsAuditGateway = {
 
 export async function bindRetainedTaskEvents(operationRoot: string, events: SanitizedTaskSchedulerEvent[]) {
   const root = resolve(operationRoot);
+  const snapshot = await firstOperationStatus(root);
   const receipts = await readRetainedExecutionReceipts(root);
   const existingBindings = await readRetainedTaskEventBindings(root);
   if (existingBindings.malformed > 0) throw new Error("DAILY69_TASK_EVENT_BINDING_STORE_INVALID");
@@ -85,6 +86,12 @@ export async function bindRetainedTaskEvents(operationRoot: string, events: Sani
   let alreadyBound = 0;
   let unproven = 0;
   for (const receipt of receipts.records) {
+    if (receipt.namespace !== snapshot.manifest.namespace || receipt.operationDate !== snapshot.manifest.operationDate
+      || receipt.expectedGitHead !== snapshot.manifest.expectedGitHead || receipt.exitCode !== 0
+      || !Number.isSafeInteger(receipt.processId) || Number(receipt.processId) < 1) {
+      unproven += 1;
+      continue;
+    }
     const bindingKey = `${receipt.role}:${receipt.invocationId}`;
     const existing = existingBindings.byKey.get(bindingKey);
     if (existing) {
@@ -100,7 +107,8 @@ export async function bindRetainedTaskEvents(operationRoot: string, events: Sani
       && Date.parse(event.timeCreatedUtc) >= started - 120_000 && Date.parse(event.timeCreatedUtc) <= completed + 120_000);
     const instanceIds = [...new Set(relevant.map((event) => event.taskInstanceId).filter(Boolean))];
     const candidates = instanceIds.map((taskInstanceId) => {
-      const chain = relevant.filter((event) => event.taskInstanceId === taskInstanceId);
+      const chain = relevant.filter((event) => event.taskInstanceId === taskInstanceId
+        || (event.eventId === 129 && event.taskInstanceId === "" && event.processId === receipt.processId));
       return { taskInstanceId, chain, provenance: classifyTaskInvocationProvenance({ taskName: receipt.taskName, events: chain }) };
     }).filter((candidate) => candidate.provenance.classification === "natural_scheduled"
       && Number.isSafeInteger(receipt.processId) && Number(receipt.processId) > 0
