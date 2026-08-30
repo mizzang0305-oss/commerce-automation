@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { bestKoreanSubstringSimilarity } from "./localRuntime";
-import { normalizeSpokenNarration, segmentSpokenNarration } from "./ttsNormalization";
+import { normalizeAsrRecoveryNarration, normalizeSpokenNarration, segmentSpokenNarration } from "./ttsNormalization";
 
 export type SafeTtsResult = {
   status: "success" | "failed";
@@ -41,10 +41,54 @@ export class TtsRecoveryError extends Error {
   constructor(message: string, readonly diagnostic: TtsRecoveryDiagnostic) { super(message); }
 }
 
-type TtsRecoveryDependencies = {
+export type TtsRecoveryDependencies = {
   synthesize(input: { text: string; target: string; attempt: number; segmentIndex: number | null }): Promise<SafeTtsResult>;
   concatenate(input: { sourcePaths: string[]; target: string; pauseMs: number }): Promise<{ status: string; output?: string; validation?: Record<string, unknown> }>;
 };
+
+export async function recoverKoreanTtsAfterAsrFailure(input: {
+  narration: string;
+  canonicalProductName: string;
+  anchors: string[];
+  voiceRoot: string;
+  dependencies: TtsRecoveryDependencies;
+}): Promise<TtsRecoveryDiagnostic> {
+  const attempts: TtsAttemptRecord[] = [];
+  const spokenNarration = normalizeAsrRecoveryNarration(input.narration);
+  const identity = inspectNarrationIdentity(normalizeAsrRecoveryNarration(input.canonicalProductName), input.anchors, spokenNarration);
+  if (!identity.passed) {
+    throw failure("ASR_FAILED_INITIAL_ATTEMPT", "ASR_SEGMENTED_TTS_IDENTITY_GUARD_FAILED", spokenNarration, [], input, attempts);
+  }
+  const segments = segmentSpokenNarration(spokenNarration);
+  if (segments.length < 2) {
+    throw failure("ASR_FAILED_INITIAL_ATTEMPT", "ASR_SEGMENTED_TTS_UNAVAILABLE", spokenNarration, segments, input, attempts);
+  }
+  const segmentPaths: string[] = [];
+  for (const [index, segment] of segments.entries()) {
+    const target = join(input.voiceRoot, `asr-recovery-tts-segment-${String(index + 1).padStart(3, "0")}.wav`);
+    const result = await synthesizeMode("segmented", segment, target, index, input.dependencies, attempts);
+    if (result.status !== "success" || !result.output) {
+      throw failure("ASR_FAILED_INITIAL_ATTEMPT", "ASR_SEGMENTED_TTS_RECOVERY_FAILED", spokenNarration, segments, input, attempts);
+    }
+    segmentPaths.push(result.output);
+  }
+  const concatenated = await input.dependencies.concatenate({
+    sourcePaths: segmentPaths,
+    target: join(input.voiceRoot, "asr-recovery-tts-segmented.wav"),
+    pauseMs: 500,
+  });
+  if (concatenated.status !== "success" || !concatenated.output || !concatenated.validation) {
+    throw failure("ASR_FAILED_INITIAL_ATTEMPT", "ASR_SEGMENTED_TTS_RECOVERY_FAILED", spokenNarration, segments, input, attempts);
+  }
+  const final = { ...attempts[attempts.length - 1], status: "success" as const, output: concatenated.output, validation: concatenated.validation };
+  return {
+    ...success("segmented_synthesis", spokenNarration, segments, final, input, attempts),
+    rootCauseCode: "ASR_FAILED_INITIAL_ATTEMPT",
+    identity,
+    outputPath: concatenated.output,
+    validation: concatenated.validation,
+  };
+}
 
 export async function recoverKoreanTts(input: {
   narration: string;

@@ -36,6 +36,14 @@ export function normalizeSpokenNarration(value: string): string {
     .replace(/,{2,}/gu, ","));
 }
 
+export function normalizeAsrRecoveryNarration(value: string): string {
+  return normalize(normalizeSpokenNarration(value
+    .replace(/\b[A-Za-z]+\b/gu, " ")
+    .replace(/\//gu, " "))
+    .replace(/\s+,/gu, ",")
+    .replace(/,{2,}/gu, ","));
+}
+
 export function segmentSpokenNarration(value: string, maxCharacters = 120): string[] {
   const normalized = normalizeSpokenNarration(value);
   const sentences = normalized.match(/[^.!?]+[.!?]?/gu)?.map((entry) => normalize(entry)).filter(Boolean) ?? [];

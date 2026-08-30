@@ -15,8 +15,8 @@ import { AUTONOMOUS_VIDEO_REVIEW_FLAGS } from "../../src/lib/video-automation/qa
 import { classifyHookFamily, selectDistinctHookCandidate } from "../../src/lib/video-automation/qa/hookDiversity";
 import type { AutomatedReviewInput, AutomatedVideoReview, HookFamily, VisualQaMeasurements } from "../../src/lib/video-automation/qa/types";
 import { buildDeterministicRepairPlan, LEGACY_INITIAL_PROFILE, V2_PROVEN_PROFILE, type RenderRepairProfile } from "../../src/lib/video-automation/repair/repairPlan";
-import { buildKoreanProductNarration, normalizeSpokenNarration } from "../../src/lib/video-automation/ttsNormalization";
-import { recoverKoreanTts, TtsRecoveryError, type SafeTtsResult, type TtsRecoveryDiagnostic } from "../../src/lib/video-automation/ttsRecovery";
+import { buildKoreanProductNarration, normalizeAsrRecoveryNarration, normalizeSpokenNarration } from "../../src/lib/video-automation/ttsNormalization";
+import { recoverKoreanTts, recoverKoreanTtsAfterAsrFailure, TtsRecoveryError, type SafeTtsResult, type TtsRecoveryDiagnostic, type TtsRecoveryDependencies } from "../../src/lib/video-automation/ttsRecovery";
 import { createLocalWhisperXProcess, PersistentWhisperXProvider } from "../../src/lib/video-automation/whisperxPersistentProvider";
 
 const USAGE_LABEL = "연출된 사용 예시";
@@ -248,39 +248,64 @@ async function synthesizeAndValidateVoice(input: {
   const started = performance.now();
   const ttsStarted = performance.now();
   let ttsRecovery: TtsRecoveryDiagnostic;
+  const ttsDependencies: TtsRecoveryDependencies = {
+    synthesize: async ({ text, target, attempt, segmentIndex }) => await runJsonProcess(input.required.python, [input.mediaBridge], { operation: "tts", text, target, command: input.required.ttsCommand, attempt, segmentIndex }, 660_000) as SafeTtsResult,
+    concatenate: async ({ sourcePaths, target, pauseMs }) => await runJsonProcess(input.required.python, [input.mediaBridge], { operation: "concat_wav", source_paths: sourcePaths, target, pause_ms: pauseMs }, 120_000) as { status: string; output?: string; validation?: Record<string, unknown> },
+  };
   try {
     ttsRecovery = await recoverKoreanTts({
       narration: input.narration, canonicalProductName: input.canonicalProductName, anchors: input.anchors, voiceRoot: input.voiceRoot,
-      dependencies: {
-        synthesize: async ({ text, target, attempt, segmentIndex }) => await runJsonProcess(input.required.python, [input.mediaBridge], { operation: "tts", text, target, command: input.required.ttsCommand, attempt, segmentIndex }, 660_000) as SafeTtsResult,
-        concatenate: async ({ sourcePaths, target, pauseMs }) => await runJsonProcess(input.required.python, [input.mediaBridge], { operation: "concat_wav", source_paths: sourcePaths, target, pause_ms: pauseMs }, 120_000) as { status: string; output?: string; validation?: Record<string, unknown> },
-      },
+      dependencies: ttsDependencies,
     });
   } catch (error) {
     if (error instanceof TtsRecoveryError) await writeJson(join(input.voiceRoot, "voice-diagnostic.json"), error.diagnostic);
     throw error;
   }
-  const ttsSeconds = elapsed(ttsStarted);
+  let ttsSeconds = elapsed(ttsStarted);
   await writeJson(join(input.voiceRoot, "voice-diagnostic.json"), ttsRecovery);
   const repairedPath = join(input.voiceRoot, "tts-repaired.wav");
   const audioRepair = await runJsonProcess(input.required.python, [input.audioPauseRepair], { source_path: ttsRecovery.outputPath, output_path: repairedPath, threshold_ms: 700, target_ms: 500, minimum_ms: 300 }, 120_000);
   if (audioRepair.status !== "success") throw new Error("AUDIO_PAUSE_REPAIR_FAILED");
   await writeJson(join(input.voiceRoot, "audio-repair.json"), audioRepair);
 
-  let asrSeconds = 0;
-  let final: Awaited<ReturnType<typeof prepareAsrAttempt>> | null = null;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const value = await prepareAsrAttempt(input, repairedPath, audioRepair, ttsRecovery.spokenNarration, attempt);
-    asrSeconds += value.asrSeconds;
-    final = value;
-    if (value.passed) break;
+  let selectedAudioPath = repairedPath;
+  let selectedAudioRepair = audioRepair;
+  let selectedTtsRecovery = ttsRecovery;
+  let final = await prepareAsrAttempt(input, selectedAudioPath, selectedAudioRepair, selectedTtsRecovery.spokenNarration, 1);
+  let asrSeconds = final.asrSeconds;
+  if (!final.passed) {
+    const asrRecoveryTtsStarted = performance.now();
+    let asrTtsRecovery: TtsRecoveryDiagnostic;
+    try {
+      asrTtsRecovery = await recoverKoreanTtsAfterAsrFailure({
+        narration: input.narration,
+        canonicalProductName: input.canonicalProductName,
+        anchors: input.anchors,
+        voiceRoot: input.voiceRoot,
+        dependencies: ttsDependencies,
+      });
+    } catch (error) {
+      if (error instanceof TtsRecoveryError) await writeJson(join(input.voiceRoot, "asr-tts-recovery.json"), error.diagnostic);
+      throw error;
+    }
+    ttsSeconds += elapsed(asrRecoveryTtsStarted);
+    await writeJson(join(input.voiceRoot, "asr-tts-recovery.json"), asrTtsRecovery);
+    const asrRecoveryRepairedPath = join(input.voiceRoot, "asr-recovery-tts-repaired.wav");
+    const asrRecoveryAudioRepair = await runJsonProcess(input.required.python, [input.audioPauseRepair], { source_path: asrTtsRecovery.outputPath, output_path: asrRecoveryRepairedPath, threshold_ms: 700, target_ms: 500, minimum_ms: 300 }, 120_000);
+    if (asrRecoveryAudioRepair.status !== "success") throw new Error("ASR_RECOVERY_AUDIO_PAUSE_REPAIR_FAILED");
+    await writeJson(join(input.voiceRoot, "asr-recovery-audio-repair.json"), asrRecoveryAudioRepair);
+    selectedAudioPath = asrRecoveryRepairedPath;
+    selectedAudioRepair = asrRecoveryAudioRepair;
+    selectedTtsRecovery = asrTtsRecovery;
+    final = await prepareAsrAttempt(input, selectedAudioPath, selectedAudioRepair, selectedTtsRecovery.spokenNarration, 2, normalizeAsrRecoveryNarration(input.canonicalProductName));
+    asrSeconds += final.asrSeconds;
   }
-  if (!final?.passed) throw new Error("ASR_FAILED_AFTER_REPAIR");
-  await writeJson(join(input.voiceRoot, "asr.json"), { provider: "faster-whisper", rawTranscript: final.transcript, similarity: final.similarity, threshold: 0.82, recognizedAnchors: final.recognizedAnchors, contextAnchorMinimum: 2, identityContract: "spoken_canonical_normalized", identitySimilarity: final.identitySimilarity, identityThreshold: 0.65, coreAnchor: input.anchors[0], coreAnchorSimilarity: final.coreAnchorSimilarity, coreAnchorThreshold: 0.65, passed: true, attempts: final.attempt, recovered: final.attempt > 1, externalApiCalled: false, uploadAttempted: false });
-  return { audioPath: repairedPath, audioDuration: Number(audioRepair.durationAfterSeconds ?? ttsRecovery.validation?.durationSeconds ?? 0), asrTranscript: final.transcript, similarity: final.similarity, recognizedAnchors: final.recognizedAnchors, coreAnchorSimilarity: final.coreAnchorSimilarity, audioRepair, asrAttempts: final.attempt, asrRecovered: final.attempt > 1, ttsRecovery, ttsSeconds: Math.round(ttsSeconds * 100) / 100, asrSeconds: Math.round(asrSeconds * 100) / 100, totalSeconds: elapsed(started) };
+  if (!final.passed) throw new Error("ASR_FAILED_AFTER_REPAIR");
+  await writeJson(join(input.voiceRoot, "asr.json"), { provider: "faster-whisper", rawTranscript: final.transcript, similarity: final.similarity, threshold: 0.82, recognizedAnchors: final.recognizedAnchors, contextAnchorMinimum: 2, identityContract: final.attempt > 1 ? "spoken_canonical_asr_recovery_normalized" : "spoken_canonical_normalized", identitySimilarity: final.identitySimilarity, identityThreshold: 0.65, coreAnchor: input.anchors[0], coreAnchorSimilarity: final.coreAnchorSimilarity, coreAnchorThreshold: 0.65, passed: true, attempts: final.attempt, recovered: final.attempt > 1, recoveryType: selectedTtsRecovery.recoveryType, externalApiCalled: false, uploadAttempted: false });
+  return { audioPath: selectedAudioPath, audioDuration: Number(selectedAudioRepair.durationAfterSeconds ?? selectedTtsRecovery.validation?.durationSeconds ?? 0), asrTranscript: final.transcript, similarity: final.similarity, recognizedAnchors: final.recognizedAnchors, coreAnchorSimilarity: final.coreAnchorSimilarity, audioRepair: selectedAudioRepair, asrAttempts: final.attempt, asrRecovered: final.attempt > 1, ttsRecovery: selectedTtsRecovery, ttsSeconds: Math.round(ttsSeconds * 100) / 100, asrSeconds: Math.round(asrSeconds * 100) / 100, totalSeconds: elapsed(started) };
 }
 
-async function prepareAsrAttempt(input: Parameters<typeof synthesizeAndValidateVoice>[0], audioPath: string, audioRepair: Record<string, unknown>, expectedNarration: string, attempt: number) {
+async function prepareAsrAttempt(input: Parameters<typeof synthesizeAndValidateVoice>[0], audioPath: string, audioRepair: Record<string, unknown>, expectedNarration: string, attempt: number, identityProductName = input.canonicalProductName) {
   const suffix = attempt === 1 ? "" : "-recovery";
   const asrStarted = performance.now();
   const asr = await runFasterWhisper({ pythonExe: input.required.asrPython, scriptPath: input.required.asrScript, modelPath: input.required.asrModel, audioPath, outputPath: join(input.voiceRoot, `asr-provider${suffix}.json`) });
@@ -288,7 +313,7 @@ async function prepareAsrAttempt(input: Parameters<typeof synthesizeAndValidateV
   const similarity = koreanTextSimilarity(expectedNarration, asr.transcript);
   const compactTranscript = compactKorean(asr.transcript);
   const recognizedAnchors = input.anchors.filter((anchor) => compactTranscript.includes(compactKorean(anchor)));
-  const identitySimilarity = bestKoreanSubstringSimilarity(normalizeSpokenNarration(input.canonicalProductName), asr.transcript);
+  const identitySimilarity = bestKoreanSubstringSimilarity(normalizeSpokenNarration(identityProductName), asr.transcript);
   const coreAnchorSimilarity = bestKoreanSubstringSimilarity(input.anchors[0], asr.transcript);
   const passed = similarity >= 0.82 && recognizedAnchors.length >= 2 && identitySimilarity >= 0.65 && coreAnchorSimilarity >= 0.65;
   return { attempt, audioRepair, transcript: asr.transcript, similarity, recognizedAnchors, identitySimilarity, coreAnchorSimilarity, passed, asrSeconds };
