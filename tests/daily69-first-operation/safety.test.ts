@@ -2,6 +2,13 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("first operation task safety", () => {
+  it("runs every closeout path with the React server condition required by Sheets audit imports", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+    for (const name of ["daily69:first-day:closeout", "daily69:first-day:verify-level3", "daily69:first-day:post-closeout", "daily69:first-day:finalize-natural-closeout"]) {
+      expect(packageJson.scripts[name]).toMatch(/^node --conditions=react-server --import tsx /u);
+    }
+  });
+
   it("uses exact task names, 20 bounded triggers, expected-head guard, and no-upload wrappers", async () => {
     const install = await readFile("scripts/daily69-first-operation/install-tasks.ps1", "utf8");
     const principal = await readFile("scripts/daily69-first-operation/principal-identity.ps1", "utf8");
