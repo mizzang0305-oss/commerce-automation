@@ -85,6 +85,19 @@ describe("local durable queue", () => {
     expect((await repository.reserveCandidates()).filter((entry) => entry.claimedBySlot).length).toBe(2);
   });
 
+  it("skips an affiliate-invalid reserve candidate during runtime replacement", async () => {
+    const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z");
+    await repository.insertRanked({ ranked: ranked(14), queueDate: "2026-08-08", now, dueNow: true });
+    const [item, reserve] = await Promise.all([repository.items().then((items) => items[0]), repository.reserveCandidates()]);
+    const invalidProductKey = reserve[0].candidate.productKey;
+    reserve[0].candidate.selectedAffiliateUrl = "";
+    await writeFile(repository.reservePath, JSON.stringify(reserve));
+    const replacement = await repository.replaceWithReserve({ id: item.id, reason: "ASR_FAILED_AFTER_REPAIR", now });
+    expect(replacement).not.toBeNull();
+    expect(replacement!.productKey).not.toBe(invalidProductKey);
+    expect((await repository.reserveCandidates()).find((entry) => entry.candidate.productKey === invalidProductKey)?.claimedBySlot).toBe("");
+  });
+
   it("stops after primary plus two replacements when reserve candidates keep failing", async () => {
     const repository = await setup(); const now = new Date("2026-08-08T00:00:00Z"); await repository.insertRanked({ ranked: ranked(14), queueDate: "2026-08-08", now, dueNow: true });
     const item = (await repository.items())[0];

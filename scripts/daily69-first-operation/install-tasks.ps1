@@ -22,6 +22,22 @@ $manifestPath = Join-Path $queue "operation-manifest.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ([string]$manifest.schemaVersion -ne "daily69-first-operation-v2" -or [string]$manifest.armStatus -ne "projection_verified") { throw "FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED" }
 if ([string]$manifest.namespace -ne $Namespace -or [string]$manifest.operationDate -ne $OperationDate -or [string]$manifest.expectedGitHead -ne $ExpectedGitHead) { throw "FIRST_OPERATION_TASK_BINDING_MISMATCH" }
+$env:QUEUE_SCHEDULER_ROOT = $queue
+$env:FIRST_OPERATION_SOURCE_ROOT = $source
+$env:SAFE_TO_UPLOAD = "false"
+$env:SAFE_TO_PUBLIC_UPLOAD = "false"
+$env:YOUTUBE_AUTO_UPLOAD = "false"
+$env:PUBLIC_UPLOAD = "false"
+$env:UNLISTED_UPLOAD = "false"
+$env:TIKTOK_AUTO_UPLOAD = "false"
+$env:THREADS_AUTO_POST = "false"
+$env:COMMENT_AUTOMATION = "false"
+$env:GOOGLE_DRIVE_VIDEO_UPLOAD = "false"
+Push-Location $root
+try {
+    & npm.cmd run daily69:first-day:preflight --silent -- --arming
+    if ($LASTEXITCODE -ne 0) { throw "FIRST_OPERATION_MATERIALIZATION_PREFLIGHT_FAILED" }
+} finally { Pop-Location }
 $operationalLog = Get-WinEvent -ListLog "Microsoft-Windows-TaskScheduler/Operational" -ErrorAction Stop
 if (-not [bool]$operationalLog.IsEnabled) { throw "TASK_SCHEDULER_OPERATIONAL_LOG_REQUIRED" }
 $batchSize = [int]$manifest.batchSize

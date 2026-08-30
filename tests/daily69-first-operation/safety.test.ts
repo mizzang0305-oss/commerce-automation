@@ -2,6 +2,13 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("first operation task safety", () => {
+  it("runs every closeout path with the React server condition required by Sheets audit imports", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+    for (const name of ["daily69:first-day:closeout", "daily69:first-day:verify-level3", "daily69:first-day:post-closeout", "daily69:first-day:finalize-natural-closeout"]) {
+      expect(packageJson.scripts[name]).toMatch(/^node --conditions=react-server --import tsx /u);
+    }
+  });
+
   it("uses exact task names, 20 bounded triggers, expected-head guard, and no-upload wrappers", async () => {
     const install = await readFile("scripts/daily69-first-operation/install-tasks.ps1", "utf8");
     const principal = await readFile("scripts/daily69-first-operation/principal-identity.ps1", "utf8");
@@ -33,12 +40,21 @@ describe("first operation task safety", () => {
     expect(install).toContain("FIRST_OPERATION_TASK_BINDING_MISMATCH");
     expect(arm).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
     expect(preflight).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+    expect(arm).toContain('requiredArg("--usage-asset-root")');
+    expect(preflight).toContain("verifyFirstOperationMaterializationEligibility");
+    expect(install).toContain("daily69:first-day:preflight");
+    expect(install.indexOf("daily69:first-day:preflight")).toBeLessThan(install.indexOf("Register-ScheduledTask"));
     expect(finalizer).toContain("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
     expect(install).toContain("$names[1..4]");
     expect(arm).toContain('resolve(operationBase, ".locks", `${namespace}.lock`)');
     expect(recovery).toContain('join(operationBase, ".locks", `${targetNamespace}.lock`)');
     expect(common).toContain('$env:SAFE_TO_UPLOAD = "false"');
     expect(common).not.toMatch(/(?:YOUTUBE_AUTO_UPLOAD|TIKTOK_AUTO_POST|THREADS_AUTO_POST)\s*=\s*["']true["']/iu);
+  });
+
+  it("checks materialization before any Sheets projection call", async () => {
+    const cutover = await readFile("scripts/daily69-first-operation/cutover.ts", "utf8");
+    expect(cutover.indexOf("verifyFirstOperationMaterializationEligibility")).toBeLessThan(cutover.indexOf("projectAppendOnly"));
   });
 
   it("keeps day-two execution out of the closeout wrapper", async () => {
@@ -56,6 +72,21 @@ describe("first operation task safety", () => {
     expect(firstOperation.indexOf("const affiliateReadiness = assertSource(source)")).toBeLessThan(firstOperation.indexOf("await mkdir(resolve(input.operationBase)"));
     expect(videoExecutor).not.toMatch(/youtubeUploadAdapter|TikTok|Threads|videos\.insert/u);
     expect([readiness, firstOperation, videoExecutor].join("\n")).not.toContain("operation-2026-08-11");
+  });
+
+  it("binds derived-source and operation publication to the exact admitted bytes", async () => {
+    const builder = await readFile("scripts/daily69-first-operation/build-operational-reserve-source.ts", "utf8");
+    const firstOperation = await readFile("src/lib/daily69-first-operation/index.ts", "utf8");
+    expect(builder).toContain("snapshotDirectoryFiles(sourceRoot)");
+    expect(builder).toContain("sha256(evidencePoolBytes)");
+    expect(builder).toContain("writeFile(join(staging, name), bytes, { flag: \"wx\" })");
+    expect(builder).toContain("const parentSourceNamespace = inheritedParentSourceNamespace || basename(sourceRoot)");
+    expect(builder).toContain("OPERATIONAL_SOURCE_PARENT_NAMESPACE_INVALID");
+    expect(builder).not.toContain("copyFile(");
+    expect(firstOperation).toContain("assertLoadedSourceFileHashes(source.loadedFileHashes, before.fileHashes)");
+    expect(firstOperation).toContain("SOURCE_PROOF_MUTATED_BEFORE_CLONE");
+    expect(firstOperation).toContain('atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry)');
+    expect(firstOperation).not.toContain('copyFile(join(sourceRoot, "selected-registry.json")');
   });
 
   it("keeps immutable operation binding separate from direct-review freshness and external writers", async () => {

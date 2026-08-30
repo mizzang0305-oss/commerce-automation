@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { allocateUsageEvidence, createUsageAllocationState } from "@/lib/usage-evidence";
+import { allocateUsageEvidence, createUsageAllocationState, validateUsageEvidenceRegistry } from "@/lib/usage-evidence";
 import { makeRankedProducts, makeUsageEvidenceRegistry } from "./fixture";
 
 describe("usage evidence allocator", () => {
@@ -22,14 +22,13 @@ describe("usage evidence allocator", () => {
     expect(allocateUsageEvidence({ candidate: ranked[2], registry, state }).reason).toBe("sequenceCapacityRejected");
   });
 
-  test("enforces the same source-video daily limit across distinct packs", () => {
+  test("keeps a registry-valid derived frame pack out of production allocations", () => {
     const registry = makeUsageEvidenceRegistry({ packsPerUseCase: 3, sourceKind: "derived_frame_pack", sharedSourceId: "reviewed-video", maxSameSourceVideoDaily: 2 });
     const useCase = registry.packs[0].useCase;
     const ranked = makeRankedProducts(100).filter((entry) => entry.candidate.useCase === useCase);
     const state = createUsageAllocationState();
-    expect(allocateUsageEvidence({ candidate: ranked[0], registry, state }).allocation).not.toBeNull();
-    expect(allocateUsageEvidence({ candidate: ranked[1], registry, state }).allocation).not.toBeNull();
-    expect(allocateUsageEvidence({ candidate: ranked[2], registry, state }).allocation).toBeNull();
+    expect(validateUsageEvidenceRegistry(registry)).toBe(registry);
+    expect(allocateUsageEvidence({ candidate: ranked[0], registry, state })).toMatchObject({ allocation: null, reason: "assetCapacityRejected" });
   });
 
   test("selects exactly three scenes from reviewed role alternatives", () => {

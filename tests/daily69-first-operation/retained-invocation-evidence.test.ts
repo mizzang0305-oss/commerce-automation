@@ -51,6 +51,27 @@ $escaped = Protect-Daily69Text -Value '{\"token\":\"nested-token\",\"private_key
     expect(value.escaped).not.toMatch(/nested-token|nested-key|nested-auth/u);
   });
 
+  it("retains only the bounded run and queue identity needed for batch reconciliation", () => {
+    const value = runPowerShell<{
+      counters: Record<string, number>;
+      record: { event: string; status: string; run: { runId: string; claimed: number }; results: Array<{ queueId: string }> };
+      serialized: string;
+    }>(`
+$line = '{"event":"queue_batch_complete","run":{"runId":"batch-20990101040000","status":"success","claimed":3,"completed":3,"blocked":0,"failed":0,"retried":0},"results":[{"queueId":"queue-001","productKey":"secret-product","finalVideo":"C:\\\\private\\\\video.mp4"},{"queueId":"queue-002"},{"queueId":"../unsafe"}],"Authorization":"Bearer should-not-survive"}'
+$record = ConvertTo-Daily69SanitizedBatchRecord -Line $line
+$counters = Get-Daily69CountersFromOutput -Lines @($line)
+[ordered]@{ counters=$counters; record=$record; serialized=($record | ConvertTo-Json -Depth 6 -Compress) } | ConvertTo-Json -Depth 8 -Compress
+`);
+    expect(value.counters).toEqual({ claimed: 3, completed: 3, failed: 0, retried: 0 });
+    expect(value.record).toMatchObject({
+      event: "queue_batch_complete",
+      status: "success",
+      run: { runId: "batch-20990101040000", claimed: 3 },
+      results: [{ queueId: "queue-001" }, { queueId: "queue-002" }],
+    });
+    expect(value.serialized).not.toMatch(/secret-product|private|Authorization|should-not-survive/u);
+  });
+
   it("creates an append-only trace and one scanner-compatible final receipt with unproven task correlation", async () => {
     const root = await tempRoot();
     const namespace = "operation-2026-08-30-attempt-2";
@@ -137,7 +158,8 @@ $controlStart = Test-Daily69NewWorkWindow -ResolvedQueue '${ps(root)}' -BoundNam
     expect(contents[0]).toContain("correlated = $false");
     expect(contents[1]).toContain("Resolve-Daily69ControlOutcome");
     expect(contents[2]).toContain("Claim-Daily69BatchSlot");
-    expect(contents[2]).toContain("REDACTED_UNPARSEABLE_OUTPUT");
+    expect(contents[0]).toContain("REDACTED_UNPARSEABLE_OUTPUT");
+    expect(contents[2]).toContain("ConvertTo-Daily69SanitizedBatchRecord");
     expect(contents[0]).toContain("BATCH_SLOT_ALREADY_CLAIMED");
     expect(contents[3].indexOf("Test-Daily69CloseoutIdle")).toBeLessThan(contents[3].indexOf("Disable-ScheduledTask"));
     expect(contents[3]).toContain("queue-control:project");

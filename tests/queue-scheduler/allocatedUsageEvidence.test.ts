@@ -91,6 +91,7 @@ describe("materializeAllocatedUsageEvidence", () => {
     expect(manifestText).not.toContain("sourceRelativeReference");
     expect(manifestText).not.toContain("safeReviewNotes");
     expect(first.sourceSha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect(first.provenance.sourceIds).toEqual(fixture.input.allocation.sourceIds);
     expect(first.reviewEvidenceSha256).toMatch(/^[0-9a-f]{64}$/u);
 
     const second = await materializeAllocatedUsageEvidence(fixture.input, dependencies);
@@ -126,7 +127,7 @@ describe("materializeAllocatedUsageEvidence", () => {
     await expect(materializeAllocatedUsageEvidence(escaped.input, fakeDependencies())).rejects.toThrow("ALLOCATED_USAGE_ASSET_PATH_OUTSIDE_ROOT");
 
     const hashMismatch = await createFixture();
-    await writeFile(join(hashMismatch.assetRoot, "selected", "image-2.jpg"), "mutated-after-registry");
+    await writeFile(join(hashMismatch.assetRoot, "selected", "image-2.png"), "mutated-after-registry");
     await expect(materializeAllocatedUsageEvidence(hashMismatch.input, fakeDependencies())).rejects.toThrow("ALLOCATED_USAGE_ASSET_HASH_MISMATCH");
   });
 
@@ -205,8 +206,8 @@ async function createFixture(
   pack.afterAssetIds = deskPacks.flatMap(({ afterAssetIds }) => afterAssetIds);
   const selected = allocatedAssetIds.map((assetId) => registry.assets.find((asset) => asset.assetId === assetId)!);
   for (const [index, asset] of selected.entries()) {
-    const content = `asset-image-${index + 1}`;
-    const sourceRelativeReference = `selected/image-${index + 1}.jpg`;
+    const content = png();
+    const sourceRelativeReference = `selected/image-${index + 1}.png`;
     await writeFile(join(assetRoot, sourceRelativeReference), content);
     asset.sourceRelativeReference = sourceRelativeReference;
     asset.derivedSha256 = sha256(content);
@@ -244,6 +245,7 @@ function fakeDependencies(probe = validProbe): AllocatedUsageEvidenceDependencie
   };
 }
 
-function sha256(value: string): string {
+function png() { return Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlOkAAAAASUVORK5CYII=", "base64"); }
+function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }

@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { buildAffiliateReadinessReport, type AffiliateReadinessReport } from "@/lib/affiliate-readiness";
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { inspectQueueMediaEvidence } from "@/lib/queue-scheduler/mediaEvidence";
 import { LocalQueueRepository } from "@/lib/queue-scheduler/repository";
 import type { LocalQueueItem, QueueSchedulerSettings, ReserveCandidate } from "@/lib/queue-scheduler/types";
+import {
+  preflightDaily69MaterializationEligibility,
+  validateUsageEvidenceRegistry,
+  type Daily69MaterializationPreflight,
+  type UsageEvidenceRegistry,
+} from "@/lib/usage-evidence";
 import { normalizeFirstOperationLifecycleStatus, validateLevel3Completion, type FirstOperationLifecycleStatus, type LegacyFirstOperationLifecycleStatus, type Level3RetainedEvidence } from "./level3";
 import type { Level3SheetsAuditGateway } from "./postCloseout";
 
@@ -19,6 +25,7 @@ const SOURCE_FILES = [
   "queue.json", "reserve-pool.json", "settings.json", "runs.json", "control-state.json",
   "source-proof.json", "selected-registry.json", "final-summary.json"
 ] as const;
+const SOURCE_ADMISSION_FILES = ["queue.json", "reserve-pool.json", "settings.json", "source-proof.json", "selected-registry.json"] as const;
 
 export type FirstOperationManifest = {
   schemaVersion: "daily69-first-operation-v1" | "daily69-first-operation-v2";
@@ -32,6 +39,7 @@ export type FirstOperationManifest = {
   armStatus?: FirstOperationArmStatus | LegacyFirstOperationLifecycleStatus;
   sourceNamespace: string;
   sourceAssetBoundaryRoot?: string;
+  usageMaterializationAssetRoot?: string;
   sourceDecision: typeof FIRST_OPERATION_SOURCE_DECISION;
   sourceFileHashes: Record<string, string>;
   sourceAssetHashes: Record<string, string>;
@@ -54,6 +62,7 @@ export type FirstOperationManifest = {
     fakeReviewedAtMutations: 0;
     aiReviewExecutions: 0;
   };
+  materializationEligibility?: Daily69MaterializationPreflight;
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
   closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
@@ -64,6 +73,7 @@ export async function armFirstOperation(input: {
   now: Date;
   expectedGitHead: string;
   assetBoundaryRoot?: string;
+  usageMaterializationAssetRoot: string;
   operationDate?: string;
   namespace?: string;
   attemptNumber?: number;
@@ -80,28 +90,44 @@ export async function armFirstOperation(input: {
   const previousAttemptNamespace = input.previousAttemptNamespace?.trim() ?? "";
   if ((attemptNumber === 1 && previousAttemptNamespace) || (attemptNumber > 1 && !previousAttemptNamespace)) throw new Error("FIRST_OPERATION_PREVIOUS_ATTEMPT_INVALID");
   const operationRoot = resolve(input.operationBase, namespace);
-  const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
-  if (existing) {
-    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
-      || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace) {
-      throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
-    }
-    await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
-    return { operationRoot, manifest: existing, idempotent: true };
-  }
-
   const sourceRoot = resolve(input.sourceRoot);
   const sourceAssetBoundaryRoot = resolve(input.assetBoundaryRoot ?? sourceRoot);
   if (escapesRoot(sourceAssetBoundaryRoot, sourceRoot)) throw new Error("FIRST_OPERATION_SOURCE_BOUNDARY_INVALID");
+  const usageMaterializationAssetRoot = resolve(input.usageMaterializationAssetRoot);
   const source = await readSource(sourceRoot);
   const sourceReadiness = assertSource(source);
+  const materializationEligibility = await preflightDaily69MaterializationEligibility({
+    active: source.queue,
+    reserve: source.reserve,
+    registry: source.registry,
+    assetRoot: usageMaterializationAssetRoot,
+    requiredActive: 69,
+    requiredReserve: 14,
+  });
+  if (!materializationEligibility.pass) throw new Error(materializationEligibility.safeCode);
+  const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
+  if (existing) {
+    if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
+      || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace
+      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot) {
+      throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
+    }
+    await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
+    await verifyFirstOperationMaterializationEligibility(operationRoot);
+    return { operationRoot, manifest: existing, idempotent: true };
+  }
+
   const affiliateReadiness = sourceReadiness.affiliateReadiness;
   const before = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
+  assertLoadedSourceFileHashes(source.loadedFileHashes, before.fileHashes);
   const armedAt = input.now.toISOString();
   const batchSize = 3;
   const schedule = scheduleGroups(sourceReadiness.scheduled, batchSize, 4);
   const scheduledHourBySlot = new Map(schedule.flatMap((group) => group.slots.map((slotId) => [slotId, group.hourKst] as const)));
-  const queue = source.queue.map((item) => cloneQueueItem(item, operationDate, armedAt, basename(sourceRoot), before.assetHashes, sourceReadiness.readyIds, scheduledHourBySlot));
+  const sourceNamespace = basename(sourceRoot);
+  const carryForwardOriginNamespace = source.proof.parentSourceNamespace?.trim() || sourceNamespace;
+  if (!/^[A-Za-z0-9_-]{1,128}$/u.test(carryForwardOriginNamespace)) throw new Error("FIRST_OPERATION_SOURCE_PARENT_NAMESPACE_INVALID");
+  const queue = source.queue.map((item) => cloneQueueItem(item, operationDate, armedAt, carryForwardOriginNamespace, before.assetHashes, sourceReadiness.readyIds, scheduledHourBySlot));
   const reserve = source.reserve.map((item) => ({ ...item, queueDate: operationDate, claimedBySlot: "", claimedAt: "" }));
   const settings: QueueSchedulerSettings = {
     ...source.settings,
@@ -133,7 +159,7 @@ export async function armFirstOperation(input: {
     atomicWriteJson(join(operationRoot, "runs.json"), []),
     atomicWriteJson(join(operationRoot, "control-state.json"), { localRevision: 1, projectionRevision: 0, snapshotHash: "", projectedAt: "", source: "local_queue_scheduler" }),
     atomicWriteJson(join(operationRoot, "control-state-initial.json"), { enabled: true, isPaused: false, observationMode: true, uploadEnabled: false, SAFE_TO_UPLOAD: false }),
-    copyFile(join(sourceRoot, "selected-registry.json"), join(operationRoot, "selected-registry.json"))
+    atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry)
   ]);
 
   const after = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
@@ -148,8 +174,9 @@ export async function armFirstOperation(input: {
     attemptNumber,
     previousAttemptNamespace,
     armStatus: "prepared",
-    sourceNamespace: basename(sourceRoot),
+    sourceNamespace,
     sourceAssetBoundaryRoot,
+    usageMaterializationAssetRoot,
     sourceDecision: FIRST_OPERATION_SOURCE_DECISION,
     sourceFileHashes: before.fileHashes,
     sourceAssetHashes: before.assetHashes,
@@ -165,6 +192,7 @@ export async function armFirstOperation(input: {
     distinct: source.proof.distinct ?? new Set([...source.queue.map((item) => item.productKey), ...source.reserve.map((item) => item.candidate.productKey)]).size,
     schedule,
     affiliateReadiness,
+    materializationEligibility,
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
@@ -272,6 +300,22 @@ export async function firstOperationStatus(operationRoot: string) {
   return { manifest, items, reserve, settings, state, runs, status };
 }
 
+export async function verifyFirstOperationMaterializationEligibility(operationRoot: string) {
+  const snapshot = await firstOperationStatus(operationRoot);
+  if (!snapshot.manifest.usageMaterializationAssetRoot) throw new Error("USAGE_MATERIALIZATION_ASSET_ROOT_REQUIRED");
+  const registry = validateUsageEvidenceRegistry(await readRequired<UsageEvidenceRegistry>(join(resolve(operationRoot), "selected-registry.json")));
+  const preflight = await preflightDaily69MaterializationEligibility({
+    active: snapshot.items,
+    reserve: snapshot.reserve,
+    registry,
+    assetRoot: resolve(snapshot.manifest.usageMaterializationAssetRoot),
+    requiredActive: 69,
+    requiredReserve: snapshot.settings.minimumReserveCount,
+  });
+  if (!preflight.pass) throw new Error(preflight.safeCode);
+  return preflight;
+}
+
 export async function closeoutFirstOperation(operationRoot: string, dependencies: {
   now?: () => Date;
   inspectMedia?: typeof inspectQueueMediaEvidence;
@@ -357,14 +401,14 @@ function cloneQueueItem(
   item: LocalQueueItem,
   operationDate: string,
   armedAt: string,
-  sourceNamespace: string,
+  carryForwardOriginNamespace: string,
   assetHashes: Record<string, string>,
   readyIds: Set<string>,
   scheduledHourBySlot: Map<string, number>,
 ): LocalQueueItem {
   if (readyIds.has(item.id)) {
     const priorCarryover = item.operationCarryover;
-    const originOperationNamespace = priorCarryover?.originOperationNamespace || sourceNamespace;
+    const originOperationNamespace = priorCarryover?.originOperationNamespace || carryForwardOriginNamespace;
     const originQueueId = priorCarryover?.originQueueId || item.id;
     const originVideoSha256 = priorCarryover?.originVideoSha256 || assetHashes[`${item.slotId}:video`] || "";
     return {
@@ -377,7 +421,7 @@ function cloneQueueItem(
       localRevision: 1,
       operationCarryover: {
         prevalidatedCanary: true,
-        sourceCanaryRunId: priorCarryover?.sourceCanaryRunId || sourceNamespace,
+        sourceCanaryRunId: priorCarryover?.sourceCanaryRunId || carryForwardOriginNamespace,
         originOperationNamespace,
         originQueueId,
         sourceVideoHash: assetHashes[`${item.slotId}:video`] ?? "",
@@ -418,12 +462,22 @@ function cloneQueueItem(
 }
 
 async function readSource(root: string) {
+  const loadedFiles = new Map(await Promise.all(SOURCE_ADMISSION_FILES.map(async (name) => [name, await readFile(join(root, name))] as const)));
+  const loadedFileHashes = Object.fromEntries([...loadedFiles].map(([name, bytes]) => [name, hash(bytes)]));
   return {
-    queue: await readRequired<LocalQueueItem[]>(join(root, "queue.json")),
-    reserve: await readRequired<ReserveCandidate[]>(join(root, "reserve-pool.json")),
-    settings: await readRequired<QueueSchedulerSettings>(join(root, "settings.json")),
-    proof: await readRequired<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number }>(join(root, "source-proof.json"))
+    queue: parseJson<LocalQueueItem[]>(loadedFiles.get("queue.json")!),
+    reserve: parseJson<ReserveCandidate[]>(loadedFiles.get("reserve-pool.json")!),
+    settings: parseJson<QueueSchedulerSettings>(loadedFiles.get("settings.json")!),
+    proof: parseJson<{ decision?: string; active?: number; reserve?: number; distinct?: number; sourceMutation?: number; parentSourceNamespace?: string }>(loadedFiles.get("source-proof.json")!),
+    registry: validateUsageEvidenceRegistry(parseJson<UsageEvidenceRegistry>(loadedFiles.get("selected-registry.json")!)),
+    loadedFileHashes,
   };
+}
+
+function assertLoadedSourceFileHashes(loaded: Record<string, string>, bundled: Record<string, string>) {
+  if (SOURCE_ADMISSION_FILES.some((name) => loaded[name] !== bundled[name])) {
+    throw new Error("SOURCE_PROOF_MUTATED_BEFORE_CLONE");
+  }
 }
 
 function assertSource(source: Awaited<ReturnType<typeof readSource>>) {
@@ -456,6 +510,7 @@ async function sourceBundle(root: string, queue: LocalQueueItem[], assetBoundary
 }
 
 async function readRequired<T>(path: string): Promise<T> { return JSON.parse(await readFile(path, "utf8")) as T; }
+function parseJson<T>(bytes: Buffer): T { return JSON.parse(bytes.toString("utf8")) as T; }
 async function hashFile(path: string) { return hash(await readFile(path)); }
 function hash(value: string | Buffer) { return createHash("sha256").update(value).digest("hex"); }
 function escapesRoot(root: string, path: string) { const value = relative(resolve(root), resolve(path)); return value.startsWith("..") || value.includes(":"); }

@@ -29,12 +29,23 @@ export async function prepareQueueVideoItemsIndependently<T>(input: {
   return { prepared, failures };
 }
 
+export function bindPreparedItemsToManifestOrder<T extends { productKey: string }, U extends Record<string, unknown>>(prepared: T[], manifestItems: U[]) {
+  const preparedByProductKey = new Map(prepared.map((binding, preparedIndex) => [binding.productKey, { binding, preparedIndex }]));
+  const manifestProductKeys = manifestItems.map((item) => typeof item.productKey === "string" ? item.productKey : "");
+  if (manifestItems.length !== prepared.length
+    || preparedByProductKey.size !== prepared.length
+    || new Set(manifestProductKeys).size !== manifestItems.length
+    || manifestProductKeys.some((productKey) => !preparedByProductKey.has(productKey))) throw new Error("QUEUE_PRODUCT_BINDING_MISMATCH");
+  return manifestItems.map((item, itemIndex) => ({ ...preparedByProductKey.get(manifestProductKeys[itemIndex]!)!, item, itemIndex }));
+}
+
 export async function executeQueueVideoBatch(input: {
   items: LocalQueueItem[];
   runId: string;
   root: string;
   selectedRegistryPath?: string;
   reviewExecutor?: typeof executeAuthenticatedCodexReview;
+  onCodexPassReady?: (result: QueueVideoResult) => Promise<void>;
   reviewContext?: {
     provenance: Exclude<CodexReviewProvenance, "diagnostic">;
     operationNamespace: string;
@@ -98,14 +109,10 @@ export async function executeQueueVideoBatch(input: {
       const runManifestPath = join(videoRoot, "run-manifest.json");
       const manifest = JSON.parse(await readFile(runManifestPath, "utf8")) as { completedAt?: string; items?: Array<Record<string, unknown>> };
       const manifestItems = manifest.items ?? [];
-      if (manifestItems.length !== prepared.length || manifestItems.some((item, index) => item.productKey !== prepared[index]?.productKey)
-        || new Set(manifestItems.map((item) => item.productKey)).size !== manifestItems.length) throw new Error("QUEUE_PRODUCT_BINDING_MISMATCH");
-      for (const [itemIndex, binding] of prepared.entries()) {
-        const item = manifestItems[itemIndex];
-        if (!item || item.productKey !== binding.productKey) { byQueueId.set(binding.queueId, failed(binding, "QUEUE_PRODUCT_BINDING_MISMATCH", false)); continue; }
+      for (const { binding, item, preparedIndex } of bindPreparedItemsToManifestOrder(prepared, manifestItems)) {
         if (item.machineQaPassed !== true || typeof item.finalVideo !== "string") { const blocker = Array.isArray(item.blockers) ? String(item.blockers[0] ?? "VIDEO_AUTO_QA_FAILED") : "VIDEO_AUTO_QA_FAILED"; byQueueId.set(binding.queueId, failed(binding, safeCode(blocker), isRetryable(blocker))); continue; }
         try {
-          const productBoundary = await realpath(join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final"));
+          const productBoundary = await realpath(join(videoRoot, `product-${String(preparedIndex + 1).padStart(3, "0")}`, "final"));
           const finalVideo = await containedFile(productBoundary, item.finalVideo, "VIDEO_OUTPUT_PATH_OUTSIDE_PRODUCT_ROOT");
           const visualEvidencePaths = await Promise.all([
             item.firstFramePath,
@@ -123,7 +130,7 @@ export async function executeQueueVideoBatch(input: {
             derivation: "native_final_artifacts",
             outputPath: join(dirname(finalVideo), "codex-visual-evidence-binding.json"),
           });
-          const finalReviewArtifact = join(videoRoot, `product-${String(itemIndex + 1).padStart(3, "0")}`, "final", "codex-review-source.json");
+          const finalReviewArtifact = join(videoRoot, `product-${String(preparedIndex + 1).padStart(3, "0")}`, "final", "codex-review-source.json");
           const codexReview = await (input.reviewExecutor ?? executeAuthenticatedCodexReview)({
             queueId: binding.queueId,
             slotId: binding.slotId,
@@ -147,7 +154,7 @@ export async function executeQueueVideoBatch(input: {
               originVideoSha256: media.sha256,
             } : {}),
           });
-          byQueueId.set(binding.queueId, {
+          const result: QueueVideoResult = {
             queueId: binding.queueId,
             productKey: binding.productKey,
             passed: true,
@@ -160,7 +167,9 @@ export async function executeQueueVideoBatch(input: {
             machineQaFinishedAt: validDate(manifest.completedAt) ? manifest.completedAt : new Date().toISOString(),
             codexReview,
             usageEvidenceProvenance: binding.usageEvidenceProvenance,
-          });
+          };
+          if (codexReview.status === "pass" && codexReview.evidence) await input.onCodexPassReady?.(result);
+          byQueueId.set(binding.queueId, result);
         } catch (error) {
           const code = safeCode(error instanceof Error ? error.message : String(error));
           byQueueId.set(binding.queueId, failed(binding, code, isRetryable(code)));

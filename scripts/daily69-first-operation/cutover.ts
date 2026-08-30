@@ -12,6 +12,7 @@ import {
 import {
   firstOperationStatus,
   transitionFirstOperationArmStatus,
+  verifyFirstOperationMaterializationEligibility,
 } from "../../src/lib/daily69-first-operation";
 import { LocalQueueRepository } from "../../src/lib/queue-scheduler";
 
@@ -27,6 +28,7 @@ async function main() {
   if (snapshot.manifest.schemaVersion !== "daily69-first-operation-v2") throw new Error("CUTOVER_MANIFEST_SCHEMA_INVALID");
   if (snapshot.manifest.namespace !== namespace) throw new Error("CUTOVER_NAMESPACE_BINDING_MISMATCH");
   if (kstDate(new Date()) >= snapshot.manifest.operationDate) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
+  await verifyFirstOperationMaterializationEligibility(operationRoot);
   assertFreshAttemptCutover({
     namespace,
     operationDate: snapshot.manifest.operationDate,

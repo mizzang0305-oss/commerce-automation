@@ -55,7 +55,7 @@ function Get-Daily69CountersFromOutput {
         try {
             $value = ([string]$line) | ConvertFrom-Json -ErrorAction Stop
             foreach ($name in @('claimed', 'completed', 'failed', 'retried')) {
-                $candidate = $value.$name
+                $candidate = if ($null -ne $value.$name) { $value.$name } else { $value.run.$name }
                 $parsed = 0
                 if ($null -ne $candidate -and [int]::TryParse([string]$candidate, [ref]$parsed) -and $parsed -ge 0) {
                     $counters[$name] = $parsed
@@ -64,6 +64,45 @@ function Get-Daily69CountersFromOutput {
         } catch { }
     }
     return [pscustomobject]$counters
+}
+
+function ConvertTo-Daily69SanitizedBatchRecord {
+    param([AllowNull()][object]$Line)
+    $record = [ordered]@{
+        event = 'child_output_redacted'
+        status = ''
+        safeError = ''
+        claimed = 0
+        completed = 0
+        failed = 0
+        retried = 0
+        run = [ordered]@{ runId = ''; claimed = 0 }
+        results = @()
+    }
+    try {
+        $value = ([string]$Line) | ConvertFrom-Json -ErrorAction Stop
+        if ([string]$value.event -match '^[a-z0-9_:-]{1,96}$') { $record.event = [string]$value.event }
+        $candidateStatus = if ($value.status) { [string]$value.status } elseif ($value.run.status) { [string]$value.run.status } else { '' }
+        if ($candidateStatus -match '^[a-z0-9_:-]{1,96}$') { $record.status = $candidateStatus }
+        foreach ($property in @('safeError', 'safeMessage')) {
+            if ($value.$property) { $record.safeError = ConvertTo-Daily69SafeCode -Value $value.$property -Fallback 'REDACTED_CHILD_ERROR'; break }
+        }
+        foreach ($name in @('claimed', 'completed', 'failed', 'retried')) {
+            $candidate = if ($null -ne $value.$name) { $value.$name } else { $value.run.$name }
+            $parsed = 0
+            if ($null -ne $candidate -and [int]::TryParse([string]$candidate, [ref]$parsed) -and $parsed -ge 0) { $record[$name] = $parsed }
+        }
+        $runId = [string]$value.run.runId
+        if ($runId -match '^batch-[0-9]{14}$') { $record.run.runId = $runId }
+        $record.run.claimed = $record.claimed
+        $safeResults = @()
+        foreach ($result in @($value.results)) {
+            $queueId = [string]$result.queueId
+            if ($queueId -match '^[A-Za-z0-9:_-]{1,160}$') { $safeResults += [ordered]@{ queueId = $queueId } }
+        }
+        $record.results = @($safeResults)
+    } catch { $record.safeError = 'REDACTED_UNPARSEABLE_OUTPUT' }
+    return [pscustomobject]$record
 }
 
 function Get-Daily69CompletionFromOutput {

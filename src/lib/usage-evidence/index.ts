@@ -4,6 +4,7 @@ export * from "./categoryDiverseV4";
 export * from "./classifier";
 export * from "./contracts";
 export * from "./fingerprint";
+export * from "./materializationEligibility";
 export * from "./productBoundSyntheticV5";
 export * from "./registry";
 export * from "./slot069RecoveryV5";

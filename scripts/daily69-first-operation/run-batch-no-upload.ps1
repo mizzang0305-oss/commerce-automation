@@ -34,21 +34,8 @@ function Write-SanitizedBatchResult {
         $writer = New-Object IO.StreamWriter($stream, $encoding)
         try {
             foreach ($line in @($Lines)) {
-                $record = [ordered]@{ event = 'child_output_redacted'; status = ''; safeError = ''; claimed = 0; completed = 0; failed = 0; retried = 0 }
-                try {
-                    $value = ([string]$line) | ConvertFrom-Json -ErrorAction Stop
-                    if ([string]$value.event -match '^[a-z0-9_:-]{1,96}$') { $record.event = [string]$value.event }
-                    $candidateStatus = if ($value.status) { [string]$value.status } elseif ($value.run.status) { [string]$value.run.status } else { '' }
-                    if ($candidateStatus -match '^[a-z0-9_:-]{1,96}$') { $record.status = $candidateStatus }
-                    foreach ($property in @('safeError', 'safeMessage')) {
-                        if ($value.$property) { $record.safeError = ConvertTo-Daily69SafeCode -Value $value.$property -Fallback 'REDACTED_CHILD_ERROR'; break }
-                    }
-                    foreach ($name in @('claimed', 'completed', 'failed', 'retried')) {
-                        $parsed = 0
-                        if ([int]::TryParse([string]$value.$name, [ref]$parsed) -and $parsed -ge 0) { $record[$name] = $parsed }
-                    }
-                } catch { $record.safeError = 'REDACTED_UNPARSEABLE_OUTPUT' }
-                $writer.WriteLine((Protect-Daily69Text -Value ($record | ConvertTo-Json -Compress)))
+                $record = ConvertTo-Daily69SanitizedBatchRecord -Line $line
+                $writer.WriteLine((Protect-Daily69Text -Value ($record | ConvertTo-Json -Depth 6 -Compress)))
             }
             $writer.Flush()
             $stream.Flush($true)

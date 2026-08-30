@@ -116,13 +116,35 @@ describe("Daily69 independent post-closeout audit", () => {
     await mkdir(join(operationRoot, "batch-results"), { recursive: true });
     const run = { runId: "batch-20990101040000", type: "scheduled_batch", status: "success", startedAt: "2099-01-01T04:00:00.000Z", finishedAt: "2099-01-01T04:01:00.000Z", claimed: 1, completed: 1, blocked: 0, failed: 0, retried: 0, safeMessage: "BATCH_MACHINE_QA_COMPLETE", metrics: { PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 } };
     await writeFile(join(operationRoot, "runs.json"), `${JSON.stringify([run])}\n`);
-    await writeFile(join(operationRoot, "batch-results", "batch-001.jsonl"), `${JSON.stringify({ event: "queue_batch_complete", run, results: [{ queueId: "queue-001", productKey: "product-001", passed: true }] })}\n`);
+    await writeFile(join(operationRoot, "batch-results", "batch-001.jsonl"), `${JSON.stringify({
+      event: "queue_batch_complete",
+      run: { runId: run.runId, claimed: run.claimed },
+      results: [
+        { queueId: "queue-001", productKey: "initial-product", passed: false },
+        { queueId: "queue-001", productKey: "reserve-product", passed: true },
+      ],
+    })}\n`);
     const gateway: Level3SheetsAuditGateway = { audit: async () => ({ exact: true, queueRows: 1, reserveRows: 0, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "c".repeat(64) }) };
     const evidence = await captureLevel3RetainedEvidence(operationRoot, gateway);
     expect(evidence.sheets).toMatchObject({ exact: true, queueRows: 1, reserveRows: 0, syncRows: 1 });
-    expect(evidence.runs).toMatchObject({ scheduledBatchRuns: 1, batchResults: 1, claimed: 1, completed: 1, runIdsMatched: true, claimedIdsObserved: 1, resultIdsObserved: 1, duplicateClaimIds: 0, duplicateResultIds: 0 });
+    expect(evidence.runs).toMatchObject({ scheduledBatchRuns: 1, batchResults: 1, claimed: 1, completed: 1, runIdsMatched: true, batchClaimResultCardinalityMatched: true, claimedIdsObserved: 1, resultIdsObserved: 1, duplicateClaimIds: 0, duplicateResultIds: 0 });
     expect(evidence.safety).toEqual({ uploadCalls: 0, platformCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0 });
     expect(JSON.parse(await readFile(join(operationRoot, "closeout", "level3-retained-evidence.json"), "utf8"))).toMatchObject({ schemaVersion: "daily69-level3-retained-evidence-v1" });
+  });
+
+  it("fails batch claim/result cardinality closed when an envelope introduces another logical queue id", async () => {
+    const { operationRoot } = await operationFixture();
+    await mkdir(join(operationRoot, "batch-results"), { recursive: true });
+    const run = { runId: "batch-20990101040000", type: "scheduled_batch", status: "success", startedAt: "2099-01-01T04:00:00.000Z", finishedAt: "2099-01-01T04:01:00.000Z", claimed: 1, completed: 1, blocked: 0, failed: 0, retried: 0, safeMessage: "BATCH_MACHINE_QA_COMPLETE", metrics: { PLATFORM_UPLOAD: 0 } };
+    await writeFile(join(operationRoot, "runs.json"), `${JSON.stringify([run])}\n`);
+    await writeFile(join(operationRoot, "batch-results", "batch-001.jsonl"), `${JSON.stringify({
+      event: "queue_batch_complete",
+      run: { runId: run.runId, claimed: run.claimed },
+      results: [{ queueId: "queue-001" }, { queueId: "queue-injected" }],
+    })}\n`);
+    const gateway: Level3SheetsAuditGateway = { audit: async () => ({ exact: true, queueRows: 1, reserveRows: 0, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "d".repeat(64) }) };
+    const evidence = await captureLevel3RetainedEvidence(operationRoot, gateway);
+    expect(evidence.runs).toMatchObject({ batchClaimResultCardinalityMatched: false, claimedIdsObserved: 1, resultIdsObserved: 2 });
   });
 
   it("does not manufacture an aggregate when the Sheets audit is unavailable", async () => {

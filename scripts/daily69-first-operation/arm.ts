@@ -23,6 +23,7 @@ async function main() {
       operationBase,
       expectedGitHead,
       assetBoundaryRoot: resolve(optionalArg("--asset-boundary-root") ?? sourceRoot),
+      usageMaterializationAssetRoot: resolve(requiredArg("--usage-asset-root")),
       now: new Date(),
       operationDate,
       namespace: optionalArg("--namespace"),

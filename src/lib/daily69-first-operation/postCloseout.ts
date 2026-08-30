@@ -12,7 +12,7 @@ import {
   verifyPreexistingRowsUnchanged,
   type PreCutoverSheetBaseline,
 } from "@/lib/queue-control-integration/cutover";
-import { firstOperationStatus, type FirstOperationManifest } from "./index";
+import { firstOperationStatus, verifyFirstOperationMaterializationEligibility, type FirstOperationManifest } from "./index";
 import { TASK_PROVENANCE_EVENT_IDS, classifyTaskInvocationProvenance, type SanitizedTaskSchedulerEvent } from "./taskProvenance";
 import {
   normalizeFirstOperationLifecycleStatus,
@@ -208,11 +208,12 @@ export async function collectLevel3CompletionInput(
 ): Promise<Level3CompletionInput> {
   const root = resolve(operationRoot);
   const expected = expectedCounts(snapshot.manifest, snapshot.settings.batchSize);
-  const [retainedFile, naturalExecution, pointer, media] = await Promise.all([
+  const [retainedFile, naturalExecution, pointer, media, materializationCapacity] = await Promise.all([
     readJson<Level3RetainedEvidence | null>(join(root, "closeout", "level3-retained-evidence.json"), null),
     scanRetainedExecution(root, snapshot.manifest),
     observeActivePointer(root, snapshot.manifest),
     inspectReadyEvidence(root, snapshot.items, expected.total, dependencies.inspectMedia ?? inspectQueueMediaEvidence),
+    observeMaterializationCapacity(root, snapshot).catch(() => null),
   ]);
   const retainedAggregate = Object.prototype.hasOwnProperty.call(dependencies, "retainedEvidenceOverride") ? dependencies.retainedEvidenceOverride ?? null : retainedFile;
   const retainedEvidence = retainedAggregate ? { ...retainedAggregate, media } : null;
@@ -223,6 +224,8 @@ export async function collectLevel3CompletionInput(
       operationDate: snapshot.manifest.operationDate,
       expectedGitHead: snapshot.manifest.expectedGitHead,
     },
+    materializationCapacityRequired: snapshot.manifest.schemaVersion === "daily69-first-operation-v2",
+    materializationCapacity,
     lifecycleStatus: normalizeFirstOperationLifecycleStatus(snapshot.manifest.armStatus, snapshot.manifest.decision),
     pointer,
     queue: snapshot.status,
@@ -233,6 +236,36 @@ export async function collectLevel3CompletionInput(
     },
     retainedEvidence,
     naturalExecution,
+  };
+}
+
+async function observeMaterializationCapacity(
+  operationRoot: string,
+  snapshot: Awaited<ReturnType<typeof firstOperationStatus>>,
+): Promise<NonNullable<Level3CompletionInput["materializationCapacity"]>> {
+  const preflight = await verifyFirstOperationMaterializationEligibility(operationRoot);
+  const productKeys = new Set<string>();
+  for (const item of snapshot.items) {
+    productKeys.add(item.productKey);
+    for (const candidate of item.candidateHistory ?? []) productKeys.add(candidate.productKey);
+  }
+  for (const reserve of snapshot.reserve) productKeys.add(reserve.candidate.productKey);
+  const claimed = snapshot.reserve.filter((reserve) => Boolean(reserve.claimedBySlot));
+  const reconciled = claimed.filter((reserve) => {
+    const item = snapshot.items.find((candidate) => candidate.slotId === reserve.claimedBySlot);
+    if (!item || item.productKey !== reserve.candidate.productKey) return false;
+    return (item.candidateHistory ?? []).some((candidate) => candidate.productKey === reserve.candidate.productKey
+      && candidate.outcome === "passed" && candidate.reason === "RESERVE_FALLBACK" && Boolean(candidate.replacementOfProductKey));
+  });
+  const uniqueClaimedProducts = new Set(claimed.map((reserve) => reserve.candidate.productKey));
+  const uniqueClaimedSlots = new Set(claimed.map((reserve) => reserve.claimedBySlot));
+  return {
+    ...preflight,
+    observedDistinct: productKeys.size,
+    reserveConsumed: claimed.length,
+    reserveConsumptionReconciled: uniqueClaimedProducts.size === claimed.length && uniqueClaimedSlots.size === claimed.length
+      ? reconciled.length
+      : -1,
   };
 }
 
@@ -281,13 +314,22 @@ async function reconcileRunsAndBatchResults(operationRoot: string, allRuns: Awai
   const claimedIds: string[] = [];
   const resultIds: string[] = [];
   const envelopeRunIds: string[] = [];
+  let batchClaimResultCardinalityMatched = true;
   for (const envelope of envelopes) {
     const run = envelope.run && typeof envelope.run === "object" ? envelope.run as Record<string, unknown> : {};
     const results = Array.isArray(envelope.results) ? envelope.results.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
-    const claimed = Number(run.claimed ?? 0);
+    const claimedValue = Number(run.claimed ?? 0);
+    const claimed = Number.isInteger(claimedValue) && claimedValue >= 0 ? claimedValue : -1;
     const ids = results.map((result) => String(result.queueId ?? "")).filter(Boolean);
-    claimedIds.push(...ids.slice(0, claimed));
-    resultIds.push(...ids);
+    const envelopeClaimedIds = claimed >= 0 ? ids.slice(0, claimed) : [];
+    const terminalIds = [...new Set(ids)];
+    const claimedSet = new Set(envelopeClaimedIds);
+    if (claimed < 0 || envelopeClaimedIds.length !== claimed || claimedSet.size !== claimed
+      || terminalIds.length !== claimed || terminalIds.some((id) => !claimedSet.has(id))) {
+      batchClaimResultCardinalityMatched = false;
+    }
+    claimedIds.push(...envelopeClaimedIds);
+    resultIds.push(...terminalIds);
     if (typeof run.runId === "string") envelopeRunIds.push(run.runId);
   }
   const runIds = runs.map((run) => run.runId).sort();
@@ -299,6 +341,7 @@ async function reconcileRunsAndBatchResults(operationRoot: string, allRuns: Awai
     completed: runs.reduce((sum, run) => sum + run.completed, 0),
     failed: runs.reduce((sum, run) => sum + run.failed + run.blocked + run.retried, 0),
     runIdsMatched: JSON.stringify(runIds) === JSON.stringify(observedRunIds),
+    batchClaimResultCardinalityMatched,
     claimedIdsObserved: claimedIds.length,
     resultIdsObserved: resultIds.length,
     duplicateClaimIds: claimedIds.length - new Set(claimedIds).size,

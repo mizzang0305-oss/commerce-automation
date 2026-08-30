@@ -9,6 +9,7 @@ import { assertCodexReviewEvidence, isCodexReviewEvidenceV2, type CodexReviewSub
 import { loadAndAssertImmutableReviewOperationBinding, stableDigest } from "./immutableReviewBinding";
 import type { RankedLiveProduct } from "@/lib/live-product-video";
 import type { UsageCapacityPlan } from "@/lib/usage-evidence";
+import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
 
 export class LocalQueueRepository {
   readonly root: string;
@@ -205,7 +206,10 @@ export class LocalQueueRepository {
       const productCandidateAttempt = item.productCandidateAttempt ?? 1;
       if (productCandidateAttempt >= (item.maxProductCandidates ?? settings.maxProductCandidates)) return null;
       const usedKeys = new Set(items.flatMap((entry) => [entry.productKey, ...(entry.candidateHistory ?? []).map((historyEntry) => historyEntry.productKey)]));
-      const compatible = reserve.filter((entry) => !entry.claimedBySlot && !usedKeys.has(entry.candidate.productKey) && entry.score.eligible);
+      const compatible = reserve.filter((entry) => !entry.claimedBySlot
+        && !usedKeys.has(entry.candidate.productKey)
+        && entry.score.eligible
+        && validateCoupangAffiliateUrl(entry.candidate.selectedAffiliateUrl).affiliateReady);
       const replacement = compatible.sort((left, right) => Number(right.candidate.useCase === item.candidate.useCase) - Number(left.candidate.useCase === item.candidate.useCase) || right.score.finalProductScore - left.score.finalProductScore || left.candidate.productKey.localeCompare(right.candidate.productKey))[0];
       if (!replacement) return null;
       const nowIso = input.now.toISOString();

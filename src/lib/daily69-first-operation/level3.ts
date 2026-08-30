@@ -1,3 +1,5 @@
+import type { Daily69MaterializationPreflight } from "@/lib/usage-evidence/materializationEligibility";
+
 export const DAILY69_LEVEL3_RETAINED_EVIDENCE_SCHEMA = "daily69-level3-retained-evidence-v1" as const;
 
 export type Level3Completion = "PASS" | "PENDING" | "FAILED";
@@ -52,6 +54,7 @@ export type Level3RetainedEvidence = {
     completed: number;
     failed: number;
     runIdsMatched: boolean;
+    batchClaimResultCardinalityMatched: boolean;
     claimedIdsObserved: number;
     resultIdsObserved: number;
     duplicateClaimIds: number;
@@ -102,6 +105,12 @@ export type Level3CompletionInput = {
     operationDate: string;
     expectedGitHead: string;
   };
+  materializationCapacityRequired?: boolean;
+  materializationCapacity?: (Daily69MaterializationPreflight & {
+    observedDistinct: number;
+    reserveConsumed: number;
+    reserveConsumptionReconciled: number;
+  }) | null;
   lifecycleStatus: FirstOperationLifecycleStatus;
   pointer: Level3PointerObservation;
   queue: {
@@ -188,7 +197,35 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
   `${input.queue.machineOnly}/${input.queue.reviewPending}/${input.queue.scheduled}/${input.queue.processing}/${input.queue.retry}/${input.queue.skipped}`,
   "DAILY69_QUEUE_NOT_TERMINAL");
   integrity("queue_failures", input.queue.blocked === 0 && input.queue.failed === 0, "blocked/failed=0", `${input.queue.blocked}/${input.queue.failed}`, "DAILY69_QUEUE_FAILURE_PRESENT");
-  completion("capacity", input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct, `reserve>=${expected.reserve} distinct>=${expected.distinct}`, `${input.queue.reserve}/${input.queue.distinct}`, "DAILY69_CAPACITY_INCOMPLETE");
+  const materializationCapacity = input.materializationCapacity;
+  const capacityPass = materializationCapacity
+    ? materializationCapacity.pass
+      && materializationCapacity.activeTotal === expected.total
+      && materializationCapacity.activeMaterializable === expected.total
+      && materializationCapacity.activeBlocked === 0
+      && materializationCapacity.reserveTotal >= expected.reserve
+      && materializationCapacity.reserveMaterializable >= expected.reserve
+      && materializationCapacity.reserveBlocked === 0
+      && materializationCapacity.requiredActive === expected.total
+      && materializationCapacity.requiredReserve === expected.reserve
+      && materializationCapacity.blockedQueueIds.length === 0
+      && materializationCapacity.blockedProductKeys.length === 0
+      && materializationCapacity.blockedEvidenceTypes.length === 0
+      && materializationCapacity.safeReasonCodes.length === 0
+      && materializationCapacity.safeCode === ""
+      && expected.distinct >= expected.total + expected.reserve
+      && materializationCapacity.observedDistinct >= expected.distinct
+      && materializationCapacity.reserveConsumed === materializationCapacity.reserveConsumptionReconciled
+      && materializationCapacity.reserveConsumed + input.queue.reserve === materializationCapacity.reserveTotal
+    : input.materializationCapacityRequired
+      ? false
+      : input.queue.reserve >= expected.reserve && input.queue.distinct >= expected.distinct;
+  const capacityActual = materializationCapacity
+    ? `closeout=${materializationCapacity.activeMaterializable}/${materializationCapacity.reserveMaterializable}/${materializationCapacity.activeBlocked}/${materializationCapacity.reserveBlocked}/${materializationCapacity.observedDistinct} consumed=${materializationCapacity.reserveConsumed}/${materializationCapacity.reserveConsumptionReconciled} remaining=${input.queue.reserve}`
+    : input.materializationCapacityRequired ? "closeout_recomputation_missing" : `${input.queue.reserve}/${input.queue.distinct}`;
+  completion("capacity", capacityPass,
+    `closeout active=${expected.total} reserve>=${expected.reserve} blocked=0/0 distinct>=${expected.distinct} consumed=reconciled`,
+    capacityActual, "DAILY69_CAPACITY_INCOMPLETE");
   integrity("leases", input.queue.unresolvedLeases === 0, "0", input.queue.unresolvedLeases, "DAILY69_UNRESOLVED_LEASES");
   integrity("stale_locks", input.queue.staleLocks === 0, "0", input.queue.staleLocks, "DAILY69_STALE_LOCK_PRESENT");
   integrity("duplicate_renders", input.queue.duplicateRenders === 0, "0", input.queue.duplicateRenders, "DAILY69_DUPLICATE_RENDERS");
@@ -252,15 +289,17 @@ export function validateLevel3Completion(input: Level3CompletionInput): Level3Co
     `${retained.sheets.exact}:${retained.sheets.queueRows}/${retained.sheets.reserveRows}/${retained.sheets.syncRows}:${retained.sheets.duplicateIdentities}/${retained.sheets.preexistingChanged}/${retained.sheets.preexistingDeleted}/${retained.sheets.preexistingReordered}:${retained.sheets.snapshotHash ? "hash" : "no-hash"}`,
     "DAILY69_SHEETS_EXACT_UNPROVEN");
     integrity("run_integrity", retained.runs.failed === 0 && retained.runs.runIdsMatched === true
+      && retained.runs.batchClaimResultCardinalityMatched === true
       && retained.runs.duplicateClaimIds === 0 && retained.runs.duplicateResultIds === 0,
-    "failed=0 runIdsMatched=true duplicateClaim/duplicateResult=0/0",
-    `${retained.runs.failed}/${retained.runs.runIdsMatched}/${retained.runs.duplicateClaimIds}/${retained.runs.duplicateResultIds}`,
+    "failed=0 runIdsMatched=true batchClaimResultCardinalityMatched=true duplicateClaim/duplicateResult=0/0",
+    `${retained.runs.failed}/${retained.runs.runIdsMatched}/${retained.runs.batchClaimResultCardinalityMatched}/${retained.runs.duplicateClaimIds}/${retained.runs.duplicateResultIds}`,
     "DAILY69_RUN_RECONCILIATION_INVALID");
     completion("run_reconciliation", retained.runs.scheduledBatchRuns === expected.scheduledBatchRuns && retained.runs.batchResults === expected.scheduledBatchRuns && retained.runs.claimed === expected.scheduledRemaining
       && retained.runs.completed === expected.scheduledRemaining
+      && retained.runs.batchClaimResultCardinalityMatched === true
       && retained.runs.claimedIdsObserved === expected.scheduledRemaining && retained.runs.resultIdsObserved === expected.scheduledRemaining,
-    `runs/results/claimed/completed/failed/runIdsMatched/claimedIds/resultIds/duplicateClaim/duplicateResult=${expected.scheduledBatchRuns}/${expected.scheduledBatchRuns}/${expected.scheduledRemaining}/${expected.scheduledRemaining}/0/true/${expected.scheduledRemaining}/${expected.scheduledRemaining}/0/0`,
-    `${retained.runs.scheduledBatchRuns}/${retained.runs.batchResults}/${retained.runs.claimed}/${retained.runs.completed}/${retained.runs.failed}/${retained.runs.runIdsMatched}/${retained.runs.claimedIdsObserved}/${retained.runs.resultIdsObserved}/${retained.runs.duplicateClaimIds}/${retained.runs.duplicateResultIds}`,
+    `runs/results/claimed/completed/failed/runIdsMatched/cardinalityMatched/claimedIds/resultIds/duplicateClaim/duplicateResult=${expected.scheduledBatchRuns}/${expected.scheduledBatchRuns}/${expected.scheduledRemaining}/${expected.scheduledRemaining}/0/true/true/${expected.scheduledRemaining}/${expected.scheduledRemaining}/0/0`,
+    `${retained.runs.scheduledBatchRuns}/${retained.runs.batchResults}/${retained.runs.claimed}/${retained.runs.completed}/${retained.runs.failed}/${retained.runs.runIdsMatched}/${retained.runs.batchClaimResultCardinalityMatched}/${retained.runs.claimedIdsObserved}/${retained.runs.resultIdsObserved}/${retained.runs.duplicateClaimIds}/${retained.runs.duplicateResultIds}`,
     "DAILY69_RUN_RECONCILIATION_INCOMPLETE");
     integrity("safety_counters", Object.values(retained.safety).every((value) => value === 0), "all=0", Object.values(retained.safety).join("/"), "DAILY69_SAFETY_COUNTER_NONZERO");
   }
