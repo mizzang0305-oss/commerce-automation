@@ -314,13 +314,22 @@ async function reconcileRunsAndBatchResults(operationRoot: string, allRuns: Awai
   const claimedIds: string[] = [];
   const resultIds: string[] = [];
   const envelopeRunIds: string[] = [];
+  let batchClaimResultCardinalityMatched = true;
   for (const envelope of envelopes) {
     const run = envelope.run && typeof envelope.run === "object" ? envelope.run as Record<string, unknown> : {};
     const results = Array.isArray(envelope.results) ? envelope.results.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
-    const claimed = Number(run.claimed ?? 0);
+    const claimedValue = Number(run.claimed ?? 0);
+    const claimed = Number.isInteger(claimedValue) && claimedValue >= 0 ? claimedValue : -1;
     const ids = results.map((result) => String(result.queueId ?? "")).filter(Boolean);
-    claimedIds.push(...ids.slice(0, claimed));
-    resultIds.push(...ids);
+    const envelopeClaimedIds = claimed >= 0 ? ids.slice(0, claimed) : [];
+    const terminalIds = [...new Set(ids)];
+    const claimedSet = new Set(envelopeClaimedIds);
+    if (claimed < 0 || envelopeClaimedIds.length !== claimed || claimedSet.size !== claimed
+      || terminalIds.length !== claimed || terminalIds.some((id) => !claimedSet.has(id))) {
+      batchClaimResultCardinalityMatched = false;
+    }
+    claimedIds.push(...envelopeClaimedIds);
+    resultIds.push(...terminalIds);
     if (typeof run.runId === "string") envelopeRunIds.push(run.runId);
   }
   const runIds = runs.map((run) => run.runId).sort();
@@ -332,6 +341,7 @@ async function reconcileRunsAndBatchResults(operationRoot: string, allRuns: Awai
     completed: runs.reduce((sum, run) => sum + run.completed, 0),
     failed: runs.reduce((sum, run) => sum + run.failed + run.blocked + run.retried, 0),
     runIdsMatched: JSON.stringify(runIds) === JSON.stringify(observedRunIds),
+    batchClaimResultCardinalityMatched,
     claimedIdsObserved: claimedIds.length,
     resultIdsObserved: resultIds.length,
     duplicateClaimIds: claimedIds.length - new Set(claimedIds).size,

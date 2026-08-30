@@ -114,6 +114,7 @@ describe("Daily69 Level3 completion matrix", () => {
     invalidInput.queue.staleLocks = 1;
     invalidInput.retainedEvidence!.sheets.duplicateIdentities = 1;
     invalidInput.retainedEvidence!.runs.duplicateResultIds = 1;
+    invalidInput.retainedEvidence!.runs.batchClaimResultCardinalityMatched = false;
     const matrix = validateLevel3Completion(invalidInput);
     expect(matrix.completion).toBe("FAILED");
     expect(matrix.gates.filter((gate) => gate.state === "FAIL").map((gate) => gate.id)).toEqual(expect.arrayContaining(["stale_locks", "media_qa_integrity", "sheets_integrity", "run_integrity"]));
@@ -148,7 +149,7 @@ function completeInput(): Level3CompletionInput {
       expectedGitHead: "a".repeat(40),
       media: { validVideoArtifacts: total, missingVideoArtifacts: 0, invalidVideoArtifacts: 0, machineQaPassed: total, finalQaPassed: total, codexReviewBindings: total, exactVideoHashBindings: total, directReviewBindings: scheduledRemaining, immutableCarryForwardBindings: total - scheduledRemaining },
       sheets: { exact: true, queueRows: total, reserveRows: 4, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "b".repeat(64) },
-      runs: { scheduledBatchRuns, batchResults: scheduledBatchRuns, claimed: scheduledRemaining, completed: scheduledRemaining, failed: 0, runIdsMatched: true, claimedIdsObserved: scheduledRemaining, resultIdsObserved: scheduledRemaining, duplicateClaimIds: 0, duplicateResultIds: 0 },
+      runs: { scheduledBatchRuns, batchResults: scheduledBatchRuns, claimed: scheduledRemaining, completed: scheduledRemaining, failed: 0, runIdsMatched: true, batchClaimResultCardinalityMatched: true, claimedIdsObserved: scheduledRemaining, resultIdsObserved: scheduledRemaining, duplicateClaimIds: 0, duplicateResultIds: 0 },
       safety: { uploadCalls: 0, platformCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0 },
     },
     naturalExecution: {
