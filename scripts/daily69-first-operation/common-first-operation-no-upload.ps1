@@ -32,6 +32,67 @@ function Protect-Daily69Text {
     return $safe
 }
 
+function Invoke-Daily69Utf8Process {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [AllowEmptyString()][string]$Arguments,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory
+    )
+    $resolvedWorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
+    $startInfo = New-Object Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $FilePath
+    $startInfo.Arguments = $Arguments
+    $startInfo.WorkingDirectory = $resolvedWorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $utf8 = New-Object Text.UTF8Encoding($false)
+    $startInfo.StandardOutputEncoding = $utf8
+    $startInfo.StandardErrorEncoding = $utf8
+    $process = New-Object Diagnostics.Process
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { throw 'DAILY69_UTF8_CHILD_START_FAILED' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
+        $captureLimit = 1MB
+        if ($stdout.Length -gt $captureLimit -or $stderr.Length -gt $captureLimit) {
+            $stdout = 'DAILY69_UTF8_CAPTURE_LIMIT_EXCEEDED'
+            $stderr = ''
+        }
+        $split = {
+            param([AllowEmptyString()][string]$Text)
+            if ([string]::IsNullOrWhiteSpace($Text)) { return @() }
+            return @($Text -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        }
+        $stdoutLines = @(& $split $stdout)
+        $stderrLines = @(& $split $stderr)
+        return [pscustomobject]@{
+            exitCode = [int]$process.ExitCode
+            stdoutLines = $stdoutLines
+            stderrLines = $stderrLines
+            combinedLines = @($stdoutLines) + @($stderrLines)
+            stdoutEncoding = 'utf-8'
+            stderrEncoding = 'utf-8'
+        }
+    } finally { $process.Dispose() }
+}
+
+function Invoke-Daily69Utf8NpmScript {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('queue-video:run-next')][string]$ScriptName,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory
+    )
+    $npmPath = (Get-Command npm.cmd -ErrorAction Stop).Source
+    $commandPath = if ($env:ComSpec) { $env:ComSpec } else { Join-Path $env:SystemRoot 'System32\cmd.exe' }
+    $arguments = '/d /s /c ""{0}" run {1} --silent"' -f $npmPath, $ScriptName
+    return Invoke-Daily69Utf8Process -FilePath $commandPath -Arguments $arguments -WorkingDirectory $WorkingDirectory
+}
+
 function Get-Daily69SafeCodeFromOutput {
     param([object[]]$Lines, [string]$Fallback)
     foreach ($line in @($Lines)) {
@@ -69,40 +130,115 @@ function Get-Daily69CountersFromOutput {
 function ConvertTo-Daily69SanitizedBatchRecord {
     param([AllowNull()][object]$Line)
     $record = [ordered]@{
-        event = 'child_output_redacted'
+        schemaVersion = 'daily69-retained-batch-result-v1'
+        event = 'evidence_capture_error'
         status = ''
-        safeError = ''
+        safeError = 'RAW_BATCH_RESULT_UNPARSEABLE'
         claimed = 0
         completed = 0
+        blocked = 0
         failed = 0
         retried = 0
-        run = [ordered]@{ runId = ''; claimed = 0 }
+        run = [ordered]@{ runId = ''; status = ''; claimed = 0; completed = 0; blocked = 0; failed = 0; retried = 0 }
         results = @()
+        SAFE_TO_UPLOAD = $false
+        SAFE_TO_PUBLIC_UPLOAD = $false
+        PLATFORM_UPLOAD = 0
+        PRODUCTION_DB_WRITE = 0
+        R2_WRITE = 0
     }
     try {
-        $value = ([string]$Line) | ConvertFrom-Json -ErrorAction Stop
-        if ([string]$value.event -match '^[a-z0-9_:-]{1,96}$') { $record.event = [string]$value.event }
-        $candidateStatus = if ($value.status) { [string]$value.status } elseif ($value.run.status) { [string]$value.run.status } else { '' }
-        if ($candidateStatus -match '^[a-z0-9_:-]{1,96}$') { $record.status = $candidateStatus }
-        foreach ($property in @('safeError', 'safeMessage')) {
-            if ($value.$property) { $record.safeError = ConvertTo-Daily69SafeCode -Value $value.$property -Fallback 'REDACTED_CHILD_ERROR'; break }
+        $text = ([string]$Line).TrimStart([char]0xFEFF)
+        $value = $text | ConvertFrom-Json -ErrorAction Stop
+        if ([string]$value.schemaVersion -ne 'daily69-retained-batch-result-v1') {
+            $record.safeError = 'RAW_BATCH_RESULT_CONTRACT_INVALID'
+            return [pscustomobject]$record
         }
-        foreach ($name in @('claimed', 'completed', 'failed', 'retried')) {
+        $event = [string]$value.event
+        if ($event -notin @('queue_batch_complete', 'queue_batch_failed')) {
+            $record.safeError = 'RAW_BATCH_RESULT_CONTRACT_INVALID'
+            return [pscustomobject]$record
+        }
+        if ($event -eq 'queue_batch_failed') {
+            $record.event = $event
+            $record.status = 'failed'
+            $record.run.status = 'failed'
+            foreach ($property in @('safeError', 'safeMessage')) {
+                if ($value.$property) { $record.safeError = ConvertTo-Daily69SafeCode -Value $value.$property -Fallback 'REDACTED_CHILD_ERROR'; break }
+            }
+            return [pscustomobject]$record
+        }
+        $candidateStatus = if ($value.status) { [string]$value.status } elseif ($value.run.status) { [string]$value.run.status } else { '' }
+        if ($candidateStatus -notin @('success', 'partial', 'failed', 'blocked_preflight', 'noop')) {
+            $record.safeError = 'RAW_BATCH_RESULT_CONTRACT_INVALID'
+            return [pscustomobject]$record
+        }
+        $record.status = $candidateStatus
+        foreach ($name in @('claimed', 'completed', 'blocked', 'failed', 'retried')) {
             $candidate = if ($null -ne $value.$name) { $value.$name } else { $value.run.$name }
             $parsed = 0
-            if ($null -ne $candidate -and [int]::TryParse([string]$candidate, [ref]$parsed) -and $parsed -ge 0) { $record[$name] = $parsed }
+            if ($null -eq $candidate -or -not [int]::TryParse([string]$candidate, [ref]$parsed) -or $parsed -lt 0) {
+                $record.safeError = 'RAW_BATCH_RESULT_CONTRACT_INVALID'
+                return [pscustomobject]$record
+            }
+            $record[$name] = $parsed
         }
         $runId = [string]$value.run.runId
-        if ($runId -match '^batch-[0-9]{14}$') { $record.run.runId = $runId }
-        $record.run.claimed = $record.claimed
+        if ($runId -notmatch '^batch-[0-9]{14}$') {
+            $record.safeError = 'RAW_BATCH_RESULT_CONTRACT_INVALID'
+            return [pscustomobject]$record
+        }
+        $record.run.runId = $runId
+        foreach ($name in @('status', 'claimed', 'completed', 'blocked', 'failed', 'retried')) { $record.run[$name] = $record[$name] }
         $safeResults = @()
         foreach ($result in @($value.results)) {
             $queueId = [string]$result.queueId
             if ($queueId -match '^[A-Za-z0-9:_-]{1,160}$') { $safeResults += [ordered]@{ queueId = $queueId } }
         }
         $record.results = @($safeResults)
-    } catch { $record.safeError = 'REDACTED_UNPARSEABLE_OUTPUT' }
+        $record.event = $event
+        $record.safeError = ''
+    } catch { }
     return [pscustomobject]$record
+}
+
+function Select-Daily69SanitizedBatchRecord {
+    param([object[]]$Lines)
+    $records = @()
+    $contractRejected = 0
+    foreach ($line in @($Lines)) {
+        $candidate = ConvertTo-Daily69SanitizedBatchRecord -Line $line
+        if ($candidate.event -eq 'queue_batch_complete') {
+            $ids = @($candidate.results | ForEach-Object { [string]$_.queueId })
+            $valid = [string]$candidate.run.runId -match '^batch-[0-9]{14}$' `
+                -and [int]$candidate.claimed -eq $ids.Count `
+                -and ([int]$candidate.completed + [int]$candidate.blocked + [int]$candidate.failed + [int]$candidate.retried) -eq [int]$candidate.claimed `
+                -and @($ids | Select-Object -Unique).Count -eq $ids.Count
+            if ($valid) { $records += $candidate } else { $contractRejected += 1 }
+        } elseif ($candidate.event -eq 'queue_batch_failed') { $records += $candidate }
+        elseif ($candidate.safeError -eq 'RAW_BATCH_RESULT_CONTRACT_INVALID') { $contractRejected += 1 }
+    }
+    if ($records.Count -eq 1) { return $records[0] }
+    $reason = if ($records.Count -gt 1) { 'RAW_BATCH_RESULT_AMBIGUOUS' } elseif ($contractRejected -gt 0) { 'RAW_BATCH_RESULT_CONTRACT_INVALID' } else { 'RAW_BATCH_RESULT_UNPARSEABLE' }
+    return [pscustomobject][ordered]@{
+        schemaVersion = 'daily69-retained-batch-result-v1'
+        event = 'evidence_capture_error'
+        status = 'failed'
+        safeError = $reason
+        claimed = 0
+        completed = 0
+        blocked = 0
+        failed = 0
+        retried = 0
+        run = [ordered]@{ runId = ''; status = 'failed'; claimed = 0; completed = 0; blocked = 0; failed = 0; retried = 0 }
+        results = @()
+        capturedLineCount = @($Lines).Count
+        SAFE_TO_UPLOAD = $false
+        SAFE_TO_PUBLIC_UPLOAD = $false
+        PLATFORM_UPLOAD = 0
+        PRODUCTION_DB_WRITE = 0
+        R2_WRITE = 0
+    }
 }
 
 function Get-Daily69CompletionFromOutput {

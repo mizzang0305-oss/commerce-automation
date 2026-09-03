@@ -33,14 +33,16 @@ function Write-SanitizedBatchResult {
     try {
         $writer = New-Object IO.StreamWriter($stream, $encoding)
         try {
-            foreach ($line in @($Lines)) {
-                $record = ConvertTo-Daily69SanitizedBatchRecord -Line $line
-                $writer.WriteLine((Protect-Daily69Text -Value ($record | ConvertTo-Json -Depth 6 -Compress)))
-            }
+            $record = Select-Daily69SanitizedBatchRecord -Lines $Lines
+            $json = $record | ConvertTo-Json -Depth 6 -Compress
+            $roundTrip = $json | ConvertFrom-Json -ErrorAction Stop
+            if ([string]$roundTrip.event -ne [string]$record.event -or [string]$roundTrip.schemaVersion -ne 'daily69-retained-batch-result-v1') { throw 'BATCH_RESULT_JSON_ROUNDTRIP_FAILED' }
+            $writer.WriteLine($json)
             $writer.Flush()
             $stream.Flush($true)
         } finally { $writer.Dispose() }
     } finally { $stream.Dispose() }
+    return $record
 }
 
 try {
@@ -67,12 +69,13 @@ try {
         exit $resolution.wrapperExitCode
     }
 
-    $batchOutput = @(& npm.cmd run queue-video:run-next --silent 2>&1)
-    $batchExit = $LASTEXITCODE
-    Write-SanitizedBatchResult -ResolvedQueue $resolvedQueue -InvocationId $Daily69InvocationId -Lines $batchOutput
+    $batchCapture = Invoke-Daily69Utf8NpmScript -ScriptName 'queue-video:run-next' -WorkingDirectory $resolvedWorktree
+    $batchOutput = @($batchCapture.combinedLines)
+    $batchExit = $batchCapture.exitCode
+    $retainedBatchRecord = Write-SanitizedBatchResult -ResolvedQueue $resolvedQueue -InvocationId $Daily69InvocationId -Lines $batchOutput
     $projectionOutput = @(& npm.cmd run queue-control:project --silent 2>&1)
     $projectionExit = $LASTEXITCODE
-    $counters = Get-Daily69CountersFromOutput -Lines $batchOutput
+    $counters = Get-Daily69CountersFromOutput -Lines @(($retainedBatchRecord | ConvertTo-Json -Depth 6 -Compress))
 
     if ($batchExit -eq 0 -and $projectionExit -eq 0) {
         $resolution = [pscustomobject]@{ outcome = 'success'; safeError = ''; wrapperExitCode = 0 }
