@@ -57,19 +57,66 @@ $escaped = Protect-Daily69Text -Value '{\"token\":\"nested-token\",\"private_key
       record: { event: string; status: string; run: { runId: string; claimed: number }; results: Array<{ queueId: string }> };
       serialized: string;
     }>(`
-$line = '{"event":"queue_batch_complete","run":{"runId":"batch-20990101040000","status":"success","claimed":3,"completed":3,"blocked":0,"failed":0,"retried":0},"results":[{"queueId":"queue-001","productKey":"secret-product","finalVideo":"C:\\\\private\\\\video.mp4"},{"queueId":"queue-002"},{"queueId":"../unsafe"}],"Authorization":"Bearer should-not-survive"}'
+$line = '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_complete","run":{"runId":"batch-20990101040000","status":"success","claimed":3,"completed":3,"blocked":0,"failed":0,"retried":0},"results":[{"queueId":"queue-001","productKey":"secret-product","finalVideo":"C:\\\\private\\\\video.mp4"},{"queueId":"queue-002"},{"queueId":"../unsafe"}],"Authorization":"Bearer should-not-survive"}'
 $record = ConvertTo-Daily69SanitizedBatchRecord -Line $line
 $counters = Get-Daily69CountersFromOutput -Lines @($line)
 [ordered]@{ counters=$counters; record=$record; serialized=($record | ConvertTo-Json -Depth 6 -Compress) } | ConvertTo-Json -Depth 8 -Compress
 `);
     expect(value.counters).toEqual({ claimed: 3, completed: 3, failed: 0, retried: 0 });
     expect(value.record).toMatchObject({
+      schemaVersion: "daily69-retained-batch-result-v1",
       event: "queue_batch_complete",
       status: "success",
       run: { runId: "batch-20990101040000", claimed: 3 },
       results: [{ queueId: "queue-001" }, { queueId: "queue-002" }],
     });
     expect(value.serialized).not.toMatch(/secret-product|private|Authorization|should-not-survive/u);
+  });
+
+  it("captures real native UTF-8 stdout explicitly even when the parent console uses CP949", () => {
+    const value = runPowerShell<{
+      exitCode: number;
+      stdoutEncoding: string;
+      record: { event: string; run: { runId: string }; results: Array<{ queueId: string }> };
+    }>(`
+$prior = [Console]::OutputEncoding
+try {
+  [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(949)
+  $node = (Get-Command node.exe -ErrorAction Stop).Source
+  $args = '-e "process.stdout.write(JSON.stringify({schemaVersion:\\"daily69-retained-batch-result-v1\\",event:\\"queue_batch_complete\\",run:{runId:\\"batch-20260903070003\\",status:\\"success\\",claimed:1,completed:1,blocked:0,failed:0,retried:0},results:[{queueId:\\"queue-001\\",productName:\\"한글 상품\\"}]}))"'
+  $capture = Invoke-Daily69Utf8Process -FilePath $node -Arguments $args -WorkingDirectory '${ps(resolve("."))}'
+  $record = Select-Daily69SanitizedBatchRecord -Lines $capture.combinedLines
+  [ordered]@{ exitCode=$capture.exitCode; stdoutEncoding=$capture.stdoutEncoding; record=$record } | ConvertTo-Json -Depth 8 -Compress
+} finally { [Console]::OutputEncoding = $prior }
+`);
+    expect(value).toMatchObject({
+      exitCode: 0,
+      stdoutEncoding: "utf-8",
+      record: { event: "queue_batch_complete", run: { runId: "batch-20260903070003" }, results: [{ queueId: "queue-001" }] },
+    });
+  });
+
+  it("selects one terminal producer event amid noise and emits parseable errors without fabricated counters", () => {
+    const value = runPowerShell<{
+      noisy: { event: string; claimed: number };
+      invalid: { event: string; safeError: string; claimed: number; results: unknown[] };
+      ambiguous: { event: string; safeError: string; claimed: number };
+      contract: { event: string; safeError: string; claimed: number };
+      roundTrips: boolean;
+    }>(`
+$valid = '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_complete","run":{"runId":"batch-20260903080003","status":"success","claimed":1,"completed":1,"blocked":0,"failed":0,"retried":0},"results":[{"queueId":"queue-001"}]}'
+$noisy = Select-Daily69SanitizedBatchRecord -Lines @('npm warning', (([char]0xFEFF) + $valid), 'stderr noise')
+$invalid = Select-Daily69SanitizedBatchRecord -Lines @('{"event":')
+$ambiguous = Select-Daily69SanitizedBatchRecord -Lines @($valid, $valid)
+$contract = Select-Daily69SanitizedBatchRecord -Lines @($valid.Replace('"claimed":1','"claimed":2'))
+$roundTrips = @($noisy,$invalid,$ambiguous,$contract | ForEach-Object { ($_ | ConvertTo-Json -Depth 8 -Compress | ConvertFrom-Json -ErrorAction Stop).schemaVersion -eq 'daily69-retained-batch-result-v1' }) -notcontains $false
+[ordered]@{ noisy=$noisy; invalid=$invalid; ambiguous=$ambiguous; contract=$contract; roundTrips=$roundTrips } | ConvertTo-Json -Depth 8 -Compress
+`);
+    expect(value.noisy).toMatchObject({ event: "queue_batch_complete", claimed: 1 });
+    expect(value.invalid).toMatchObject({ event: "evidence_capture_error", safeError: "RAW_BATCH_RESULT_UNPARSEABLE", claimed: 0, results: [] });
+    expect(value.ambiguous).toMatchObject({ event: "evidence_capture_error", safeError: "RAW_BATCH_RESULT_AMBIGUOUS", claimed: 0 });
+    expect(value.contract).toMatchObject({ event: "evidence_capture_error", safeError: "RAW_BATCH_RESULT_CONTRACT_INVALID", claimed: 0 });
+    expect(value.roundTrips).toBe(true);
   });
 
   it("creates an append-only trace and one scanner-compatible final receipt with unproven task correlation", async () => {
@@ -158,8 +205,9 @@ $controlStart = Test-Daily69NewWorkWindow -ResolvedQueue '${ps(root)}' -BoundNam
     expect(contents[0]).toContain("correlated = $false");
     expect(contents[1]).toContain("Resolve-Daily69ControlOutcome");
     expect(contents[2]).toContain("Claim-Daily69BatchSlot");
-    expect(contents[0]).toContain("REDACTED_UNPARSEABLE_OUTPUT");
-    expect(contents[2]).toContain("ConvertTo-Daily69SanitizedBatchRecord");
+    expect(contents[0]).toContain("RAW_BATCH_RESULT_UNPARSEABLE");
+    expect(contents[0]).toContain("StandardOutputEncoding");
+    expect(contents[2]).toContain("Select-Daily69SanitizedBatchRecord");
     expect(contents[0]).toContain("BATCH_SLOT_ALREADY_CLAIMED");
     expect(contents[3].indexOf("Test-Daily69CloseoutIdle")).toBeLessThan(contents[3].indexOf("Disable-ScheduledTask"));
     expect(contents[3]).toContain("queue-control:project");

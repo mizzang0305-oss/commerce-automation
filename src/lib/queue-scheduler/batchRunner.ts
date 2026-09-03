@@ -44,6 +44,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     const executor: typeof executeQueueVideoBatch = input.executor ?? ((request) => executeQueueVideoBatch({ ...request, reviewExecutor: input.reviewExecutor, onCodexPassReady: applyFreshCodexPass }));
     const results = await executeSafely(executor, claimed, runId, repository.root, applyFreshCodexPass);
     const allResults: QueueVideoResult[] = [...results];
+    const terminalResults: QueueVideoResult[] = [];
     let completed = 0; let blocked = 0; let failed = 0; let retried = 0;
     let fallbacks = 0; let fallbackSuccess = 0;
     for (const initialResult of results) {
@@ -58,6 +59,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
         allResults.push(replacementResult);
         if (result.passed) fallbackSuccess += 1;
       }
+      terminalResults.push(result);
       if (result.passed) {
         if (immediatelyAppliedCodexPasses.has(result.queueId)) {
           completed += 1;
@@ -80,7 +82,7 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     const status = completed === claimed.length ? "success" : completed > 0 ? "partial" : "failed";
     const codexReviewed = allResults.filter((entry) => entry.codexReview?.evidence).length;
     const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, blocked, failed, retried, safeMessage: status === "success" && codexReviewed === claimed.length ? "BATCH_CODEX_REVIEW_COMPLETE" : status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, blocked, codexReviewed, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
-    await repository.addRun(run); return { run, results: allResults };
+    await repository.addRun(run); return { run, results: allResults, terminalResults };
   } finally { await release(); }
 }
 
@@ -89,7 +91,7 @@ function unsafeUploadFlagPresent(env: NodeJS.ProcessEnv) {
     .some((name) => env[name]?.trim().toLowerCase() === "true");
 }
 
-async function recordNoop(repository: LocalQueueRepository, runId: string, now: Date, message: string, metrics: Record<string, number> = {}, status: LocalRun["status"] = "noop") { const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: Number(metrics.claimed ?? 0), completed: 0, blocked: 0, failed: 0, retried: 0, safeMessage: message, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, results: [] }; }
+async function recordNoop(repository: LocalQueueRepository, runId: string, now: Date, message: string, metrics: Record<string, number> = {}, status: LocalRun["status"] = "noop") { const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: Number(metrics.claimed ?? 0), completed: 0, blocked: 0, failed: 0, retried: 0, safeMessage: message, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, results: [], terminalResults: [] }; }
 async function diskFreeGb(path: string) { const value = await statfs(path); return Math.round(Number(value.bavail * value.bsize) / 1024 / 1024 / 1024 * 100) / 100; }
 function safeCode(error: unknown) { const value = error instanceof Error ? error.message : String(error); return /^[A-Z0-9_:-]+$/u.test(value) ? value : "VIDEO_BATCH_SUBPROCESS_FAILED"; }
 function isRetryable(code: string) { return /TEMPORARY|TIMEOUT|SUBPROCESS|FILESYSTEM|EACCES|EBUSY|LOCAL_RUNTIME_NOT_CONFIGURED/u.test(code); }

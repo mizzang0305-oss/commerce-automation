@@ -4,6 +4,7 @@ export * from "./codexReviewEvidence";
 export * from "./lock";
 export * from "./nightlyScout";
 export * from "./repository";
+export * from "./retainedBatchEnvelope";
 export * from "./runtimePreflight";
 export * from "./settings";
 export * from "./singleSlotRecovery";
