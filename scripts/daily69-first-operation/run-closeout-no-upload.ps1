@@ -29,7 +29,13 @@ try {
         -SourceRoot $SourceRoot -ExpectedGitHead $ExpectedGitHead -EnvFile $EnvFile `
         -InvocationRole closeout -TaskName $taskName -WrapperPath $PSCommandPath
 
-    $idle = Test-Daily69CloseoutIdle -ResolvedQueue $resolvedQueue
+    $binding = Get-Daily69OperationBinding -ResolvedQueue $resolvedQueue -BoundNamespace $Namespace
+    $timing = Get-Daily69Timing -OperationDate $binding.operationDate
+    $now = (Get-Daily69KstNow).DateTime
+    if ($now -lt $timing.closeoutAt -or $now -ge $timing.closeoutDeadline) { throw 'FIRST_OPERATION_DATE_NOT_ACTIVE' }
+    # The wait probes Test-Daily69CloseoutIdle read-only; no queue work occurs
+    # until it returns idle. Its evidence contains counts, never queue contents.
+    $idle = Wait-Daily69CloseoutIdle -ResolvedQueue $resolvedQueue -MaximumWaitSeconds $timing.contract.idleGraceSeconds -PollIntervalSeconds $timing.contract.idlePollSeconds
     if (-not $idle.idle) {
         Complete-Daily69InvocationEvidence -Outcome guard_blocked -ChildExitCode 3 -WrapperExitCode 3 -SafeError $idle.safeCode
         Disable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
@@ -40,7 +46,7 @@ try {
     foreach ($name in @("Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1")) {
         Disable-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue | Out-Null
     }
-    $preflightOutput = @(& npm.cmd run daily69:first-day:preflight --silent -- --sheets 2>&1)
+    $preflightOutput = @(& npm.cmd run daily69:first-day:preflight --silent -- --sheets --closeout 2>&1)
     $preflightExit = $LASTEXITCODE
     if ($preflightExit -ne 0) {
         $safeError = Get-Daily69SafeCodeFromOutput -Lines $preflightOutput -Fallback 'FIRST_OPERATION_PREFLIGHT_FAILED'
@@ -50,6 +56,18 @@ try {
         Complete-Daily69InvocationEvidence -Outcome $resolution.outcome -ChildExitCode $preflightExit -WrapperExitCode $resolution.wrapperExitCode -SafeError $resolution.safeError
         Write-CloseoutSummary -Outcome $resolution.outcome -SafeError $resolution.safeError -ExitCode $resolution.wrapperExitCode -State FAILED
         exit $resolution.wrapperExitCode
+    }
+
+    # Preflight may take time. Recheck the no-writer boundary immediately before
+    # projection; disabling a Task does not terminate an already running action.
+    $idle = Test-Daily69CloseoutIdle -ResolvedQueue $resolvedQueue
+    $priorRunning = @(@('Minz-Commerce-VideoBatch-NoUpload-V1','Minz-Commerce-ControlRunner-NoUpload-V1') | Where-Object { [string](Get-ScheduledTask -TaskName $_ -ErrorAction Stop).State -eq 'Running' }).Count -gt 0
+    if (-not $idle.idle -or $priorRunning -or (Get-Daily69KstNow).DateTime -ge $timing.closeoutDeadline) {
+        $safeError = if (-not $idle.idle) { $idle.safeCode } elseif ($priorRunning) { 'FIRST_OPERATION_CLOSEOUT_PENDING_ACTIVE_WORK' } else { 'FIRST_OPERATION_DATE_NOT_ACTIVE' }
+        Complete-Daily69InvocationEvidence -Outcome guard_blocked -ChildExitCode 3 -WrapperExitCode 3 -SafeError $safeError
+        Disable-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Out-Null
+        Write-CloseoutSummary -Outcome guard_blocked -SafeError $safeError -ExitCode 3 -State PENDING
+        exit 3
     }
 
     # The Task Scheduler 201/102 completion events for this action do not exist

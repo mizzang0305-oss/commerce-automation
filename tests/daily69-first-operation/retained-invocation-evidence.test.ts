@@ -214,7 +214,9 @@ $controlStart = Test-Daily69NewWorkWindow -ResolvedQueue '${ps(root)}' -BoundNam
     expect(contents[3]).toContain("PENDING_FINALIZER");
     expect(contents[3]).not.toContain("daily69:first-day:closeout");
     expect(contents[3]).toContain("$resolution.wrapperExitCode -ge 3");
-    expect(contents[4]).toContain("daily69:first-day:finalize-natural-closeout");
+    expect(contents[4]).toContain("Invoke-Daily69FinalizerChild");
+    const finalizerHelper = await readFile("scripts/daily69-first-operation/finalizer-result.ps1", "utf8");
+    expect(finalizerHelper).toContain('--conditions=react-server --import tsx "scripts/daily69-first-operation/finalize-natural-closeout.ts" --queue-root');
   });
 });
 

@@ -5,6 +5,8 @@ import { promisify } from "node:util";
 import { firstOperationStatus, verifyFirstOperationMaterializationEligibility, verifySourceBundle } from "../../src/lib/daily69-first-operation";
 import { NoUploadGoogleSheetsClient } from "../../src/lib/queue-control-integration";
 import { inspectQueueVideoRuntime, kstDate } from "../../src/lib/queue-scheduler";
+import { isDaily69CloseoutWindow } from "../../src/lib/daily69-first-operation/timing";
+import { assertFirstOperationIdentity } from "../../src/lib/daily69-first-operation/operationIdentity";
 
 const exec = promisify(execFile);
 
@@ -12,11 +14,16 @@ async function main() {
   const operationRoot = resolve(requiredEnv("QUEUE_SCHEDULER_ROOT"));
   const sourceRoot = resolve(requiredEnv("FIRST_OPERATION_SOURCE_ROOT"));
   const snapshot = await firstOperationStatus(operationRoot);
+  assertFirstOperationIdentity(snapshot.manifest);
   const actualHead = (await exec("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
   if (actualHead !== snapshot.manifest.expectedGitHead) throw new Error("RUNTIME_GIT_HEAD_MISMATCH");
   const dirty = (await exec("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
   if (dirty) throw new Error("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
-  if (!process.argv.includes("--arming") && kstDate(new Date()) !== snapshot.manifest.operationDate) throw new Error("FIRST_OPERATION_DATE_NOT_ACTIVE");
+  const now = new Date();
+  const dateAllowed = process.argv.includes("--closeout")
+    ? isDaily69CloseoutWindow(snapshot.manifest.operationDate, now)
+    : kstDate(now) === snapshot.manifest.operationDate;
+  if (!process.argv.includes("--arming") && !dateAllowed) throw new Error("FIRST_OPERATION_DATE_NOT_ACTIVE");
   if (unsafeUploadFlagPresent(process.env)) throw new Error("UPLOAD_SAFETY_FLAG_BLOCKED");
   if (process.env.GOOGLE_DRIVE_VIDEO_FOLDER_ID?.trim()) throw new Error("DRIVE_SCOPE_MUST_REMAIN_DISABLED");
   await verifySourceBundle(sourceRoot, snapshot.manifest);

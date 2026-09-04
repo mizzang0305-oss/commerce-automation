@@ -11,6 +11,20 @@ param(
     [switch]$LibraryOnly
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'timing-contract.ps1')
+
+function Read-Daily69QueueItems {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $raw = Get-Content -LiteralPath $Path -Raw -Encoding utf8
+    if (-not $raw.TrimStart().StartsWith('[')) { throw 'FIRST_OPERATION_QUEUE_INVALID' }
+    # Assign before enumerating: Windows PowerShell 5.1 emits JSON arrays as one
+    # pipeline object, unlike PowerShell 7. @(... | ConvertFrom-Json) nests it.
+    $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
+    foreach ($item in $parsed) {
+        if ($null -eq $item -or $item -isnot [pscustomobject]) { throw 'FIRST_OPERATION_QUEUE_INVALID' }
+        Write-Output $item
+    }
+}
 
 function ConvertTo-Daily69SafeCode {
     param([AllowNull()][object]$Value, [string]$Fallback = "UNEXPECTED_EXCEPTION")
@@ -389,7 +403,7 @@ function Initialize-Daily69InvocationEvidence {
     $scheduledBoundary = switch ($Role) {
         'control' { $now.ToString('yyyy-MM-ddTHH:mm:00zzz') }
         'batch' { $now.ToString('yyyy-MM-ddTHH:00:00zzz') }
-        'closeout' { "$($now.ToString('yyyy-MM-dd'))T23:55:00$($now.ToString('zzz'))" }
+        'closeout' { if ($operationDate) { (Get-Daily69Timing -OperationDate $operationDate).closeoutAt.ToString('yyyy-MM-ddTHH:mm:ss') + '+09:00' } else { '' } }
     }
     Write-Daily69EvidenceLine -Create -Data ([ordered]@{
         schemaVersion = 'daily69-retained-invocation-v1'
@@ -434,7 +448,7 @@ function Complete-Daily69InvocationEvidence {
     $queueCounts = [ordered]@{ readyCount = 0; blockedCount = 0; failedCount = 0; retryCount = 0 }
     $revisions = [ordered]@{ queueRevision = 0; projectionRevision = 0 }
     try {
-        $items = @(Get-Content -LiteralPath (Join-Path $script:Daily69InvocationQueueRoot 'queue.json') -Raw -Encoding utf8 | ConvertFrom-Json)
+        $items = @(Read-Daily69QueueItems -Path (Join-Path $script:Daily69InvocationQueueRoot 'queue.json'))
         $queueCounts.readyCount = @($items | Where-Object { $_.status -eq 'video_ready_autoqa' }).Count
         $queueCounts.blockedCount = @($items | Where-Object { $_.status -eq 'blocked' }).Count
         $queueCounts.failedCount = @($items | Where-Object { $_.status -eq 'failed' }).Count
@@ -603,19 +617,51 @@ function Claim-Daily69BatchSlot {
 
 function Test-Daily69CloseoutIdle {
     param([string]$ResolvedQueue)
-    $locks = @('runner.lock', 'queue.mutation.lock', 'runs.mutation.lock')
+    $locks = @('runner.lock', 'command-runner.lock', 'queue.mutation.lock', 'runs.mutation.lock')
     $present = @($locks | Where-Object { Test-Path -LiteralPath (Join-Path $ResolvedQueue $_) -PathType Leaf })
     $unresolvedLeases = 0
     $queuePath = Join-Path $ResolvedQueue 'queue.json'
-    if (Test-Path -LiteralPath $queuePath -PathType Leaf) {
-        $items = @(Get-Content -LiteralPath $queuePath -Raw -Encoding utf8 | ConvertFrom-Json)
-        $unresolvedLeases = @($items | Where-Object { $_.leaseOwner -or $_.leaseExpiresAt }).Count
-    }
+    try { $items = @(Read-Daily69QueueItems -Path $queuePath) }
+    catch { return [pscustomobject]@{ idle = $false; safeCode = 'FIRST_OPERATION_QUEUE_INVALID'; presentLocks = $present; unresolvedLeases = 0; processingCount = 0; claimedCount = 0 } }
+    $unresolvedLeases = @($items | Where-Object { $_.leaseOwner -or $_.leaseExpiresAt }).Count
+    $processingCount = @($items | Where-Object { $_.status -eq 'processing' }).Count
+    $claimedCount = @($items | Where-Object { $_.status -eq 'claimed' }).Count
     return [pscustomobject]@{
-        idle = ($present.Count -eq 0 -and $unresolvedLeases -eq 0)
-        safeCode = if ($present.Count -gt 0 -or $unresolvedLeases -gt 0) { 'FIRST_OPERATION_CLOSEOUT_PENDING_ACTIVE_WORK' } else { '' }
+        idle = ($present.Count -eq 0 -and $unresolvedLeases -eq 0 -and $processingCount -eq 0 -and $claimedCount -eq 0)
+        safeCode = if ($present.Count -gt 0 -or $unresolvedLeases -gt 0 -or $processingCount -gt 0 -or $claimedCount -gt 0) { 'FIRST_OPERATION_CLOSEOUT_PENDING_ACTIVE_WORK' } else { '' }
         presentLocks = $present
         unresolvedLeases = $unresolvedLeases
+        processingCount = $processingCount
+        claimedCount = $claimedCount
+    }
+}
+
+function Wait-Daily69CloseoutIdle {
+    param(
+        [Parameter(Mandatory = $true)][string]$ResolvedQueue,
+        [ValidateRange(1, 900)][int]$MaximumWaitSeconds = 600,
+        [ValidateRange(1, 30)][int]$PollIntervalSeconds = 5,
+        [scriptblock]$IdleProbe = { param($queue) Test-Daily69CloseoutIdle -ResolvedQueue $queue },
+        [scriptblock]$Sleep = { param($seconds) Start-Sleep -Seconds $seconds }
+    )
+    if ($PollIntervalSeconds -gt $MaximumWaitSeconds) { throw 'FIRST_OPERATION_IDLE_WAIT_CONTRACT_INVALID' }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $scheduledWait = 0
+    $checks = 0
+    while ($true) {
+        $idle = & $IdleProbe $ResolvedQueue
+        $checks += 1
+        $elapsed = [Math]::Max($clock.Elapsed.TotalSeconds, $scheduledWait)
+        $valid = $null -ne $idle -and $idle.idle -is [bool] -and $null -ne $idle.unresolvedLeases
+        if (-not $valid) { throw 'FIRST_OPERATION_IDLE_PROBE_INVALID' }
+        Write-Daily69EvidenceLine -Data ([ordered]@{ schemaVersion = 'daily69-closeout-idle-wait-v1'; event = 'closeout_idle_checked'; check = $checks; elapsedSeconds = [Math]::Round($elapsed, 3); maximumWaitSeconds = $MaximumWaitSeconds; idle = $idle.idle; presentLockCount = @($idle.presentLocks).Count; unresolvedLeases = $idle.unresolvedLeases; processingCount = $idle.processingCount; claimedCount = $idle.claimedCount; safeError = $idle.safeCode; SAFE_TO_UPLOAD = $false; PLATFORM_UPLOAD = 0 })
+        if ($idle.idle -or $idle.safeCode -ne 'FIRST_OPERATION_CLOSEOUT_PENDING_ACTIVE_WORK' -or $elapsed -ge $MaximumWaitSeconds) {
+            return [pscustomobject]@{ idle = $idle.idle; safeCode = $idle.safeCode; checks = $checks; elapsedSeconds = $elapsed; timedOut = (-not $idle.idle -and $elapsed -ge $MaximumWaitSeconds) }
+        }
+        $delay = [Math]::Min($PollIntervalSeconds, $MaximumWaitSeconds - $elapsed)
+        & $Sleep $delay
+        # Also cap iterations when a test clock/sleeper does not advance.
+        $scheduledWait += $delay
     }
 }
 

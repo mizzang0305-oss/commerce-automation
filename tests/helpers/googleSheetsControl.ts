@@ -4,6 +4,7 @@ import type {
   UserEnteredSheetsGateway,
 } from "@/lib/google-sheets/googleSheetsClient";
 import { COMMAND_HEADERS, LOG_HEADERS, QUEUE_HEADERS, SHEET_NAMES, toKstTimestamp, type SheetRow } from "@/lib/google-sheets/sheetSchemas";
+import { COMPLETE_SHEET_COLUMNS, parseBoundedSheetRange } from "@/lib/google-sheets/completeSheetRead";
 
 function columnIndex(letter: string) {
   return letter.split("").reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1;
@@ -11,6 +12,8 @@ function columnIndex(letter: string) {
 
 export class MemorySheetsGateway implements SheetsGateway, UserEnteredSheetsGateway {
   readonly sheets = new Map<string, SheetRow[]>();
+  readonly gridRows = new Map<string, number>();
+  readonly pageReads: Array<{ sheetName: string; range: string; semantic: boolean }> = [];
 
   constructor() {
     this.sheets.set(SHEET_NAMES.queue, [
@@ -33,6 +36,24 @@ export class MemorySheetsGateway implements SheetsGateway, UserEnteredSheetsGate
 
   async getUserEnteredCells(sheetName: string) {
     return structuredClone(this.sheets.get(sheetName) ?? []).map((row) => row.map(toUserEnteredCell));
+  }
+
+  async metadata() {
+    return { sheets: [...new Set([...this.sheets.keys(), ...Object.keys(COMPLETE_SHEET_COLUMNS)])].map((title, sheetId) => ({ properties: { title, sheetId, gridProperties: { rowCount: this.gridRows.get(title) ?? 2000, columnCount: 61 } } })) };
+  }
+
+  async getValuesPage(sheetName: string, range: string) {
+    this.pageReads.push({ sheetName, range, semantic: false });
+    const bounds = parseBoundedSheetRange(range);
+    const rows = (await this.getValues(sheetName)).slice(bounds.startRow - 1, bounds.endRow).map((row) => row.slice(0, bounds.columnCount));
+    return { sheetName, ...bounds, rows };
+  }
+
+  async getUserEnteredPage(sheetName: string, range: string) {
+    this.pageReads.push({ sheetName, range, semantic: true });
+    const bounds = parseBoundedSheetRange(range);
+    const rows = (await this.getUserEnteredCells(sheetName)).slice(bounds.startRow - 1, bounds.endRow).map((row) => row.slice(0, bounds.columnCount));
+    return { sheetName, ...bounds, rows };
   }
 
   async updateValues(sheetName: string, range: string, values: SheetRow[]) {

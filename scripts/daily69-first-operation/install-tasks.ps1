@@ -10,6 +10,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "principal-identity.ps1")
+. (Join-Path $PSScriptRoot 'timing-contract.ps1')
 $names = @("Minz-Commerce-Scout-NoUpload-V1", "Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1", "Minz-Commerce-Daily69-Closeout-NoUpload-V1", "Minz-Commerce-Daily69-Finalizer-NoUpload-V1")
 $root = (Resolve-Path -LiteralPath $WorktreeRoot).Path
 $queue = (Resolve-Path -LiteralPath $QueueRoot).Path
@@ -17,6 +18,7 @@ $source = (Resolve-Path -LiteralPath $SourceRoot).Path
 $envPath = (Resolve-Path -LiteralPath $EnvFile).Path
 $backupRoot = Join-Path $queue "task-definitions"
 $operationLocal = [DateTime]::ParseExact($OperationDate, "yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+$timing = Get-Daily69Timing -OperationDate $OperationDate
 if ($operationLocal -le (Get-Date).Date) { throw "FIRST_OPERATION_DATE_MUST_BE_FUTURE" }
 $manifestPath = Join-Path $queue "operation-manifest.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -66,6 +68,10 @@ function New-OperationAction([string]$Script) {
 
 function Assert-TaskBinding([string]$Name, [string]$Role) {
     $task = Get-ScheduledTask -TaskName $Name -ErrorAction Stop
+    $scriptPath = switch ($Role) { 'batch' { $batchScript }; 'control' { $controlScript }; 'closeout' { $closeoutScript }; 'finalizer' { $finalizerScript } }
+    $expectedAction = New-OperationAction $scriptPath
+    $actions = @($task.Actions)
+    if ($actions.Count -ne 1 -or [string]$actions[0].Execute -cne [string]$expectedAction.Execute -or [string]$actions[0].Arguments -cne [string]$expectedAction.Arguments -or [string]$actions[0].WorkingDirectory -cne $root) { throw "FIRST_OPERATION_TASK_ACTION_VERIFY_FAILED:$Name" }
     $actionText = (@($task.Actions) | ForEach-Object { [string]$_.Execute + " " + [string]$_.Arguments }) -join " "
     foreach ($required in @($root, $queue, $source, $envPath, $Namespace, $ExpectedGitHead)) {
         if ($actionText -notlike "*$required*") { throw "FIRST_OPERATION_TASK_BINDING_VERIFY_FAILED:$Name" }
@@ -80,15 +86,42 @@ function Assert-TaskBinding([string]$Name, [string]$Role) {
     if (-not [bool]$task.Settings.Hidden -or [string]$task.Principal.RunLevel -ne "Limited" -or [string]$task.Principal.LogonType -ne "Interactive") { throw "FIRST_OPERATION_TASK_PRINCIPAL_VERIFY_FAILED:$Name" }
     if (@($task.Actions | Where-Object { [string]$_.WorkingDirectory -ne $root }).Count -gt 0) { throw "FIRST_OPERATION_TASK_WORKDIR_VERIFY_FAILED:$Name" }
     $starts = @($task.Triggers | ForEach-Object { [DateTime]::Parse([string]$_.StartBoundary) })
-    $expectedTriggerDate = if ($Role -eq "finalizer") { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }
+    $expectedTriggerDate = if ($Role -in @('closeout', 'finalizer')) { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }
     if ($starts | Where-Object { $_.Date -ne $expectedTriggerDate }) { throw "FIRST_OPERATION_TASK_DATE_VERIFY_FAILED:$Name" }
     if ($Role -eq "batch") {
         $hours = @($starts | Sort-Object | ForEach-Object { $_.Hour })
         if ($hours.Count -ne $expectedBatchHours.Count -or (Compare-Object -ReferenceObject @($expectedBatchHours | Sort-Object) -DifferenceObject $hours)) { throw "FIRST_OPERATION_BATCH_TRIGGERS_VERIFY_FAILED:$Name" }
+        if (@($starts | Where-Object { $_.Minute -ne 0 -or $_.Second -ne 0 }).Count -gt 0) { throw "FIRST_OPERATION_BATCH_TRIGGERS_VERIFY_FAILED:$Name" }
     }
-    if ($Role -eq "control" -and ($starts.Count -ne 1 -or $starts[0].Hour -ne 0 -or $starts[0].Minute -ne 1)) { throw "FIRST_OPERATION_CONTROL_TRIGGER_VERIFY_FAILED:$Name" }
-    if ($Role -eq "closeout" -and ($starts.Count -ne 1 -or $starts[0].Hour -ne 23 -or $starts[0].Minute -ne 55)) { throw "FIRST_OPERATION_CLOSEOUT_TRIGGER_VERIFY_FAILED:$Name" }
-    if ($Role -eq "finalizer" -and ($starts.Count -ne 1 -or $starts[0].Date -ne $operationLocal.AddDays(1).Date -or $starts[0].Hour -ne 0 -or $starts[0].Minute -ne 5)) { throw "FIRST_OPERATION_FINALIZER_TRIGGER_VERIFY_FAILED:$Name" }
+    if ($Role -eq "control" -and ($starts.Count -ne 1 -or $starts[0] -ne $operationLocal.AddMinutes(1))) { throw "FIRST_OPERATION_CONTROL_TRIGGER_VERIFY_FAILED:$Name" }
+    if ($Role -eq "closeout" -and ($starts.Count -ne 1 -or $starts[0] -ne $timing.closeoutAt)) { throw "FIRST_OPERATION_CLOSEOUT_TRIGGER_VERIFY_FAILED:$Name" }
+    if ($Role -eq "finalizer" -and ($starts.Count -ne 1 -or $starts[0] -ne $timing.finalizerAt)) { throw "FIRST_OPERATION_FINALIZER_TRIGGER_VERIFY_FAILED:$Name" }
+    $limitMinutes = switch ($Role) { 'batch' { $timing.contract.batchExecutionLimitMinutes }; 'control' { 5 }; 'closeout' { $timing.contract.closeoutExecutionLimitMinutes }; 'finalizer' { $timing.contract.finalizerExecutionLimitMinutes } }
+    if ([System.Xml.XmlConvert]::ToTimeSpan([string]$task.Settings.ExecutionTimeLimit) -ne [TimeSpan]::FromMinutes($limitMinutes)) { throw "FIRST_OPERATION_TASK_EXECUTION_LIMIT_VERIFY_FAILED:$Name" }
+}
+
+function Get-TaskContractHash([string]$Value) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($Value)))).Replace('-', '').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+}
+
+function Write-FinalizerTaskContract {
+    $task = Get-ScheduledTask -TaskName $names[4] -ErrorAction Stop
+    $parts = @($task.Actions | ForEach-Object { [string]$_.Execute; [string]$_.Arguments; [string]$_.WorkingDirectory })
+    $contract = [ordered]@{ schemaVersion = 'daily69-finalizer-task-contract-v1'; namespace = $Namespace; operationDate = $OperationDate; expectedGitHead = $ExpectedGitHead; taskName = $names[4]; principalSidSha256 = Get-TaskContractHash $currentSid.ToLowerInvariant(); taskActionSha256 = Get-TaskContractHash ($parts -join "`n") }
+    $path = Join-Path $backupRoot 'finalizer-task-contract.json'
+    if (Test-Path -LiteralPath $path) {
+        $existing = Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json
+        foreach ($key in $contract.Keys) { if ([string]$existing.$key -cne [string]$contract[$key]) { throw 'FIRST_OPERATION_FINALIZER_TASK_CONTRACT_MISMATCH' } }
+        return
+    }
+    $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes(($contract | ConvertTo-Json -Compress))
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    } finally { $stream.Dispose() }
 }
 
 $backups = @{}
@@ -105,7 +138,7 @@ foreach ($name in $names) {
 }
 
 if ($WhatIfPreference) {
-    [pscustomobject]@{ event = "daily69_first_operation_tasks_plan"; operationDate = $OperationDate; namespace = $Namespace; batchTriggers = $expectedBatchCount; finalizerAt = $operationLocal.AddDays(1).AddMinutes(5).ToString('o'); mutationPerformed = $false; SAFE_TO_UPLOAD = $false; PLATFORM_UPLOAD = 0 }
+    [pscustomobject]@{ event = "daily69_first_operation_tasks_plan"; operationDate = $OperationDate; namespace = $Namespace; batchTriggers = $expectedBatchCount; closeoutAt = $timing.closeoutAt.ToString('o'); finalizerAt = $timing.finalizerAt.ToString('o'); timingContract = $timing.contract; mutationPerformed = $false; SAFE_TO_UPLOAD = $false; PLATFORM_UPLOAD = 0 }
     return
 }
 
@@ -114,14 +147,14 @@ $controlScript = (Resolve-Path -LiteralPath (Join-Path $root "scripts\daily69-fi
 $closeoutScript = (Resolve-Path -LiteralPath (Join-Path $root "scripts\daily69-first-operation\run-closeout-no-upload.ps1")).Path
 $finalizerScript = (Resolve-Path -LiteralPath (Join-Path $root "scripts\daily69-first-operation\run-finalizer-no-upload.ps1")).Path
 $principal = New-ScheduledTaskPrincipal -UserId $currentSid -LogonType Interactive -RunLevel Limited
-$batchSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes(55)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
+$batchSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes($timing.contract.batchExecutionLimitMinutes)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
 $controlSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes(5)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
-$closeoutSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes(30)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
-$finalizerSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes(15)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
+$closeoutSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes($timing.contract.closeoutExecutionLimitMinutes)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
+$finalizerSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes($timing.contract.finalizerExecutionLimitMinutes)) -Hidden -MultipleInstances IgnoreNew -StartWhenAvailable
 $batchTriggers = $expectedBatchHours | Sort-Object | ForEach-Object { New-ScheduledTaskTrigger -Once -At $operationLocal.AddHours($_) }
 $controlTrigger = New-ScheduledTaskTrigger -Once -At $operationLocal.AddMinutes(1) -RepetitionInterval ([TimeSpan]::FromMinutes(1)) -RepetitionDuration ([TimeSpan]::FromHours(23.9))
-$closeoutTrigger = New-ScheduledTaskTrigger -Once -At $operationLocal.AddHours(23).AddMinutes(55)
-$finalizerTrigger = New-ScheduledTaskTrigger -Once -At $operationLocal.AddDays(1).AddMinutes(5)
+$closeoutTrigger = New-ScheduledTaskTrigger -Once -At $timing.closeoutAt
+$finalizerTrigger = New-ScheduledTaskTrigger -Once -At $timing.finalizerAt
 
 try {
     foreach ($name in $names[1..4]) { if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $name -Confirm:$false } }
@@ -135,6 +168,7 @@ try {
     Assert-TaskBinding $names[3] "closeout"
     Assert-TaskBinding $names[4] "finalizer"
     if ([string](Get-ScheduledTask -TaskName $names[0] -ErrorAction Stop).State -ne "Disabled") { throw "FIRST_OPERATION_SCOUT_NOT_DISABLED" }
+    Write-FinalizerTaskContract
     Push-Location $root
     try {
         & npm.cmd run daily69:first-day:arm-status --silent -- --operation-root $queue --status tasks_armed --promote

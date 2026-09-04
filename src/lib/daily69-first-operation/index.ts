@@ -14,6 +14,7 @@ import {
 } from "@/lib/usage-evidence";
 import { normalizeFirstOperationLifecycleStatus, validateLevel3Completion, type FirstOperationLifecycleStatus, type LegacyFirstOperationLifecycleStatus, type Level3RetainedEvidence } from "./level3";
 import type { Level3SheetsAuditGateway } from "./postCloseout";
+import { assertFirstOperationIdentity, firstOperationNamespace, isFirstOperationDate } from "./operationIdentity";
 
 export const FIRST_OPERATION_DECISION = "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED" as const;
 export const FIRST_OPERATION_MODE = "no_upload_daily69_first_operation" as const;
@@ -80,15 +81,14 @@ export async function armFirstOperation(input: {
   previousAttemptNamespace?: string;
 }) {
   const operationDate = input.operationDate ?? nextKstDate(input.now);
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(operationDate)) throw new Error("FIRST_OPERATION_DATE_INVALID");
+  if (!isFirstOperationDate(operationDate)) throw new Error("FIRST_OPERATION_DATE_INVALID");
   if (operationDate <= kstDate(input.now)) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
   const attemptNumber = input.attemptNumber ?? 1;
-  if (!Number.isInteger(attemptNumber) || attemptNumber < 1) throw new Error("FIRST_OPERATION_ATTEMPT_INVALID");
-  const canonicalNamespace = attemptNumber === 1 ? `operation-${operationDate}` : `operation-${operationDate}-attempt-${attemptNumber}`;
+  const canonicalNamespace = firstOperationNamespace(operationDate, attemptNumber);
   const namespace = input.namespace ?? canonicalNamespace;
   if (namespace !== canonicalNamespace) throw new Error("FIRST_OPERATION_NAMESPACE_ATTEMPT_MISMATCH");
   const previousAttemptNamespace = input.previousAttemptNamespace?.trim() ?? "";
-  if ((attemptNumber === 1 && previousAttemptNamespace) || (attemptNumber > 1 && !previousAttemptNamespace)) throw new Error("FIRST_OPERATION_PREVIOUS_ATTEMPT_INVALID");
+  assertFirstOperationIdentity({ namespace, operationDate, attemptNumber, previousAttemptNamespace });
   const operationRoot = resolve(input.operationBase, namespace);
   const sourceRoot = resolve(input.sourceRoot);
   const sourceAssetBoundaryRoot = resolve(input.assetBoundaryRoot ?? sourceRoot);

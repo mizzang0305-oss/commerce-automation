@@ -5,6 +5,7 @@ import { COMMAND_HEADERS, QUEUE_HEADERS, SHEET_NAMES, assertHeaders, rowValue, t
 import { LocalQueueRepository } from "@/lib/queue-scheduler";
 import { QUEUE_PROJECTION_EXTRA_HEADERS, RESERVE_HEADERS, RESERVE_SHEET_NAME, SYNC_HEADERS, SYNC_SHEET_NAME, type QueueProjectionSnapshot } from "./contracts";
 import { projectionIdentity } from "./projectionIdentity";
+import { COMPLETE_SHEET_COLUMNS, assertCompleteSheetAppendCapacity, completeSheetSemanticHash, readCompleteSheetUserEntered } from "@/lib/google-sheets/completeSheetRead";
 
 const QUEUE_PROJECTION_HEADERS = [...QUEUE_HEADERS, ...QUEUE_PROJECTION_EXTRA_HEADERS] as const;
 
@@ -24,6 +25,7 @@ export class QueueProjectionService {
     const prepared = await this.buildProjectionPlan();
     const unsafe = prepared.plans.find((plan) => plan.diff.unrelatedRowsWouldChange !== 0);
     if (unsafe) throw new Error(`SHEETS_PROJECTION_UNRELATED_ROWS_WOULD_CHANGE:${unsafe.sheetName}`);
+    await this.revalidateAllPlans(prepared.plans);
     for (const plan of prepared.plans) await this.applyPlan(plan);
     const state = await this.repository.recordProjection({ localRevision: prepared.localRevision, snapshotHash: prepared.snapshotHash, projectedAt: prepared.projectedAt });
     return {
@@ -42,6 +44,7 @@ export class QueueProjectionService {
     if (unsafe) throw new Error(`SHEETS_PROJECTION_UNRELATED_ROWS_WOULD_CHANGE:${unsafe.sheetName}`);
     const existingMutation = prepared.plans.find((plan) => plan.headerWriteRequired || plan.updates.length > 0);
     if (existingMutation) throw new Error(`CUTOVER_WOULD_MUTATE_EXISTING_ROWS:${existingMutation.sheetName}`);
+    await this.revalidateAllPlans(prepared.plans);
     for (const plan of prepared.plans) await this.applyPlan(plan);
     const state = await this.repository.recordProjection({ localRevision: prepared.localRevision, snapshotHash: prepared.snapshotHash, projectedAt: prepared.projectedAt });
     return {
@@ -69,9 +72,9 @@ export class QueueProjectionService {
     const syncRow: SheetRow = [this.namespace, "local_queue_scheduler", localRevision, localRevision, snapshotHash, projectedAt, snapshot.items.length, snapshot.reserve.length, snapshot.settings.isPaused, snapshot.settings.enabled, false, "completed"];
     const plans = await Promise.all([
       this.planRows(SHEET_NAMES.commands, "A1:O1000", COMMAND_HEADERS, [], (row, columns) => rowValue(row, columns, "명령 ID")),
-      this.planRows(SHEET_NAMES.queue, "A1:AH1000", QUEUE_PROJECTION_HEADERS, queueRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Queue ID"))),
-      this.planRows(RESERVE_SHEET_NAME, "A1:L1000", RESERVE_HEADERS, reserveRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Product Key Hash"))),
-      this.planRows(SYNC_SHEET_NAME, "A1:L100", SYNC_HEADERS, [syncRow], (row, columns) => rowValue(row, columns, "Namespace")),
+      this.planRows(SHEET_NAMES.queue, "", QUEUE_PROJECTION_HEADERS, queueRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Queue ID"))),
+      this.planRows(RESERVE_SHEET_NAME, "", RESERVE_HEADERS, reserveRows, (row, columns) => projectionIdentity(rowValue(row, columns, "Namespace"), rowValue(row, columns, "Product Key Hash"))),
+      this.planRows(SYNC_SHEET_NAME, "", SYNC_HEADERS, [syncRow], (row, columns) => rowValue(row, columns, "Namespace")),
     ]);
     return { plans, localRevision, snapshotHash, projectedAt, queueCount: queueRows.length, reserveCount: reserveRows.length };
   }
@@ -83,10 +86,14 @@ export class QueueProjectionService {
     incoming: SheetRow[],
     identity: (row: SheetRow, columns: Map<string, number>) => string,
   ): Promise<InternalProjectionPlan> {
-    const rows = await this.gateway.getValues(sheetName, range);
+    const complete = COMPLETE_SHEET_COLUMNS[sheetName] ? await readCompleteSheetUserEntered(this.gateway, sheetName) : null;
+    // Plan from the same user-entered snapshot that is fingerprinted, not a second
+    // formatted view whose volatile formula results can drift independently.
+    const rows: SheetRow[] = complete ? complete.rows.map((row) => row.map((cell) => cell.kind === "blank" ? "" : cell.value)) : await this.gateway.getValues(sheetName, range);
     const currentHeaders = rows[0] ?? [];
     const missing = headers.filter((header) => !currentHeaders.map(String).includes(header));
     const plannedHeaders = rows.length === 0 ? [...headers] : [...currentHeaders, ...missing];
+    if (complete && plannedHeaders.length > complete.columnCount) throw new Error("SHEETS_COMPLETE_COLUMN_SCHEMA_INVALID");
     const columns = assertHeaders(plannedHeaders, headers, sheetName);
     const canonicalHeaders = new Set<string>(headers);
     const existing = new Map<string, number[]>();
@@ -114,11 +121,13 @@ export class QueueProjectionService {
     const unrelatedRows = rows.slice(1).filter((row) => {
       try { return !incomingKeys.has(identity(row, columns)); } catch { return true; }
     }).length;
+    if (complete) assertCompleteSheetAppendCapacity({ ...complete, rows }, additions.length);
     return {
       sheetName,
       range,
       headers: plannedHeaders,
       sourceRowsHash: hashRows(rows),
+      sourceSemanticHash: complete ? completeSheetSemanticHash(complete) : null,
       headerWriteRequired: rows.length === 0 || missing.length > 0,
       sourceRowCount: rows.length,
       updates,
@@ -127,9 +136,21 @@ export class QueueProjectionService {
     };
   }
 
+  private async revalidatePlan(plan: InternalProjectionPlan) {
+    if (plan.sourceSemanticHash) {
+      const current = await readCompleteSheetUserEntered(this.gateway, plan.sheetName);
+      if (completeSheetSemanticHash(current) !== plan.sourceSemanticHash) throw new Error(`SHEETS_PROJECTION_PLAN_STALE:${plan.sheetName}`);
+      assertCompleteSheetAppendCapacity(current, plan.additions.length);
+    } else if (hashRows(await this.gateway.getValues(plan.sheetName, plan.range)) !== plan.sourceRowsHash) throw new Error(`SHEETS_PROJECTION_PLAN_STALE:${plan.sheetName}`);
+  }
+
+  private async revalidateAllPlans(plans: InternalProjectionPlan[]) {
+    // A stale later sheet must reject before the first external write, not after Queue.
+    for (const plan of plans) await this.revalidatePlan(plan);
+  }
+
   private async applyPlan(plan: InternalProjectionPlan) {
-    const current = await this.gateway.getValues(plan.sheetName, plan.range);
-    if (hashRows(current) !== plan.sourceRowsHash) throw new Error(`SHEETS_PROJECTION_PLAN_STALE:${plan.sheetName}`);
+    await this.revalidatePlan(plan);
     if (plan.headerWriteRequired) {
       await this.gateway.updateValues(plan.sheetName, `A1:${columnName(plan.headers.length)}1`, [plan.headers]);
     }
@@ -160,6 +181,7 @@ type InternalProjectionPlan = {
   range: string;
   headers: SheetRow;
   sourceRowsHash: string;
+  sourceSemanticHash: string | null;
   headerWriteRequired: boolean;
   sourceRowCount: number;
   updates: Array<{ rowNumber: number; row: SheetRow }>;

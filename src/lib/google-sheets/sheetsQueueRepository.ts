@@ -3,6 +3,7 @@ import {
   stringValue, toKstTimestamp, type QueuePatch, type SheetQueueItem, type SheetRow
 } from "./sheetSchemas";
 import type { SheetsGateway } from "./googleSheetsClient";
+import { assertCompleteSheetAppendCapacity, readCompleteSheetValues } from "./completeSheetRead";
 
 const HEADER_TO_FIELD: Record<string, keyof QueuePatch> = {
   "상품명": "productName", "카테고리": "category", "가격": "price", "쿠팡 제휴 URL": "affiliateUrl",
@@ -35,9 +36,10 @@ export class SheetsQueueRepository {
   constructor(private readonly gateway: SheetsGateway) {}
 
   private async readRows() {
-    const rows = await this.gateway.getValues(SHEET_NAMES.queue, "A1:AH1000");
+    const snapshot = await readCompleteSheetValues(this.gateway, SHEET_NAMES.queue);
+    const rows = snapshot.rows;
     const columns = assertHeaders(rows[0] ?? [], QUEUE_HEADERS, SHEET_NAMES.queue);
-    return { rows, columns };
+    return { rows, columns, snapshot };
   }
 
   async list(namespace?: string) {
@@ -75,7 +77,8 @@ export class SheetsQueueRepository {
 
   async append(item: SheetQueueItem) {
     if (!item.namespace) throw new SheetsControlError("QUEUE_NAMESPACE_REQUIRED", "현재 operation Namespace가 필요합니다.", 400);
-    const { rows, columns } = await this.readRows();
+    const { rows, columns, snapshot } = await this.readRows();
+    assertCompleteSheetAppendCapacity(snapshot, 1);
     const namespaceColumn = columns.get("Namespace");
     if (namespaceColumn === undefined) throw new SheetsControlError("SHEETS_QUEUE_NAMESPACE_HEADER_REQUIRED", "상품큐 Namespace 열이 필요합니다.", 503);
     const base: SheetRow = [

@@ -8,6 +8,7 @@ import {
   type GoogleCredentialResolverOptions
 } from "./googleServiceAccountCredential";
 import { SHEET_NAMES, SheetsControlError, type SheetRow } from "./sheetSchemas";
+import { USER_ENTERED_PAGE_FIELDS, userEnteredPageFromResponse, valuesPageFromResponse, type GoogleGridPage, type GoogleValuesPage, type SheetReadPage, type SheetsMetadata } from "./completeSheetRead";
 
 export const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -24,6 +25,9 @@ export type GoogleSheetsConfig = {
 };
 
 export interface SheetsGateway {
+  metadata?(): Promise<SheetsMetadata>;
+  getValuesPage?(sheetName: string, range: string): Promise<SheetReadPage<SheetRow[number]>>;
+  getUserEnteredPage?(sheetName: string, range: string): Promise<SheetReadPage<SheetUserEnteredCell>>;
   getValues(sheetName: string, range: string): Promise<SheetRow[]>;
   updateValues(sheetName: string, range: string, values: SheetRow[]): Promise<void>;
   appendValues(sheetName: string, range: string, values: SheetRow[]): Promise<void>;
@@ -131,6 +135,20 @@ export class GoogleSheetsClient implements SheetsGateway {
       "GOOGLE_SHEETS_READ_FAILED"
     );
     return result.values ?? [];
+  }
+
+  async metadata() {
+    return this.request<SheetsMetadata>(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount,frozenRowCount))`, { method: "GET" }, "GOOGLE_SHEETS_READ_FAILED");
+  }
+
+  async getValuesPage(sheetName: string, range: string) {
+    const result = await this.request<GoogleValuesPage>(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}/values/${encodeURIComponent(a1(sheetName, range))}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`, { method: "GET" }, "GOOGLE_SHEETS_READ_FAILED");
+    return valuesPageFromResponse(sheetName, range, result);
+  }
+
+  async getUserEnteredPage(sheetName: string, range: string) {
+    const result = await this.request<GoogleGridPage>(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(this.config.spreadsheetId)}?ranges=${encodeURIComponent(a1(sheetName, range))}&includeGridData=true&fields=${encodeURIComponent(USER_ENTERED_PAGE_FIELDS)}`, { method: "GET" }, "GOOGLE_SHEETS_READ_FAILED");
+    return userEnteredPageFromResponse(sheetName, range, result);
   }
 
   async updateValues(sheetName: string, range: string, values: SheetRow[]) {

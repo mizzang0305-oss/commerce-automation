@@ -13,13 +13,11 @@ import {
   SYNC_SHEET_NAME,
 } from "./contracts";
 import type { ProjectionSheetDiff } from "./projection";
+import { readCompleteSheetUserEntered, readCompleteSheetValues } from "@/lib/google-sheets/completeSheetRead";
 
 const QUEUE_CUTOVER_HEADERS = [...QUEUE_HEADERS, ...QUEUE_PROJECTION_EXTRA_HEADERS] as const;
 const CUTOVER_RANGES = {
   [SHEET_NAMES.commands]: "A1:O1000",
-  [SHEET_NAMES.queue]: "A1:AH1000",
-  [RESERVE_SHEET_NAME]: "A1:L1000",
-  [SYNC_SHEET_NAME]: "A1:L100",
 } as const;
 
 type FingerprintedRow = { rowNumber: number; rowHash: string };
@@ -66,6 +64,7 @@ export type PreCutoverSheetBaselineV2 = {
   queue: QueueCutoverFingerprint[];
   reserve: ReserveCutoverFingerprint[];
   sync: SyncCutoverFingerprint[];
+  headerHashes?: { queue: string; reserve: string; sync: string };
   aggregateHash: string;
   rawValuesStored: false;
   formulaTextStored: false;
@@ -79,9 +78,9 @@ export type PreCutoverSheetBaseline = PreCutoverSheetBaselineV1 | PreCutoverShee
 
 export async function capturePreCutoverSheetBaseline(gateway: CutoverSheetsGateway, now = new Date()): Promise<PreCutoverSheetBaselineV2> {
   const [queueRows, reserveRows, syncRows] = await Promise.all([
-    gateway.getUserEnteredCells(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-    gateway.getUserEnteredCells(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-    gateway.getUserEnteredCells(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+    semanticRows(gateway, SHEET_NAMES.queue),
+    semanticRows(gateway, RESERVE_SHEET_NAME),
+    semanticRows(gateway, SYNC_SHEET_NAME),
   ]);
   const queueValues = semanticRowsToValues(queueRows);
   const reserveValues = semanticRowsToValues(reserveRows);
@@ -112,6 +111,7 @@ export async function capturePreCutoverSheetBaseline(gateway: CutoverSheetsGatew
     snapshotHash: rowValue(syncValues[index + 1] ?? [], syncColumns, "Snapshot Hash"),
     rowHash: hashSemanticRow(row, syncRows[0]?.length ?? 0),
   }));
+  const headerHashes = { queue: hashSemanticRow(queueRows[0], queueRows[0].length), reserve: hashSemanticRow(reserveRows[0], reserveRows[0].length), sync: hashSemanticRow(syncRows[0], syncRows[0].length) };
   return {
     schemaVersion: "daily69-sheets-pre-cutover-baseline-v2",
     fingerprintMode: "USER_ENTERED_VALUE",
@@ -119,7 +119,8 @@ export async function capturePreCutoverSheetBaseline(gateway: CutoverSheetsGatew
     queue,
     reserve,
     sync,
-    aggregateHash: aggregateFingerprintHashV2({ queue, reserve, sync }),
+    headerHashes,
+    aggregateHash: aggregateFingerprintHashV2({ queue, reserve, sync, headerHashes }),
     rawValuesStored: false,
     formulaTextStored: false,
     effectiveValuesStored: false,
@@ -140,18 +141,20 @@ export async function verifyPreexistingRowsUnchanged(gateway: CutoverSheetsGatew
     if (aggregateFingerprintHashV1(baseline) !== baseline.aggregateHash) throw new Error("CUTOVER_BASELINE_HASH_INVALID");
   } else throw new Error("CUTOVER_BASELINE_SCHEMA_INVALID");
   let currentHashes: { queue: string[]; reserve: string[]; sync: string[] };
+  let headersUnchanged = true;
   if (baseline.schemaVersion === "daily69-sheets-pre-cutover-baseline-v2") {
     const [queueRows, reserveRows, syncRows] = await Promise.all([
-      gateway.getUserEnteredCells(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-      gateway.getUserEnteredCells(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-      gateway.getUserEnteredCells(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+      semanticRows(gateway, SHEET_NAMES.queue),
+      semanticRows(gateway, RESERVE_SHEET_NAME),
+      semanticRows(gateway, SYNC_SHEET_NAME),
     ]);
     currentHashes = { queue: semanticRowHashes(queueRows), reserve: semanticRowHashes(reserveRows), sync: semanticRowHashes(syncRows) };
+    if (baseline.headerHashes) headersUnchanged = Object.entries({ queue: queueRows, reserve: reserveRows, sync: syncRows }).every(([key, rows]) => hashSemanticRow(rows[0] ?? [], rows[0]?.length ?? 0) === baseline.headerHashes![key as keyof typeof baseline.headerHashes]);
   } else {
     const [queueRows, reserveRows, syncRows] = await Promise.all([
-      gateway.getValues(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-      gateway.getValues(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-      gateway.getValues(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+      formattedRows(gateway, SHEET_NAMES.queue),
+      formattedRows(gateway, RESERVE_SHEET_NAME),
+      formattedRows(gateway, SYNC_SHEET_NAME),
     ]);
     currentHashes = { queue: formattedRowHashes(queueRows), reserve: formattedRowHashes(reserveRows), sync: formattedRowHashes(syncRows) };
   }
@@ -160,13 +163,14 @@ export async function verifyPreexistingRowsUnchanged(gateway: CutoverSheetsGatew
   const sync = compareRowHashes(currentHashes.sync, baseline.sync);
   return {
     fingerprintMode,
+    headersUnchanged,
     queue,
     reserve,
     sync,
     existingRowsChanged: queue.changed + reserve.changed + sync.changed,
     existingRowsDeleted: queue.deleted + reserve.deleted + sync.deleted,
     existingRowsReorderedByUs: queue.reordered + reserve.reordered + sync.reordered,
-    pass: [queue, reserve, sync].every((result) => result.changed === 0 && result.deleted === 0 && result.reordered === 0),
+    pass: headersUnchanged && [queue, reserve, sync].every((result) => result.changed === 0 && result.deleted === 0 && result.reordered === 0),
   };
 }
 
@@ -192,9 +196,9 @@ export function assertFreshCutoverProjectionPlan(diff: Record<string, Projection
 
 export async function verifyFreshNamespaceRows(gateway: SheetsGateway, namespace: string) {
   const [queueRows, reserveRows, syncRows] = await Promise.all([
-    gateway.getValues(SHEET_NAMES.queue, CUTOVER_RANGES[SHEET_NAMES.queue]),
-    gateway.getValues(RESERVE_SHEET_NAME, CUTOVER_RANGES[RESERVE_SHEET_NAME]),
-    gateway.getValues(SYNC_SHEET_NAME, CUTOVER_RANGES[SYNC_SHEET_NAME]),
+    formattedRows(gateway, SHEET_NAMES.queue),
+    formattedRows(gateway, RESERVE_SHEET_NAME),
+    formattedRows(gateway, SYNC_SHEET_NAME),
   ]);
   const queueColumns = assertHeaders(queueRows[0] ?? [], QUEUE_CUTOVER_HEADERS, SHEET_NAMES.queue);
   const reserveColumns = assertHeaders(reserveRows[0] ?? [], RESERVE_HEADERS, RESERVE_SHEET_NAME);
@@ -248,10 +252,12 @@ function semanticRowsToValues(rows: SheetUserEnteredCell[][]): SheetRow[] {
 function aggregateFingerprintHashV1(value: Pick<PreCutoverSheetBaselineV1, "queue" | "reserve" | "sync">) {
   return hash(JSON.stringify({ queue: value.queue, reserve: value.reserve, sync: value.sync }));
 }
-function aggregateFingerprintHashV2(value: Pick<PreCutoverSheetBaselineV2, "queue" | "reserve" | "sync">) {
-  return hash(JSON.stringify({ fingerprintMode: "USER_ENTERED_VALUE", queue: value.queue, reserve: value.reserve, sync: value.sync }));
+function aggregateFingerprintHashV2(value: Pick<PreCutoverSheetBaselineV2, "queue" | "reserve" | "sync" | "headerHashes">) {
+  return hash(JSON.stringify({ fingerprintMode: "USER_ENTERED_VALUE", queue: value.queue, reserve: value.reserve, sync: value.sync, ...(value.headerHashes ? { headerHashes: value.headerHashes } : {}) }));
 }
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
+async function semanticRows(gateway: SheetsGateway, sheetName: string) { return (await readCompleteSheetUserEntered(gateway, sheetName)).rows; }
+async function formattedRows(gateway: SheetsGateway, sheetName: string) { return (await readCompleteSheetValues(gateway, sheetName)).rows; }
 
 export const CUTOVER_SHEET_RANGES = CUTOVER_RANGES;
 export const CUTOVER_COMMAND_HEADERS = COMMAND_HEADERS;

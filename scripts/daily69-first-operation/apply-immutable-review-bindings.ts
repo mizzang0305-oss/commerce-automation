@@ -5,6 +5,7 @@ import { atomicWriteJson } from "../../src/lib/queue-scheduler/atomicJson";
 import { planImmutableReviewOperationBindings } from "../../src/lib/queue-scheduler/immutableReviewBinding";
 import { LocalQueueRepository } from "../../src/lib/queue-scheduler/repository";
 import type { ImmutableCodexReviewOperationBindingRefV1 } from "../../src/lib/queue-scheduler/types";
+import { assertFirstOperationIdentity } from "../../src/lib/daily69-first-operation/operationIdentity";
 
 export async function applyImmutableBindings(input: { queueRoot: string; originRegistryPath: string; now?: Date }) {
   assertNoUploadEnvironment(process.env);
@@ -12,9 +13,10 @@ export async function applyImmutableBindings(input: { queueRoot: string; originR
   const repository = new LocalQueueRepository(queueRoot);
   const [items, manifest] = await Promise.all([repository.items(), readJson(join(queueRoot, "operation-manifest.json"))]);
   if (manifest.schemaVersion !== "daily69-first-operation-v2" || manifest.namespace !== basename(queueRoot)
-    || manifest.operationDate !== basename(queueRoot).replace(/^operation-/u, "") || manifest.armStatus !== "prepared") {
+    || manifest.armStatus !== "prepared") {
     throw new Error("IMMUTABLE_REVIEW_BINDING_OPERATION_NOT_PREPARED");
   }
+  assertFirstOperationIdentity({ namespace: manifest.namespace, operationDate: manifest.operationDate, attemptNumber: manifest.attemptNumber, previousAttemptNamespace: manifest.previousAttemptNamespace });
   const pending = items.filter((item) => item.operationCarryover && item.status === "video_ready_machine_qa" && item.reviewMetadata.codexReview === "not_executed")
     .sort((left, right) => left.queueRank - right.queueRank || left.id.localeCompare(right.id));
   const now = input.now ?? new Date();

@@ -1,5 +1,6 @@
 import type { SheetsGateway } from "./googleSheetsClient";
 import { COMMAND_HEADERS, LOG_HEADERS, QUEUE_HEADERS, SHEET_NAMES, isAllowedCommand, type SheetRow } from "./sheetSchemas";
+import { COMPLETE_SHEET_COLUMNS, parseBoundedSheetRange } from "./completeSheetRead";
 
 function columnIndex(letter: string) {
   return letter.split("").reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1;
@@ -30,6 +31,15 @@ export class MockCommerceControlGateway implements SheetsGateway {
   }
 
   async getValues(sheetName: string) { return structuredClone(this.sheets.get(sheetName) ?? []); }
+
+  async metadata() {
+    return { sheets: [...new Set([...this.sheets.keys(), ...Object.keys(COMPLETE_SHEET_COLUMNS)])].map((title, sheetId) => ({ properties: { title, sheetId, gridProperties: { rowCount: 2000, columnCount: 61 } } })) };
+  }
+
+  async getValuesPage(sheetName: string, range: string) {
+    const bounds = parseBoundedSheetRange(range);
+    return { sheetName, ...bounds, rows: (await this.getValues(sheetName)).slice(bounds.startRow - 1, bounds.endRow).map((row) => row.slice(0, bounds.columnCount)) };
+  }
 
   async updateValues(sheetName: string, range: string, values: SheetRow[]) {
     const match = /^([A-Z]+)(\d+)/.exec(range); if (!match) throw new Error("MOCK_RANGE_INVALID");

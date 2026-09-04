@@ -15,11 +15,40 @@ import type { RankedLiveProduct } from "../../src/lib/live-product-video";
 import { createTestCodexEvidence } from "./testCodexEvidence";
 import { firstOperationStatus } from "../../src/lib/daily69-first-operation";
 import { collectLevel3CompletionInput } from "../../src/lib/daily69-first-operation/postCloseout";
+import { applyImmutableBindings } from "../../scripts/daily69-first-operation/apply-immutable-review-bindings";
+import { firstOperationNamespace } from "../../src/lib/daily69-first-operation/operationIdentity";
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("immutable Codex review origin to operation binding", () => {
+  it("plans, applies, and reopens canonical attempt-2 bindings without changing immutable origin clocks", async () => {
+    const fixture = await bindingFixture(2);
+    const before = await readFile(fixture.registryPath, "utf8");
+    const planned = await plan(fixture);
+    expect(planned.bindings.every((binding) => binding.targetOperationNamespace === fixture.operationNamespace && binding.targetOperationDate === "2099-01-02")).toBe(true);
+    await atomicWriteJson(join(fixture.operationRoot, "operation-manifest.json"), { schemaVersion: "daily69-first-operation-v2", namespace: fixture.operationNamespace, operationDate: "2099-01-02", attemptNumber: 2, previousAttemptNamespace: "operation-2099-01-02", armStatus: "prepared" });
+    await expect(applyImmutableBindings({ queueRoot: fixture.operationRoot, originRegistryPath: fixture.registryPath, now: fixture.boundAt })).resolves.toMatchObject({ updated: 9 });
+    const updated = await fixture.repository.items();
+    for (const [index, item] of updated.entries()) {
+      const binding = await loadAndAssertImmutableReviewOperationBinding({ reference: item.reviewMetadata.operationBinding!, item, queueRoot: fixture.operationRoot });
+      expect(binding.targetOperationNamespace).toBe(fixture.operationNamespace);
+      expect(binding.originReviewedAt).toBe(fixture.evidence[index].reviewedAt);
+      expect(binding.boundToOperationAt).toBe(fixture.boundAt.toISOString());
+    }
+    expect(await readFile(fixture.registryPath, "utf8")).toBe(before);
+  });
+
+  it("rejects attempt/date mismatch before writing immutable bindings", async () => {
+    const fixture = await bindingFixture(2);
+    await expect(planImmutableReviewOperationBindings({ ...basePlanInput(fixture), targetOperationDate: "2099-01-03" })).rejects.toThrow("IMMUTABLE_REVIEW_TARGET_NAMESPACE_INVALID");
+    await expect(planImmutableReviewOperationBindings({ ...basePlanInput(fixture), targetOperationNamespace: "operation-2099-01-02-attempt-02" })).rejects.toThrow("IMMUTABLE_REVIEW_TARGET_NAMESPACE_INVALID");
+    await atomicWriteJson(join(fixture.operationRoot, "operation-manifest.json"), { schemaVersion: "daily69-first-operation-v2", namespace: fixture.operationNamespace, operationDate: "2099-01-02", attemptNumber: 1, previousAttemptNamespace: "", armStatus: "prepared" });
+    await expect(applyImmutableBindings({ queueRoot: fixture.operationRoot, originRegistryPath: fixture.registryPath, now: fixture.boundAt })).rejects.toThrow("FIRST_OPERATION_NAMESPACE_ATTEMPT_MISMATCH");
+    expect((await fixture.repository.items()).every((item) => !item.reviewMetadata.operationBinding)).toBe(true);
+    await expect(readFile(join(fixture.operationRoot, "review-bindings", "registry.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("creates exactly nine PASS bindings while preserving reviewedAt as a separate origin clock", async () => {
     const fixture = await bindingFixture();
     const planned = await plan(fixture);
@@ -29,8 +58,8 @@ describe("immutable Codex review origin to operation binding", () => {
       && !("reviewedAt" in entry))).toBe(true);
   });
 
-  it("stores digest-bound references and atomically promotes only exact prepared carry-forward items", async () => {
-    const fixture = await bindingFixture();
+  it.each([1, 2])("stores digest-bound references and preserves post-audit binding for attempt %d", async (attemptNumber) => {
+    const fixture = await bindingFixture(attemptNumber);
     const planned = await plan(fixture);
     const bindingRoot = join(fixture.operationRoot, "review-bindings");
     await mkdir(bindingRoot);
@@ -51,14 +80,15 @@ describe("immutable Codex review origin to operation binding", () => {
     expect(updated.filter((item) => item.status === "video_ready_autoqa" && item.reviewMetadata.codexReview === "pass" && item.reviewMetadata.operationBinding && !item.reviewMetadata.evidence)).toHaveLength(9);
 
     await mkdir(join(fixture.operationRoot, "closeout"));
-    const manifest = { schemaVersion: "daily69-first-operation-v2", decision: "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED", operationDate: "2099-01-02", armedAt: fixture.boundAt.toISOString(), expectedGitHead: "a".repeat(40), namespace: "operation-2099-01-02", attemptNumber: 1, previousAttemptNamespace: "", armStatus: "prepared", sourceNamespace: "source-canary", sourceDecision: "COUPANG_IMAGE_SKILL_USAGE_SCENES_V5_PROVEN_DAILY69_CAPACITY", sourceFileHashes: {}, sourceAssetHashes: {}, sourceBundleHash: "b".repeat(64), sourceHashAfterClone: "b".repeat(64), originalMutated: false, prevalidatedReady: 9, carryForwardCandidateCount: 9, verifiedReady: 9, scheduledRemaining: 0, batchSize: 3, reserve: 0, distinct: 9, schedule: [], safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 } } as const;
+    const manifest = { schemaVersion: "daily69-first-operation-v2", decision: "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED", operationDate: "2099-01-02", armedAt: fixture.boundAt.toISOString(), expectedGitHead: "a".repeat(40), namespace: fixture.operationNamespace, attemptNumber, previousAttemptNamespace: attemptNumber === 1 ? "" : "operation-2099-01-02", armStatus: "prepared", sourceNamespace: "source-canary", sourceDecision: "COUPANG_IMAGE_SKILL_USAGE_SCENES_V5_PROVEN_DAILY69_CAPACITY", sourceFileHashes: {}, sourceAssetHashes: {}, sourceBundleHash: "b".repeat(64), sourceHashAfterClone: "b".repeat(64), originalMutated: false, prevalidatedReady: 9, carryForwardCandidateCount: 9, verifiedReady: 9, scheduledRemaining: 0, batchSize: 3, reserve: 0, distinct: 9, schedule: [], safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 } } as const;
     await atomicWriteJson(join(fixture.operationRoot, "operation-manifest.json"), manifest);
-    await atomicWriteJson(join(fixture.root, "active-operation.json"), { schemaVersion: "daily69-first-operation-pointer-v2", namespace: manifest.namespace, operationDate: manifest.operationDate, attemptNumber: 1, expectedGitHead: manifest.expectedGitHead, armStatus: "prepared", decision: manifest.decision, SAFE_TO_UPLOAD: false });
+    await atomicWriteJson(join(fixture.root, "active-operation.json"), { schemaVersion: "daily69-first-operation-pointer-v2", namespace: manifest.namespace, operationDate: manifest.operationDate, attemptNumber, expectedGitHead: manifest.expectedGitHead, armStatus: "prepared", decision: manifest.decision, SAFE_TO_UPLOAD: false });
     await atomicWriteJson(join(fixture.operationRoot, "closeout", "level3-retained-evidence.json"), { schemaVersion: "daily69-level3-retained-evidence-v1", namespace: manifest.namespace, operationDate: manifest.operationDate, expectedGitHead: manifest.expectedGitHead, media: {}, sheets: { exact: false, queueRows: 0, reserveRows: 0, syncRows: 0, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "" }, runs: { scheduledBatchRuns: 0, batchResults: 0, claimed: 0, completed: 0, failed: 0, runIdsMatched: true, batchClaimResultCardinalityMatched: true, claimedIdsObserved: 0, resultIdsObserved: 0, duplicateClaimIds: 0, duplicateResultIds: 0 }, safety: { uploadCalls: 0, platformCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0 } });
     const snapshot = await firstOperationStatus(fixture.operationRoot);
     const input = await collectLevel3CompletionInput(fixture.operationRoot, snapshot, { inspectMedia: async (path) => { const bytes = await readFile(path); return { videoPath: path, videoSha256: sha(bytes), videoSize: bytes.length, videoCodec: "h264", audioCodec: "aac", width: 1080, height: 1920, fps: 30, durationSeconds: 30, passed: true, blockers: [] }; } });
     expect(input.queue).toMatchObject({ directReviewBindings: 0, immutableCarryForwardBindings: 9, reviewEvidenceModeConflicts: 0 });
     expect(input.retainedEvidence?.media).toMatchObject({ codexReviewBindings: 9, exactVideoHashBindings: 9, directReviewBindings: 0, immutableCarryForwardBindings: 9, invalidCodexReviewBindings: 0 });
+    expect(input.pointer).toMatchObject({ state: "MATCH" });
   });
 
   it("fails for a different video SHA, different product, rerender, machine-QA mismatch, or stale business eligibility", async () => {
@@ -168,9 +198,10 @@ describe("immutable Codex review origin to operation binding", () => {
   });
 });
 
-async function bindingFixture() {
+async function bindingFixture(attemptNumber = 1) {
   const root = await mkdtemp(join(tmpdir(), "immutable-review-binding-")); roots.push(root);
-  const operationRoot = join(root, "operation-2099-01-02");
+  const operationNamespace = firstOperationNamespace("2099-01-02", attemptNumber);
+  const operationRoot = join(root, operationNamespace);
   await mkdir(operationRoot);
   const repository = new LocalQueueRepository(operationRoot);
   await repository.writeSettings({ ...DEFAULT_QUEUE_SCHEDULER_SETTINGS, dailyTargetCount: 9, pilotMaxDailyItems: 9, processingDailyCap: 9, enabled: true });
@@ -237,7 +268,7 @@ async function bindingFixture() {
   };
   const registryPath = join(root, "origin-registry.json");
   await atomicWriteJson(registryPath, registryOriginal);
-  return { root, operationRoot, repository, items, evidence, registryPath, registryOriginal, boundAt: new Date("2098-12-31T12:00:00.000Z") };
+  return { root, operationRoot, operationNamespace, repository, items, evidence, registryPath, registryOriginal, boundAt: new Date("2098-12-31T12:00:00.000Z") };
 }
 
 function plan(fixture: Awaited<ReturnType<typeof bindingFixture>>) { return planWithItems(fixture, fixture.items); }
@@ -245,7 +276,7 @@ function planWithItems(fixture: Awaited<ReturnType<typeof bindingFixture>>, item
   return planImmutableReviewOperationBindings({ ...basePlanInput(fixture), items });
 }
 function basePlanInput(fixture: Awaited<ReturnType<typeof bindingFixture>>) {
-  return { items: fixture.items, targetOperationNamespace: "operation-2099-01-02", targetOperationDate: "2099-01-02", originRegistryPath: fixture.registryPath, boundToOperationAt: fixture.boundAt, requirePreparedItems: true, now: fixture.boundAt };
+  return { items: fixture.items, targetOperationNamespace: fixture.operationNamespace, targetOperationDate: "2099-01-02", originRegistryPath: fixture.registryPath, boundToOperationAt: fixture.boundAt, requirePreparedItems: true, now: fixture.boundAt };
 }
 async function registryValue(path: string) { return JSON.parse(await readFile(path, "utf8")) as { evidence: Array<Record<string, unknown>>; results: Array<Record<string, unknown>>; [key: string]: unknown }; }
 function sha(value: Buffer) { return createHash("sha256").update(value).digest("hex"); }
