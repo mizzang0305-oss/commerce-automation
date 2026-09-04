@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { atomicWriteJson } from "../../src/lib/queue-scheduler/atomicJson";
 import { NoUploadGoogleSheetsClient } from "../../src/lib/queue-control-integration";
 import { SHEET_NAMES } from "../../src/lib/google-sheets/sheetSchemas";
+import { COMPLETE_SHEET_COLUMNS, readCompleteSheetValues } from "../../src/lib/google-sheets/completeSheetRead";
+import { RESERVE_SHEET_NAME, SYNC_SHEET_NAME } from "../../src/lib/queue-control-integration/contracts";
 
 async function main() {
   const root = resolve(requiredEnv("QUEUE_SCHEDULER_ROOT"));
@@ -14,12 +16,12 @@ async function main() {
   const baseSheets = [SHEET_NAMES.dashboard, SHEET_NAMES.queue, SHEET_NAMES.settings, SHEET_NAMES.guide, SHEET_NAMES.commands, SHEET_NAMES.logs];
   if (baseSheets.some((name) => !names.includes(name))) throw new Error("GOOGLE_SHEETS_SCHEMA_MISMATCH");
   const ranges = new Map<string, string>([
-    [SHEET_NAMES.dashboard, "A1:Z500"], [SHEET_NAMES.queue, "A1:AH1000"], [SHEET_NAMES.settings, "A1:Z500"],
+    [SHEET_NAMES.dashboard, "A1:Z500"], [SHEET_NAMES.settings, "A1:Z500"],
     [SHEET_NAMES.guide, "A1:Z500"], [SHEET_NAMES.commands, "A1:O1000"], [SHEET_NAMES.logs, "A1:Z2000"]
   ]);
   const sheets = [];
-  for (const name of baseSheets) {
-    const rows = await client.getValues(name, ranges.get(name)!);
+  for (const name of [...baseSheets, ...[RESERVE_SHEET_NAME, SYNC_SHEET_NAME].filter((sheetName) => names.includes(sheetName))]) {
+    const rows = COMPLETE_SHEET_COLUMNS[name] ? (await readCompleteSheetValues(client, name)).rows : await client.getValues(name, ranges.get(name)!);
     sheets.push({ name, headers: (rows[0] ?? []).map(String), rowCount: Math.max(0, rows.length - 1), sanitizedHash: hash(JSON.stringify(rows)) });
   }
   await atomicWriteJson(resolve(root, `${label}-sheets-snapshot.json`), { schemaVersion: "daily69-first-operation-sheets-snapshot-v1", label, worksheetNames: names, baseWorksheetCount: 6, sheets, credentialIdentifiersStored: false, rawValuesStored: false, driveCalls: 0, SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 });

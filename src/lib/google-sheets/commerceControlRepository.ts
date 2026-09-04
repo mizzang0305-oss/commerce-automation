@@ -1,6 +1,7 @@
 import "server-only";
 
 import { GoogleSheetsClient, googleDriveConfigured, googleSheetsConfigured, type SheetsGateway } from "./googleSheetsClient";
+import { readCompleteSheetValues } from "./completeSheetRead";
 import { SheetsCommandRepository } from "./sheetsCommandRepository";
 import { SheetsLogRepository } from "./sheetsLogRepository";
 import { SheetsQueueRepository } from "./sheetsQueueRepository";
@@ -52,7 +53,7 @@ export class CommerceControlRepository {
       if (!/^[A-Za-z0-9_-]{1,96}$/u.test(configured)) throw new Error("QUEUE_CONTROL_NAMESPACE_INVALID");
       return configured;
     }
-    const rows = await this.gateway.getValues(SYNC_SHEET_NAME, "A1:L100");
+    const { rows } = await readCompleteSheetValues(this.gateway, SYNC_SHEET_NAME);
     const columns = assertHeaders(rows[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
     const completed = rows.slice(1).filter((row) => rowValue(row, columns, "Projection Status") === "completed" && rowValue(row, columns, "Namespace"));
     if (completed.length === 0) throw new Error("ACTIVE_OPERATION_NAMESPACE_NOT_FOUND");
@@ -62,7 +63,7 @@ export class CommerceControlRepository {
   async queueControlReserve(namespace?: string) {
     const activeNamespace = namespace ?? await this.activeNamespace();
     if (!activeNamespace) throw new Error("ACTIVE_OPERATION_NAMESPACE_NOT_FOUND");
-    const rows = await this.gateway.getValues(RESERVE_SHEET_NAME, "A1:L1000");
+    const { rows } = await readCompleteSheetValues(this.gateway, RESERVE_SHEET_NAME);
     const columns = assertHeaders(rows[0] ?? [], RESERVE_HEADERS, RESERVE_SHEET_NAME);
     return rows.slice(1).filter((row) => rowValue(row, columns, "Product Key Hash") && (!activeNamespace || rowValue(row, columns, "Namespace") === activeNamespace)).map((row) => ({
       queueDate: rowValue(row, columns, "Queue Date"), rank: Number(rowValue(row, columns, "Reserve Rank") || 0),
@@ -74,7 +75,7 @@ export class CommerceControlRepository {
 
   private async integrationDashboard() {
     try {
-      const [reserveRows, syncRows] = await Promise.all([this.gateway.getValues(RESERVE_SHEET_NAME, "A1:L1000"), this.gateway.getValues(SYNC_SHEET_NAME, "A1:L100")]);
+      const [{ rows: reserveRows }, { rows: syncRows }] = await Promise.all([readCompleteSheetValues(this.gateway, RESERVE_SHEET_NAME), readCompleteSheetValues(this.gateway, SYNC_SHEET_NAME)]);
       const namespace = await this.activeNamespace();
       const syncColumns = assertHeaders(syncRows[0] ?? [], SYNC_HEADERS, SYNC_SHEET_NAME);
       const sync = [...syncRows.slice(1)].reverse().find((row) => rowValue(row, syncColumns, "Namespace") === namespace) ?? [];

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
+import { parseFirstOperationNamespace } from "@/lib/daily69-first-operation/operationIdentity";
 import {
   assertCodexExecutorReceipt,
   assertCodexMachineQaArtifact,
@@ -353,7 +354,8 @@ async function loadOriginRegistry(path: string) {
 }
 
 function assertTarget(namespace: string, date: string) {
-  if (!isOperationNamespace(namespace) || namespace !== `operation-${date}` || !/^\d{4}-\d{2}-\d{2}$/u.test(date)) {
+  const identity = parseFirstOperationNamespace(namespace);
+  if (!identity || identity.operationDate !== date) {
     throw new Error("IMMUTABLE_REVIEW_TARGET_NAMESPACE_INVALID");
   }
 }
@@ -382,7 +384,7 @@ async function inspectFile(path: string, code: string) {
   }
 }
 
-function isOperationNamespace(value: unknown): value is string { return typeof value === "string" && /^operation-\d{4}-\d{2}-\d{2}$/u.test(value); }
+function isOperationNamespace(value: unknown): value is string { return parseFirstOperationNamespace(value) !== null; }
 function isSha256(value: unknown): value is string { return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value); }
 function samePath(left: string, right: string) { return process.platform === "win32" ? resolve(left).toLowerCase() === resolve(right).toLowerCase() : resolve(left) === resolve(right); }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }

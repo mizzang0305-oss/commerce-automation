@@ -120,6 +120,10 @@ describe("first no-upload Daily69 operation", () => {
       expectedGitHead: "f".repeat(40),
     });
     expect(armed.manifest).toMatchObject({ operationDate: "2026-08-17", namespace: "operation-2026-08-17-attempt-2", attemptNumber: 2, previousAttemptNamespace: "operation-2026-08-17", armStatus: "prepared" });
+    expect(armed.manifest.materializationEligibility).toMatchObject({ pass: true });
+    await transitionFirstOperationArmStatus(armed.operationRoot, "projection_verified");
+    await transitionFirstOperationArmStatus(armed.operationRoot, "tasks_armed");
+    await expect(promoteFirstOperationActivePointer(armed.operationRoot)).resolves.toMatchObject({ namespace: armed.manifest.namespace, operationDate: "2026-08-17", attemptNumber: 2, expectedGitHead: "f".repeat(40), armStatus: "tasks_armed", SAFE_TO_UPLOAD: false });
     await expect(armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase: join(fixture.parent, "missed"), assetBoundaryRoot: fixture.parent, usageMaterializationAssetRoot: fixture.sourceRoot, now: new Date("2026-08-17T00:00:00+09:00"), operationDate: "2026-08-17", attemptNumber: 2, previousAttemptNamespace: "operation-2026-08-17", expectedGitHead: "f".repeat(40) }))
       .rejects.toThrow("TARGET_OPERATION_DATE_WINDOW_MISSED");
   });

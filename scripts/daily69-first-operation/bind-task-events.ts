@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { finalizerExecutionTimeBounds, FINALIZER_TASK_NAME } from "../../src/lib/daily69-first-operation/finalizerResult";
 import { bindRetainedTaskEvents, retainedExecutionTimeBounds } from "../../src/lib/daily69-first-operation/postCloseout";
 import type { SanitizedTaskSchedulerEvent } from "../../src/lib/daily69-first-operation/taskProvenance";
 
@@ -17,24 +18,32 @@ async function main() {
   if (result.malformedReceipts > 0 || result.unproven > 0 || result.bound + result.alreadyBound !== result.receipts) process.exitCode = 2;
 }
 
-export async function queryOperationalLog(operationRoot: string): Promise<SanitizedTaskSchedulerEvent[]> {
+export async function queryOperationalLog(operationRoot: string, options: { finalizerOnly?: boolean } = {}): Promise<SanitizedTaskSchedulerEvent[]> {
   if (process.platform !== "win32") throw new Error("TASK_SCHEDULER_OPERATIONAL_LOG_WINDOWS_ONLY");
-  const bounds = await retainedExecutionTimeBounds(operationRoot);
+  const bounds = await (options.finalizerOnly ? finalizerExecutionTimeBounds(operationRoot) : retainedExecutionTimeBounds(operationRoot));
   if (bounds.malformedReceipts > 0) throw new Error("DAILY69_RETAINED_EXECUTION_RECEIPTS_INVALID");
-  const script = operationalLogScript(bounds.startUtc, bounds.endUtc);
-  const { stdout } = await execute("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
-    windowsHide: true,
-    timeout: 45_000,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  return parseSanitizedEvents(stdout);
+  const script = operationalLogScript(bounds.startUtc, bounds.endUtc, options.finalizerOnly ? [FINALIZER_TASK_NAME] : undefined);
+  try {
+    const { stdout } = await execute("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
+      windowsHide: true, timeout: 45_000, maxBuffer: 4 * 1024 * 1024,
+    });
+    return parseSanitizedEvents(stdout);
+  } catch (error) {
+    const failure = error as { killed?: boolean; code?: string; stderr?: string };
+    if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw new Error("DAILY69_TASK_EVENTS_QUERY_OUTPUT_LIMIT");
+    if (failure.killed) throw new Error("DAILY69_TASK_EVENTS_QUERY_TIMEOUT");
+    const childCode = failure.stderr?.trim();
+    if (childCode === "DAILY69_TASK_EVENTS_QUERY_OUTPUT_LIMIT" || childCode === "TASK_SCHEDULER_OPERATIONAL_EVENTS_INVALID") throw new Error(childCode);
+    if (error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message)) throw error;
+    throw new Error("DAILY69_TASK_EVENTS_QUERY_FAILED");
+  }
 }
 
 async function readSanitizedEvents(path: string) {
   return parseSanitizedEvents(await readFile(path, "utf8"));
 }
 
-function parseSanitizedEvents(content: string): SanitizedTaskSchedulerEvent[] {
+export function parseSanitizedEvents(content: string): SanitizedTaskSchedulerEvent[] {
   const parsed = JSON.parse(content) as unknown;
   const values = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray((parsed as { events?: unknown }).events)
     ? (parsed as { events: unknown[] }).events : parsed ? [parsed] : [];
@@ -58,41 +67,36 @@ function isSanitizedEvent(value: unknown): value is SanitizedTaskSchedulerEvent 
     && typeof event.taskName === "string" && event.taskName.length > 0
     && typeof event.taskInstanceId === "string"
     && (event.processId === undefined || Number.isSafeInteger(event.processId))
-    && (event.resultCode === undefined || Number.isSafeInteger(event.resultCode));
+    && (event.resultCode === undefined || Number.isSafeInteger(event.resultCode))
+    && (event.principalSidSha256 === undefined || /^[a-f0-9]{64}$/u.test(event.principalSidSha256));
 }
 
-function operationalLogScript(startUtc: string, endUtc: string) {
+export function operationalLogScript(startUtc: string, endUtc: string, taskNames = [
+  "Minz-Commerce-ControlRunner-NoUpload-V1", "Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-Daily69-Closeout-NoUpload-V1",
+]) {
+  const start = new Date(startUtc).toISOString();
+  const end = new Date(endUtc).toISOString();
+  if (taskNames.length === 0 || taskNames.length > 4 || taskNames.some((name) => !/^[A-Za-z0-9_-]{1,128}$/u.test(name))) throw new Error("TASK_SCHEDULER_QUERY_TASK_INVALID");
+  const taskPredicate = taskNames.map((name) => "Data[@Name='TaskName']='\\" + name + "'").join(" or ");
+  const helper = resolve(dirname(fileURLToPath(import.meta.url)), "operational-log-query.cs").split("'").join("''");
   return String.raw`
 $ErrorActionPreference = 'Stop'
-$startUtc = [DateTimeOffset]::Parse('${startUtc}').UtcDateTime
-$endUtc = [DateTimeOffset]::Parse('${endUtc}').UtcDateTime
-$ids = @(107, 100, 129, 200, 201, 102, 110)
-$result = @()
-$events = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-TaskScheduler/Operational'; Id = $ids; StartTime = $startUtc; EndTime = $endUtc } -ErrorAction Stop
-foreach ($eventRecord in $events) {
-  $xml = [xml]$eventRecord.ToXml()
-  $data = @{}
-  foreach ($node in @($xml.Event.EventData.Data)) {
-    $name = [string]$node.GetAttribute('Name')
-    if ($name) { $data[$name] = [string]$node.'#text' }
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$xpath = "*[System[(EventID=107 or EventID=100 or EventID=129 or EventID=200 or EventID=201 or EventID=102 or EventID=110) and TimeCreated[@SystemTime >= '${start}' and @SystemTime <= '${end}']] and EventData[(${taskPredicate})]]"
+try {
+  Add-Type -LiteralPath '${helper}' -ReferencedAssemblies 'System.Core','System.Xml','System.Web.Extensions' -ErrorAction Stop
+  [Console]::Out.Write([Daily69OperationalLogQuery]::Read($xpath))
+} catch {
+  $errorCode = 'DAILY69_TASK_EVENTS_QUERY_FAILED'
+  $exception = $_.Exception
+  while ($null -ne $exception) {
+    if ($exception.Message -in @('DAILY69_TASK_EVENTS_QUERY_OUTPUT_LIMIT','TASK_SCHEDULER_OPERATIONAL_EVENTS_INVALID')) { $errorCode = $exception.Message; break }
+    $exception = $exception.InnerException
   }
-  $taskName = [string](@($data['TaskName'], $data['Task'], $data['Path']) | Where-Object { $_ } | Select-Object -First 1)
-  $taskInstanceId = [string](@($data['TaskInstanceId'], $data['InstanceId'], $data['TaskInstance']) | Where-Object { $_ } | Select-Object -First 1)
-  $processIdValue = [string](@($data['ProcessId'], $data['EnginePID']) | Where-Object { $_ } | Select-Object -First 1)
-  $resultCodeValue = [string](@($data['ResultCode'], $data['Result'], $data['ErrorCode']) | Where-Object { $_ -ne $null -and $_ -ne '' } | Select-Object -First 1)
-  $record = [ordered]@{
-    eventRecordId = [long]$eventRecord.RecordId
-    eventId = [int]$eventRecord.Id
-    timeCreatedUtc = $eventRecord.TimeCreated.ToUniversalTime().ToString('o')
-    taskName = $taskName
-    taskInstanceId = $taskInstanceId
-  }
-  if ($processIdValue -match '^\d+$') { $record.processId = [int]$processIdValue }
-  if ($resultCodeValue -match '^0[xX][0-9a-fA-F]+$') { $record.resultCode = [Convert]::ToInt64($resultCodeValue.Substring(2), 16) }
-  elseif ($resultCodeValue -match '^-?\d+$') { $record.resultCode = [long]$resultCodeValue }
-  $result += [pscustomobject]$record
+  [Console]::Error.WriteLine($errorCode)
+  exit 3
 }
-@($result) | ConvertTo-Json -Depth 4 -Compress
 `;
 }
 

@@ -13,6 +13,7 @@ import {
   type PreCutoverSheetBaseline,
 } from "@/lib/queue-control-integration/cutover";
 import { firstOperationStatus, verifyFirstOperationMaterializationEligibility, type FirstOperationManifest } from "./index";
+import { auditFinalizerResult } from "./finalizerResult";
 import { TASK_PROVENANCE_EVENT_IDS, classifyTaskInvocationProvenance, type SanitizedTaskSchedulerEvent } from "./taskProvenance";
 import {
   normalizeFirstOperationLifecycleStatus,
@@ -181,6 +182,7 @@ export async function recomputePostCloseout(operationRoot: string, nowOrDependen
   now?: Date;
   sheetsGateway?: Level3SheetsAuditGateway;
   inspectMedia?: typeof inspectQueueMediaEvidence;
+  finalizerEvents?: SanitizedTaskSchedulerEvent[];
 } = new Date()) {
   const root = resolve(operationRoot);
   const dependencies = nowOrDependencies instanceof Date ? { now: nowOrDependencies } : nowOrDependencies;
@@ -192,6 +194,8 @@ export async function recomputePostCloseout(operationRoot: string, nowOrDependen
   const closeoutPath = join(root, "closeout", "closeout-report.json");
   const closeout = await readJson<Record<string, unknown> | null>(closeoutPath, null);
   matrix = appendGate(matrix, closeoutReportGate(closeout, snapshot.manifest, matrix));
+  // This gate belongs only to the post-exit audit, never to Finalizer's own closeout.
+  matrix = appendGate(matrix, await auditFinalizerResult(root, snapshot.manifest, dependencies.finalizerEvents));
   const report = {
     schemaVersion: "daily69-post-closeout-audit-v1",
     auditedAt: (dependencies.now ?? new Date()).toISOString(),

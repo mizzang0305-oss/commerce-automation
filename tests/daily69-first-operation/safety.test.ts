@@ -34,7 +34,7 @@ describe("first operation task safety", () => {
     expect(install).toContain("-StartWhenAvailable");
     expect(install).toContain("FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED");
     expect(install).toContain("daily69:first-day:arm-status");
-    expect(install).toContain('$expectedTriggerDate = if ($Role -eq "finalizer") { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }');
+    expect(install).toContain("$expectedTriggerDate = if ($Role -in @('closeout', 'finalizer')) { $operationLocal.AddDays(1).Date } else { $operationLocal.Date }");
     expect(common).toContain("RUNTIME_GIT_HEAD_MISMATCH");
     expect(common).toContain("BATCH_SLOT_ALREADY_CLAIMED");
     expect(install).toContain("FIRST_OPERATION_TASK_BINDING_MISMATCH");

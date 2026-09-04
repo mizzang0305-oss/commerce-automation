@@ -1,8 +1,11 @@
 import { resolve } from "node:path";
 import { recomputePostCloseout } from "../../src/lib/daily69-first-operation/postCloseout";
+import { queryOperationalLog } from "./bind-task-events";
 
 async function main() {
-  const report = await recomputePostCloseout(resolve(requiredRoot()));
+  const root = resolve(requiredRoot());
+  const finalizerEvents = await queryOperationalLog(root, { finalizerOnly: true }).catch(() => []);
+  const report = await recomputePostCloseout(root, { finalizerEvents });
   process.stdout.write(`${JSON.stringify({ event: "daily69_post_closeout_audit", completion: report.completion, matrix: report.matrix, SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 })}\n`);
   if (report.completion !== "PASS") process.exitCode = report.completion === "PENDING" ? 2 : 3;
 }

@@ -27,6 +27,7 @@ export type SanitizedTaskSchedulerEvent = {
   taskInstanceId: string;
   processId?: number;
   resultCode?: number;
+  principalSidSha256?: string;
 };
 
 export type TaskProvenanceResult = {

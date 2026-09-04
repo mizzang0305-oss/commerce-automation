@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { readJson } from "../../src/lib/queue-scheduler/atomicJson";
 import {
-  assertFreshAttemptCutover,
   assertFreshCutoverProjectionPlan,
   NoUploadGoogleSheetsClient,
   QueueProjectionService,
@@ -15,6 +14,7 @@ import {
   verifyFirstOperationMaterializationEligibility,
 } from "../../src/lib/daily69-first-operation";
 import { LocalQueueRepository } from "../../src/lib/queue-scheduler";
+import { assertFirstOperationAttemptCutover } from "../../src/lib/daily69-first-operation/attemptCutover";
 
 const PHASES = ["plan", "project", "verify"] as const;
 type Phase = typeof PHASES[number];
@@ -29,12 +29,7 @@ async function main() {
   if (snapshot.manifest.namespace !== namespace) throw new Error("CUTOVER_NAMESPACE_BINDING_MISMATCH");
   if (kstDate(new Date()) >= snapshot.manifest.operationDate) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
   await verifyFirstOperationMaterializationEligibility(operationRoot);
-  assertFreshAttemptCutover({
-    namespace,
-    operationDate: snapshot.manifest.operationDate,
-    attemptNumber: snapshot.manifest.attemptNumber ?? 1,
-    previousAttemptNamespace: snapshot.manifest.previousAttemptNamespace ?? "",
-  });
+  await assertFirstOperationAttemptCutover(operationRoot, snapshot.manifest);
   const baseline = await readJson<PreCutoverSheetBaseline | null>(resolve(operationRoot, "pre-cutover-sheet-baseline.json"), null);
   if (!baseline) throw new Error("CUTOVER_BASELINE_NOT_FOUND");
   const gateway = new NoUploadGoogleSheetsClient();
@@ -56,6 +51,9 @@ async function main() {
     return;
   }
 
+  // Reopen the terminal predecessor immediately before the only external write.
+  await assertFirstOperationAttemptCutover(operationRoot, (await firstOperationStatus(operationRoot)).manifest);
+  if (!(await verifyPreexistingRowsUnchanged(gateway, baseline)).pass) throw new Error("CUTOVER_EXISTING_ROW_IMMUTABILITY_FAILED");
   await projection.projectAppendOnly();
   const post = await verifyPreexistingRowsUnchanged(gateway, baseline);
   if (!post.pass) throw new Error("CUTOVER_EXISTING_ROW_IMMUTABILITY_FAILED");

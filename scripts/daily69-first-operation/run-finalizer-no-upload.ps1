@@ -7,70 +7,71 @@ param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedGitHead,
     [Parameter(Mandatory = $true)][string]$EnvFile
 )
-$ErrorActionPreference = "Stop"
-
-function Write-FinalizerSummary {
-    param([string]$Outcome, [string]$SafeError, [int]$ExitCode)
-    [ordered]@{
-        event = 'daily69_natural_closeout_finalizer_wrapper_completed'
-        outcome = $Outcome
-        safeError = $SafeError
-        exitCode = $ExitCode
-        SAFE_TO_UPLOAD = $false
-        PLATFORM_UPLOAD = 0
-    } | ConvertTo-Json -Compress | Write-Output
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'principal-identity.ps1')
+. (Join-Path $PSScriptRoot 'finalizer-result.ps1')
+. (Join-Path $PSScriptRoot 'timing-contract.ps1')
+$taskName = 'Minz-Commerce-Daily69-Finalizer-NoUpload-V1'
+$result = [ordered]@{
+    schemaVersion='daily69-finalizer-result-v1'; resultId=[guid]::NewGuid().ToString('N')
+    namespace=$Namespace; operationDate=''; expectedGitHead=$ExpectedGitHead; actualGitHead=''
+    taskName=$taskName; processId=$PID; startedAt=[datetimeoffset]::UtcNow.ToString('o'); finishedAt=''
+    childExitCode=-1; wrapperExitCode=3; outcome='failed'; safeError='DAILY69_FINALIZER_UNEXPECTED'
+    outputSha256=Get-Daily69FinalizerTextHash ''; principalSidSha256=''; taskActionSha256=''
+    SAFE_TO_UPLOAD=$false; PLATFORM_UPLOAD=0
 }
-
-function Safe-Code([object]$Value, [string]$Fallback) {
-    $candidate = [string]$Value
-    if ($candidate -match '^[A-Z0-9_:-]{1,160}$') { return $candidate }
-    return $Fallback
-}
-
+$queue = $null
+$evidenceQueue = $null
 try {
-    $root = (Resolve-Path -LiteralPath $WorktreeRoot).Path
     $queue = (Resolve-Path -LiteralPath $QueueRoot).Path
-    $source = (Resolve-Path -LiteralPath $SourceRoot).Path
-    $envPath = (Resolve-Path -LiteralPath $EnvFile).Path
     if ((Split-Path -Leaf $queue) -ne $Namespace) { throw 'FIRST_OPERATION_NAMESPACE_MISMATCH' }
+    $manifest = Get-Content -LiteralPath (Join-Path $queue 'operation-manifest.json') -Raw -Encoding utf8 | ConvertFrom-Json
+    $result.operationDate = [string]$manifest.operationDate
+    if ($manifest.namespace -eq $Namespace -and $result.operationDate -match '^\d{4}-\d{2}-\d{2}$') { $evidenceQueue = $queue }
+    if ($manifest.namespace -ne $Namespace -or $manifest.expectedGitHead -ne $ExpectedGitHead) { throw 'FIRST_OPERATION_TASK_BINDING_MISMATCH' }
+    $root = (Resolve-Path -LiteralPath $WorktreeRoot).Path
     $actualHead = (& git.exe -C $root rev-parse HEAD 2>$null | Out-String).Trim()
-    $gitExitCode = $LASTEXITCODE
-    if ($gitExitCode -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw 'RUNTIME_GIT_HEAD_MISMATCH' }
+    $result.actualGitHead = $actualHead
+    if ($LASTEXITCODE -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw 'RUNTIME_GIT_HEAD_MISMATCH' }
     $dirty = (& git.exe -C $root status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
-    $manifest = Get-Content -LiteralPath (Join-Path $queue 'operation-manifest.json') -Raw -Encoding utf8 | ConvertFrom-Json
-    if ([string]$manifest.namespace -ne $Namespace -or [string]$manifest.expectedGitHead -ne $ExpectedGitHead) { throw 'FIRST_OPERATION_TASK_BINDING_MISMATCH' }
-
+    $timing = Get-Daily69Timing -OperationDate $result.operationDate
+    $now = [datetimeoffset]::UtcNow
+    if ($now -lt $timing.finalizerAt.ToUniversalTime() -or $now -ge $timing.finalizerDeadline.ToUniversalTime()) { throw 'DAILY69_FINALIZER_OUTSIDE_WINDOW' }
+    $identity = Get-Daily69FinalizerTaskIdentity -TaskName $taskName
+    $result.principalSidSha256 = $identity.principalSidSha256
+    $result.taskActionSha256 = $identity.taskActionSha256
+    $contract = Get-Content -LiteralPath (Join-Path $queue 'task-definitions\finalizer-task-contract.json') -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($contract.schemaVersion -ne 'daily69-finalizer-task-contract-v1' -or $contract.namespace -ne $Namespace -or $contract.operationDate -ne $result.operationDate -or $contract.expectedGitHead -ne $ExpectedGitHead -or $contract.taskName -ne $taskName -or $contract.principalSidSha256 -ne $identity.principalSidSha256 -or $contract.taskActionSha256 -ne $identity.taskActionSha256) { throw 'DAILY69_FINALIZER_TASK_CONTRACT_MISMATCH' }
+    foreach ($priorTask in @('Minz-Commerce-VideoBatch-NoUpload-V1','Minz-Commerce-ControlRunner-NoUpload-V1','Minz-Commerce-Daily69-Closeout-NoUpload-V1')) {
+        if ([string](Get-ScheduledTask -TaskName $priorTask -ErrorAction Stop).State -eq 'Running') { throw 'DAILY69_FINALIZER_PRIOR_TASK_RUNNING' }
+    }
+    $source = (Resolve-Path -LiteralPath $SourceRoot).Path
+    $envPath = (Resolve-Path -LiteralPath $EnvFile).Path
     . (Join-Path $root 'scripts\queue-control-integration\common-control-no-upload.ps1') -WorktreeRoot $root -QueueRoot $queue -Namespace $Namespace -EnvFile $envPath
     . (Join-Path $root 'scripts\queue-scheduler\common-no-upload.ps1') -WorktreeRoot $root -EnvFile $envPath
-    $env:QUEUE_SCHEDULER_ROOT = $queue
-    $env:QUEUE_CONTROL_NAMESPACE = $Namespace
-    $env:FIRST_OPERATION_SOURCE_ROOT = $source
-    $env:QUEUE_SCHEDULER_EXPECTED_GIT_HEAD = $ExpectedGitHead
-    $env:SAFE_TO_UPLOAD = 'false'
-    $env:SAFE_TO_PUBLIC_UPLOAD = 'false'
-    $env:YOUTUBE_AUTO_UPLOAD = 'false'
-    $env:TIKTOK_AUTO_UPLOAD = 'false'
-    $env:THREADS_AUTO_POST = 'false'
-    $env:COMMENT_AUTOMATION = 'false'
-    $output = @(& npm.cmd run daily69:first-day:finalize-natural-closeout --silent -- --queue-root $queue 2>&1)
-    $childExit = $LASTEXITCODE
-    if ($childExit -eq 0) {
-        Write-FinalizerSummary -Outcome success -SafeError '' -ExitCode 0
-        exit 0
-    }
-    $safeError = 'DAILY69_NATURAL_CLOSEOUT_FINALIZER_FAILED'
-    foreach ($line in $output) {
-        try {
-            $value = ([string]$line) | ConvertFrom-Json -ErrorAction Stop
-            if ($value.safeError) { $safeError = Safe-Code $value.safeError $safeError; break }
-        } catch { }
-    }
-    $exitCode = if ($childExit -eq 2) { 2 } else { 3 }
-    Write-FinalizerSummary -Outcome $(if ($exitCode -eq 2) { 'pending' } else { 'failed' }) -SafeError $safeError -ExitCode $exitCode
-    exit $exitCode
+    $env:QUEUE_SCHEDULER_ROOT=$queue; $env:QUEUE_CONTROL_NAMESPACE=$Namespace; $env:FIRST_OPERATION_SOURCE_ROOT=$source
+    $env:QUEUE_SCHEDULER_EXPECTED_GIT_HEAD=$ExpectedGitHead
+    foreach ($name in @('SAFE_TO_UPLOAD','SAFE_TO_PUBLIC_UPLOAD','YOUTUBE_AUTO_UPLOAD','TIKTOK_AUTO_UPLOAD','THREADS_AUTO_POST','COMMENT_AUTOMATION')) { [Environment]::SetEnvironmentVariable($name,'false','Process') }
+    $capture = Invoke-Daily69FinalizerChild -WorktreeRoot $root -QueueRoot $queue
+    $result.childExitCode = $capture.childExitCode
+    $result.outputSha256 = $capture.outputSha256
+    if ($capture.safeError) { throw $capture.safeError }
+    $outcome = ConvertTo-Daily69FinalizerOutcome -Lines $capture.lines -ChildExitCode $capture.childExitCode
+    $result.outcome=$outcome.outcome; $result.safeError=$outcome.safeError; $result.wrapperExitCode=$outcome.wrapperExitCode
 } catch {
-    $safeError = Safe-Code $_.Exception.Message 'DAILY69_NATURAL_CLOSEOUT_FINALIZER_UNEXPECTED'
-    Write-FinalizerSummary -Outcome failed -SafeError $safeError -ExitCode 3
-    exit 3
+    $code = [string]$_.Exception.Message
+    $result.safeError = if ($code -match '^[A-Z][A-Z0-9_:-]{0,159}$') { $code } else { 'DAILY69_FINALIZER_UNEXPECTED' }
+    $result.outcome='failed'; $result.wrapperExitCode=3
+} finally {
+    $result.finishedAt=[datetimeoffset]::UtcNow.ToString('o')
+    try {
+        if (-not $evidenceQueue) { throw 'DAILY69_FINALIZER_RESULT_ROOT_UNAVAILABLE' }
+        $digest = Write-Daily69FinalizerResult -QueueRoot $evidenceQueue -Result $result
+        [ordered]@{event='daily69_natural_closeout_finalizer_wrapper_completed';outcome=$result.outcome;safeError=$result.safeError;exitCode=$result.wrapperExitCode;resultId=$result.resultId;resultSha256=$digest;SAFE_TO_UPLOAD=$false;PLATFORM_UPLOAD=0}|ConvertTo-Json -Compress|Write-Output
+    } catch {
+        $result.wrapperExitCode=3
+        [ordered]@{event='daily69_natural_closeout_finalizer_wrapper_completed';outcome='failed';safeError='DAILY69_FINALIZER_RESULT_WRITE_FAILED';exitCode=3;SAFE_TO_UPLOAD=$false;PLATFORM_UPLOAD=0}|ConvertTo-Json -Compress|Write-Output
+    }
 }
+exit $result.wrapperExitCode
