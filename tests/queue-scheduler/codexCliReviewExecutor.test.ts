@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildCodexCliArguments, executeAuthenticatedCodexReview, resolveCodexLaunch } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
+import { buildCodexCliArguments, buildCodexReviewOutputSchema, executeAuthenticatedCodexReview, loadCompletedCodexEvidenceFromReceipt, resolveCodexLaunch } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
+import { cliInvocationError, captureCliProcess } from "../../src/lib/queue-scheduler/codexCliDiagnostics";
 import { assertCodexExecutorReceipt } from "../../src/lib/queue-scheduler/codexReviewEvidence";
 import { createCodexVisualEvidenceBinding, readCodexVisualEvidenceBinding } from "../../src/lib/queue-scheduler/visualEvidenceBinding";
 
@@ -11,6 +12,14 @@ const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("authenticated Codex CLI review executor", () => {
+  it("does not retry a deterministic CLI upgrade requirement or invent review evidence", async () => {
+    const fixture = await setup();
+    const invoke = vi.fn(async () => { throw new Error("CODEX_REVIEW_CLI_UPGRADE_REQUIRED"); });
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, now: () => fixture.now });
+    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_CLI_UPGRADE_REQUIRED", attempts: 1, retryable: false });
+    expect(result.evidence).toBeUndefined();
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
   it("keeps the review prompt on stdin so Windows command-line limits cannot truncate it", () => {
     const args = buildCodexCliArguments({
       imagePaths: ["C:/very-long/image-1.jpg", "C:/very-long/image-2.jpg"],
@@ -60,13 +69,13 @@ describe("authenticated Codex CLI review executor", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
-  it("retries one invalid structured binding, then retains the second failure without evidence", async () => {
+  it("fails closed on an invalid structured binding without retry or evidence", async () => {
     const fixture = await setup();
     const invoke = vi.fn(async () => ({ exitCode: 0, output: { ...output(fixture, "pass"), queueId: "wrong" }, usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 } }));
     const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, now: () => fixture.now });
-    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_STRUCTURED_BINDING_MISMATCH", retryable: false, attempts: 2 });
+    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_STRUCTURED_BINDING_MISMATCH", retryable: false, attempts: 1 });
     expect(result.evidence).toBeUndefined();
-    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it("rejects same-SHA deduplication when exact visual evidence binding changes", async () => {
@@ -97,7 +106,7 @@ describe("authenticated Codex CLI review executor", () => {
   it("records a non-invoked controlled input failure and never creates promotion evidence", async () => {
     const fixture = await setup();
     const invoke = vi.fn();
-    const result = await executeAuthenticatedCodexReview({ ...fixture.request, visualEvidencePaths: [join(fixture.root, "missing.jpg"), ...fixture.request.visualEvidencePaths.slice(1)], provenance: "diagnostic" }, { invoke, now: () => fixture.now });
+    const result = await executeAuthenticatedCodexReview({ ...fixture.request, operationNamespace: "diagnostic-test", diagnosticRoot: fixture.root, visualEvidencePaths: [join(fixture.root, "missing.jpg"), ...fixture.request.visualEvidencePaths.slice(1)], provenance: "diagnostic" }, { invoke, now: () => fixture.now });
     expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_INPUT_VISUAL_EVIDENCE_NOT_FOUND", attempts: 0 });
     expect(result.evidence).toBeUndefined();
     expect(invoke).not.toHaveBeenCalled();
@@ -156,8 +165,92 @@ describe("authenticated Codex CLI review executor", () => {
   });
 });
 
+describe("durable failure and diagnostic separation", () => {
+  it("constrains the model timestamp to one host-owned request instant", () => {
+    expect(buildCodexReviewOutputSchema(new Date("2026-09-05T02:00:00Z")).properties.reviewedAt).toEqual({ type: "string", const: "2026-09-05T02:00:00.000Z" });
+  });
+
+  it.each(["2026-09-05편집00:00:00+09:00", "2026-09-05T00:00:00.000Z"])("rejects malformed or invented timestamp %s without retry", async reviewedAt => {
+    const fixture = await setup();
+    const invoke = vi.fn(async (input: { schemaPath: string; prompt: string }) => {
+      const schema = JSON.parse(await readFile(input.schemaPath, "utf8"));
+      expect(schema.properties.reviewedAt.const).toBe(fixture.now.toISOString());
+      expect(input.prompt).toContain(`requestedAt=${fixture.now.toISOString()}`);
+      return { exitCode: 0, output: { ...output(fixture, "pass"), reviewedAt }, usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 } };
+    });
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, now: () => fixture.now });
+    expect(result.status).toBe("error"); expect(result.errorCode).toMatch(/^CODEX_REVIEW_STRUCTURED_TIMESTAMP_/u); expect(result.attempts).toBe(1); expect(result.evidence).toBeUndefined();
+  });
+
+  it.each(["CODEX_REVIEW_CLI_AUTH_UNAVAILABLE", "CODEX_REVIEW_CLI_SCHEMA_REJECTED", "CODEX_REVIEW_CLI_USAGE_LIMIT", "CODEX_REVIEW_CLI_IMAGE_INPUT_INVALID", "CODEX_REVIEW_CLI_UPGRADE_REQUIRED", "CODEX_REVIEW_CLI_EXIT_NONZERO"])("does not retry %s", async errorCode => {
+    const fixture = await setup();
+    const invoke = vi.fn(async () => { throw new Error(errorCode); });
+    const delay = vi.fn(async () => {});
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, delay });
+    expect(result).toMatchObject({ status: "error", errorCode, retryable: false, attempts: 1 });
+    expect(invoke).toHaveBeenCalledTimes(1); expect(delay).not.toHaveBeenCalled(); expect(result.evidence).toBeUndefined();
+    const repeated = await executeAuthenticatedCodexReview(fixture.request, { invoke, delay });
+    expect(repeated.errorCode).toBe(errorCode); expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["CODEX_REVIEW_CLI_TEMPORARY_SERVICE", "CODEX_REVIEW_CLI_NETWORK"])("bounds explicit %s to two attempts with deterministic backoff", async code => {
+    const fixture = await setup(), invoke = vi.fn(async () => { throw new Error(code); }), delay = vi.fn(async () => {});
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, delay });
+    expect(result).toMatchObject({ status: "error", retryable: false, attempts: 2 });
+    expect(invoke).toHaveBeenCalledTimes(2); expect(delay).toHaveBeenCalledExactlyOnceWith(2000);
+    await executeAuthenticatedCodexReview(fixture.request, { invoke, delay });
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains true non-1 exit, hashes, classification and timestamps without raw secrets", async () => {
+    const fixture = await setup();
+    const secrets = 'Authorization: Bearer sentinel-auth\ntoken=sentinel-token\nrefresh_token=sentinel-refresh\nCookie: sentinel-cookie\napi_key=sentinel-key\nclient_secret=sentinel-client\npassword=sentinel-pass';
+    const stdout = 'private product prompt content', stderr = `authentication failed\n${secrets}`;
+    const processResult = await captureCliProcess({ command: process.execPath, args: ["-e", `process.stdout.write(${JSON.stringify(stdout)});process.stderr.write(${JSON.stringify(stderr)});process.exitCode=7;`], cwd: fixture.root, env: process.env, timeoutMs: 5000, stdin: "" });
+    const error = cliInvocationError({ process: processResult, classifiedErrorCode: "CODEX_REVIEW_CLI_AUTH_UNAVAILABLE", cliVersion: "0.153.1", executableFingerprint: "a".repeat(64) });
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke: async () => { throw error; } });
+    const text = await readFile(result.receiptPath, "utf8"), receipt = JSON.parse(text);
+    expect(receipt).toMatchObject({ status: "error", exitCode: 7, errorCode: "CODEX_REVIEW_CLI_AUTH_UNAVAILABLE", diagnostic: {
+      cliExitCode: 7, stdoutSha256: createHash("sha256").update(stdout).digest("hex"), stderrSha256: createHash("sha256").update(stderr).digest("hex"),
+      stdoutByteLength: Buffer.byteLength(stdout), stderrByteLength: Buffer.byteLength(stderr), stdoutWasTruncated: false, stderrWasTruncated: false,
+      codexCliVersion: "0.153.1", resolvedExecutableFingerprint: "a".repeat(64), failurePhase: "exit",
+    } });
+    expect(receipt.startedAt).toBeTruthy(); expect(receipt.completedAt).toBeTruthy(); expect(receipt.diagnostic.processId).toBeGreaterThan(0);
+    expect(receipt.diagnostic.sanitizedStderrExcerpt).toBeUndefined(); expect(receipt.diagnostic.sanitizedStdoutExcerpt).toBeUndefined();
+    for (const value of ["sentinel-", "Authorization:", "Cookie:", "refresh_token", "private product prompt content"]) expect(text).not.toContain(value);
+    expect(error.message).toBe("CODEX_REVIEW_CLI_AUTH_UNAVAILABLE");
+  });
+
+  it("uses the real child capture path and keeps unknown exits terminal", async () => {
+    const fixture = await setup(), fake = join(fixture.root, "fake-codex.mjs");
+    await writeFile(fake, 'if(process.argv.includes("--version")){console.log("codex-cli 0.153.1");}else{process.stdin.resume();process.stdin.on("end",()=>{process.stderr.write("opaque sentinel-secret");process.exitCode=9;});}');
+    const result = await executeAuthenticatedCodexReview(fixture.request, { env: { ...process.env, CODEX_REVIEW_CODEX_COMMAND: fake } });
+    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_CLI_EXIT_NONZERO", attempts: 1, retryable: false });
+    const receipt = JSON.parse(await readFile(result.receiptPath, "utf8"));
+    expect(receipt.exitCode).toBe(9); expect(receipt.diagnostic.stderrSha256).toBe(createHash("sha256").update("opaque sentinel-secret").digest("hex"));
+    expect(JSON.stringify(receipt)).not.toContain("sentinel-secret");
+  });
+
+  it("creates no promotion evidence for successful diagnostics or subsequent receipt loading", async () => {
+    const fixture = await setup();
+    const request = { ...fixture.request, provenance: "diagnostic" as const, operationNamespace: "diagnostic-test", diagnosticRoot: fixture.root };
+    const result = await executeAuthenticatedCodexReview(request, { now: () => fixture.now, invoke: async () => ({ exitCode: 0, output: output(fixture, "pass"), usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 } }) });
+    expect(result.status).toBe("pass"); expect(result.evidence).toBeUndefined();
+    await expect(loadCompletedCodexEvidenceFromReceipt(result.receiptPath)).rejects.toThrow("DIAGNOSTIC_PROMOTION_FORBIDDEN");
+    expect(JSON.parse(await readFile(request.finalReviewArtifact, "utf8"))).toMatchObject({ reviewProvenance: "diagnostic", promotionEligible: false });
+  });
+
+  it("rejects a canonical write target before invocation or any operational change", async () => {
+    const fixture = await setup(), canonical = await setup();
+    const before = await readFile(canonical.request.machineQaSourceArtifact);
+    const invoke = vi.fn();
+    await expect(executeAuthenticatedCodexReview({ ...fixture.request, provenance: "diagnostic", operationNamespace: "diagnostic-test", diagnosticRoot: fixture.root, finalReviewArtifact: canonical.request.machineQaSourceArtifact }, { invoke })).rejects.toThrow("DIAGNOSTIC_PATH_ESCAPE");
+    expect(await readFile(canonical.request.machineQaSourceArtifact)).toEqual(before); expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
 async function setup() {
-  const root = await mkdtemp(join(tmpdir(), "codex-cli-review-")); roots.push(root);
+  const root = await mkdtemp(join(tmpdir(), "codex-review-diagnostic-")); roots.push(root);
   const videoPath = join(root, "video.mp4");
   const productReferencePath = join(root, "product-reference.jpg");
   const visualEvidencePaths = [

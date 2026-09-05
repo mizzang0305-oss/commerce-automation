@@ -7,6 +7,7 @@ import { NoUploadGoogleSheetsClient } from "../../src/lib/queue-control-integrat
 import { inspectQueueVideoRuntime, kstDate } from "../../src/lib/queue-scheduler";
 import { isDaily69CloseoutWindow } from "../../src/lib/daily69-first-operation/timing";
 import { assertFirstOperationIdentity } from "../../src/lib/daily69-first-operation/operationIdentity";
+import { readOperationCodexRuntime } from "../../src/lib/queue-scheduler/codexRuntimeBinding";
 
 const exec = promisify(execFile);
 
@@ -36,7 +37,10 @@ async function main() {
   const freeGb = Math.round(Number(disk.bavail * disk.bsize) / 1024 / 1024 / 1024 * 100) / 100;
   if (freeGb < 20) throw new Error("DISK_SPACE_GUARD_BLOCKED");
   let runtimeReady = true;
-  if (process.argv.includes("--runtime")) runtimeReady = (await inspectQueueVideoRuntime({ diskSpace: true })).ready;
+  if (process.argv.includes("--runtime")) {
+    await readOperationCodexRuntime(operationRoot, snapshot.manifest.namespace);
+    runtimeReady = (await inspectQueueVideoRuntime({ diskSpace: true })).ready;
+  }
   if (!runtimeReady) throw new Error("RUNTIME_PREFLIGHT_BLOCKED");
   let sheetsReady = true;
   if (process.argv.includes("--sheets")) { const metadata = await new NoUploadGoogleSheetsClient().metadata(); sheetsReady = Boolean(metadata.sheets?.length); }

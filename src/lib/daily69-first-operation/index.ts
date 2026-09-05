@@ -15,6 +15,7 @@ import {
 import { normalizeFirstOperationLifecycleStatus, validateLevel3Completion, type FirstOperationLifecycleStatus, type LegacyFirstOperationLifecycleStatus, type Level3RetainedEvidence } from "./level3";
 import type { Level3SheetsAuditGateway } from "./postCloseout";
 import { assertFirstOperationIdentity, firstOperationNamespace, isFirstOperationDate } from "./operationIdentity";
+import { assertCodexRuntimeBinding, type CodexRuntimeBinding } from "@/lib/queue-scheduler/codexRuntimeBinding";
 
 export const FIRST_OPERATION_DECISION = "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED" as const;
 export const FIRST_OPERATION_MODE = "no_upload_daily69_first_operation" as const;
@@ -64,6 +65,7 @@ export type FirstOperationManifest = {
     aiReviewExecutions: 0;
   };
   materializationEligibility?: Daily69MaterializationPreflight;
+  codexReviewRuntime?: CodexRuntimeBinding;
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
   closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
@@ -79,7 +81,9 @@ export async function armFirstOperation(input: {
   namespace?: string;
   attemptNumber?: number;
   previousAttemptNamespace?: string;
+  codexReviewRuntime?: CodexRuntimeBinding;
 }) {
+  if (input.codexReviewRuntime) assertCodexRuntimeBinding(input.codexReviewRuntime);
   const operationDate = input.operationDate ?? nextKstDate(input.now);
   if (!isFirstOperationDate(operationDate)) throw new Error("FIRST_OPERATION_DATE_INVALID");
   if (operationDate <= kstDate(input.now)) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
@@ -109,7 +113,8 @@ export async function armFirstOperation(input: {
   if (existing) {
     if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
       || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace
-      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot) {
+      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot
+      || JSON.stringify(existing.codexReviewRuntime) !== JSON.stringify(input.codexReviewRuntime)) {
       throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
     }
     await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
@@ -193,6 +198,7 @@ export async function armFirstOperation(input: {
     schedule,
     affiliateReadiness,
     materializationEligibility,
+    ...(input.codexReviewRuntime ? { codexReviewRuntime: input.codexReviewRuntime } : {}),
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
