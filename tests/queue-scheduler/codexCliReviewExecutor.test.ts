@@ -1,5 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,27 @@ const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("authenticated Codex CLI review executor", () => {
+  it("rejects missing operation runtime before creating any executor ledger or invoking an ambient runtime", async () => {
+    const fixture = await setup();
+    const operationNamespace = basename(fixture.root);
+    await writeFile(join(fixture.root, "operation-manifest.json"), JSON.stringify({ namespace: operationNamespace }));
+    const invoke = vi.fn(), delay = vi.fn();
+    const result = await executeAuthenticatedCodexReview({ ...fixture.request, operationNamespace }, { invoke, delay,
+      env: { NODE_ENV: "test", FIRST_OPERATION_SOURCE_ROOT: fixture.root, CODEX_REVIEW_CODEX_COMMAND: "ambient-must-not-launch" } });
+    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_REVIEW_RUNTIME_BINDING_REQUIRED", retryable: false, attempts: 0, receiptPath: "" });
+    await expect(access(fixture.request.receiptRoot)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(invoke).not.toHaveBeenCalled(); expect(delay).not.toHaveBeenCalled();
+  });
+
+  it("records a last-instant capsule admission rejection as not invoked and never retries", async () => {
+    const fixture = await setup();
+    const invoke = vi.fn(async () => { throw new Error("CODEX_CAPSULE_RUNTIME_MISSING"); }), delay = vi.fn();
+    const result = await executeAuthenticatedCodexReview(fixture.request, { invoke, delay });
+    expect(result).toMatchObject({ status: "error", errorCode: "CODEX_CAPSULE_RUNTIME_MISSING", retryable: false, attempts: 0 });
+    expect(JSON.parse(await readFile(result.receiptPath, "utf8"))).toMatchObject({ status: "error", invoked: false, errorCode: "CODEX_CAPSULE_RUNTIME_MISSING" });
+    expect(invoke).toHaveBeenCalledTimes(1); expect(delay).not.toHaveBeenCalled(); expect(result.evidence).toBeUndefined();
+  });
+
   it("does not retry a deterministic CLI upgrade requirement or invent review evidence", async () => {
     const fixture = await setup();
     const invoke = vi.fn(async () => { throw new Error("CODEX_REVIEW_CLI_UPGRADE_REQUIRED"); });
@@ -166,6 +187,31 @@ describe("authenticated Codex CLI review executor", () => {
 });
 
 describe("durable failure and diagnostic separation", () => {
+  it.each(["pass", "block"] as const)("retains only bounded actual process metadata for a successful CLI %s result", async reviewResult => {
+    const fixture = await setup(), fake = join(fixture.root, "fake-codex.mjs");
+    const stdout = 'private-success-output-sentinel', stderr = 'Authorization: Bearer private-success-token-sentinel';
+    await writeFile(fake, `import { writeFileSync } from "node:fs";
+      if(process.argv.includes("--version")){console.log("codex-cli 0.153.1");}
+      else{process.stdin.resume();process.stdin.on("end",()=>{
+        writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1],JSON.stringify(${JSON.stringify(output(fixture, reviewResult))}));
+        process.stdout.write(${JSON.stringify(stdout)});process.stderr.write(${JSON.stringify(stderr)});
+      });}`);
+    const result = await executeAuthenticatedCodexReview(fixture.request, { now: () => fixture.now,
+      env: { ...process.env, CODEX_REVIEW_CODEX_COMMAND: fake } });
+    expect(result).toMatchObject({ status: reviewResult, attempts: 1, retryable: false });
+    const receiptText = await readFile(result.receiptPath, "utf8"), receipt = JSON.parse(receiptText), diagnostic = receipt.processDiagnostic;
+    expect(diagnostic).toMatchObject({ schemaVersion: "codex-cli-process-diagnostic-v1", phase: "exit", exitCode: 0, signal: null,
+      terminationConfirmed: true, codexCliVersion: "0.153.1",
+      stdoutSha256: createHash("sha256").update(stdout).digest("hex"), stderrSha256: createHash("sha256").update(stderr).digest("hex"),
+      stdoutByteLength: Buffer.byteLength(stdout), stderrByteLength: Buffer.byteLength(stderr) });
+    expect(diagnostic.processId).toBeGreaterThan(0);
+    expect(diagnostic.durationMs).toBe(Date.parse(diagnostic.completedAt) - Date.parse(diagnostic.startedAt));
+    expect(diagnostic.durationMs).toBeGreaterThanOrEqual(0);
+    expect(diagnostic.resolvedExecutableFingerprint).toMatch(/^[a-f0-9]{64}$/u);
+    expect(receipt.diagnostic).toBeUndefined();
+    for (const text of ["private-success", "Authorization:", "Bearer", "stdout\":", "stderr\":"]) expect(receiptText).not.toContain(text);
+  });
+
   it("constrains the model timestamp to one host-owned request instant", () => {
     expect(buildCodexReviewOutputSchema(new Date("2026-09-05T02:00:00Z")).properties.reviewedAt).toEqual({ type: "string", const: "2026-09-05T02:00:00.000Z" });
   });

@@ -5,7 +5,11 @@ param(
     [Parameter(Mandatory = $true)][string]$Namespace,
     [Parameter(Mandatory = $true)][string]$SourceRoot,
     [Parameter(Mandatory = $true)][string]$ExpectedGitHead,
-    [Parameter(Mandatory = $true)][string]$EnvFile
+    [Parameter(Mandatory = $true)][string]$EnvFile,
+    [Parameter(Mandatory = $true)][string]$CodexRuntimeCapsulePath,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleManifestSha256,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleBundleDigest,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeBinarySha256
 )
 $ErrorActionPreference = "Stop"
 $taskName = "Minz-Commerce-ControlRunner-NoUpload-V1"
@@ -26,6 +30,8 @@ try {
     . (Join-Path $PSScriptRoot "common-first-operation-no-upload.ps1") `
         -WorktreeRoot $WorktreeRoot -QueueRoot $QueueRoot -Namespace $Namespace `
         -SourceRoot $SourceRoot -ExpectedGitHead $ExpectedGitHead -EnvFile $EnvFile `
+        -CodexRuntimeCapsulePath $CodexRuntimeCapsulePath -CodexRuntimeCapsuleManifestSha256 $CodexRuntimeCapsuleManifestSha256 `
+        -CodexRuntimeCapsuleBundleDigest $CodexRuntimeCapsuleBundleDigest -CodexRuntimeBinarySha256 $CodexRuntimeBinarySha256 `
         -InvocationRole control -TaskName $taskName -WrapperPath $PSCommandPath
 
     $window = Test-Daily69NewWorkWindow -ResolvedQueue $resolvedQueue -BoundNamespace $Namespace -Role control

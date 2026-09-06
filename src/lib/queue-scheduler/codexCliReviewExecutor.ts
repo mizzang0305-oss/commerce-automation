@@ -8,8 +8,8 @@ import { assertCodexUsageEvidenceBinding, type CodexUsageEvidenceProvenance } fr
 import { acquireProcessLock } from "./lock";
 import type { CodexReviewEvidenceV2 } from "./types";
 import { assertCodexVisualEvidenceBinding, CODEX_VISUAL_EVIDENCE_ROLES, readCodexVisualEvidenceBinding, type CodexVisualEvidenceRole } from "./visualEvidenceBinding";
-import { inspectCodexRuntimeBinding, readOperationCodexRuntime, type CodexRuntimeBinding } from "./codexRuntimeBinding";
-import { captureCliProcess, cliInvocationError, CodexCliInvocationError, receiptCliDiagnostic, type CodexCliFailureDiagnostic } from "./codexCliDiagnostics";
+import { inspectCodexRuntimeBinding, readOperationCodexRuntime, verifyCodexRuntimeBeforeInvocation, type CodexRuntimeBinding } from "./codexRuntimeBinding";
+import { captureCliProcess, cliInvocationError, CodexCliInvocationError, receiptCliDiagnostic, type CapturedCliProcess, type CodexCliFailureDiagnostic } from "./codexCliDiagnostics";
 import { assertDiagnosticIsolation, assertDiagnosticPath } from "./codexReviewDiagnosticPaths";
 
 export const CODEX_REVIEW_OUTPUT_SCHEMA_VERSION = "queue-codex-review-output-v1" as const;
@@ -76,7 +76,21 @@ type InvocationResult = {
   exitCode: number;
   output: unknown;
   usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+  processDiagnostic?: CodexCliProcessDiagnostic;
 };
+
+// Minimal process-to-receipt linkage for Level3 success proof. Never retain
+// stdout/stderr text, arguments, environment, or authentication state here.
+type CodexCliProcessDiagnostic = Pick<CapturedCliProcess,
+  "processId" | "exitCode" | "signal" | "startedAt" | "completedAt" | "terminationConfirmed"
+  | "stdoutByteLength" | "stderrByteLength" | "stdoutSha256" | "stderrSha256"
+  | "stdoutWasTruncated" | "stderrWasTruncated"> & {
+    schemaVersion: "codex-cli-process-diagnostic-v1";
+    phase: "exit";
+    durationMs: number;
+    codexCliVersion: string;
+    resolvedExecutableFingerprint: string;
+  };
 
 type ReviewDependencies = {
   invoke?: (input: {
@@ -136,6 +150,7 @@ type ExecutorReceipt = {
   startedAt?: string;
   completedAt?: string;
   diagnostic?: CodexCliFailureDiagnostic;
+  processDiagnostic?: CodexCliProcessDiagnostic;
   usage?: InvocationResult["usage"];
   runtimeBinding?: CodexRuntimeBinding;
   SAFE_TO_UPLOAD: false;
@@ -189,6 +204,16 @@ export async function executeAuthenticatedCodexReview(
   const receiptRoot = resolve(input.receiptRoot);
   const receiptsRoot = join(receiptRoot, "receipts");
   const attemptsRoot = join(receiptRoot, "attempts");
+  let runtimeBinding: CodexRuntimeBinding | undefined;
+  // Infrastructure admission must fail before any executor directory, lock,
+  // receipt, or attempt counter is created. Historical operations are read only.
+  try {
+    runtimeBinding = diagnosticRoot
+      ? input.diagnosticRuntimeBinding ? await inspectCodexRuntimeBinding(input.diagnosticRuntimeBinding) : undefined
+      : await readOperationCodexRuntime(dirname(receiptRoot), input.operationNamespace, Boolean(env.FIRST_OPERATION_SOURCE_ROOT));
+  } catch (error) {
+    return failed(safeError(error), false, 0, "");
+  }
   await Promise.all([mkdir(receiptsRoot, { recursive: true }), mkdir(attemptsRoot, { recursive: true })]);
   let release: (() => Promise<void>) | null = null;
   try {
@@ -197,9 +222,6 @@ export async function executeAuthenticatedCodexReview(
     return failed("CODEX_REVIEW_CONCURRENCY_LOCKED", true, 0, "");
   }
   try {
-    const runtimeBinding = diagnosticRoot
-      ? input.diagnosticRuntimeBinding ? await inspectCodexRuntimeBinding(input.diagnosticRuntimeBinding) : undefined
-      : await readOperationCodexRuntime(dirname(receiptRoot), input.operationNamespace, Boolean(env.FIRST_OPERATION_SOURCE_ROOT));
     const validated = await validateRequest(input);
     const receipts = await readReceipts(receiptsRoot);
     const sameSha = receipts.filter((receipt) => receipt.videoSha256 === validated.video.sha256);
@@ -223,6 +245,10 @@ export async function executeAuthenticatedCodexReview(
 
     let lastFailure: CodexReviewExecution | null = null;
     for (let attempt = sameSha.length + 1; attempt <= PER_VIDEO_ATTEMPT_CAP; attempt += 1) {
+      if (runtimeBinding) {
+        try { await verifyCodexRuntimeBeforeInvocation(runtimeBinding); }
+        catch (error) { return failed(safeError(error), false, attempt - 1, lastFailure?.receiptPath ?? ""); }
+      }
       const currentReceipts = await readReceipts(receiptsRoot);
       if (currentReceipts.filter((receipt) => receipt.invoked).length >= DAILY_INVOCATION_CAP) {
         return failed("CODEX_REVIEW_DAILY_CAP_REACHED", false, attempt - 1, lastFailure?.receiptPath ?? "");
@@ -276,6 +302,7 @@ export async function executeAuthenticatedCodexReview(
       await atomicWriteJson(receiptPath, started);
       let invocationUsage: InvocationResult["usage"] | undefined;
       let observedExitCode: number | undefined;
+      let processDiagnostic: CodexCliProcessDiagnostic | undefined;
       try {
         const result = await invoke({
           prompt: buildPrompt(input, validated.video.sha256, validated.machineSummary, requestedAt),
@@ -289,6 +316,7 @@ export async function executeAuthenticatedCodexReview(
         });
         invocationUsage = result.usage;
         observedExitCode = result.exitCode;
+        processDiagnostic = result.processDiagnostic ? receiptProcessDiagnostic(result.processDiagnostic) : undefined;
         if (result.exitCode !== 0) throw new Error("CODEX_REVIEW_CLI_EXIT_NONZERO");
         const model = validateModelOutput(result.output, input, validated.video.sha256, requestedAt.toISOString());
         const reviewedAt = now().toISOString();
@@ -309,6 +337,7 @@ export async function executeAuthenticatedCodexReview(
           contactSheetNote: model.contactSheetNote,
           exitCode: result.exitCode,
           usage: result.usage,
+          ...(processDiagnostic ? { processDiagnostic } : {}),
         };
         await atomicWriteJson(receiptPath, completedReceipt);
         const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completedReceipt, receiptPath);
@@ -318,10 +347,11 @@ export async function executeAuthenticatedCodexReview(
         const delayMs = codexCliRetryDelayMs(errorCode, attempt);
         const retryable = delayMs !== null;
         const diagnostic = error instanceof CodexCliInvocationError ? receiptCliDiagnostic(error, Boolean(diagnosticRoot)) : undefined;
-        await atomicWriteJson(receiptPath, { ...started, status: "error", completedAt: now().toISOString(), errorCode,
+        const admissionRejected = errorCode.startsWith("CODEX_CAPSULE_");
+        await atomicWriteJson(receiptPath, { ...started, ...(admissionRejected ? { invoked: false } : {}), status: "error", completedAt: now().toISOString(), errorCode,
           exitCode: diagnostic ? diagnostic.cliExitCode : observedExitCode,
-          ...(diagnostic ? { diagnostic } : {}), ...(invocationUsage ? { usage: invocationUsage } : {}) });
-        lastFailure = failed(errorCode, retryable, attempt, receiptPath);
+          ...(diagnostic ? { diagnostic } : {}), ...(processDiagnostic ? { processDiagnostic } : {}), ...(invocationUsage ? { usage: invocationUsage } : {}) });
+        lastFailure = failed(errorCode, retryable, admissionRejected ? attempt - 1 : attempt, receiptPath);
         if (!retryable) return lastFailure;
         await (dependencies.delay ?? (ms => new Promise(resolve => setTimeout(resolve, ms))))(delayMs!);
       }
@@ -567,6 +597,7 @@ async function invokeCodexCli(input: {
     commandHash: await sha256File(launch.executable).catch(() => "unavailable"),
     prefixHashes: await Promise.all(launch.argsPrefix.map(p => sha256File(p).catch(() => "unavailable"))), cliVersion,
   }));
+  if (input.runtimeBinding) await verifyCodexRuntimeBeforeInvocation(input.runtimeBinding);
   const processResult = await captureCliProcess({ command: launch.executable, args: [...launch.argsPrefix, ...codexArgs], env: input.env, cwd: input.cwd, timeoutMs: input.timeoutMs, stdin: input.prompt });
   if (processResult.exitCode !== 0 || processResult.failurePhase !== "exit") {
     const classifiedErrorCode = processResult.failurePhase === "timeout" ? "CODEX_REVIEW_CLI_TIMEOUT"
@@ -578,7 +609,26 @@ async function invokeCodexCli(input: {
   let output: unknown = null;
   try { output = JSON.parse(await readFile(input.outputPath, "utf8")); }
   catch { throw cliInvocationError({ process: processResult, classifiedErrorCode: "CODEX_REVIEW_STRUCTURED_OUTPUT_INVALID", cliVersion, executableFingerprint, phase: "structured_output" }); }
-  return { exitCode: processResult.exitCode, output, usage: parseUsage(processResult.stdout) };
+  return { exitCode: processResult.exitCode, output, usage: parseUsage(processResult.stdout), processDiagnostic: receiptProcessDiagnostic({
+    ...processResult, schemaVersion: "codex-cli-process-diagnostic-v1", phase: "exit",
+    durationMs: Date.parse(processResult.completedAt) - Date.parse(processResult.startedAt),
+    codexCliVersion: cliVersion, resolvedExecutableFingerprint: executableFingerprint,
+  }) };
+}
+
+function receiptProcessDiagnostic(value: CodexCliProcessDiagnostic): CodexCliProcessDiagnostic {
+  // Explicit selection is intentional: an invocation result is not permission
+  // to serialize its arbitrary fields or raw process output.
+  return {
+    schemaVersion: value.schemaVersion, phase: value.phase,
+    processId: value.processId, exitCode: value.exitCode, signal: value.signal,
+    startedAt: value.startedAt, completedAt: value.completedAt, durationMs: value.durationMs,
+    terminationConfirmed: value.terminationConfirmed,
+    stdoutByteLength: value.stdoutByteLength, stderrByteLength: value.stderrByteLength,
+    stdoutSha256: value.stdoutSha256, stderrSha256: value.stderrSha256,
+    stdoutWasTruncated: value.stdoutWasTruncated, stderrWasTruncated: value.stderrWasTruncated,
+    codexCliVersion: value.codexCliVersion, resolvedExecutableFingerprint: value.resolvedExecutableFingerprint,
+  };
 }
 
 export function buildCodexCliArguments(input: {

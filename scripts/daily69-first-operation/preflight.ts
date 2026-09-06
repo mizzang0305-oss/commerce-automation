@@ -8,6 +8,7 @@ import { inspectQueueVideoRuntime, kstDate } from "../../src/lib/queue-scheduler
 import { isDaily69CloseoutWindow } from "../../src/lib/daily69-first-operation/timing";
 import { assertFirstOperationIdentity } from "../../src/lib/daily69-first-operation/operationIdentity";
 import { readOperationCodexRuntime } from "../../src/lib/queue-scheduler/codexRuntimeBinding";
+import { verifyFirstOperationCapsuleAdmission } from "../../src/lib/daily69-first-operation/runtimeCapsule";
 
 const exec = promisify(execFile);
 
@@ -16,6 +17,9 @@ async function main() {
   const sourceRoot = resolve(requiredEnv("FIRST_OPERATION_SOURCE_ROOT"));
   const snapshot = await firstOperationStatus(operationRoot);
   assertFirstOperationIdentity(snapshot.manifest);
+  if (process.argv.includes("--arming") || snapshot.manifest.codexReviewRuntime?.schemaVersion === "daily69-codex-cli-runtime-v2") {
+    await verifyFirstOperationCapsuleAdmission(snapshot.manifest.codexReviewRuntime);
+  }
   const actualHead = (await exec("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
   if (actualHead !== snapshot.manifest.expectedGitHead) throw new Error("RUNTIME_GIT_HEAD_MISMATCH");
   const dirty = (await exec("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();

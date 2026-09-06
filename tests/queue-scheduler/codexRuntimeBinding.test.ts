@@ -1,8 +1,10 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assertCodexRuntimeBinding, inspectCodexRuntimeBinding, readOperationCodexRuntime, type CodexRuntimeBinding } from "../../src/lib/queue-scheduler/codexRuntimeBinding";
+import { assertCodexRuntimeBinding, assertOperationCodexCapsuleRuntimeBinding, inspectCodexRuntimeBinding, readOperationCodexRuntime, verifyCodexRuntimeBeforeInvocation, type CodexRuntimeBinding } from "../../src/lib/queue-scheduler/codexRuntimeBinding";
+import { materializeCodexRuntimeCapsule } from "../../src/lib/queue-scheduler/codexRuntimeCapsule";
 import { buildCodexCliArguments, classifyCliFailure } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
 
 const roots: string[] = [];
@@ -12,6 +14,50 @@ function probes() {
   return { canonical: async (p: string) => p, hash: async () => binding.commandSha256, run: vi.fn(async (_: string, args: string[]) => args[0] === "--version" ? "codex-cli 0.153.1\n" : args[0] === "exec" ? "--ignore-user-config" : JSON.stringify({ models: [{ slug: "gpt-6-astra", supported_reasoning_levels: [{ effort: "medium" }] }] })) };
 }
 describe("immutable Daily69 Codex runtime", () => {
+  it("retains legacy validation but rejects it for every future operation capsule gate", () => {
+    expect(() => assertCodexRuntimeBinding(binding)).not.toThrow();
+    expect(() => assertOperationCodexCapsuleRuntimeBinding(binding)).toThrow("CODEX_CAPSULE_OPERATION_BINDING_REQUIRED");
+  });
+
+  it("reopens a v2 capsule, binds the command/model/config exactly, and probes only its executable", async () => {
+    const fixture = await capsuleFixture();
+    const p = probes();
+    await expect(inspectCodexRuntimeBinding(fixture.binding, { run: p.run, capsulePolicy: fixture.policy })).resolves.toEqual(fixture.binding);
+    expect(p.run).toHaveBeenCalledTimes(3);
+    for (const [command] of p.run.mock.calls) expect(command).toBe(fixture.binding.command);
+    expect(() => assertOperationCodexCapsuleRuntimeBinding(fixture.binding)).not.toThrow();
+    for (const mutation of [
+      { command: binding.command }, { commandSha256: "b".repeat(64) }, { cliVersion: "0.144.6" },
+      { model: "gpt-another" }, { reasoningEffort: "high" as const },
+    ]) expect(() => assertCodexRuntimeBinding({ ...fixture.binding, ...mutation })).toThrow("CODEX_CAPSULE_CONFIG_BINDING_MISMATCH");
+  });
+
+  it("never promotes a diagnostic capsule into an operation binding", async () => {
+    const fixture = await capsuleFixture("diagnostic");
+    expect(() => assertCodexRuntimeBinding(fixture.binding)).not.toThrow();
+    expect(() => assertOperationCodexCapsuleRuntimeBinding(fixture.binding)).toThrow("CODEX_CAPSULE_DIAGNOSTIC_PROMOTION_FORBIDDEN");
+  });
+
+  it("fails before any probe when a capsule disappears or its manifest identity changes, with no ambient fallback", async () => {
+    const fixture = await capsuleFixture();
+    const p = probes();
+    await expect(inspectCodexRuntimeBinding({ ...fixture.binding, capsule: { ...fixture.binding.capsule, manifestSha256: "f".repeat(64) } }, {
+      ...p, capsulePolicy: fixture.policy,
+    })).rejects.toThrow("CODEX_CAPSULE_MANIFEST_INVALID");
+    expect(p.run).not.toHaveBeenCalled();
+    await rename(fixture.binding.capsule.canonicalPath, `${fixture.binding.capsule.canonicalPath}.missing`);
+    await expect(verifyCodexRuntimeBeforeInvocation(fixture.binding, fixture.policy)).rejects.toThrow("CODEX_CAPSULE_RUNTIME_MISSING");
+    await expect(inspectCodexRuntimeBinding(fixture.binding, { ...p, capsulePolicy: fixture.policy })).rejects.toThrow("CODEX_CAPSULE_RUNTIME_MISSING");
+    expect(p.run).not.toHaveBeenCalled();
+  });
+
+  it("does not let an operation reference redefine the trusted capsule root", async () => {
+    const fixture = await capsuleFixture();
+    const p = probes();
+    await expect(inspectCodexRuntimeBinding(fixture.binding, p)).rejects.toThrow("CODEX_CAPSULE_PATH_ESCAPE");
+    expect(p.run).not.toHaveBeenCalled();
+  });
+
   it("classifies the reproduced HTTP 400 before unrelated MCP auth warnings", () => {
     expect(classifyCliFailure(`authentication warning\nThe 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.`)).toBe("CODEX_REVIEW_CLI_UPGRADE_REQUIRED");
   });
@@ -53,3 +99,17 @@ describe("immutable Daily69 Codex runtime", () => {
     await expect(readOperationCodexRuntime(root, "different", false)).rejects.toThrow("NAMESPACE_MISMATCH");
   });
 });
+
+async function capsuleFixture(purpose: "operation" | "diagnostic" = "operation") {
+  const root = await mkdtemp(join(tmpdir(), "codex-runtime-fixture-")); roots.push(root);
+  const source = join(root, "source", "codex.exe"), bytes = "synthetic-runtime-not-a-real-executable";
+  await mkdir(join(root, "source")); await writeFile(source, bytes);
+  const policy = { approvedRoot: join(root, "capsules") };
+  const result = await materializeCodexRuntimeCapsule({ sourceCommand: source, policy, approval: {
+    schemaVersion: "daily69-codex-runtime-approval-v1", purpose, authorizationRef: "synthetic-unit-test-only",
+    version: binding.cliVersion, binarySha256: createHash("sha256").update(bytes).digest("hex"),
+    model: binding.model, reasoningEffort: binding.reasoningEffort, ignoreUserConfig: true,
+  } }, { run: probes().run });
+  return { policy, binding: { ...binding, schemaVersion: "daily69-codex-cli-runtime-v2" as const,
+    command: result.command, commandSha256: result.reference.binarySha256, capsule: result.reference } };
+}
