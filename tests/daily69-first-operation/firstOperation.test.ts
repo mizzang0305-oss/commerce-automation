@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { armFirstOperation, closeoutFirstOperation, firstOperationStatus, promoteFirstOperationActivePointer, transitionFirstOperationArmStatus, verifySourceBundle } from "../../src/lib/daily69-first-operation";
 import { DAILY_69_NO_UPLOAD_SETTINGS, LocalQueueRepository } from "../../src/lib/queue-scheduler";
 import { createTestCodexEvidence } from "../queue-scheduler/testCodexEvidence";
@@ -12,6 +12,11 @@ import { allocateUsageEvidence, createUsageAllocationState } from "../../src/lib
 import { makeUsageEvidenceRegistry } from "../usage-evidence/fixture";
 
 const roots: string[] = [];
+// These fixtures isolate existing clone/lifecycle behavior. The actual runtime gate
+// and no-write failure cases are exercised in runtimeCapsuleAdmission.test.ts.
+vi.mock("../../src/lib/daily69-first-operation/runtimeCapsule", () => ({
+  verifyFirstOperationCapsuleAdmission: vi.fn(async (runtime: unknown) => runtime),
+}));
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 describe("first no-upload Daily69 operation", () => {

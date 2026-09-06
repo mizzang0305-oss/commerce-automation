@@ -8,10 +8,15 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('control', 'batch', 'closeout')][string]$InvocationRole,
     [Parameter(Mandatory = $true)][string]$TaskName,
     [Parameter(Mandatory = $true)][string]$WrapperPath,
+    [string]$CodexRuntimeCapsulePath,
+    [string]$CodexRuntimeCapsuleManifestSha256,
+    [string]$CodexRuntimeCapsuleBundleDigest,
+    [string]$CodexRuntimeBinarySha256,
     [switch]$LibraryOnly
 )
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'timing-contract.ps1')
+. (Join-Path $PSScriptRoot 'runtime-capsule-task-contract.ps1')
 
 function Read-Daily69QueueItems {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -279,7 +284,7 @@ function Resolve-Daily69FailureOutcome {
         'FIRST_OPERATION_PREFLIGHT_FAILED',
         'QUEUE_BATCH_BLOCKED_PREFLIGHT'
     )
-    if ($guardCodes -contains $code -or $code -match '(?:^|_)REVISION_MISMATCH$') {
+    if ($guardCodes -contains $code -or $code -match '(?:^|_)REVISION_MISMATCH$' -or $code -cmatch '^CODEX_CAPSULE_') {
         return [pscustomobject]@{ outcome = 'guard_blocked'; safeError = $code; wrapperExitCode = 3 }
     }
     if ($code -eq 'UNEXPECTED_EXCEPTION') {
@@ -668,7 +673,17 @@ function Wait-Daily69CloseoutIdle {
 function Stop-FirstOperationFailClosed {
     param([string]$Reason)
     $safeReason = ConvertTo-Daily69SafeCode -Value $Reason -Fallback 'FIRST_OPERATION_FAILED'
-    try { & npm.cmd run daily69:first-day:emergency-pause --silent | Out-Null } catch { }
+    # Capsule rejection occurs before credential-environment import. Never let
+    # the existing pause command consume an ambient queue root or working dir.
+    if ($script:Daily69FailClosedQueueRoot -and $script:Daily69FailClosedWorktreeRoot) {
+        $savedQueueRoot = $env:QUEUE_SCHEDULER_ROOT
+        Push-Location $script:Daily69FailClosedWorktreeRoot
+        try {
+            $env:QUEUE_SCHEDULER_ROOT = $script:Daily69FailClosedQueueRoot
+            & npm.cmd run daily69:first-day:emergency-pause --silent | Out-Null
+        } catch { }
+        finally { $env:QUEUE_SCHEDULER_ROOT = $savedQueueRoot; Pop-Location }
+    }
     foreach ($name in @("Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1")) {
         try { Disable-ScheduledTask -TaskName $name -ErrorAction Stop | Out-Null } catch { }
     }
@@ -677,6 +692,8 @@ function Stop-FirstOperationFailClosed {
 
 if ($LibraryOnly) { return }
 
+$script:Daily69FailClosedQueueRoot = $null
+$script:Daily69FailClosedWorktreeRoot = $null
 $resolvedWorktree = (Resolve-Path -LiteralPath $WorktreeRoot).Path
 $resolvedQueue = (Resolve-Path -LiteralPath $QueueRoot).Path
 $actualHead = (& git.exe -C $resolvedWorktree rev-parse HEAD 2>$null | Out-String).Trim()
@@ -684,6 +701,15 @@ $gitExitCode = $LASTEXITCODE
 Initialize-Daily69InvocationEvidence -ResolvedQueue $resolvedQueue -Role $InvocationRole -Name $TaskName -BoundNamespace $Namespace -ExpectedHead $ExpectedGitHead -ActualHead $actualHead -BoundWrapper $WrapperPath
 if ($Namespace -notmatch '^[A-Za-z0-9_-]{1,96}$' -or (Split-Path -Leaf $resolvedQueue) -ne $Namespace) { throw "FIRST_OPERATION_NAMESPACE_MISMATCH" }
 if ($gitExitCode -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw "RUNTIME_GIT_HEAD_MISMATCH" }
+$dirty = (& git.exe -C $resolvedWorktree status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
+$script:Daily69FailClosedQueueRoot = $resolvedQueue
+$script:Daily69FailClosedWorktreeRoot = $resolvedWorktree
+# Verify Task arguments and all capsule bytes before environment/auth loading,
+# hourly slot claims, control commands, or closeout projection side effects.
+$null = Assert-Daily69TaskCapsule -WorktreeRoot $resolvedWorktree -QueueRoot $resolvedQueue -Namespace $Namespace `
+    -CodexRuntimeCapsulePath $CodexRuntimeCapsulePath -CodexRuntimeCapsuleManifestSha256 $CodexRuntimeCapsuleManifestSha256 `
+    -CodexRuntimeCapsuleBundleDigest $CodexRuntimeCapsuleBundleDigest -CodexRuntimeBinarySha256 $CodexRuntimeBinarySha256
 $resolvedSource = (Resolve-Path -LiteralPath $SourceRoot).Path
 $resolvedEnv = (Resolve-Path -LiteralPath $EnvFile).Path
 . (Join-Path $resolvedWorktree "scripts\queue-control-integration\common-control-no-upload.ps1") -WorktreeRoot $resolvedWorktree -QueueRoot $resolvedQueue -Namespace $Namespace -EnvFile $resolvedEnv

@@ -106,6 +106,7 @@
     "queue-control:project": "node --conditions=react-server --import tsx scripts/queue-control-integration/project.ts",
     "queue-control:run-once": "node --conditions=react-server --import tsx scripts/queue-control-integration/run-control-runner.ts",
     "daily69:first-day:arm": "tsx scripts/daily69-first-operation/arm.ts",
+    "daily69:runtime-capsule": "tsx scripts/daily69-first-operation/runtime-capsule.ts",
     "daily69:first-day:recover-four-slots": "tsx scripts/daily69-first-operation/run-four-slot-recovery.ts",
     "daily69:first-day:review-carry-forward": "tsx scripts/daily69-first-operation/run-carry-forward-codex-reviews.ts",
     "daily69:first-day:apply-carry-forward-review": "tsx scripts/daily69-first-operation/apply-carry-forward-codex-reviews.ts",
