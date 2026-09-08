@@ -123,6 +123,8 @@ export type V2APrivateCanaryReadinessReport = {
   YOUTUBE_UPLOAD_SCOPE: "PASS" | "BLOCKED";
   API_PROJECT_STATUS: "KNOWN" | "UNKNOWN";
   QUOTA_READINESS: "PASS" | "BLOCKED";
+  PRIVATE_CANARY_QUOTA_READY: "PASS" | "BLOCKED";
+  DAILY69_BULK_QUOTA_READY: "PASS" | "BLOCKED";
   RESUMABLE_UPLOAD_ADAPTER: "PASS" | "BLOCKED";
   IDEMPOTENCY: "PASS" | "BLOCKED";
   PRIVATE_ONLY_GUARD: "PASS" | "BLOCKED";
@@ -133,6 +135,8 @@ export type V2APrivateCanaryReadinessReport = {
   quota: {
     remainingUnits: number | null;
     requiredUnits: number | null;
+    requiredCanaryUnits: number | null;
+    requiredBulkUnits: number | null;
     intendedCount: number;
     reservedRetryHeadroom: number | null;
   };
@@ -191,7 +195,9 @@ export function evaluateV2APrivateCanaryReadiness(
     OAUTH_READINESS: authResult.authReady ? "PASS" : "BLOCKED",
     YOUTUBE_UPLOAD_SCOPE: authResult.scopeReady ? "PASS" : "BLOCKED",
     API_PROJECT_STATUS: apiResult.statusKnown ? "KNOWN" : "UNKNOWN",
-    QUOTA_READINESS: quotaResult.ready ? "PASS" : "BLOCKED",
+    QUOTA_READINESS: quotaResult.canaryReady ? "PASS" : "BLOCKED",
+    PRIVATE_CANARY_QUOTA_READY: quotaResult.canaryReady ? "PASS" : "BLOCKED",
+    DAILY69_BULK_QUOTA_READY: quotaResult.bulkReady ? "PASS" : "BLOCKED",
     RESUMABLE_UPLOAD_ADAPTER: resumablePass ? "PASS" : "BLOCKED",
     IDEMPOTENCY: idempotencyPass ? "PASS" : "BLOCKED",
     PRIVATE_ONLY_GUARD: packageResult.privateOnly ? "PASS" : "BLOCKED",
@@ -201,7 +207,9 @@ export function evaluateV2APrivateCanaryReadiness(
     PLATFORM_UPLOAD: 0,
     quota: {
       remainingUnits: quotaResult.remainingUnits,
-      requiredUnits: quotaResult.requiredUnits,
+      requiredUnits: quotaResult.requiredCanaryUnits,
+      requiredCanaryUnits: quotaResult.requiredCanaryUnits,
+      requiredBulkUnits: quotaResult.requiredBulkUnits,
       intendedCount: input.quota?.intendedCount ?? YOUTUBE_UPLOAD_V2A_INTENDED_DAILY_COUNT,
       reservedRetryHeadroom: input.quota?.reservedRetryHeadroom ?? null
     }
@@ -263,7 +271,6 @@ function evaluateApiProject(apiProject: V2AApiProjectEvidence | null | undefined
     nonEmpty(apiProject.googleCloudProjectId) &&
     typeof apiProject.youtubeDataApiEnabled === "boolean" &&
     typeof apiProject.oauthClientConfigured === "boolean" &&
-    apiProject.consentStatus !== "unknown" &&
     apiProject.auditVerificationStatus !== "unknown" &&
     apiProject.uploadPrivacyRestrictionStatus !== "unknown" &&
     validTimestamp(apiProject.observedAt)
@@ -283,8 +290,11 @@ function evaluateQuota(quota: V2AQuotaEvidence | null | undefined, nowMs: number
   if (!quota) {
     return {
       ready: false,
+      canaryReady: false,
+      bulkReady: false,
       remainingUnits: null,
-      requiredUnits: null,
+      requiredCanaryUnits: null,
+      requiredBulkUnits: null,
       blockers: ["V2A_QUOTA_EVIDENCE_MISSING"] as V2APrivateCanaryReadinessBlocker[]
     };
   }
@@ -306,13 +316,25 @@ function evaluateQuota(quota: V2AQuotaEvidence | null | undefined, nowMs: number
   const remainingUnits = valid
     ? quota.videosInsertLimitUnits! - quota.videosInsertUsageUnits!
     : null;
-  const requiredUnits = valid
+  const requiredCanaryUnits = valid
+    ? quota.videosInsertCostUnits!
+    : null;
+  const requiredBulkUnits = valid
     ? (quota.intendedCount + quota.reservedRetryHeadroom!) * quota.videosInsertCostUnits!
     : null;
-  if (valid && (remainingUnits! < requiredUnits! || remainingUnits! < 0)) {
+  if (valid && (remainingUnits! < requiredCanaryUnits! || remainingUnits! < 0)) {
     blockers.push("V2A_QUOTA_INSUFFICIENT");
   }
-  return { ready: blockers.length === 0, remainingUnits, requiredUnits, blockers };
+  const evidenceReady = blockers.length === 0;
+  return {
+    ready: evidenceReady,
+    canaryReady: evidenceReady,
+    bulkReady: evidenceReady && remainingUnits! >= requiredBulkUnits!,
+    remainingUnits,
+    requiredCanaryUnits,
+    requiredBulkUnits,
+    blockers
+  };
 }
 
 function evaluatePackage(input: V2APrivateCanaryReadinessInput) {

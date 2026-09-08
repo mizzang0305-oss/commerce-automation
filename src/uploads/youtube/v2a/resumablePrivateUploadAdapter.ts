@@ -1,3 +1,5 @@
+import { YOUTUBE_UPLOAD_V2A_RESUMABLE_INITIATION_URL } from "./constants";
+
 export type UploadVisibility = "private" | "unlisted" | "public";
 
 export type ResumableUploadTransportRequest = {
@@ -24,6 +26,8 @@ export type ResumablePrivateUploadRequest = {
   tags: readonly string[];
   categoryId: string;
   madeForKids: boolean;
+  containsSyntheticMedia: boolean;
+  notifySubscribers: false;
   targetChannelId: string;
   media: Uint8Array;
   mimeType: string;
@@ -249,7 +253,8 @@ export function createResumablePrivateUploadAdapter(
                 },
                 status: {
                   privacyStatus: "private",
-                  selfDeclaredMadeForKids: request.madeForKids
+                  selfDeclaredMadeForKids: request.madeForKids,
+                  containsSyntheticMedia: request.containsSyntheticMedia
                 }
               })
             });
@@ -290,6 +295,8 @@ function isValidRequest(request: ResumablePrivateUploadRequest): boolean {
       request.tags.every((tag) => tag.length > 0 && tag.length <= 60 && !hasControlCharacters(tag)) &&
       /^\d{1,3}$/.test(request.categoryId) &&
       typeof request.madeForKids === "boolean" &&
+      typeof request.containsSyntheticMedia === "boolean" &&
+      request.notifySubscribers === false &&
       /^UC[A-Za-z0-9_-]{22}$/.test(request.targetChannelId) &&
       request.mimeType === "video/mp4" &&
       request.media.byteLength > 0
@@ -306,12 +313,19 @@ function isOfficialInitiationUrl(value: string): boolean {
       url.username === "" &&
       url.password === "" &&
       url.pathname === "/upload/youtube/v3/videos" &&
+      url.searchParams.get("part") === "snippet,status" &&
       url.searchParams.get("uploadType") === "resumable" &&
+      url.searchParams.get("notifySubscribers") === "false" &&
+      url.searchParams.size === 3 &&
       url.hash === ""
     );
   } catch {
     return false;
   }
+}
+
+export function buildV2AResumableInitiationUrl(): typeof YOUTUBE_UPLOAD_V2A_RESUMABLE_INITIATION_URL {
+  return YOUTUBE_UPLOAD_V2A_RESUMABLE_INITIATION_URL;
 }
 
 function isOfficialSessionUrl(value: string): boolean {

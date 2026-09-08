@@ -1,4 +1,4 @@
-export const YOUTUBE_UPLOAD_V2A_PACKAGE_VERSION = "youtube-upload-v2a-package-v1" as const;
+export const YOUTUBE_UPLOAD_V2A_PACKAGE_VERSION = "youtube-upload-v2a-package-v2" as const;
 
 export const YOUTUBE_UPLOAD_V2A_PRIVATE_CANARY_READY =
   "YOUTUBE_UPLOAD_V2_PRIVATE_CANARY_READY" as const;
@@ -7,6 +7,9 @@ export const YOUTUBE_UPLOAD_V2A_PRIVATE_CANARY_BLOCKED =
 
 export const YOUTUBE_UPLOAD_SCOPE =
   "https://www.googleapis.com/auth/youtube.upload" as const;
+
+export const YOUTUBE_UPLOAD_V2A_RESUMABLE_INITIATION_URL =
+  "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet%2Cstatus&uploadType=resumable&notifySubscribers=false" as const;
 
 export const YOUTUBE_UPLOAD_V2A_INTENDED_DAILY_COUNT = 69 as const;
 

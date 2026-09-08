@@ -4,10 +4,9 @@
 
 V2-A implements a separate, private-only YouTube upload contract. It does not change or reinterpret Daily69 V1 operation evidence and it does not authorize an upload.
 
-Current implementation base:
+Current V2-A.1 composition base:
 
-- source SHA: `aa742b3e193c848451029d98fc4d86351a9a8cd5`
-- source tree: `865d2802bd4a46b48c8084ab26cde659bff3551d`
+- source SHA: `b391a5a86119b68033ec65f4a2360043b934b002`
 - V2 branch: `codex/youtube-upload-automation-v2-private-canary-no-public`
 - V1 operation observed during implementation: `operation-2026-09-09`, `tasks_armed`, `SAFE_TO_UPLOAD=false`, `PLATFORM_UPLOAD=0`
 
@@ -47,6 +46,7 @@ There is no scheduler, public/unlisted adapter, bulk worker, publication endpoin
 | `readbackVerifier.ts` | Exact video ID, channel, private visibility, title, and safe description-digest verification |
 | `idempotencyReceipt.ts` | Canonical idempotency key and exclusive-create success/ambiguous records with an allowlisted secret-free schema |
 | `privateCanaryCoordinator.ts` | One item only; exact Owner phrase; duplicate/ambiguous reconciliation before any adapter call |
+| `productionComposition.ts` | Owner-only, exact-phrase, one-private-item readiness dry-run; no coordinator call, session, media, or platform mutation |
 
 ## Upload package contract
 
@@ -55,7 +55,8 @@ Each package binds:
 - operation namespace and product ID;
 - affiliate URL;
 - absolute video reference, SHA-256, size, and `video/mp4` MIME type;
-- exact title, description, ordered tags, category, and made-for-kids declaration;
+- exact title, description, ordered tags, category, made-for-kids declaration, and synthetic-media disposition;
+- explicit `notifySubscribers=false` rather than an API default;
 - `private` visibility only;
 - canonical target channel ID;
 - source Git SHA;
@@ -79,7 +80,13 @@ As observed in official YouTube Data API documentation on 2026-09-08, `videos.in
 - Reference: <https://developers.google.com/youtube/v3/docs/videos/insert>
 - Overview: <https://developers.google.com/youtube/v3/getting-started>
 
-V2-A does not hardcode those values as runtime success. Readiness requires a current sanitized project readback containing the actual limit, usage, unit cost, capture time, intended 69 uploads, and reserved retry headroom. Missing or insufficient evidence blocks readiness.
+V2-A does not hardcode those values as runtime success. Readiness requires a current sanitized project readback containing the actual limit, usage, unit cost, capture time, intended 69 uploads, and reserved retry headroom. A single canary passes when one call remains; Daily69 bulk readiness is reported separately and does not authorize bulk execution.
+
+## V2-A.1 dry-run boundary
+
+`authorizeV2AReadinessDryRun` rejects anonymous, non-owner, missing-phrase, execute-mode, public, unlisted, and bulk requests. A successful authorization result still keeps `coordinatorInvoked=false`, `approvalPhraseForwarded=false`, `videosInsertCalls=0`, `resumableSessionCalls=0`, `mediaUploadBytes=0`, and `platformUploads=0`.
+
+`buildV2APrivateCanaryDryRunRequest` renders only the future request shape. It sets `privacyStatus=private`, `notifySubscribers=false`, explicit `selfDeclaredMadeForKids`, and explicit `containsSyntheticMedia`; it includes neither an Authorization header nor media bytes.
 
 ## API project constraint
 

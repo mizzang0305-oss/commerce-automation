@@ -7,7 +7,11 @@ export type YouTubeVideoReadback = {
     tags?: unknown;
     categoryId?: unknown;
   } | null;
-  status?: { privacyStatus?: unknown; selfDeclaredMadeForKids?: unknown } | null;
+  status?: {
+    privacyStatus?: unknown;
+    selfDeclaredMadeForKids?: unknown;
+    containsSyntheticMedia?: unknown;
+  } | null;
 };
 
 export type YouTubeReadbackExpectation = {
@@ -18,6 +22,7 @@ export type YouTubeReadbackExpectation = {
   tags: readonly string[];
   categoryId: string;
   madeForKids: boolean;
+  containsSyntheticMedia: boolean;
 };
 
 export type YouTubeReadbackVerificationResult =
@@ -68,7 +73,8 @@ export async function verifyYouTubeUploadReadback(input: {
   if (!Array.isArray(resource.snippet.tags) ||
       JSON.stringify(resource.snippet.tags) !== JSON.stringify(expected.tags) ||
       resource.snippet.categoryId !== expected.categoryId ||
-      resource.status.selfDeclaredMadeForKids !== expected.madeForKids) {
+      resource.status.selfDeclaredMadeForKids !== expected.madeForKids ||
+      resource.status.containsSyntheticMedia !== expected.containsSyntheticMedia) {
     return { ok: false, code: "READBACK_METADATA_MISMATCH" };
   }
 

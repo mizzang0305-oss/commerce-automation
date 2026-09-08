@@ -22,6 +22,8 @@ export type V2AUploadPackageInput = {
   tags: readonly string[];
   categoryId: string;
   madeForKids: boolean;
+  containsSyntheticMedia: boolean;
+  notifySubscribers: false;
   visibility: V2AUploadVisibility;
   targetChannelId: string;
   sourceGitSha: string;
@@ -50,6 +52,8 @@ export type V2AUploadPackageBlocker =
   | "V2A_TAGS_INVALID"
   | "V2A_CATEGORY_ID_INVALID"
   | "V2A_MADE_FOR_KIDS_INVALID"
+  | "V2A_SYNTHETIC_MEDIA_DISPOSITION_INVALID"
+  | "V2A_NOTIFY_SUBSCRIBERS_MUST_BE_FALSE"
   | "V2A_VISIBILITY_PUBLIC_REJECTED"
   | "V2A_VISIBILITY_UNLISTED_REJECTED"
   | "V2A_VISIBILITY_INVALID"
@@ -69,6 +73,8 @@ export type V2AUploadPackageBlocker =
   | "V2A_TAGS_MISMATCH"
   | "V2A_CATEGORY_ID_MISMATCH"
   | "V2A_MADE_FOR_KIDS_MISMATCH"
+  | "V2A_SYNTHETIC_MEDIA_DISPOSITION_MISMATCH"
+  | "V2A_NOTIFY_SUBSCRIBERS_MISMATCH"
   | "V2A_VISIBILITY_MISMATCH"
   | "V2A_TARGET_CHANNEL_ID_MISMATCH"
   | "V2A_SOURCE_GIT_SHA_MISMATCH";
@@ -104,6 +110,8 @@ export function buildV2AUploadPackage(input: V2AUploadPackageInput): V2AUploadPa
     tags: [...input.tags],
     categoryId: input.categoryId,
     madeForKids: input.madeForKids,
+    containsSyntheticMedia: input.containsSyntheticMedia,
+    notifySubscribers: input.notifySubscribers,
     visibility: input.visibility,
     targetChannelId: input.targetChannelId,
     sourceGitSha: input.sourceGitSha
@@ -183,6 +191,8 @@ function packagePayload(uploadPackage: V2AUploadPackage): V2AUploadPackagePayloa
     tags: uploadPackage.tags,
     categoryId: uploadPackage.categoryId,
     madeForKids: uploadPackage.madeForKids,
+    containsSyntheticMedia: uploadPackage.containsSyntheticMedia,
+    notifySubscribers: uploadPackage.notifySubscribers,
     visibility: uploadPackage.visibility,
     targetChannelId: uploadPackage.targetChannelId,
     sourceGitSha: uploadPackage.sourceGitSha
@@ -204,6 +214,8 @@ function validatePayload(payload: V2AUploadPackagePayload): V2AUploadPackageBloc
   if (!validTags(payload.tags)) blockers.push("V2A_TAGS_INVALID");
   if (!/^[0-9]{1,3}$/u.test(payload.categoryId)) blockers.push("V2A_CATEGORY_ID_INVALID");
   if (typeof payload.madeForKids !== "boolean") blockers.push("V2A_MADE_FOR_KIDS_INVALID");
+  if (typeof payload.containsSyntheticMedia !== "boolean") blockers.push("V2A_SYNTHETIC_MEDIA_DISPOSITION_INVALID");
+  if (payload.notifySubscribers !== false) blockers.push("V2A_NOTIFY_SUBSCRIBERS_MUST_BE_FALSE");
   if (payload.visibility === "public") blockers.push("V2A_VISIBILITY_PUBLIC_REJECTED");
   else if (payload.visibility === "unlisted") blockers.push("V2A_VISIBILITY_UNLISTED_REJECTED");
   else if (payload.visibility !== "private") blockers.push("V2A_VISIBILITY_INVALID");
@@ -229,6 +241,8 @@ function bindingMismatches(
   if (!sameStringArray(uploadPackage.tags, expected.tags)) blockers.push("V2A_TAGS_MISMATCH");
   compare(uploadPackage.categoryId, expected.categoryId, "V2A_CATEGORY_ID_MISMATCH", blockers);
   compare(uploadPackage.madeForKids, expected.madeForKids, "V2A_MADE_FOR_KIDS_MISMATCH", blockers);
+  compare(uploadPackage.containsSyntheticMedia, expected.containsSyntheticMedia, "V2A_SYNTHETIC_MEDIA_DISPOSITION_MISMATCH", blockers);
+  compare(uploadPackage.notifySubscribers, expected.notifySubscribers, "V2A_NOTIFY_SUBSCRIBERS_MISMATCH", blockers);
   compare(uploadPackage.visibility, expected.visibility, "V2A_VISIBILITY_MISMATCH", blockers);
   compare(uploadPackage.targetChannelId, expected.targetChannelId, "V2A_TARGET_CHANNEL_ID_MISMATCH", blockers);
   compare(uploadPackage.sourceGitSha, expected.sourceGitSha, "V2A_SOURCE_GIT_SHA_MISMATCH", blockers);

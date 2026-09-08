@@ -3,6 +3,7 @@ export * from "./constants";
 export * from "./idempotencyReceipt";
 export * from "./localVideoAsset";
 export * from "./privateCanaryCoordinator";
+export * from "./productionComposition";
 export * from "./readbackVerifier";
 export * from "./readiness";
 export * from "./resumablePrivateUploadAdapter";

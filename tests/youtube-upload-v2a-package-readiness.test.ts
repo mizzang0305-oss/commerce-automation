@@ -33,6 +33,8 @@ const packageInput: V2AUploadPackageInput = {
   tags: ["상품123", "private-canary"],
   categoryId: "26",
   madeForKids: false,
+  containsSyntheticMedia: true,
+  notifySubscribers: false,
   visibility: "private",
   targetChannelId: CHANNEL_ID,
   sourceGitSha: "c".repeat(40)
@@ -200,6 +202,8 @@ describe("YouTube Upload Automation V2-A package and private-canary readiness", 
       YOUTUBE_UPLOAD_SCOPE: "PASS",
       API_PROJECT_STATUS: "KNOWN",
       QUOTA_READINESS: "PASS",
+      PRIVATE_CANARY_QUOTA_READY: "PASS",
+      DAILY69_BULK_QUOTA_READY: "PASS",
       RESUMABLE_UPLOAD_ADAPTER: "PASS",
       IDEMPOTENCY: "PASS",
       PRIVATE_ONLY_GUARD: "PASS",
@@ -223,7 +227,7 @@ describe("YouTube Upload Automation V2-A package and private-canary readiness", 
     ]));
   });
 
-  test("rejects insufficient quantitative quota headroom", () => {
+  test("keeps one canary ready while reporting Daily69 bulk quota separately", () => {
     const report = evaluateV2APrivateCanaryReadiness(readyInput({
       quota: {
         videosInsertLimitUnits: 100,
@@ -236,9 +240,22 @@ describe("YouTube Upload Automation V2-A package and private-canary readiness", 
         runtimeEvidence: true
       }
     }));
+    expect(report.ready).toBe(true);
+    expect(report.PRIVATE_CANARY_QUOTA_READY).toBe("PASS");
+    expect(report.DAILY69_BULK_QUOTA_READY).toBe("BLOCKED");
+    expect(report.quota).toMatchObject({ remainingUnits: 70, requiredCanaryUnits: 1, requiredBulkUnits: 79 });
+    expect(report.blockers).not.toContain("V2A_QUOTA_INSUFFICIENT");
+  });
+
+  test("rejects a canary when fewer than one videos.insert call remains", () => {
+    const report = evaluateV2APrivateCanaryReadiness(readyInput({
+      quota: {
+        ...readyInput().quota!,
+        videosInsertUsageUnits: 100
+      }
+    }));
     expect(report.ready).toBe(false);
-    expect(report.QUOTA_READINESS).toBe("BLOCKED");
-    expect(report.quota).toMatchObject({ remainingUnits: 70, requiredUnits: 79 });
+    expect(report.PRIVATE_CANARY_QUOTA_READY).toBe("BLOCKED");
     expect(report.blockers).toContain("V2A_QUOTA_INSUFFICIENT");
   });
 
@@ -258,5 +275,17 @@ describe("YouTube Upload Automation V2-A package and private-canary readiness", 
     expect(report.ready).toBe(false);
     expect(report.API_PROJECT_STATUS).toBe("UNKNOWN");
     expect(report.blockers).toContain("V2A_API_PROJECT_STATUS_UNKNOWN");
+  });
+
+  test("does not guess an unobserved consent publishing state", () => {
+    const report = evaluateV2APrivateCanaryReadiness(readyInput({
+      apiProject: {
+        ...readyInput().apiProject!,
+        consentStatus: "unknown"
+      }
+    }));
+    expect(report.ready).toBe(true);
+    expect(report.API_PROJECT_STATUS).toBe("KNOWN");
+    expect(report.blockers).not.toContain("V2A_API_PROJECT_STATUS_UNKNOWN");
   });
 });

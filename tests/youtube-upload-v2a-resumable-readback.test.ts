@@ -76,7 +76,17 @@ describe("YouTube V2A resumable private upload adapter", () => {
 
     expect(result).toMatchObject({ status: "succeeded", videoId: "video123456" });
     expect(transport).toHaveBeenCalledTimes(3);
-    expect(transport.mock.calls[0][0]).toMatchObject({ method: "POST" });
+    expect(transport.mock.calls[0][0]).toMatchObject({
+      method: "POST",
+      url: expect.stringContaining("notifySubscribers=false")
+    });
+    expect(JSON.parse(String(transport.mock.calls[0][0].body))).toMatchObject({
+      status: {
+        privacyStatus: "private",
+        selfDeclaredMadeForKids: false,
+        containsSyntheticMedia: true
+      }
+    });
     expect(transport.mock.calls[1][0]).toMatchObject({
       method: "PUT",
       headers: { "Content-Range": "bytes 0-3/4" }
@@ -162,7 +172,8 @@ describe("YouTube V2A post-upload readback", () => {
         descriptionDigest: "digest:16",
         tags: ["tag-1"],
         categoryId: "22",
-        madeForKids: false
+        madeForKids: false,
+        containsSyntheticMedia: true
       },
       resource: {
         id: "video123456",
@@ -173,7 +184,11 @@ describe("YouTube V2A post-upload readback", () => {
           tags: ["tag-1"],
           categoryId: "22"
         },
-        status: { privacyStatus: "private", selfDeclaredMadeForKids: false }
+        status: {
+          privacyStatus: "private",
+          selfDeclaredMadeForKids: false,
+          containsSyntheticMedia: true
+        }
       },
       digestDescription
     });
@@ -193,7 +208,8 @@ describe("YouTube V2A post-upload readback", () => {
         descriptionDigest: "digest:16",
         tags: ["tag-1"],
         categoryId: "22",
-        madeForKids: false
+        madeForKids: false,
+        containsSyntheticMedia: true
       },
       resource: {
         id: "video123456",
@@ -204,7 +220,11 @@ describe("YouTube V2A post-upload readback", () => {
           tags: ["tag-1"],
           categoryId: "22"
         },
-        status: { privacyStatus: "private", selfDeclaredMadeForKids: false }
+        status: {
+          privacyStatus: "private",
+          selfDeclaredMadeForKids: false,
+          containsSyntheticMedia: true
+        }
       },
       digestDescription
     });
@@ -220,7 +240,7 @@ function adapter(
 ) {
   return createResumablePrivateUploadAdapter({
     initiationUrl:
-      "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+      "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet%2Cstatus&uploadType=resumable&notifySubscribers=false",
     transport,
     delay: async () => undefined,
     ...overrides
@@ -237,6 +257,8 @@ function request(
     tags: ["tag-1"],
     categoryId: "22",
     madeForKids: false,
+    containsSyntheticMedia: true,
+    notifySubscribers: false,
     targetChannelId: CHANNEL_ID,
     media: new Uint8Array([1, 2, 3, 4]),
     mimeType: "video/mp4",
