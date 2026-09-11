@@ -42,6 +42,9 @@ export type RetainedExecutionReceipt = {
   startedAt: string;
   completedAt: string;
   exitCode: number;
+  outcome?: "success" | "noop" | "partial" | "pending" | "failed" | "guard_blocked" | "unexpected_exception";
+  safeError?: string;
+  safeErrorCode?: string;
   taskEvent: {
     correlated: boolean;
     startedEventId: number;
@@ -60,7 +63,9 @@ export type RetainedTaskEventBinding = {
   eventRecordIds: number[];
   requiredEventIds: number[];
   observedEventIds: number[];
-  resultCodesPass: true;
+  resultCodesPass: boolean;
+  terminalOutcome?: "SUCCESS" | "TERMINAL_FAILED";
+  safeError?: string;
 };
 
 export type Level3SheetsAuditGateway = {
@@ -86,19 +91,24 @@ export async function bindRetainedTaskEvents(operationRoot: string, events: Sani
   let bound = 0;
   let alreadyBound = 0;
   let unproven = 0;
+  const terminalFailures: Array<{ role: RetainedExecutionReceipt["role"]; invocationId: string; safeError: string }> = [];
   for (const receipt of receipts.records) {
     if (receipt.namespace !== snapshot.manifest.namespace || receipt.operationDate !== snapshot.manifest.operationDate
-      || receipt.expectedGitHead !== snapshot.manifest.expectedGitHead || receipt.exitCode !== 0
-      || !Number.isSafeInteger(receipt.processId) || Number(receipt.processId) < 1) {
-      unproven += 1;
-      continue;
+      || receipt.expectedGitHead !== snapshot.manifest.expectedGitHead) {
+      throw new Error("DAILY69_TASK_RECEIPT_IDENTITY_MISMATCH");
     }
+    if (!Number.isSafeInteger(receipt.processId) || Number(receipt.processId) < 1) {
+      throw new Error("DAILY69_TASK_RECEIPT_PROCESS_ID_INVALID");
+    }
+    const terminalSafeError = receipt.exitCode === 0 ? "" : receiptSafeError(receipt);
+    if (receipt.exitCode !== 0 && !terminalSafeError) throw new Error("DAILY69_TASK_TERMINAL_RECEIPT_INVALID");
     const bindingKey = `${receipt.role}:${receipt.invocationId}`;
     const existing = existingBindings.byKey.get(bindingKey);
     if (existing) {
       if (normalizeTaskName(existing.taskName) !== normalizeTaskName(receipt.taskName) || existing.actionProcessId !== receipt.processId) {
         throw new Error("DAILY69_TASK_EVENT_BINDING_CONFLICT");
       }
+      if (existing.terminalOutcome === "TERMINAL_FAILED") terminalFailures.push({ role: receipt.role, invocationId: receipt.invocationId, safeError: existing.safeError || terminalSafeError });
       alreadyBound += 1;
       continue;
     }
@@ -111,11 +121,23 @@ export async function bindRetainedTaskEvents(operationRoot: string, events: Sani
       const chain = relevant.filter((event) => event.taskInstanceId === taskInstanceId
         || (event.eventId === 129 && event.taskInstanceId === "" && event.processId === receipt.processId));
       return { taskInstanceId, chain, provenance: classifyTaskInvocationProvenance({ taskName: receipt.taskName, events: chain }) };
-    }).filter((candidate) => candidate.provenance.classification === "natural_scheduled"
+    }).filter((candidate) => candidate.provenance.classification === (receipt.exitCode === 0 ? "natural_scheduled" : "natural_scheduled_terminal_failure")
       && Number.isSafeInteger(receipt.processId) && Number(receipt.processId) > 0
       && [129, 200, 201].every((eventId) => candidate.chain.some((event) => event.eventId === eventId && event.processId === receipt.processId))
       && !usedInstances.has(candidate.taskInstanceId));
-    if (candidates.length !== 1) { unproven += 1; continue; }
+    if (candidates.length !== 1) {
+      const contradictory = instanceIds.map((taskInstanceId) => {
+        const chain = relevant.filter((event) => event.taskInstanceId === taskInstanceId
+          || (event.eventId === 129 && event.taskInstanceId === "" && event.processId === receipt.processId));
+        return {
+          classification: classifyTaskInvocationProvenance({ taskName: receipt.taskName, events: chain }).classification,
+          pidMatched: [129, 200, 201].every((eventId) => chain.some((event) => event.eventId === eventId && event.processId === receipt.processId)),
+        };
+      }).some(({ classification, pidMatched }) => pidMatched && (classification === "natural_scheduled" || classification === "natural_scheduled_terminal_failure"));
+      if (contradictory) throw new Error("DAILY69_TASK_TERMINAL_EVIDENCE_MISMATCH");
+      unproven += 1;
+      continue;
+    }
     const candidate = candidates[0];
     const binding: RetainedTaskEventBinding = {
       schemaVersion: "daily69-task-event-binding-v1",
@@ -128,13 +150,16 @@ export async function bindRetainedTaskEvents(operationRoot: string, events: Sani
       eventRecordIds: TASK_PROVENANCE_EVENT_IDS.map((eventId) => candidate.chain.find((event) => event.eventId === eventId)!.eventRecordId),
       requiredEventIds: [...TASK_PROVENANCE_EVENT_IDS],
       observedEventIds: candidate.provenance.observedEventIds,
-      resultCodesPass: true,
+      resultCodesPass: receipt.exitCode === 0,
+      terminalOutcome: receipt.exitCode === 0 ? "SUCCESS" : "TERMINAL_FAILED",
+      safeError: terminalSafeError,
     };
     await createNewJson(join(outputRoot, `${receipt.role}-${receipt.invocationId}.json`), binding);
     usedInstances.add(candidate.taskInstanceId);
+    if (receipt.exitCode !== 0) terminalFailures.push({ role: receipt.role, invocationId: receipt.invocationId, safeError: terminalSafeError });
     bound += 1;
   }
-  return { receipts: receipts.records.length, malformedReceipts: receipts.malformed, bound, alreadyBound, unproven, SAFE_TO_UPLOAD: false as const, PLATFORM_UPLOAD: 0 as const };
+  return { receipts: receipts.records.length, malformedReceipts: receipts.malformed, bound, alreadyBound, unproven, terminalFailures, SAFE_TO_UPLOAD: false as const, PLATFORM_UPLOAD: 0 as const };
 }
 
 export async function retainedExecutionTimeBounds(operationRoot: string) {
@@ -216,7 +241,11 @@ export async function recomputePostCloseout(operationRoot: string, nowOrDependen
 export async function collectLevel3CompletionInput(
   operationRoot: string,
   snapshot: Awaited<ReturnType<typeof firstOperationStatus>>,
-  dependencies: { inspectMedia?: typeof inspectQueueMediaEvidence; retainedEvidenceOverride?: Level3RetainedEvidence | null } = {},
+  dependencies: {
+    inspectMedia?: typeof inspectQueueMediaEvidence;
+    retainedEvidenceOverride?: Level3RetainedEvidence | null;
+    executionMode?: "natural" | "functional_shadow";
+  } = {},
 ): Promise<Level3CompletionInput> {
   const root = resolve(operationRoot);
   const expected = expectedCounts(snapshot.manifest, snapshot.settings.batchSize);
@@ -230,6 +259,7 @@ export async function collectLevel3CompletionInput(
   const retainedAggregate = Object.prototype.hasOwnProperty.call(dependencies, "retainedEvidenceOverride") ? dependencies.retainedEvidenceOverride ?? null : retainedFile;
   const retainedEvidence = retainedAggregate ? { ...retainedAggregate, media } : null;
   return {
+    executionMode: dependencies.executionMode ?? "natural",
     expected,
     binding: {
       namespace: snapshot.manifest.namespace,
@@ -351,7 +381,9 @@ async function reconcileRunsAndBatchResults(operationRoot: string, allRuns: Awai
     batchResults: envelopes.length,
     claimed: runs.reduce((sum, run) => sum + run.claimed, 0),
     completed: runs.reduce((sum, run) => sum + run.completed, 0),
-    failed: runs.reduce((sum, run) => sum + run.failed + run.blocked + run.retried, 0),
+    blocked: runs.reduce((sum, run) => sum + run.blocked, 0),
+    retried: runs.reduce((sum, run) => sum + run.retried, 0),
+    failed: runs.reduce((sum, run) => sum + run.failed, 0),
     runIdsMatched: JSON.stringify(runIds) === JSON.stringify(observedRunIds),
     batchClaimResultCardinalityMatched,
     claimedIdsObserved: claimedIds.length,
@@ -595,7 +627,9 @@ function isTaskEventBinding(value: unknown): value is RetainedTaskEventBinding {
     && typeof binding.taskName === "string" && binding.taskName.length > 0
     && typeof binding.taskInstanceId === "string" && binding.taskInstanceId.length > 0
     && Number.isSafeInteger(binding.actionProcessId) && Number(binding.actionProcessId) > 0
-    && binding.origin === "NATURAL_SCHEDULED" && binding.resultCodesPass === true
+    && binding.origin === "NATURAL_SCHEDULED" && typeof binding.resultCodesPass === "boolean"
+    && (binding.terminalOutcome === undefined || binding.terminalOutcome === (binding.resultCodesPass ? "SUCCESS" : "TERMINAL_FAILED"))
+    && (binding.safeError === undefined || (typeof binding.safeError === "string" && /^(?:[A-Z][A-Z0-9_:-]{0,159})?$/u.test(binding.safeError)))
     && Array.isArray(binding.eventRecordIds) && binding.eventRecordIds.length === required.length
     && binding.eventRecordIds.every((id) => Number.isSafeInteger(id) && id > 0)
     && new Set(binding.eventRecordIds).size === binding.eventRecordIds.length
@@ -615,6 +649,8 @@ function isReceipt(value: unknown, role: RetainedExecutionReceipt["role"]): valu
     && typeof receipt.startedAt === "string" && validTimestamp(receipt.startedAt)
     && typeof receipt.completedAt === "string" && validTimestamp(receipt.completedAt)
     && typeof receipt.exitCode === "number" && Number.isInteger(receipt.exitCode)
+    && (receipt.safeError === undefined || (typeof receipt.safeError === "string" && /^(?:[A-Z][A-Z0-9_:-]{0,159})?$/u.test(receipt.safeError)))
+    && (receipt.safeErrorCode === undefined || (typeof receipt.safeErrorCode === "string" && /^(?:[A-Z][A-Z0-9_:-]{0,159})?$/u.test(receipt.safeErrorCode)))
     && Boolean(receipt.taskEvent) && typeof receipt.taskEvent?.correlated === "boolean"
     && Number.isInteger(receipt.taskEvent?.startedEventId) && Number.isInteger(receipt.taskEvent?.completedEventId);
 }
@@ -712,6 +748,8 @@ function appendGate(matrix: Level3CompletionMatrix, extra: Level3Gate): Level3Co
   return {
     ...matrix,
     completion: failed > 0 ? "FAILED" : unproven > 0 ? "PENDING" : "PASS",
+    terminalState: failed > 0 ? "FAILED" : unproven > 0 ? "PENDING" : matrix.terminalState,
+    perfectDay: failed === 0 && unproven === 0 && matrix.perfectDay,
     pass: gates.length - failed - unproven,
     failed,
     unproven,
@@ -723,4 +761,8 @@ function appendGate(matrix: Level3CompletionMatrix, extra: Level3Gate): Level3Co
 function validTimestamp(value: string) { return Number.isFinite(Date.parse(value)); }
 function hash(value: string | Buffer) { return createHash("sha256").update(value).digest("hex"); }
 function normalizeTaskName(value: string) { const trimmed = value.trim(); return (trimmed.startsWith("\\") ? trimmed : `\\${trimmed}`).toLowerCase(); }
+function receiptSafeError(receipt: RetainedExecutionReceipt) {
+  const value = receipt.safeError || receipt.safeErrorCode || "";
+  return /^[A-Z][A-Z0-9_:-]{0,159}$/u.test(value) ? value : "";
+}
 function isMissingFileError(error: unknown) { return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"; }

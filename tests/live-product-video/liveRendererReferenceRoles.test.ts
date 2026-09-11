@@ -9,5 +9,9 @@ describe("live renderer identity roles", () => {
     expect(source).toContain("상품 참고 이미지");
     expect(source).toContain("연출된 사용 예시");
     expect(source).toContain('"exact_product_use_claimed": False');
+    expect(source).toContain('role == "product_reference"');
+    expect(source).toContain("force_original_aspect_ratio=decrease");
+    expect(source).toContain("pad=1160:2000");
+    expect(source).toContain("40+40*sin(2*PI*t/2.4)");
   });
 });

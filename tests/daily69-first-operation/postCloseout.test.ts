@@ -100,9 +100,6 @@ describe("Daily69 independent post-closeout audit", () => {
   it.each([
     { name: "wrong PID", receipt: {}, eventTaskName: "Minz-Commerce-Control", eventPid: 9191 },
     { name: "wrong task", receipt: {}, eventTaskName: "Other-Task", eventPid: 5151 },
-    { name: "wrong operation", receipt: { namespace: "operation-other" }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
-    { name: "wrong expectedGitHead", receipt: { expectedGitHead: "f".repeat(40) }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
-    { name: "receipt failure", receipt: { exitCode: 1 }, eventTaskName: "Minz-Commerce-Control", eventPid: 5151 },
   ])("does not bind $name evidence", async ({ receipt: receiptOverride, eventTaskName, eventPid }) => {
     const { operationRoot, manifest } = await operationFixture();
     const roleRoot = join(operationRoot, "retained-execution", "control");
@@ -111,6 +108,75 @@ describe("Daily69 independent post-closeout audit", () => {
     await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
     const chain = taskEventChain(eventTaskName, "rejected-instance", eventPid, 5000, "2099-01-01T00:00:30.000Z");
     await expect(bindRetainedTaskEvents(operationRoot, chain)).resolves.toMatchObject({ receipts: 1, bound: 0, unproven: 1 });
+  });
+
+  it.each([
+    { namespace: "operation-other" },
+    { expectedGitHead: "f".repeat(40) },
+  ])("fails a mismatched retained receipt identity instead of polling it", async (receiptOverride) => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "control");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, receiptOverride);
+    await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
+    await expect(bindRetainedTaskEvents(operationRoot, taskEventChain(receipt.taskName, "rejected-instance", 5151, 5000, "2099-01-01T00:00:30.000Z")))
+      .rejects.toThrow("DAILY69_TASK_RECEIPT_IDENTITY_MISMATCH");
+  });
+
+  it("binds a natural terminal receipt and finalizes as failed with its exact safe code", async () => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "control");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, { exitCode: 5, outcome: "unexpected_exception", safeError: "UNEXPECTED_EXCEPTION" });
+    await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
+    const chain = [
+      ...taskEventChain(receipt.taskName, "terminal-instance", 5151, 6000, "2099-01-01T00:00:30.000Z", 5),
+      { eventRecordId: 6999, eventId: 322, timeCreatedUtc: "2099-01-01T00:00:31.000Z", taskName: receipt.taskName, taskInstanceId: "terminal-instance" },
+    ];
+    const binding = await bindRetainedTaskEvents(operationRoot, chain);
+    expect(binding).toMatchObject({ receipts: 1, bound: 1, unproven: 0,
+      terminalFailures: [{ role: "control", invocationId: receipt.invocationId, safeError: "UNEXPECTED_EXCEPTION" }] });
+    const storedBinding = JSON.parse(await readFile(join(operationRoot, "retained-execution", "task-events", `control-${receipt.invocationId}.json`), "utf8")) as RetainedTaskEventBinding;
+    expect(storedBinding.observedEventIds).toEqual([...TASK_PROVENANCE_EVENT_IDS].sort((left, right) => left - right));
+    let closeoutCalls = 0;
+    await expect(finalizeNaturalCloseout(operationRoot, {
+      collectEvents: async () => chain, attempts: 5, intervalMs: 0, wait: async () => undefined,
+      closeout: async () => { closeoutCalls += 1; return { completion: "PASS" }; },
+    })).rejects.toThrow("UNEXPECTED_EXCEPTION");
+    expect(closeoutCalls).toBe(0);
+  });
+
+  it("treats a retained slot-local partial with wrapper exit zero as a successful natural invocation", async () => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "batch");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, { role: "batch", taskName: "Minz-Commerce-VideoBatch-NoUpload-V1", exitCode: 0, outcome: "partial", safeError: "BATCH_PARTIAL" });
+    await writeFile(join(roleRoot, "partial.json"), `${JSON.stringify(receipt)}\n`);
+    const chain = taskEventChain(receipt.taskName, "partial-instance", receipt.processId!, 6250, "2099-01-01T00:00:30.000Z", 0);
+    let closeoutCalls = 0;
+    const result = await finalizeNaturalCloseout(operationRoot, {
+      collectEvents: async () => chain,
+      attempts: 1,
+      closeout: async () => { closeoutCalls += 1; return { completion: "PASS" }; },
+    });
+    expect(result.binding).toMatchObject({ receipts: 1, bound: 1, unproven: 0, terminalFailures: [] });
+    expect(result.completion).toBe("PASS");
+    expect(closeoutCalls).toBe(1);
+  });
+
+  it("keeps a nonzero receipt pending while its natural terminal event is not visible yet", async () => {
+    const { operationRoot, manifest } = await operationFixture();
+    const roleRoot = join(operationRoot, "retained-execution", "control");
+    await mkdir(roleRoot, { recursive: true });
+    const receipt = retainedReceipt(manifest, { exitCode: 5, outcome: "unexpected_exception", safeError: "UNEXPECTED_EXCEPTION" });
+    await writeFile(join(roleRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`);
+    const incomplete = taskEventChain(receipt.taskName, "lagging-instance", 5151, 6500, "2099-01-01T00:00:30.000Z", 5).slice(0, -2);
+    let closeoutCalls = 0;
+    await expect(finalizeNaturalCloseout(operationRoot, {
+      collectEvents: async () => incomplete, attempts: 1, intervalMs: 0, wait: async () => undefined,
+      closeout: async () => { closeoutCalls += 1; return { completion: "PASS" }; },
+    })).rejects.toThrow("DAILY69_TASK_EVENTS_PENDING");
+    expect(closeoutCalls).toBe(0);
   });
 
   it("finalizes only after the prior closeout receipt has a completed natural event chain", async () => {
@@ -182,7 +248,7 @@ describe("Daily69 independent post-closeout audit", () => {
   });
 });
 
-function taskEventChain(taskName: string, taskInstanceId: string, processId: number, recordBase: number, timeCreatedUtc: string): SanitizedTaskSchedulerEvent[] {
+function taskEventChain(taskName: string, taskInstanceId: string, processId: number, recordBase: number, timeCreatedUtc: string, resultCode = 0): SanitizedTaskSchedulerEvent[] {
   return TASK_PROVENANCE_EVENT_IDS.map((eventId, index) => ({
     eventRecordId: recordBase + index,
     eventId,
@@ -190,7 +256,7 @@ function taskEventChain(taskName: string, taskInstanceId: string, processId: num
     taskName,
     taskInstanceId,
     ...([129, 200, 201].includes(eventId) ? { processId } : {}),
-    ...(eventId === 201 ? { resultCode: 0 } : {}),
+    ...(eventId === 201 ? { resultCode } : {}),
   }));
 }
 
