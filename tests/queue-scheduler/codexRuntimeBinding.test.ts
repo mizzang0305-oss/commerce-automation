@@ -13,7 +13,10 @@ const binding: CodexRuntimeBinding = { schemaVersion: "daily69-codex-cli-runtime
 function probes() {
   return { canonical: async (p: string) => p, hash: async () => binding.commandSha256, run: vi.fn(async (_: string, args: string[]) => args[0] === "--version" ? "codex-cli 0.153.1\n" : args[0] === "exec" ? "--ignore-user-config" : JSON.stringify({ models: [{ slug: "gpt-6-astra", supported_reasoning_levels: [{ effort: "medium" }] }] })) };
 }
-describe("immutable Daily69 Codex runtime", () => {
+// These integration cases materialize and verify a Windows runtime capsule.
+// Host-level worker contention can legitimately push the subprocess-backed
+// metadata checks past Vitest's 10 second default without changing semantics.
+describe("immutable Daily69 Codex runtime", { timeout: 30_000 }, () => {
   it("retains legacy validation but rejects it for every future operation capsule gate", () => {
     expect(() => assertCodexRuntimeBinding(binding)).not.toThrow();
     expect(() => assertOperationCodexCapsuleRuntimeBinding(binding)).toThrow("CODEX_CAPSULE_OPERATION_BINDING_REQUIRED");

@@ -96,6 +96,49 @@ try {
     });
   });
 
+  it("keeps stderr separate from exit semantics across the Windows PowerShell native matrix", () => {
+    const value = runPowerShell<{
+      stdout0: { exitCode: number; stdout: string[]; stderrBytes: number };
+      stderr0: { exitCode: number; stderrBytes: number };
+      stderr7: { exitCode: number; stderrBytes: number };
+      large: { exitCode: number; stderrBytes: number };
+      unicode: { exitCode: number; decoded: boolean };
+      startFailure: { caught: boolean; started: boolean; fingerprint: string };
+    }>(`
+$node = (Get-Command node.exe -ErrorAction Stop).Source
+function Invoke-NodeCapture([string]$Code) {
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Code))
+  $arguments = '-e "eval(Buffer.from(''{0}'',''base64'').toString())"' -f $encoded
+  return Invoke-Daily69Utf8Process -FilePath $node -Arguments $arguments -WorkingDirectory '${ps(resolve("."))}'
+}
+$stdout0 = Invoke-NodeCapture 'process.stdout.write("stdout-ok");process.exit(0)'
+$stderr0 = Invoke-NodeCapture 'process.stderr.write("stderr-ok");process.exit(0)'
+$stderr7 = Invoke-NodeCapture 'process.stderr.write("stderr-seven");process.exit(7)'
+$large = Invoke-NodeCapture 'process.stderr.write("x".repeat(1100000));process.exit(0)'
+$unicode = Invoke-NodeCapture 'process.stdout.write("\uD55C\uAE00-\uC815\uC0C1");process.exit(0)'
+$startFailure = $null
+try { Invoke-Daily69Utf8Process -FilePath '${ps(commonPath)}' -Arguments '' -WorkingDirectory '${ps(resolve("."))}' | Out-Null }
+catch { $startFailure = [ordered]@{ caught=$true; started=[bool]$_.Exception.Data['daily69NativeProcessStarted']; fingerprint=[string]$_.Exception.Data['daily69ExecutableFingerprint'] } }
+[ordered]@{
+  stdout0=[ordered]@{exitCode=$stdout0.exitCode;stdout=@($stdout0.stdoutLines);stderrBytes=$stdout0.stderrByteLength}
+  stderr0=[ordered]@{exitCode=$stderr0.exitCode;stderrBytes=$stderr0.stderrByteLength}
+  stderr7=[ordered]@{exitCode=$stderr7.exitCode;stderrBytes=$stderr7.stderrByteLength}
+  large=[ordered]@{exitCode=$large.exitCode;stderrBytes=$large.stderrByteLength}
+  unicode=[ordered]@{exitCode=$unicode.exitCode;decoded=($unicode.stdoutLines[0] -eq ([string][char]0xD55C + [char]0xAE00 + '-' + [char]0xC815 + [char]0xC0C1))}
+  startFailure=$startFailure
+}|ConvertTo-Json -Depth 8 -Compress
+`);
+    expect(value.stdout0).toMatchObject({ exitCode: 0, stdout: ["stdout-ok"], stderrBytes: 0 });
+    expect(value.stderr0.exitCode).toBe(0);
+    expect(value.stderr0.stderrBytes).toBeGreaterThan(0);
+    expect(value.stderr7).toMatchObject({ exitCode: 7 });
+    expect(value.large.exitCode).toBe(0);
+    expect(value.large.stderrBytes).toBe(1_100_000);
+    expect(value.unicode).toMatchObject({ exitCode: 0, decoded: true });
+    expect(value.startFailure).toMatchObject({ caught: true, started: false });
+    expect(value.startFailure.fingerprint).toMatch(/^[a-f0-9]{64}$/u);
+  });
+
   it("selects one terminal producer event amid noise and emits parseable errors without fabricated counters", () => {
     const value = runPowerShell<{
       noisy: { event: string; claimed: number };
@@ -117,6 +160,37 @@ $roundTrips = @($noisy,$invalid,$ambiguous,$contract | ForEach-Object { ($_ | Co
     expect(value.ambiguous).toMatchObject({ event: "evidence_capture_error", safeError: "RAW_BATCH_RESULT_AMBIGUOUS", claimed: 0 });
     expect(value.contract).toMatchObject({ event: "evidence_capture_error", safeError: "RAW_BATCH_RESULT_CONTRACT_INVALID", claimed: 0 });
     expect(value.roundTrips).toBe(true);
+  });
+
+  it("cross-binds child exit codes to exact retained terminal envelopes", () => {
+    const value = runPowerShell(`
+$success = ConvertTo-Daily69SanitizedBatchRecord -Line '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_complete","run":{"runId":"batch-20260903090000","status":"success","claimed":1,"completed":1,"blocked":0,"failed":0,"retried":0},"results":[{"queueId":"queue-001"}]}'
+$partial = ConvertTo-Daily69SanitizedBatchRecord -Line '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_complete","run":{"runId":"batch-20260903100000","status":"partial","claimed":2,"completed":1,"blocked":1,"failed":0,"retried":0},"results":[{"queueId":"queue-002"},{"queueId":"queue-003"}]}'
+$retry = ConvertTo-Daily69SanitizedBatchRecord -Line '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_complete","run":{"runId":"batch-20260903110000","status":"partial","claimed":1,"completed":0,"blocked":0,"failed":0,"retried":1},"results":[{"queueId":"queue-004"}]}'
+$failed = ConvertTo-Daily69SanitizedBatchRecord -Line '{"schemaVersion":"daily69-retained-batch-result-v1","event":"queue_batch_failed","safeError":"QUEUE_BATCH_FAILED"}'
+$malformed = Select-Daily69SanitizedBatchRecord -Lines @('{"event":')
+$contradictory = [pscustomobject]@{ schemaVersion='daily69-retained-batch-result-v1'; event='queue_batch_complete'; status='partial'; safeError=''; claimed=1; completed=1; blocked=0; failed=0; retried=0; results=@([pscustomobject]@{queueId='queue-005'}) }
+[ordered]@{
+  success0=(Test-Daily69RetainedBatchExitContract -Record $success -ChildExitCode 0)
+  success2=(Test-Daily69RetainedBatchExitContract -Record $success -ChildExitCode 2)
+  partial2=(Test-Daily69RetainedBatchExitContract -Record $partial -ChildExitCode 2)
+  partial0=(Test-Daily69RetainedBatchExitContract -Record $partial -ChildExitCode 0)
+  retry2=(Test-Daily69RetainedBatchExitContract -Record $retry -ChildExitCode 2)
+  failed2=(Test-Daily69RetainedBatchExitContract -Record $failed -ChildExitCode 2)
+  malformed2=(Test-Daily69RetainedBatchExitContract -Record $malformed -ChildExitCode 2)
+  contradictory2=(Test-Daily69RetainedBatchExitContract -Record $contradictory -ChildExitCode 2)
+} | ConvertTo-Json -Compress
+`);
+    expect(value).toEqual({
+      success0: true,
+      success2: false,
+      partial2: true,
+      partial0: false,
+      retry2: true,
+      failed2: false,
+      malformed2: false,
+      contradictory2: false,
+    });
   });
 
   it("creates an append-only trace and one scanner-compatible final receipt with unproven task correlation", async () => {
@@ -146,6 +220,7 @@ Complete-Daily69InvocationEvidence -Outcome success -ChildExitCode 0 -WrapperExi
       SAFE_TO_UPLOAD: false,
       PLATFORM_UPLOAD: 0,
       secretRedacted: true,
+      diagnostic: { schemaVersion: "daily69-invocation-diagnostic-v1", phase: "RECEIPT_FINALIZE", process: null, exception: null },
     });
     expect(receipt.invocationId).toMatch(/^[A-Za-z0-9_-]{8,128}$/u);
     expect(Number.isFinite(Date.parse(receipt.startedAt))).toBe(true);
@@ -207,7 +282,10 @@ $controlStart = Test-Daily69NewWorkWindow -ResolvedQueue '${ps(root)}' -BoundNam
     expect(contents[2]).toContain("Claim-Daily69BatchSlot");
     expect(contents[0]).toContain("RAW_BATCH_RESULT_UNPARSEABLE");
     expect(contents[0]).toContain("StandardOutputEncoding");
+    expect(contents[1]).not.toMatch(/&\s+npm(?:\.cmd)?\b/u);
+    expect(contents[1]).toContain("Invoke-Daily69Utf8NpmScript");
     expect(contents[2]).toContain("Select-Daily69SanitizedBatchRecord");
+    expect(contents[2]).toContain("outcome = 'partial'; safeError = 'BATCH_PARTIAL'; wrapperExitCode = 0");
     expect(contents[0]).toContain("BATCH_SLOT_ALREADY_CLAIMED");
     expect(contents[3].indexOf("Test-Daily69CloseoutIdle")).toBeLessThan(contents[3].indexOf("Disable-ScheduledTask"));
     expect(contents[3]).toContain("queue-control:project");
