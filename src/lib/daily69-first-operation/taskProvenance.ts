@@ -1,6 +1,6 @@
 export const TASK_PROVENANCE_EVENT_IDS = [107, 100, 129, 200, 201, 102] as const;
 
-export type TaskInvocationProvenance = "natural_scheduled" | "manual" | "diagnostic" | "retry" | "unknown";
+export type TaskInvocationProvenance = "natural_scheduled" | "natural_scheduled_terminal_failure" | "manual" | "diagnostic" | "retry" | "unknown";
 export type TaskEventResultStatus = "RESULT_SUCCESS" | "RESULT_FAILURE" | "RESULT_NOT_APPLICABLE" | "RESULT_MISSING_UNEXPECTED";
 
 type TaskSchedulerEventContract = {
@@ -52,8 +52,8 @@ export function classifyTaskInvocationProvenance(input: {
 }): TaskProvenanceResult {
   const taskName = normalizeTaskName(input.taskName);
   const relevant = input.events.filter((event) => normalizeTaskName(event.taskName) === taskName);
-  const observedEventIds = [...new Set(relevant.map((event) => event.eventId))].sort((left, right) => left - right);
   const requiredEventIds = [...TASK_PROVENANCE_EVENT_IDS];
+  const observedEventIds = [...new Set(relevant.map((event) => event.eventId).filter((eventId) => requiredEventIds.includes(eventId as (typeof TASK_PROVENANCE_EVENT_IDS)[number])))].sort((left, right) => left - right);
   const missingEventIds = requiredEventIds.filter((eventId) => !observedEventIds.includes(eventId));
   const duplicateEventIds = observedEventIds.filter((eventId) => relevant.filter((event) => event.eventId === eventId).length > 1);
   const instanceIds = [...new Set(relevant.map((event) => event.taskInstanceId).filter(Boolean))];
@@ -92,8 +92,15 @@ export function classifyTaskInvocationProvenance(input: {
   if (resultCodeStatuses.some(({ status }) => status === "RESULT_MISSING_UNEXPECTED")) reasons.push("TASK_EVENT_RESULT_MISSING");
   if (resultCodeStatuses.some(({ status }) => status === "RESULT_FAILURE")) reasons.push("TASK_EVENT_RESULT_NONZERO");
   if (relevant.length === 0) reasons.push("TASK_EVENTS_ABSENT");
-  const natural = instanceIdsPass && missingEventIds.length === 0 && duplicateEventIds.length === 0 && processIdsPass && resultCodesPass;
-  return result(natural ? "natural_scheduled" : "unknown", taskName, taskInstanceId, requiredEventIds, observedEventIds, missingEventIds, duplicateEventIds, resultCodesPass, processIdsPass, instanceIdsPass, resultCodeStatuses, reasons);
+  const exactChain = instanceIdsPass && missingEventIds.length === 0 && duplicateEventIds.length === 0 && processIdsPass;
+  const resultMissing = resultCodeStatuses.some(({ status }) => status === "RESULT_MISSING_UNEXPECTED");
+  const resultFailed = resultCodeStatuses.some(({ status }) => status === "RESULT_FAILURE");
+  const classification = exactChain && resultCodesPass
+    ? "natural_scheduled"
+    : exactChain && !resultMissing && resultFailed
+      ? "natural_scheduled_terminal_failure"
+      : "unknown";
+  return result(classification, taskName, taskInstanceId, requiredEventIds, observedEventIds, missingEventIds, duplicateEventIds, resultCodesPass, processIdsPass, instanceIdsPass, resultCodeStatuses, reasons);
 }
 
 function result(

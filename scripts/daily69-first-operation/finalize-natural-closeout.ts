@@ -23,6 +23,7 @@ export async function finalizeNaturalCloseout(operationRoot: string, dependencie
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const events = await (dependencies.collectEvents ?? (() => queryOperationalLog(root)))();
     binding = await bindRetainedTaskEvents(root, events);
+    if (binding.terminalFailures.length > 0) throw new Error(binding.terminalFailures[0].safeError || "DAILY69_TASK_TERMINAL_FAILED");
     if (binding.malformedReceipts === 0 && binding.unproven === 0 && binding.bound + binding.alreadyBound === binding.receipts) break;
     if (attempt < attempts) await wait(intervalMs);
   }

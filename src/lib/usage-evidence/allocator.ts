@@ -24,15 +24,24 @@ const VIDEO_SOURCE_KINDS = new Set<UsageEvidenceAsset["sourceKind"]>([
   "derived_frame_pack"
 ]);
 
-export function createUsageAllocationState(): AllocationState {
-  return { packUses: new Map(), assetUses: new Map(), sourceVideoUses: new Map(), allocations: [] };
+export function createUsageAllocationState(input?: { allocations: UsageEvidenceAllocation[]; registry: UsageEvidenceRegistry }): AllocationState {
+  const state: AllocationState = { packUses: new Map(), assetUses: new Map(), sourceVideoUses: new Map(), allocations: [] };
+  if (!input) return state;
+  const videoSources = new Set(input.registry.assets.filter((asset) => VIDEO_SOURCE_KINDS.has(asset.sourceKind)).map((asset) => asset.sourceId));
+  for (const allocation of input.allocations) {
+    increment(state.packUses, allocation.packId);
+    for (const assetId of allocation.assetIds) increment(state.assetUses, assetId);
+    for (const sourceId of allocation.sourceIds) if (videoSources.has(sourceId)) increment(state.sourceVideoUses, sourceId);
+    state.allocations.push(structuredClone(allocation));
+  }
+  return state;
 }
 
 export function cloneUsageAllocationState(state: AllocationState): AllocationState {
   return { packUses: new Map(state.packUses), assetUses: new Map(state.assetUses), sourceVideoUses: new Map(state.sourceVideoUses), allocations: [...state.allocations] };
 }
 
-export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; registry: UsageEvidenceRegistry; state: AllocationState; batchSize?: number }): { allocation: UsageEvidenceAllocation | null; reason: keyof UsageEvidenceAllocationDiagnostics | "" } {
+export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; registry: UsageEvidenceRegistry; state: AllocationState; batchSize?: number; requireUniqueSequence?: boolean }): { allocation: UsageEvidenceAllocation | null; reason: keyof UsageEvidenceAllocationDiagnostics | "" } {
   const { candidate, registry, state } = input;
   const assets = new Map(registry.assets.map((asset) => [asset.assetId, asset]));
   const useCasePacks = eligiblePacksForUseCase(registry, candidate.candidate.useCase);
@@ -49,7 +58,7 @@ export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; reg
 
   const options = compatiblePacks
     .filter((pack) => (state.packUses.get(pack.packId) ?? 0) < Math.min(pack.dailyReuseLimit, registry.maxUsagePackReuse))
-    .map((pack) => selectPackOption(pack, assets, state, registry.maxSameSourceVideoDaily))
+    .map((pack) => selectPackOption(pack, assets, state, registry.maxSameSourceVideoDaily, input.requireUniqueSequence === true))
     .filter((option): option is PackOption => option !== null)
     .sort((left, right) => comparePackOptions(left, right, state));
 
@@ -84,17 +93,21 @@ export function allocateUsageEvidence(input: { candidate: RankedLiveProduct; reg
   return { allocation: null, reason: sequenceRejected ? "sequenceCapacityRejected" : "assetCapacityRejected" };
 }
 
-function selectPackOption(pack: UsageEvidencePack, assets: Map<string, UsageEvidenceAsset>, state: AllocationState, sourceDailyLimit: number): PackOption | null {
-  const productionAssets = new Map([...assets].filter(([, asset]) => isUsageEvidenceAssetProductionMaterializable(asset, pack.useCase)));
-  const problemAssets = resolveAssets(pack.problemAssetIds, productionAssets);
-  const usageAssets = resolveAssets([...new Set([...pack.usageAssetIds, ...pack.actionAssetIds])], productionAssets);
-  const afterAssets = resolveAssets(pack.afterAssetIds, productionAssets);
+function selectPackOption(pack: UsageEvidencePack, assets: Map<string, UsageEvidenceAsset>, state: AllocationState, sourceDailyLimit: number, requireUniqueSequence: boolean): PackOption | null {
+  // Only referenced role assets can participate in this pack. Apply the same
+  // production gate after lookup instead of rescanning the entire registry for
+  // every pack; keep role order, duplicate handling and last-ID Map semantics.
+  const materializable = (asset: UsageEvidenceAsset) => isUsageEvidenceAssetProductionMaterializable(asset, pack.useCase);
+  const problemAssets = resolveAssets(pack.problemAssetIds, assets).filter(materializable);
+  const usageAssets = resolveAssets([...new Set([...pack.usageAssetIds, ...pack.actionAssetIds])], assets).filter(materializable);
+  const afterAssets = resolveAssets(pack.afterAssetIds, assets).filter(materializable);
   const options: PackOption[] = [];
   for (const problem of problemAssets) {
     for (const usage of usageAssets) {
       for (const after of afterAssets) {
         const selected: [UsageEvidenceAsset, UsageEvidenceAsset, UsageEvidenceAsset] = [problem, usage, after];
         if (new Set(selected.map((asset) => asset.assetId)).size !== selected.length) continue;
+        if (requireUniqueSequence && state.allocations.some((allocation) => allocation.sequenceFingerprint === `${pack.sequenceFingerprint}:${selected.map((asset) => asset.assetId).join(":")}`)) continue;
         if (selected.some((asset) => (state.assetUses.get(asset.assetId) ?? 0) >= Math.min(asset.dailyReuseLimit, 5))) continue;
         const sourceVideoIds = [...new Set(selected.filter((asset) => VIDEO_SOURCE_KINDS.has(asset.sourceKind)).map((asset) => asset.sourceId))];
         if (sourceVideoIds.some((sourceId) => (state.sourceVideoUses.get(sourceId) ?? 0) >= sourceDailyLimit)) continue;

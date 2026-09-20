@@ -1,5 +1,8 @@
 import type { QueueSchedulerSettings } from "./types";
 
+export const DAILY69_OPERATIONAL_RESERVE_COUNT = 14;
+export const DAILY69_MAX_PRODUCT_CANDIDATES = DAILY69_OPERATIONAL_RESERVE_COUNT + 1;
+
 export const DEFAULT_QUEUE_SCHEDULER_SETTINGS: QueueSchedulerSettings = Object.freeze({
   mode: "no_upload_pilot",
   dailyTargetCount: 9,
@@ -36,7 +39,8 @@ export const DAILY_69_NO_UPLOAD_SETTINGS: QueueSchedulerSettings = Object.freeze
   startHour: 1,
   endHour: 23,
   minimumFreeGb: 20,
-  minimumReserveCount: 14,
+  maxProductCandidates: DAILY69_MAX_PRODUCT_CANDIDATES,
+  minimumReserveCount: DAILY69_OPERATIONAL_RESERVE_COUNT,
   maxRawDiscoveries: 240,
   maxProviderCalls: 30,
   processingDailyCap: 9,
@@ -54,7 +58,11 @@ export function validateSettings(value: QueueSchedulerSettings): QueueSchedulerS
   if (value.batchSize !== 3) throw new Error("PILOT_BATCH_SIZE_INVALID");
   if (value.intervalHours < 1 || value.startHour < 0 || value.endHour > 23 || value.startHour > value.endHour) throw new Error("SCHEDULE_SETTINGS_INVALID");
   if (value.maxAttempts < 1 || value.maxAttempts > 2) throw new Error("RETRY_LIMIT_INVALID");
-  if (value.maxProductCandidates !== 3) throw new Error("PRODUCT_CANDIDATE_LIMIT_INVALID");
+  if (value.mode === "no_upload_pilot") {
+    if (value.maxProductCandidates !== 3) throw new Error("PRODUCT_CANDIDATE_LIMIT_INVALID");
+  } else if (![3, DAILY69_MAX_PRODUCT_CANDIDATES].includes(value.maxProductCandidates)) {
+    throw new Error("PRODUCT_CANDIDATE_LIMIT_INVALID");
+  }
   if (value.minimumFreeGb < 0 || value.minimumFreeGb < (value.mode === "no_upload_daily_69" ? 20 : 0)) throw new Error("MINIMUM_FREE_GB_INVALID");
   if (value.reserveRatio !== 0.2 || value.minimumReserveCount < 0) throw new Error("RESERVE_SETTINGS_INVALID");
   if (!Number.isInteger(value.maxRawDiscoveries) || value.maxRawDiscoveries < value.dailyTargetCount || value.maxRawDiscoveries > 240) throw new Error("DISCOVERY_CAP_INVALID");

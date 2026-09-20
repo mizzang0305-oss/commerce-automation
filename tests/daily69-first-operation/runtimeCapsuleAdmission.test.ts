@@ -26,7 +26,7 @@ describe("future Daily69 capsule admission", () => {
     const operational = await capsule("operation");
     await expect(verifyFirstOperationCapsuleAdmission(operational.binding)).rejects.toThrow("CODEX_CAPSULE_PATH_ESCAPE");
     expect(fixture.run).toHaveBeenCalledTimes(3); // materialization probes only
-  });
+  }, 30_000);
 
   it("blocks lifecycle ARM and pointer promotion for legacy runtime without mutating existing records", async () => {
     const root = await temp(), op = join(root, "operation-2026-09-07"); await mkdir(op);

@@ -34,8 +34,9 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     if (claimed.length !== settings.batchSize) { for (const item of claimed) await repository.fail({ id: item.id, code: "INCOMPLETE_BATCH_CLAIM", retryable: true, now, settings }); return recordNoop(repository, runId, now, "INCOMPLETE_BATCH_CLAIM", { claimed: claimed.length }); }
     await repository.markProcessing(claimed.map((item) => item.id), now);
     const immediatelyAppliedCodexPasses = new Set<string>();
+    const expectedProductByQueue = new Map(claimed.map((item) => [item.id, item.productKey]));
     const applyFreshCodexPass = async (result: QueueVideoResult) => {
-      if (!result.passed || result.codexReview?.status !== "pass" || !result.codexReview.evidence) return;
+      if (!result.passed || result.codexReview?.status !== "pass" || !result.codexReview.evidence || expectedProductByQueue.get(result.queueId) !== result.productKey) return;
       const machineQaFinishedAt = result.machineQaFinishedAt && Number.isFinite(Date.parse(result.machineQaFinishedAt)) ? new Date(result.machineQaFinishedAt) : new Date();
       await repository.complete({ id: result.queueId, videoPath: result.finalVideo, reviewPath: result.reviewPath, creativeScore: result.creativeScore, videoQualityScore: result.videoQualityScore, now: machineQaFinishedAt });
       await repository.recordCodexVisualReviews({ reviews: [result.codexReview.evidence], now: new Date() });
@@ -49,10 +50,16 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
     let fallbacks = 0; let fallbackSuccess = 0;
     for (const initialResult of results) {
       let result = normalizeCodexBlockedResultForFallback(initialResult);
+      let terminalCandidateReason = result.errorCode;
       while (!result.passed && isProductFallbackCode(result.errorCode)) {
+        terminalCandidateReason = result.errorCode;
         const replacement = await repository.replaceWithReserve({ id: result.queueId, reason: result.errorCode, now: new Date() });
-        if (!replacement) break;
+        if (!replacement) {
+          result = { ...result, errorCode: await repository.candidateExhaustionCode(result.queueId), retryable: false };
+          break;
+        }
         fallbacks += 1;
+        expectedProductByQueue.set(replacement.id, replacement.productKey);
         await repository.markProcessing([replacement.id], new Date());
         const [replacementResult] = await executeSafely(executor, [replacement], `${runId}-fallback-${fallbacks}`, repository.root, applyFreshCodexPass);
         result = normalizeCodexBlockedResultForFallback(replacementResult);
@@ -77,9 +84,9 @@ export async function runNextBatch(input: { repository?: LocalQueueRepository; n
           completed += 1;
         }
       }
-      else { const status = await repository.fail({ id: result.queueId, code: result.errorCode, retryable: result.retryable && !isProductFallbackCode(result.errorCode), now: new Date(), settings }); if (status === "retry_wait") retried += 1; else if (status === "blocked") blocked += 1; else failed += 1; }
+      else { const status = await repository.fail({ id: result.queueId, code: result.errorCode, candidateReason: terminalCandidateReason, retryable: result.retryable && !isProductFallbackCode(result.errorCode), now: new Date(), settings }); if (status === "retry_wait") retried += 1; else if (status === "blocked") blocked += 1; else failed += 1; }
     }
-    const status = completed === claimed.length ? "success" : completed > 0 ? "partial" : "failed";
+    const status = failed > 0 ? "failed" : completed === claimed.length ? "success" : "partial";
     const codexReviewed = allResults.filter((entry) => entry.codexReview?.evidence).length;
     const run: LocalRun = { runId, type: "scheduled_batch", status, startedAt: now.toISOString(), finishedAt: new Date().toISOString(), claimed: claimed.length, completed, blocked, failed, retried, safeMessage: status === "success" && codexReviewed === claimed.length ? "BATCH_CODEX_REVIEW_COMPLETE" : status === "success" ? "BATCH_MACHINE_QA_COMPLETE" : "BATCH_PARTIAL_OR_FAILED", metrics: { freeGb, preflightDurationMs: readiness.durationMs, preflightFailures: 0, blocked, codexReviewed, fallbacks, fallbackSuccess, productAttempts: allResults.length, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...QUEUE_SCHEDULER_FLAGS } };
     await repository.addRun(run); return { run, results: allResults, terminalResults };
@@ -105,6 +112,21 @@ export function normalizeCodexBlockedResultForFallback(result: QueueVideoResult)
     : result;
 }
 async function executeSafely(executor: typeof executeQueueVideoBatch, items: Parameters<typeof executeQueueVideoBatch>[0]["items"], runId: string, root: string, onCodexPassReady: NonNullable<Parameters<typeof executeQueueVideoBatch>[0]["onCodexPassReady"]>): Promise<QueueVideoResult[]> {
-  try { return await executor({ items, runId, root, onCodexPassReady }); }
+  try {
+    const results = await executor({ items, runId, root, onCodexPassReady });
+    const resultsByQueue = new Map<string, QueueVideoResult>();
+    for (const result of results) {
+      if (resultsByQueue.has(result.queueId)) continue;
+      resultsByQueue.set(result.queueId, result);
+    }
+    return items.map((item) => {
+      const result = resultsByQueue.get(item.id);
+      if (!result || result.productKey !== item.productKey) return failedResult(item, "PRODUCT_BINDING_MISMATCH", false);
+      return result;
+    });
+  }
   catch (error) { const code = safeCode(error); const retryable = isRetryable(code); return items.map((item) => ({ queueId: item.id, productKey: item.productKey, passed: false, errorCode: code, finalVideo: "", reviewPath: "", creativeScore: 0, videoQualityScore: 0, retryable })); }
+}
+function failedResult(item: Parameters<typeof executeQueueVideoBatch>[0]["items"][number], errorCode: string, retryable: boolean): QueueVideoResult {
+  return { queueId: item.id, productKey: item.productKey, passed: false, errorCode, finalVideo: "", reviewPath: "", creativeScore: 0, videoQualityScore: 0, retryable };
 }

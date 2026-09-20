@@ -21,7 +21,10 @@ import { firstOperationNamespace } from "../../src/lib/daily69-first-operation/o
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
-describe("immutable Codex review origin to operation binding", () => {
+// This suite exercises the complete nine-item immutable binding lifecycle with
+// real filesystem publication and hashing. Keep its budget local to the suite
+// so unrelated host worker contention cannot trip Vitest's 10 second default.
+describe("immutable Codex review origin to operation binding", { timeout: 30_000 }, () => {
   it("plans, applies, and reopens canonical attempt-2 bindings without changing immutable origin clocks", async () => {
     const fixture = await bindingFixture(2);
     const before = await readFile(fixture.registryPath, "utf8");

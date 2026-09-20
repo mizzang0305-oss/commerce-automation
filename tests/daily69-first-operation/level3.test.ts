@@ -11,6 +11,39 @@ describe("Daily69 Level3 completion matrix", () => {
     expect(matrix.completion).toBe("PASS");
     expect(matrix.failed).toBe(0);
     expect(matrix.unproven).toBe(0);
+    expect(matrix).toMatchObject({ terminalState: "CLEAN_COMPLETE", perfectDay: true });
+  });
+
+  it("accepts an honest terminal day with blocked items without treating it as a perfect day", () => {
+    const input = completeInput();
+    input.queue.ready = 10;
+    input.queue.blocked = 2;
+    input.queue.codexReviews = 10;
+    input.queue.directReviewBindings = 7;
+    input.retainedEvidence!.media = {
+      ...input.retainedEvidence!.media,
+      validVideoArtifacts: 10,
+      missingVideoArtifacts: 2,
+      machineQaPassed: 10,
+      finalQaPassed: 10,
+      codexReviewBindings: 10,
+      exactVideoHashBindings: 10,
+      directReviewBindings: 7,
+    };
+    input.retainedEvidence!.runs.completed = 7;
+    input.retainedEvidence!.runs.blocked = 2;
+    const matrix = validateLevel3Completion(input);
+    expect(matrix).toMatchObject({ completion: "PASS", terminalState: "COMPLETE_WITH_BLOCKED_ITEMS", perfectDay: false, failed: 0, unproven: 0 });
+  });
+
+  it("accepts explicit functional-shadow provenance without claiming natural task events", () => {
+    const input = completeInput();
+    input.executionMode = "functional_shadow";
+    input.naturalExecution = null;
+    const matrix = validateLevel3Completion(input);
+    expect(matrix).toMatchObject({ completion: "PASS", terminalState: "CLEAN_COMPLETE" });
+    expect(matrix.gates.find((gate) => gate.id === "functional_execution")).toMatchObject({ state: "PASS" });
+    expect(matrix.gates.some((gate) => gate.id === "natural_execution")).toBe(false);
   });
 
   it("keeps absent Sheets and natural task-event evidence pending and unproven", () => {
@@ -55,7 +88,7 @@ describe("Daily69 Level3 completion matrix", () => {
     expect(matrix.completion).toBe("PASS");
   });
 
-  it("fails prearm capacity closed when a materialization allocation was blocked", () => {
+  it("retains a blocked materialization allocation as closeout telemetry", () => {
     const input = completeInput();
     input.materializationCapacityRequired = true;
     input.materializationCapacity = {
@@ -80,17 +113,17 @@ describe("Daily69 Level3 completion matrix", () => {
       reserveConsumptionReconciled: 0,
     };
     const matrix = validateLevel3Completion(input);
-    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "UNPROVEN" });
-    expect(matrix.completion).toBe("PENDING");
+    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "PASS", severity: "telemetry" });
+    expect(matrix.completion).toBe("PASS");
   });
 
-  it("requires fresh closeout materialization evidence for v2 operations", () => {
+  it("does not turn missing closeout capacity telemetry into a terminal blocker", () => {
     const input = completeInput();
     input.materializationCapacityRequired = true;
     input.materializationCapacity = null;
     const matrix = validateLevel3Completion(input);
-    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "UNPROVEN", actual: "closeout_recomputation_missing" });
-    expect(matrix.completion).toBe("PENDING");
+    expect(matrix.gates.find((gate) => gate.id === "capacity")).toMatchObject({ state: "PASS", severity: "telemetry", actual: "closeout_recomputation_missing" });
+    expect(matrix.completion).toBe("PASS");
   });
 
   it("classifies explicit pointer, safety, and binding contradictions as failed", () => {
@@ -149,7 +182,7 @@ function completeInput(): Level3CompletionInput {
       expectedGitHead: "a".repeat(40),
       media: { validVideoArtifacts: total, missingVideoArtifacts: 0, invalidVideoArtifacts: 0, machineQaPassed: total, finalQaPassed: total, codexReviewBindings: total, exactVideoHashBindings: total, directReviewBindings: scheduledRemaining, immutableCarryForwardBindings: total - scheduledRemaining },
       sheets: { exact: true, queueRows: total, reserveRows: 4, syncRows: 1, duplicateIdentities: 0, preexistingChanged: 0, preexistingDeleted: 0, preexistingReordered: 0, snapshotHash: "b".repeat(64) },
-      runs: { scheduledBatchRuns, batchResults: scheduledBatchRuns, claimed: scheduledRemaining, completed: scheduledRemaining, failed: 0, runIdsMatched: true, batchClaimResultCardinalityMatched: true, claimedIdsObserved: scheduledRemaining, resultIdsObserved: scheduledRemaining, duplicateClaimIds: 0, duplicateResultIds: 0 },
+      runs: { scheduledBatchRuns, batchResults: scheduledBatchRuns, claimed: scheduledRemaining, completed: scheduledRemaining, blocked: 0, retried: 0, failed: 0, runIdsMatched: true, batchClaimResultCardinalityMatched: true, claimedIdsObserved: scheduledRemaining, resultIdsObserved: scheduledRemaining, duplicateClaimIds: 0, duplicateResultIds: 0 },
       safety: { uploadCalls: 0, platformCalls: 0, driveCalls: 0, dbWrites: 0, r2Writes: 0 },
     },
     naturalExecution: {

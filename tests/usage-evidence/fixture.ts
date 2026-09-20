@@ -102,7 +102,7 @@ export function makeRankedProducts(count = 120): RankedLiveProduct[] {
       candidate: {
         rawProductId: String(1_000_000 + index), rawProductName: productName, canonicalProductName: productName,
         category: group, categoryPath: `${group}>subcategory-${index}`, priceText: "12900", rawProductUrl: `https://example.invalid/product/${index}`,
-        selectedAffiliateUrl: `https://example.invalid/affiliate/${index}`, productImageUrls: [`https://example.invalid/image/${index}.jpg`],
+        selectedAffiliateUrl: `https://link.coupang.com/a/test${index}`, productImageUrls: [`https://example.invalid/image/${index}.jpg`],
         sourceProvider: "coupang_partners_product_search", sourceRequestId: `request-${index}`, discoveredAt: "2026-08-09T00:00:00.000Z",
         sourceKeyword: `${useCase} keyword`, eventContext: { eventId: "test-event", eventName: "test event" }, candidateId: `candidate-${index}`,
         productKey, productAliases: [`alias-${index}`], productAnchors: [`anchor-${index}`], useCase
