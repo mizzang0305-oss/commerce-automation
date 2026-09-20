@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { rankLiveProducts, selectDistinctLiveProductSlots } from "@/lib/live-product-video";
+import { rankLiveProducts, selectDistinctLiveProductSlots, selectLiveProductTargetCount, type LiveProductUseCase, type RankedLiveProduct } from "@/lib/live-product-video";
 import { candidate, context, providerProduct } from "./fixtures";
 import { normalizeLiveProduct } from "@/lib/live-product-video";
 
@@ -28,4 +28,88 @@ describe("live product ranking and fallback", () => {
     expect(selected.selected).toHaveLength(3);
     expect(new Set(selected.selected.map((entry) => entry.candidate.useCase)).size).toBe(3);
   });
+
+  test("blocks when the candidate pool has fewer products than the requested target", () => {
+    const result = selectLiveProductTargetCount({ candidates: rankedCandidates(2), targetCount: 3 });
+    expect(result.targetMet).toBe(false);
+    expect(result.selected).toHaveLength(2);
+    expect(result.discarded).toHaveLength(0);
+  });
+
+  test("keeps exactly three candidates when the candidate pool equals the target", () => {
+    const result = selectLiveProductTargetCount({ candidates: rankedCandidates(3), targetCount: 3 });
+    expect(result.targetMet).toBe(true);
+    expect(result.selected).toHaveLength(3);
+    expect(result.discarded).toHaveLength(0);
+  });
+
+  test("takes the deterministic canonical top three and records later candidates as discarded", () => {
+    const candidates = rankedCandidates(4);
+    const result = selectLiveProductTargetCount({ candidates: [candidates[3], candidates[1], candidates[2], candidates[0]], targetCount: 3 });
+    expect(result.targetMet).toBe(true);
+    expect(result.selected.map((entry) => entry.candidate.productKey)).toEqual(candidates.slice(0, 3).map((entry) => entry.candidate.productKey));
+    expect(result.discarded.map((entry) => entry.candidate.productKey)).toEqual([candidates[3].candidate.productKey]);
+  });
+
+  test("uses the same canonical top three for ten candidates across repeated inputs", () => {
+    const candidates = rankedCandidates(10);
+    const first = selectLiveProductTargetCount({ candidates: [...candidates].reverse(), targetCount: 3 });
+    const second = selectLiveProductTargetCount({ candidates: [...candidates].reverse(), targetCount: 3 });
+    const expected = candidates.slice(0, 3).map((entry) => entry.candidate.productKey);
+    expect(first.selected.map((entry) => entry.candidate.productKey)).toEqual(expected);
+    expect(second.selected.map((entry) => entry.candidate.productKey)).toEqual(expected);
+    expect(first.discarded).toHaveLength(7);
+  });
+
+  test("does not select an affiliate-blocked candidate", () => {
+    const candidates = rankedCandidates(4);
+    candidates[0] = {
+      candidate: { ...candidates[0].candidate, selectedAffiliateUrl: "" },
+      score: { ...candidates[0].score, eligible: false, blockers: ["AFFILIATE_NOT_READY"] }
+    };
+    const result = selectLiveProductTargetCount({ candidates, targetCount: 3 });
+    expect(result.targetMet).toBe(true);
+    expect(result.selected.every((entry) => entry.score.blockers.includes("AFFILIATE_NOT_READY") === false)).toBe(true);
+  });
 });
+
+const useCases: LiveProductUseCase[] = [
+  "home_storage",
+  "kitchen_organization",
+  "camping_storage",
+  "vehicle_console_organization",
+  "vehicle_cabin_storage",
+  "cable_organization",
+  "laundry_space_organization",
+  "vehicle_organization",
+  "desk_organization",
+  "laundry_drying"
+];
+
+function rankedCandidates(count: number): RankedLiveProduct[] {
+  return Array.from({ length: count }, (_, index) => {
+    const product = candidate({
+      rawProductId: `target-${index + 1}`,
+      rawProductUrl: `https://www.coupang.com/vp/products/target-${index + 1}`,
+      rawProductName: `정리 상품 ${index + 1}`
+    });
+    const live = { ...product, useCase: useCases[index] };
+    return {
+      candidate: live,
+      score: {
+        productKey: live.productKey,
+        eventRelevanceScore: 100,
+        motionSuitabilityScore: 100,
+        policySafetyScore: 100,
+        imageReadinessScore: 100,
+        affiliateReadinessScore: 100,
+        duplicatePenalty: 0,
+        usageEvidenceScore: 100,
+        finalProductScore: 100 - index,
+        selectionRank: index + 1,
+        eligible: true,
+        blockers: []
+      }
+    };
+  });
+}

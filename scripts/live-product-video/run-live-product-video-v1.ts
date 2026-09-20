@@ -12,6 +12,7 @@ import {
   resolveOwnerReviewedUsageEvidence,
   searchLiveCoupangProducts,
   selectDistinctLiveProductSlots,
+  selectLiveProductTargetCount,
   supportsUsageEvidence,
   type LiveProductCandidate,
   type LiveProductKeywordContext,
@@ -50,15 +51,15 @@ async function main(): Promise<void> {
   const rankingStarted = performance.now();
   const ranked = rankLiveProducts({ candidates, keywordContexts: contexts, usageEvidenceAvailable: supportsUsageEvidence });
   const selection = selectDistinctLiveProductSlots({ ranked, maxAttemptsPerSlot: MAX_CANDIDATE_ATTEMPTS_PER_SLOT });
+  const targetSelection = selectLiveProductTargetCount({ candidates: selection.selected, targetCount: MAX_FINAL_PRODUCTS });
   const rankingMs = Math.round(performance.now() - rankingStarted);
-  await writeJson(join(root, "discovery.json"), buildDiscoveryManifest({ providerConfigured, contexts, window, rawCount: raw.length, candidates, ranked, providerResults, apiCallCount, discoverySeconds, selectedCount: selection.selected.length }));
+  await writeJson(join(root, "discovery.json"), buildDiscoveryManifest({ providerConfigured, contexts, window, rawCount: raw.length, candidates, ranked, providerResults, apiCallCount, discoverySeconds, targetCount: MAX_FINAL_PRODUCTS, candidatePoolCount: selection.selected.length, selected: targetSelection.selected, discarded: targetSelection.discarded }));
   await writeJson(join(root, "candidate-ranking.json"), ranked);
   if (!runtime.configured) return blocked(root, "BLOCKED_FOR_OWNER_DECISION", "LOCAL_VIDEO_RUNTIME_NOT_CONFIGURED", apiCallCount, started);
-  if (selection.selected.length !== MAX_FINAL_PRODUCTS) return blocked(root, "LIVE_PRODUCT_TO_VIDEO_V1_PARTIAL", "LIVE_PRODUCT_SLOT_UNFILLED", apiCallCount, started, { selection, discoverySeconds, rankingMs });
+  if (!targetSelection.targetMet) return blocked(root, "LIVE_PRODUCT_TO_VIDEO_V1_PARTIAL", "LIVE_PRODUCT_SLOT_UNFILLED", apiCallCount, started, { selection, targetSelection, discoverySeconds, rankingMs });
 
   const assetStarted = performance.now();
-  const useCases = ["vehicle_organization", "desk_organization", "laundry_drying"] as const;
-  const pools = useCases.map((useCase) => ranked.filter((entry) => entry.candidate.useCase === useCase && entry.score.eligible).slice(0, MAX_CANDIDATE_ATTEMPTS_PER_SLOT));
+  const pools = targetSelection.selected.map((entry) => ranked.filter((candidate) => candidate.candidate.useCase === entry.candidate.useCase && candidate.score.eligible).slice(0, MAX_CANDIDATE_ATTEMPTS_PER_SLOT));
   const prepared: Array<Awaited<ReturnType<typeof prepareCandidate>> | null> = [null, null, null];
   const offsets = [0, 0, 0];
   const slotAttempts: Record<string, number> = {};
@@ -136,7 +137,10 @@ async function main(): Promise<void> {
     rawCandidateCount: raw.length,
     normalizedCount: candidates.length,
     eligibleCount: ranked.filter((entry) => entry.score.eligible).length,
+    requestedProductCount: MAX_FINAL_PRODUCTS,
+    candidatePoolCount: selection.selected.length,
     selectedCount: finalPrepared.length,
+    discarded: targetSelection.discarded.map((entry) => ({ productKey: entry.candidate.productKey, selectionRank: entry.score.selectionRank, reason: "TARGET_COUNT_REACHED" })),
     slotAttempts,
     candidateRejections,
     selected: finalPrepared.map((entry) => ({ candidate: entry.ranked.candidate, score: entry.ranked.score, exactProductReference: { ...entry.reference, localPath: undefined }, genericUsageEvidence: { assetId: entry.input.product.realUseAsset?.assetId, identityType: "generic_usage_example" }, exactProductUse: false, overclaim: false })),
@@ -183,7 +187,10 @@ function buildDiscoveryManifest(input: {
   providerResults: Awaited<ReturnType<typeof searchLiveCoupangProducts>>[];
   apiCallCount: number;
   discoverySeconds: number;
-  selectedCount: number;
+  targetCount: number;
+  candidatePoolCount: number;
+  selected: RankedLiveProduct[];
+  discarded: RankedLiveProduct[];
 }) {
   const rejected = input.ranked.filter((entry) => !entry.score.eligible);
   return {
@@ -195,7 +202,10 @@ function buildDiscoveryManifest(input: {
     discovered: input.rawCount,
     normalized: input.candidates.length,
     eligible: input.ranked.filter((entry) => entry.score.eligible).length,
-    selected: input.selectedCount,
+    requestedProductCount: input.targetCount,
+    candidatePoolCount: input.candidatePoolCount,
+    selected: input.selected.length,
+    discarded: input.discarded.map((entry) => ({ productKey: entry.candidate.productKey, selectionRank: entry.score.selectionRank, reason: "TARGET_COUNT_REACHED" })),
     policyBlocked: rejected.filter((entry) => entry.score.blockers.includes("POLICY_BLOCKED")).length,
     imageBlocked: rejected.filter((entry) => entry.score.blockers.includes("PRODUCT_IMAGE_NOT_READY")).length,
     affiliateBlocked: rejected.filter((entry) => entry.score.blockers.includes("AFFILIATE_NOT_READY")).length,

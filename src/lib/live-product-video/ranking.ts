@@ -93,6 +93,20 @@ export function selectDistinctLiveProductSlots(input: {
   return { selected, attempts, rejected };
 }
 
+export function selectLiveProductTargetCount(input: {
+  candidates: RankedLiveProduct[];
+  targetCount: number;
+}): { selected: RankedLiveProduct[]; discarded: RankedLiveProduct[]; targetMet: boolean } {
+  const ordered = [...input.candidates]
+    .filter((entry) => entry.score.eligible)
+    .sort((left, right) => left.score.selectionRank - right.score.selectionRank || left.candidate.productKey.localeCompare(right.candidate.productKey));
+  return {
+    selected: ordered.slice(0, input.targetCount),
+    discarded: ordered.slice(input.targetCount),
+    targetMet: ordered.length >= input.targetCount
+  };
+}
+
 function zeroScore(candidateId: string) {
   return { candidateId, eventRelevanceScore: 0, motionSuitabilityScore: 0, policySafetyScore: 0, imageReadinessScore: 0, affiliateReadinessScore: 0, duplicatePenalty: 0, finalScore: 0 };
 }
