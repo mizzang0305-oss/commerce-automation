@@ -69,6 +69,7 @@
     "automation:v108:first-video-upload-package-materializer": "tsx scripts/automation/run-v108-first-video-upload-package-materializer.ts",
     "automation:v109:product-source-affiliate-evidence": "tsx scripts/automation/run-v109-product-source-affiliate-evidence.ts",
     "automation:sheets-command-runner": "node --conditions=react-server --import tsx scripts/automation/google-sheets-command-runner.ts",
+    "maintenance:sheets-runner-lock:quarantine": "node --conditions=react-server --import tsx scripts/automation/quarantine-stale-sheets-runner-lock.ts",
     "upload:v110:private-pilot-one-shot": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts",
     "upload:v114:local-private-pilot:preflight": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts --server-local-asset",
     "upload:v114:local-private-pilot:execute": "node --conditions=react-server --import tsx scripts/uploads/run-v110-v057-private-upload-one-shot.ts --server-local-asset --execute",
