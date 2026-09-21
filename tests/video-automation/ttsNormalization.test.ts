@@ -9,4 +9,7 @@ describe("Korean TTS normalization", () => {
   test("adds deterministic spacing for a Korean loanword core anchor", () => {
     expect(normalizeKoreanTtsPronunciation("컵홀더, 왜 3가지를 확인할까요?")).toBe("컵 홀더, 왜 세 가지를 확인할까요?");
   });
+  test("separates the proven compound brand pronunciation before local TTS", () => {
+    expect(normalizeKoreanTtsPronunciation("코멧 아웃도어 캠핑 빨래 집게줄")).toBe("코멧 아웃 도어 캠핑 빨래 집게줄");
+  });
 });

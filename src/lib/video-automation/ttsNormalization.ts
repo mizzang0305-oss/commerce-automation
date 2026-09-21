@@ -7,7 +7,10 @@ export function buildKoreanProductNarration(input: { canonicalProductName: strin
 }
 
 export function normalizeKoreanTtsPronunciation(value: string): string {
-  return normalize(value).replace(/컵홀더/gu, "컵 홀더").replace(/3가지/gu, "세 가지");
+  return normalize(value)
+    .replace(/컵홀더/gu, "컵 홀더")
+    .replace(/3가지/gu, "세 가지")
+    .replace(/코멧\s*아웃도어/gu, "코멧 아웃 도어");
 }
 
 export function normalizeSpokenNarration(value: string): string {
