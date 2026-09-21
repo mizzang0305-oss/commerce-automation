@@ -14,6 +14,11 @@ from src.media.tts_generator import (
     BLOCKED_NOT_KOREAN,
     BLOCKED_PAID_OR_CLOUD,
     BLOCKED_SAPI,
+    TTS_INPUT_UNSUPPORTED,
+    TTS_SUBPROCESS_TIMEOUT,
+    TTS_UNKNOWN_RUNTIME_FAILURE,
+    TtsGenerationError,
+    _classify_local_command_failure,
     create_tts_audio,
 )
 
@@ -30,6 +35,17 @@ def write_wav(path: Path, duration: float, amplitude: int = 1200) -> None:
 
 
 class TtsGeneratorTest(unittest.TestCase):
+    def test_classifies_unsupported_frontend_symbol_without_generic_runtimeerror(self):
+        code, stage, retryable = _classify_local_command_failure(b"Traceback\nKeyError: '+'\n")
+        self.assertEqual(code, TTS_INPUT_UNSUPPORTED)
+        self.assertEqual(stage, "frontend")
+        self.assertFalse(retryable)
+        self.assertNotIn("RUNTIMEERROR", code)
+
+    def test_classifies_timeout_and_unknown_failures_safely(self):
+        self.assertEqual(_classify_local_command_failure(b"timed out")[0], TTS_SUBPROCESS_TIMEOUT)
+        self.assertEqual(_classify_local_command_failure(b"unclassified failure")[0], TTS_UNKNOWN_RUNTIME_FAILURE)
+
     def test_placeholder_remains_explicit_local_test_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "placeholder.wav"

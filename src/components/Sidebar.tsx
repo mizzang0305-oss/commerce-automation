@@ -14,11 +14,13 @@ import {
   ServerCog,
   Settings,
   ShieldCheck,
+  TableProperties,
   UploadCloud,
   Webhook
 } from "lucide-react";
 
 const navItems = [
+  { href: "/commerce-control", label: "Sheets Control", icon: TableProperties },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/queue", label: "Queue", icon: ListChecks },
   { href: "/candidates", label: "Candidates", icon: ClipboardCheck },

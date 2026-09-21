@@ -1,0 +1,52 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { readJsonObject, requireApiAuth, requireMutationApi, safeApiError } from "@/lib/commerce-control/api";
+import { parseOwnerCommand } from "@/lib/commerce-control/commandParser";
+import { getCommerceControlRepository } from "@/lib/google-sheets/commerceControlRepository";
+import { isAllowedCommand, isQueueControlCommand } from "@/lib/google-sheets/sheetSchemas";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const denied = requireApiAuth(request); if (denied) return denied;
+  try { const repository = getCommerceControlRepository(); const namespace = await repository.activeNamespace(); return NextResponse.json({ ok: true, namespace, commands: (await repository.commands.list(namespace)).reverse() }); }
+  catch (error) { return safeApiError(error); }
+}
+
+export async function POST(request: Request) {
+  const denied = requireMutationApi(request); if (denied) return denied;
+  try {
+    const body = await readJsonObject(request);
+    let command = typeof body.command === "string" ? body.command : "";
+    let requestValue = typeof body.requestValue === "string" ? body.requestValue : "";
+    if (!command && typeof body.naturalLanguage === "string") {
+      const parsed = parseOwnerCommand(body.naturalLanguage);
+      if ("error" in parsed) return NextResponse.json({ ok: false, code: "COMMAND_NOT_UNDERSTOOD", message: parsed.error }, { status: 400 });
+      command = parsed.command;
+      requestValue = parsed.requestValue ?? "";
+    }
+    if (!isAllowedCommand(command)) return NextResponse.json({ ok: false, code: "COMMAND_NOT_ALLOWED", message: "허용되지 않은 명령입니다." }, { status: 400 });
+    const queueId = typeof body.queueId === "string" ? body.queueId.trim() : "";
+    const globalCommands = new Set(["오늘상품찾기", "PAUSE_AUTOMATION", "RESUME_AUTOMATION", "RUN_NIGHTLY_SCOUT", "RUN_NEXT_BATCH", "REFRESH_PROJECTION", "CANCEL_COMMAND"]);
+    if (!globalCommands.has(command) && !queueId) return NextResponse.json({ ok: false, code: "QUEUE_ID_REQUIRED", message: "Queue ID가 필요합니다." }, { status: 400 });
+    if (queueId.length > 128 || requestValue.length > 10_000) return NextResponse.json({ ok: false, code: "COMMAND_PAYLOAD_TOO_LARGE", message: "명령 요청값이 너무 깁니다." }, { status: 400 });
+    const suppliedWebRequestKey = typeof body.webRequestKey === "string" ? body.webRequestKey.trim() : "";
+    if (suppliedWebRequestKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedWebRequestKey)) {
+      return NextResponse.json({ ok: false, code: "WEB_REQUEST_KEY_INVALID", message: "웹 요청 키가 올바르지 않습니다." }, { status: 400 });
+    }
+    const expectedRevision = typeof body.expectedRevision === "number" && Number.isInteger(body.expectedRevision) && body.expectedRevision >= 0 ? body.expectedRevision : null;
+    if (isQueueControlCommand(command) && !globalCommands.has(command) && expectedRevision === null) return NextResponse.json({ ok: false, code: "EXPECTED_REVISION_REQUIRED", message: "Local Revision이 필요합니다." }, { status: 400 });
+    const repository = getCommerceControlRepository();
+    const activeNamespace = await repository.activeNamespace();
+    const suppliedNamespace = typeof body.namespace === "string" ? body.namespace.trim() : "";
+    if (isQueueControlCommand(command) && (!activeNamespace || (suppliedNamespace && suppliedNamespace !== activeNamespace))) {
+      return NextResponse.json({ ok: false, code: "COMMAND_NAMESPACE_MISMATCH", message: "현재 operation namespace와 일치하는 명령만 허용됩니다." }, { status: 409 });
+    }
+    const namespace = activeNamespace || suppliedNamespace;
+    const result = await repository.commands.create({
+      queueId, command, requestValue,
+      requester: "web-owner", webRequestKey: suppliedWebRequestKey || randomUUID(), expectedRevision, namespace
+    });
+    return NextResponse.json({ ok: true, ...result }, { status: result.created ? 201 : 200 });
+  } catch (error) { return safeApiError(error); }
+}

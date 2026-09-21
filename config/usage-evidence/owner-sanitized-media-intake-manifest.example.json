@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "owner-sanitized-media-intake-v1",
+  "sourceId": "replace-with-unique-source-id",
+  "ownerProvided": true,
+  "rightsConfirmed": true,
+  "privacyConfirmed": true,
+  "brandNeutralConfirmed": true,
+  "allowedUseCases": [
+    "home_storage"
+  ],
+  "sourceHumanReviewStatus": "not_available",
+  "humanOwnerReviewStatus": "not_requested",
+  "publishEligible": false,
+  "noUploadAutomationCandidate": true
+}

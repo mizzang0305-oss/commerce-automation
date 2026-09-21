@@ -5,6 +5,26 @@
 .env.local.comfyui
 config/comfyui/*.local.json
 node_modules
+/data/video-automation/
+/data/live-product-video/
+/data/queue-scheduler-v1/
+/data/usage-evidence-library-v2/
+/data/daily69-asset-capacity-*/
+/data/usage-evidence-source-packs-v3/
+/data/daily69-source-packs-v3-*/
+/data/daily69-v3-live-marginal-*/
+/data/daily69-v3-selected-proof-*/
+/data/v3-live-capacity-proof-*/
+/data/v3-live-capacity-offline-analysis-*/
+/data/category-diverse-usage-media-v4/
+/data/daily69-category-opportunity-v4-*/
+/data/daily69-category-selected-v4-*/
+/data/v4-category-opportunity-proof-*/
+/data/coupang-image-skill-usage-scenes-v5/
+/data/daily69-coupang-image-skill-v5-*/
+/data/control-center-canary-v6/
+/data/daily69-first-operation/
+/tmp/imagegen/
 .next
 out
 coverage
@@ -24,7 +44,13 @@ python-worker/logs/**
 !python-worker/logs/.gitkeep
 commerce-assets/generated-motion/
 commerce-assets/autopilot/
+commerce-assets/sheets-runner/
 commerce-assets/review/
+/data/video-lab/
+/commerce-assets/video-lab/
+/models/video-lab/
+/audio/video-lab/
+/video-lab-outputs/
 # Local visual-gate image corpus is intentionally not committed. Keep only
 # sanitized JSON manifests/reports needed for code review and calibration lineage.
 /commerce-assets/research/**

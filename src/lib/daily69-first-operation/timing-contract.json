@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "daily69-task-timing-v1",
+  "lastBatchTriggerMinute": 1380,
+  "batchExecutionLimitMinutes": 55,
+  "postBatchSafetyMarginMinutes": 15,
+  "closeoutExecutionLimitMinutes": 30,
+  "postCloseoutSafetyMarginMinutes": 15,
+  "finalizerExecutionLimitMinutes": 15,
+  "roundingMinutes": 5,
+  "idleGraceSeconds": 600,
+  "idlePollSeconds": 5
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "daily69-task-scheduler-event-fixture-v1",
+  "capturedAtKst": "2026-08-30T19:20:33.4944798+09:00",
+  "source": "Microsoft-Windows-TaskScheduler/Operational",
+  "taskName": "Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+  "receipt": {
+    "runId": "3ab2f75c-78cf-43be-92da-7b4f3a4e608b",
+    "processId": 149224,
+    "exitCode": 0,
+    "principalSidSha256": "5e1a31ccbc98cf607b706629bca300028fac56e68de656480b765c466b58b627"
+  },
+  "events": [
+    {
+      "eventRecordId": 4672,
+      "eventId": 107,
+      "timeCreatedUtc": "2026-08-30T10:20:00.6275237Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "{dcfacf74-b60f-4e93-a607-f5e41b831901}"
+    },
+    {
+      "eventRecordId": 4673,
+      "eventId": 129,
+      "timeCreatedUtc": "2026-08-30T10:20:00.6386198Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "",
+      "processId": 149224
+    },
+    {
+      "eventRecordId": 4674,
+      "eventId": 100,
+      "timeCreatedUtc": "2026-08-30T10:20:00.6390258Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "{dcfacf74-b60f-4e93-a607-f5e41b831901}"
+    },
+    {
+      "eventRecordId": 4675,
+      "eventId": 200,
+      "timeCreatedUtc": "2026-08-30T10:20:00.6390282Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "{dcfacf74-b60f-4e93-a607-f5e41b831901}",
+      "processId": 149224
+    },
+    {
+      "eventRecordId": 4676,
+      "eventId": 201,
+      "timeCreatedUtc": "2026-08-30T10:20:02.5104245Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "{dcfacf74-b60f-4e93-a607-f5e41b831901}",
+      "processId": 149224,
+      "resultCode": 0
+    },
+    {
+      "eventRecordId": 4677,
+      "eventId": 102,
+      "timeCreatedUtc": "2026-08-30T10:20:02.5107493Z",
+      "taskName": "\\Minz-Commerce-Daily69-Provenance-Canary-20260830-191420",
+      "taskInstanceId": "{dcfacf74-b60f-4e93-a607-f5e41b831901}"
+    }
+  ],
+  "manualStartCommands": 0,
+  "SAFE_TO_UPLOAD": false,
+  "PLATFORM_UPLOAD": 0
+}
