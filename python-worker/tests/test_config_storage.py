@@ -12,6 +12,17 @@ from src.config import load_config
 
 
 class WorkerConfigStorageTest(unittest.TestCase):
+    def test_v143_korean_voice_delivery_style_is_loaded(self):
+        env = {
+            "WORKER_API_SECRET": "worker-secret",
+            "KOREAN_VOICE_DELIVERY_STYLE": "brisk_confident_sales",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config()
+
+        self.assertEqual(config.korean_voice_delivery_style, "brisk_confident_sales")
+
     def test_worker_visual_binding_secret_is_loaded_without_logging(self):
         env = {
             "WORKER_API_SECRET": "worker-secret",

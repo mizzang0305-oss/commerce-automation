@@ -3,7 +3,7 @@ import type { RenderPlan } from "@/lib/video/renderPlanTypes";
 import { buildWorkerVisualBinding } from "@/lib/server/workerVisualBinding";
 
 const SECRET = "v140-test-secret-0123456789abcdef";
-const EXPECTED_SIGNATURE = "4ec36e81f9a23503384dec31867d40eef6ee75867fe143c903020237fb7d7225";
+const EXPECTED_SIGNATURE = "74ca7a4c1c3db3b2ffddd3659fd15366f1b020c3a7abc287fe325d3223c540cf";
 
 describe("server-authoritative Worker visual binding", () => {
   test("matches the Python cross-runtime HMAC vector", () => {
@@ -35,22 +35,34 @@ describe("server-authoritative Worker visual binding", () => {
     expect(JSON.stringify(result.binding)).not.toContain(SECRET);
   });
 
-  test("changes the signature when a bound script or image changes", () => {
+  test("changes the signature when a bound script, image, usage label, or creative policy changes", () => {
     const base = buildFixture(renderPlanFixture());
     const scriptSpoof = renderPlanFixture();
     scriptSpoof.shots[0].voice_text = "Spoofed script";
     const imageSpoof = renderPlanFixture();
     imageSpoof.shots[0].image_url = "https://evil.invalid/spoof.jpg";
+    const usageLabelSpoof = renderPlanFixture();
+    usageLabelSpoof.shots[0].usage_label = "Unbound label";
+    const policySpoof = renderPlanFixture();
+    policySpoof.creative_policy = {
+      ...policySpoof.creative_policy!,
+      real_usage_scene_present: true,
+      usage_source_role: "generic_usage_example"
+    };
 
     const changedScript = buildFixture(scriptSpoof);
     const changedImage = buildFixture(imageSpoof);
+    const changedUsageLabel = buildFixture(usageLabelSpoof);
+    const changedPolicy = buildFixture(policySpoof);
 
-    expect(base.ok && changedScript.ok && changedImage.ok).toBe(true);
-    if (!base.ok || !changedScript.ok || !changedImage.ok) {
+    expect(base.ok && changedScript.ok && changedImage.ok && changedUsageLabel.ok && changedPolicy.ok).toBe(true);
+    if (!base.ok || !changedScript.ok || !changedImage.ok || !changedUsageLabel.ok || !changedPolicy.ok) {
       throw new Error("fixture binding failed");
     }
     expect(changedScript.binding.signature).not.toBe(base.binding.signature);
     expect(changedImage.binding.signature).not.toBe(base.binding.signature);
+    expect(changedUsageLabel.binding.signature).not.toBe(base.binding.signature);
+    expect(changedPolicy.binding.signature).not.toBe(base.binding.signature);
   });
 
   test("fails closed for a missing or short secret", () => {
@@ -91,6 +103,15 @@ function renderPlanFixture(): RenderPlan {
     product_name: "Rear seat organizer",
     source: "storyboard_template",
     disclosure_text: "Affiliate disclosure",
+    creative_policy: {
+      real_usage_scene_present: false,
+      usage_source_role: "product_reference_still",
+      usage_label_present: false,
+      exact_product_identity_claim: false,
+      exact_product_identity_verified: false,
+      actor_nationality_claim: null,
+      actor_nationality_verified: false
+    },
     shots: voices.map((voice, index) => ({
       shot_id: `shot-${index + 1}`,
       duration_sec: 4,

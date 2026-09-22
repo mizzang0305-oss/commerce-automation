@@ -15,7 +15,7 @@ from src.media.worker_visual_binding import verify_server_visual_binding
 
 
 SECRET = "v140-test-secret-0123456789abcdef"
-EXPECTED_SIGNATURE = "4ec36e81f9a23503384dec31867d40eef6ee75867fe143c903020237fb7d7225"
+EXPECTED_SIGNATURE = "74ca7a4c1c3db3b2ffddd3659fd15366f1b020c3a7abc287fe325d3223c540cf"
 
 
 class WorkerVisualBindingTest(unittest.TestCase):
@@ -36,9 +36,16 @@ class WorkerVisualBindingTest(unittest.TestCase):
             "product": lambda job, payload, plan: plan.update(product_name="Spoofed product"),
             "script": lambda job, payload, plan: plan["shots"][0].update(voice_text="Spoofed script"),
             "caption": lambda job, payload, plan: plan["shots"][0].update(caption="Spoofed caption"),
+            "usage_label": lambda job, payload, plan: plan["shots"][0].update(
+                usage_label="Spoofed usage label"
+            ),
             "duration": lambda job, payload, plan: plan["shots"][0].update(duration_sec=8),
             "image": lambda job, payload, plan: plan["shots"][0].update(image_url="https://evil.invalid/image.jpg"),
             "disclosure": lambda job, payload, plan: plan.update(disclosure_text="Spoofed disclosure"),
+            "creative_policy": lambda job, payload, plan: plan["creative_policy"].update(
+                real_usage_scene_present=True,
+                usage_source_role="generic_usage_example",
+            ),
             "category": lambda job, payload, plan: payload.update(server_product_category="food"),
             "queue": lambda job, payload, plan: job.update(product_queue_id="queue-spoofed"),
         }
@@ -90,6 +97,15 @@ def _signed_fixture():
         "product_name": "Rear seat organizer",
         "source": "storyboard_template",
         "disclosure_text": "Affiliate disclosure",
+        "creative_policy": {
+            "real_usage_scene_present": False,
+            "usage_source_role": "product_reference_still",
+            "usage_label_present": False,
+            "exact_product_identity_claim": False,
+            "exact_product_identity_verified": False,
+            "actor_nationality_claim": None,
+            "actor_nationality_verified": False,
+        },
         "shots": [
             {
                 "shot_id": f"shot-{index}",

@@ -2,6 +2,14 @@ from pathlib import Path
 import textwrap
 
 
+def compose_usage_labeled_caption(caption: object, usage_label: object = "") -> str:
+    normalized_caption = " ".join(str(caption or "").split())
+    normalized_label = " ".join(str(usage_label or "").split())
+    if not normalized_label:
+        return normalized_caption
+    return f"[{normalized_label}] {normalized_caption}".strip()
+
+
 def wrap_caption(text: str, max_chars: int = 24, max_lines: int = 2) -> list[str]:
     cleaned = " ".join(text.strip().split())
     if not cleaned:

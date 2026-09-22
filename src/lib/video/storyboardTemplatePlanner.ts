@@ -131,6 +131,15 @@ export function buildStoryboardRenderPlan(
     source: "storyboard_template",
     shots,
     disclosure_text: safeContent.disclosure_text.trim(),
+    creative_policy: {
+      real_usage_scene_present: false,
+      usage_source_role: "product_reference_still",
+      usage_label_present: false,
+      exact_product_identity_claim: false,
+      exact_product_identity_verified: false,
+      actor_nationality_claim: null,
+      actor_nationality_verified: false
+    },
     render_target: {
       width: 1080,
       height: 1920,
