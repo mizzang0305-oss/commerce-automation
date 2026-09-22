@@ -1,4 +1,5 @@
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
+import type { StudioCandidate, StudioPlan } from "@/lib/commerce-studio/bridge/contracts";
 
 export const SIMPLE_PRODUCER_SCHEMA = "simple-producer/v1";
 
@@ -28,12 +29,17 @@ export type SimpleProducerSlotRecord = {
 export type SimpleProducerState = {
   schema: typeof SIMPLE_PRODUCER_SCHEMA;
   slots: SimpleProducerSlotRecord[];
+  studioSettingsRevision?: number;
+  studioPlans?: StudioPlan[];
+  studioCandidates?: StudioCandidate[];
+  studioCommandReceipts?: Array<{ commandId: string; status: "applied" | "rejected" | "pending"; safeError: string; appliedVersion: number | null }>;
 };
 
 export type SimpleProducerPipelineInput = {
   runId: string;
   outputRoot: string;
   excludedProductIds: string[];
+  lockedProductId?: string | null;
 };
 
 export type SimpleProducerPipelineItem = {
@@ -59,6 +65,7 @@ export type SimpleProducerRunStatus =
   | "outside_slot"
   | "daily_target_reached"
   | "slot_already_recorded"
+  | "plan_held"
   | "ready_job_created"
   | "failed";
 

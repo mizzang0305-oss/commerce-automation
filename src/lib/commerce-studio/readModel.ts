@@ -7,6 +7,7 @@ import type { SimpleProducerSlotRecord, SimpleProducerState } from "@/lib/simple
 import type { YouTubePublicPublisherState, YouTubePublicUploadJob, YouTubePublicUploadLedgerEntry } from "@/lib/youtube-public-publisher/publisher";
 import { resolvePublisherChannel } from "@/lib/youtube-public-publisher/channelConfig";
 import type { StudioContent, StudioModel, StudioSlot } from "@/lib/commerce-studio/model";
+import { studioCandidateSchema, studioPlanSchema } from "@/lib/commerce-studio/bridge/contracts";
 
 const CHANNELS = ["neoman_moleulgeol", "father_jobs"] as const;
 
@@ -20,7 +21,9 @@ export async function readCommerceStudioModel(now = new Date()): Promise<StudioM
   const publisherState = publisherPath && isAbsolute(publisherPath)
     ? await readJsonFile<YouTubePublicPublisherState>(publisherPath)
     : null;
-  const producerReady = Boolean(config && producerState && producerState.schema === "simple-producer/v1" && Array.isArray(producerState.slots) && producerState.slots.every(isProducerSlot));
+  const producerReady = Boolean(config && producerState && producerState.schema === "simple-producer/v1" && Array.isArray(producerState.slots) && producerState.slots.every(isProducerSlot) &&
+    (producerState.studioPlans === undefined || (Array.isArray(producerState.studioPlans) && producerState.studioPlans.every((entry) => studioPlanSchema.safeParse(entry).success))) &&
+    (producerState.studioCandidates === undefined || (Array.isArray(producerState.studioCandidates) && producerState.studioCandidates.every((entry) => studioCandidateSchema.safeParse(entry).success))));
   const publisherReady = Boolean(publisherState && Array.isArray(publisherState.jobs) && publisherState.jobs.every(isPublisherJob) && Array.isArray(publisherState.ledger) && publisherState.ledger.every(isPublisherLedgerEntry));
   const jobs = publisherReady ? publisherState!.jobs : [];
   const jobById = new Map(jobs.map((job) => [job.id, job]));
@@ -28,22 +31,32 @@ export async function readCommerceStudioModel(now = new Date()): Promise<StudioM
   const recordByDateSlot = new Map(records.map((record) => [`${record.date}|${record.slot}`, record]));
   const dates = surroundingKstDates(now);
   const currentKst = kstDateTime(now);
-  const slots: StudioSlot[] = config
-    ? dates.flatMap((date) => config.generationSlots.map((time) => {
+  const today = currentKst.slice(0, 10);
+  const projected = config ? dates.filter((date) => date >= today).flatMap((date) => config.generationSlots.map((time) => ({ date, time }))) : [];
+  const keys = new Map<string, { date: string; time: string }>();
+  for (const record of records) keys.set(`${record.date}|${record.slot}`, { date: record.date, time: record.slot });
+  for (const item of projected) keys.set(`${item.date}|${item.time}`, item);
+  const slots: StudioSlot[] = [...keys.values()]
+    .sort((a, b) => `${a.date}|${a.time}`.localeCompare(`${b.date}|${b.time}`))
+    .map(({ date, time }) => {
       const record = recordByDateSlot.get(`${date}|${time}`);
       const job = record?.uploadJobId ? jobById.get(record.uploadJobId) : undefined;
+      const plan = producerReady ? producerState?.studioPlans?.find((entry) => entry.date === date && entry.slot === time) : undefined;
+      const candidate = plan?.candidateSnapshotId && producerReady ? producerState?.studioCandidates?.find((entry) => entry.snapshotId === plan.candidateSnapshotId && entry.productId === plan.exactProductId) : undefined;
       return {
         date,
         time,
-        status: record?.status ?? (!config.enabled ? "disabled" : `${date}T${time}` <= currentKst ? "unknown" : "scheduled"),
-        productName: job?.canonicalProductName ?? null,
-        channelKey: job?.channelKey ?? null,
+        status: record?.status ?? (config?.enabled === false ? "disabled" : `${date}T${time}` <= currentKst ? "unknown" : "scheduled"),
+        productName: job?.canonicalProductName ?? candidate?.productName ?? null,
+        productId: record?.productId || plan?.exactProductId || null,
+        planVersion: plan?.version ?? null,
+        planStatus: plan?.status ?? null,
+        channelKey: job?.channelKey ?? plan?.channelKey ?? null,
         publishStatus: job?.status ?? null,
-        youtubeUrl: job?.youtubeUrl || null,
+        youtubeUrl: job?.youtubeUrl ? safeYouTubeUrl(job.youtubeUrl) : null,
         safeError: record?.safeError || null
       };
-    }))
-    : [];
+    });
   const jobContents: StudioContent[] = jobs
     .filter((job) => job.canonicalProductName && job.channelKey && job.status)
     .map((job) => ({
@@ -75,7 +88,12 @@ export async function readCommerceStudioModel(now = new Date()): Promise<StudioM
 
   return {
     observedAt: now.toISOString(),
+    queriedAt: now.toISOString(),
+    producerObservedAt: latestIso(records.map((record) => record.updatedAt)),
+    publisherObservedAt: latestIso([...(publisherReady ? publisherState!.jobs.map((job) => job.updatedAt || job.createdAt) : []), ...(publisherReady ? publisherState!.ledger.map((entry) => entry.recordedAt) : [])]),
+    receivedAt: null,
     timeZone: "Asia/Seoul",
+    calendarDates: dates,
     producerSource: producerReady ? "connected" : "unavailable",
     publisherSource: publisherReady ? "connected" : "unavailable",
     producerSafeError: producerReady ? null : configResult.ok ? "PRODUCER_STATE_NOT_READABLE" : configResult.safeError,
@@ -88,6 +106,7 @@ export async function readCommerceStudioModel(now = new Date()): Promise<StudioM
     } : null,
     slots,
     contents,
+    candidates: producerReady ? (producerState!.studioCandidates ?? []).map((candidate) => ({ snapshotId: candidate.snapshotId, slotId: candidate.slotId, productId: candidate.productId, productName: candidate.productName, channelKey: candidate.channelKey, eligible: candidate.eligible, safeBlockers: candidate.safeBlockers })) : [],
     youtubeChannels: CHANNELS.map((key) => {
       const channel = resolvePublisherChannel(key);
       return {
@@ -134,6 +153,11 @@ function safeYouTubeUrl(value: string) {
   } catch {
     return null;
   }
+}
+
+function latestIso(values: string[]) {
+  const valid = values.filter((value) => Number.isFinite(Date.parse(value)));
+  return valid.length ? valid.sort()[valid.length - 1] : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

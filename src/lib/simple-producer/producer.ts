@@ -33,6 +33,7 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
   const claim = await claimSlot(input.producerStore, input.config, time);
   if (claim.kind === "existing") return noOp("slot_already_recorded", "SIMPLE_PRODUCER_SLOT_ALREADY_RECORDED", time.date, time.slot);
   if (claim.kind === "daily_target_reached") return noOp("daily_target_reached", "SIMPLE_PRODUCER_DAILY_TARGET_REACHED", time.date, time.slot);
+  if (claim.kind === "held") return noOp("plan_held", "SIMPLE_PRODUCER_PLAN_HELD", time.date, time.slot);
 
   const publisherState = await input.publisherStore.read();
   const excludedProductIds = [...new Set([
@@ -45,7 +46,8 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
     pipeline = await input.executePipeline({
       runId,
       outputRoot: input.config.evidenceRoot,
-      excludedProductIds
+      excludedProductIds,
+      lockedProductId: claim.lockedProductId
     });
   } catch (error) {
     const safeError = safeErrorOf(error, "SIMPLE_PRODUCER_PIPELINE_FAILED");
@@ -58,10 +60,19 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
     return failed(time, safeError, pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
   }
 
+  if (claim.lockedProductId && pipeline.item.productId !== claim.lockedProductId) {
+    await completeSlot(input.producerStore, time, { status: "failed", safeError: "SIMPLE_PRODUCER_LOCKED_PRODUCT_MISMATCH" });
+    return failed(time, "SIMPLE_PRODUCER_LOCKED_PRODUCT_MISMATCH", pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
+  }
+
   const channelKey = channelForUseCase(pipeline.item.useCase);
   if (!channelKey) {
     await completeSlot(input.producerStore, time, { status: "failed", safeError: "SIMPLE_PRODUCER_CHANNEL_NOT_SUPPORTED" });
     return failed(time, "SIMPLE_PRODUCER_CHANNEL_NOT_SUPPORTED", pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
+  }
+  if (claim.lockedChannelKey && channelKey !== claim.lockedChannelKey) {
+    await completeSlot(input.producerStore, time, { status: "failed", safeError: "SIMPLE_PRODUCER_LOCKED_CHANNEL_MISMATCH" });
+    return failed(time, "SIMPLE_PRODUCER_LOCKED_CHANNEL_MISMATCH", pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
   }
   const videoSha256 = await sha256File(pipeline.item.videoPath);
   if (!videoSha256) {
@@ -148,6 +159,16 @@ async function claimSlot(store: SimpleProducerStore, config: SimpleProducerConfi
     const today = state.slots.filter((record) => record.date === time.date);
     if (today.some((record) => record.slot === time.slot)) return { kind: "existing" } as const;
     if (today.filter((record) => record.status === "succeeded").length >= config.dailyGenerateTarget) return { kind: "daily_target_reached" } as const;
+    const plan = state.studioPlans?.find((entry) => entry.date === time.date && entry.slot === time.slot);
+    if (plan?.status === "held") return { kind: "held" } as const;
+    const lockedProductId = plan?.status === "selected" && plan.selectionMode === "manual" ? plan.exactProductId : null;
+    const lockedChannelKey = lockedProductId ? plan?.channelKey : null;
+    if (plan?.status === "selected" && plan.selectionMode === "manual" && !lockedProductId) throw new Error("SIMPLE_PRODUCER_MANUAL_PLAN_INVALID");
+    if (plan && plan.status !== "unassigned" && plan.status !== "selected") return { kind: "existing" } as const;
+    if (plan && lockedProductId) {
+      plan.status = "claimed";
+      plan.lockedAt = time.now;
+    }
     state.slots.push({
       date: time.date,
       slot: time.slot,
@@ -158,7 +179,7 @@ async function claimSlot(store: SimpleProducerStore, config: SimpleProducerConfi
       uploadJobId: "",
       safeError: ""
     });
-    return { kind: "claimed" } as const;
+    return { kind: "claimed", lockedProductId, lockedChannelKey } as const;
   });
 }
 
@@ -171,6 +192,11 @@ async function completeSlot(store: SimpleProducerStore, time: KstTime, update: P
     record.productId = update.productId ?? "";
     record.uploadJobId = update.uploadJobId ?? "";
     record.updatedAt = time.now;
+    const plan = state.studioPlans?.find((entry) => entry.date === time.date && entry.slot === time.slot && entry.status === "claimed");
+    if (plan) {
+      plan.status = update.status === "succeeded" ? "completed" : "failed";
+      plan.executionRecordId = `${time.date}|${time.slot}`;
+    }
   });
 }
 
@@ -204,7 +230,7 @@ function kstTime(now: Date): KstTime {
   return { date: `${value("year")}-${value("month")}-${value("day")}`, slot: `${value("hour")}:${value("minute")}`, now: now.toISOString() };
 }
 
-function noOp(status: Extract<SimpleProducerRunResult["status"], "disabled" | "outside_slot" | "daily_target_reached" | "slot_already_recorded">, safeError: string, date: string, slot: string | null): SimpleProducerRunResult {
+function noOp(status: Extract<SimpleProducerRunResult["status"], "disabled" | "outside_slot" | "daily_target_reached" | "slot_already_recorded" | "plan_held">, safeError: string, date: string, slot: string | null): SimpleProducerRunResult {
   return { status, safeError, date, slot, productId: null, uploadJobId: null, channelKey: null, readyJobCreated: 0, videosInsertCalls: 0, searchCalls: 0, rawProductsFound: 0, eligibleProductsFound: 0 };
 }
 

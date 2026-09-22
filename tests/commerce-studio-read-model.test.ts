@@ -64,7 +64,10 @@ describe.sequential("Commerce Studio read model", () => {
     const model = await readCommerceStudioModel(new Date("2026-09-23T00:00:00.000Z"));
     expect(model.producerSource).toBe("connected");
     expect(model.publisherSource).toBe("connected");
-    expect(model.slots).toHaveLength(42);
+    expect(model.slots).toHaveLength(14);
+    expect(model.calendarDates).toHaveLength(21);
+    expect(model.producerObservedAt).toBe("2026-09-23T00:05:00Z");
+    expect(model.queriedAt).toBe("2026-09-23T00:00:00.000Z");
     expect(model.slots.find((slot) => slot.date === "2026-09-23" && slot.time === "09:00")).toMatchObject({ status: "succeeded", productName: "fixture product", publishStatus: "ready" });
     expect(model.slots.find((slot) => slot.date === "2026-09-23" && slot.time === "15:00")).toMatchObject({ status: "scheduled", productName: null });
     expect(model.contents).toHaveLength(1);
@@ -85,5 +88,28 @@ describe.sequential("Commerce Studio read model", () => {
     expect(model.producerSource).toBe("unavailable");
     expect(model.slots.find((slot) => slot.date === "2026-09-23" && slot.time === "09:00")?.status).toBe("unknown");
     expect(model.slots.find((slot) => slot.date === "2026-09-24" && slot.time === "09:00")?.status).toBe("scheduled");
+  });
+
+  it("keeps persisted historical slots after schedule change and rejects unsafe slot URLs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "studio-history-"));
+    roots.push(root);
+    const configPath = join(root, "config.json");
+    const publisherPath = join(root, "publisher.json");
+    process.env.SIMPLE_PRODUCER_CONFIG_PATH = configPath;
+    process.env.YOUTUBE_PUBLIC_PUBLISHER_STATE_PATH = publisherPath;
+    await writeFile(configPath, JSON.stringify({ schema: "simple-producer/v1", enabled: true, dailyGenerateTarget: 1,
+      maxItemsPerRun: 1, generationSlots: ["10:00"], timeZone: "Asia/Seoul", evidenceRoot: root }));
+    await writeFile(join(root, "simple-producer-state.json"), JSON.stringify({ schema: "simple-producer/v1", slots: [{
+      date: "2026-09-01", slot: "09:00", status: "succeeded", createdAt: "2026-09-01T00:00:00Z",
+      updatedAt: "2026-09-01T00:05:00Z", productId: "old-product", uploadJobId: "old-job", safeError: ""
+    }] }));
+    await writeFile(publisherPath, JSON.stringify({ jobs: [{ id: "old-job", productId: "old-product", channelKey: "father_jobs",
+      canonicalProductName: "과거 상품", status: "uploaded", title: "과거 제목", createdAt: "2026-09-01T00:05:00Z",
+      publishedAt: "2026-09-02T00:05:00Z", youtubeUrl: "javascript:alert(1)", youtubeVideoId: "video-id" }], ledger: [] }));
+    const model = await readCommerceStudioModel(new Date("2026-09-23T00:00:00.000Z"));
+    expect(model.slots.find((slot) => slot.date === "2026-09-01" && slot.time === "09:00")).toMatchObject({ status: "succeeded", youtubeUrl: null });
+    expect(model.slots.some((slot) => slot.date === "2026-09-01" && slot.time === "10:00")).toBe(false);
+    expect(model.contents[0].youtubeUrl).toBeNull();
+    expect(model.publisherObservedAt).toBe("2026-09-01T00:05:00Z");
   });
 });

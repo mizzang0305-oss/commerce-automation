@@ -52,6 +52,7 @@ async function executeLivePipeline(input: {
   runId: string;
   outputRoot: string;
   excludedProductIds: string[];
+  lockedProductId?: string | null;
 }): Promise<SimpleProducerPipelineResult> {
   const liveRoot = resolve(input.outputRoot, "live-product-video", input.runId);
   const child = await runChild({
@@ -62,6 +63,7 @@ async function executeLivePipeline(input: {
       LIVE_PRODUCT_VIDEO_TARGET_COUNT: "1",
       LIVE_PRODUCT_VIDEO_ALLOWED_USE_CASES: "vehicle_organization,laundry_drying",
       LIVE_PRODUCT_VIDEO_EXCLUDED_PRODUCT_IDS: JSON.stringify(input.excludedProductIds),
+      LIVE_PRODUCT_VIDEO_LOCKED_PRODUCT_ID: input.lockedProductId || "",
       LIVE_PRODUCT_VIDEO_OUTPUT_ROOT: input.outputRoot,
       VIDEO_AUTOMATION_OUTPUT_ROOT: input.outputRoot
     }
@@ -78,6 +80,9 @@ async function executeLivePipeline(input: {
   const machineItem = candidate && machineItems.find((entry) => isRecord(entry) && entry.productKey === candidate.productKey && entry.machineQaPassed === true);
   if (child.code !== 0 || !candidate || !isRecord(machineItem) || typeof machineItem.finalVideo !== "string" || !machineItem.finalVideo) {
     return { ok: false, safeError: readSafeError(summary) || child.safeError || "SIMPLE_PRODUCER_LIVE_PIPELINE_FAILED", ...counts, item: null };
+  }
+  if (input.lockedProductId && candidate.productKey !== input.lockedProductId) {
+    return { ok: false, safeError: "SIMPLE_PRODUCER_LOCKED_PRODUCT_MISMATCH", ...counts, item: null };
   }
   if (typeof candidate.productKey !== "string" || typeof candidate.canonicalProductName !== "string" || typeof candidate.selectedAffiliateUrl !== "string" || !candidate.selectedAffiliateUrl || (candidate.useCase !== "vehicle_organization" && candidate.useCase !== "laundry_drying")) {
     return { ok: false, safeError: "SIMPLE_PRODUCER_OUTPUT_CONTRACT_INVALID", ...counts, item: null };

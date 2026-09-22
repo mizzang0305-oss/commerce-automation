@@ -97,6 +97,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@supabase/ssr": "0.10.0",
     "@supabase/supabase-js": "^2.106.1",
     "@tanstack/react-table": "^8.21.3",
     "cmdk": "^1.1.1",
