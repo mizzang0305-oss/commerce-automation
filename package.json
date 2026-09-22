@@ -88,6 +88,7 @@
     "autopilot:status": "tsx scripts/autopilot/read-autopilot-state.ts",
     "autopilot:decision": "tsx scripts/autopilot/decide-next-action.ts",
     "preflight:production-pilot": "node scripts/production-pilot-preflight.mjs",
+    "youtube:public-publisher:run-once": "node --conditions=react-server --import tsx scripts/youtube-public-publisher/run-once.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
