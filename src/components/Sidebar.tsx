@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isCommerceStudioEnabled } from "@/lib/commerce-studio/featureFlag";
 import {
   Activity,
   BriefcaseBusiness,
@@ -38,6 +39,7 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const studioEnabled = isCommerceStudioEnabled();
   return (
     <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white px-4 py-5 lg:block">
       <Link href="/dashboard" className="flex items-center gap-3 rounded-lg px-2 py-2">
@@ -50,6 +52,7 @@ export function Sidebar() {
         </span>
       </Link>
       <nav className="mt-8 space-y-1">
+        {studioEnabled && <Link href="/studio" className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><LayoutDashboard size={17} aria-hidden="true" />Commerce Studio</Link>}
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
