@@ -12,9 +12,12 @@ __pycache__/
 *.py[cod]
 *.tsbuildinfo
 /outputs/
+/output/playwright/
+/.playwright-cli/
 /temp/
 data/*.json
 data/*.tmp
+/data/commerce-poc/
 python-worker/.venv/
 python-worker/outputs/**
 !python-worker/outputs/.gitkeep
