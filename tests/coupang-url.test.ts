@@ -3,6 +3,7 @@ import {
   buildCoupangProductKey,
   extractCoupangProductId,
   isLikelyCoupangProductUrl,
+  materializeCoupangProductUrlFromAffiliate,
   normalizeCoupangUrl,
   removeTrackingParams,
   validateAffiliateUrl
@@ -53,5 +54,12 @@ describe("Coupang URL helpers", () => {
       ok: false,
       status: "invalid"
     });
+  });
+
+  test("materializes a product URL only from a valid affiliate page key", () => {
+    expect(materializeCoupangProductUrlFromAffiliate("https://link.coupang.com/a/example?pageKey=123456789&itemId=111&vendorItemId=222")).toBe(
+      "https://www.coupang.com/vp/products/123456789?itemId=111&vendorItemId=222"
+    );
+    expect(materializeCoupangProductUrlFromAffiliate("https://link.coupang.com/a/example?pageKey=not-a-number")).toBe("");
   });
 });

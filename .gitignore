@@ -15,6 +15,8 @@ __pycache__/
 /temp/
 data/*.json
 data/*.tmp
+/data/live-product-video/
+/data/video-automation/
 python-worker/.venv/
 python-worker/outputs/**
 !python-worker/outputs/.gitkeep
