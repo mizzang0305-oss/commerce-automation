@@ -6,6 +6,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { readConfiguredSimpleProducerConfig, isPathInside } from "../../src/lib/simple-producer/config";
 import { snapshotEnvelopeSchema, snapshotPayloadSchema, studioCandidateSchema, studioPlanSchema, type StudioSnapshot } from "../../src/lib/commerce-studio/bridge/contracts";
 import { signStudioHostRequest } from "../../src/lib/commerce-studio/bridge/hostAuth";
+import { studioPreviewProtectionHeaders } from "../../src/lib/commerce-studio/bridge/previewProtection";
 import type { SimpleProducerState } from "../../src/lib/simple-producer/types";
 import type { YouTubePublicPublisherState } from "../../src/lib/youtube-public-publisher/publisher";
 
@@ -41,9 +42,12 @@ async function main() {
     const body = JSON.stringify(envelope);
     const signed = signStudioHostRequest({ secret, hostId, method: "POST", pathname: "/api/studio-host/snapshot",
       timestamp: new Date().toISOString(), nonce: randomUUID(), body });
+    const protectionHeaders = studioPreviewProtectionHeaders({ endpoint,
+      allowedOrigin: process.env.STUDIO_VERCEL_AUTOMATION_BYPASS_ORIGIN,
+      bypassSecret: process.env.STUDIO_VERCEL_AUTOMATION_BYPASS_SECRET });
     const response = await fetch(`${endpoint}/api/studio-host/snapshot`, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(20_000),
       headers: { "Content-Type": "application/json", "x-studio-host-id": signed.hostId, "x-studio-timestamp": signed.timestamp,
-        "x-studio-nonce": signed.nonce, "x-studio-signature": signed.signature }, body });
+        "x-studio-nonce": signed.nonce, "x-studio-signature": signed.signature, ...protectionHeaders }, body });
     if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error("STUDIO_EXPORT_DELIVERY_NOT_ACKNOWLEDGED");
     const result = await response.json() as { status?: { status?: string } };
     if (!["accepted", "duplicate"].includes(result.status?.status || "")) throw new Error("STUDIO_EXPORT_DELIVERY_NOT_ACKNOWLEDGED");

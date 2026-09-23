@@ -24,6 +24,8 @@
 
 호스트: `STUDIO_BRIDGE_ORIGIN`, `STUDIO_ENVIRONMENT_ID`, `STUDIO_OWNER_GOOGLE_SUB`, `STUDIO_HOST_ID`, `STUDIO_HOST_HMAC_SECRET`, `STUDIO_RUNTIME_SHA`, `STUDIO_HOST_SEQUENCE_PATH`, `YOUTUBE_PUBLIC_PUBLISHER_STATE_PATH`, `SIMPLE_PRODUCER_CONFIG_PATH`, `STUDIO_HOST_COMMANDS_ENABLED`.
 
+Vercel Authentication으로 보호된 Preview에 전송할 때만, 기존 승인된 자동화 우회 secret을 저장소 밖 호스트 설정의 `STUDIO_VERCEL_AUTOMATION_BYPASS_SECRET`으로 주입한다. `STUDIO_VERCEL_AUTOMATION_BYPASS_ORIGIN`은 `STUDIO_BRIDGE_ORIGIN`과 동일한 정확한 HTTPS `*.vercel.app` origin이어야 한다. exporter는 헤더로만 보내며 redirect를 따르지 않는다. 우회 secret이 없으면 헤더를 보내지 않고 기존 Studio HMAC 검증은 그대로 유지된다.
+
 서버와 호스트는 서로 다른 환경/credential/namespace를 사용해 Preview→Production 명령 교차를 막아야 한다. 추가 DB 변경, 자격정보 사용, Task 설치, Production 쓰기는 별도 Owner 승인과 롤백 계획이 필요하다.
 
 ## 전용 스키마 적용 후 연결 경계
