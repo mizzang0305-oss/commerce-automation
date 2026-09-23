@@ -1,5 +1,10 @@
 export type StudioOwner = { ownerId: string; email: string };
 
+type StudioAuthUser = {
+  email?: string | null;
+  identities?: Array<{ provider?: string; identity_data?: Record<string, unknown> | null }> | null;
+};
+
 export function studioAuthConfig(env: NodeJS.ProcessEnv = process.env) {
   const url = env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
   const key = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() || "";
@@ -13,16 +18,21 @@ export function studioAuthConfig(env: NodeJS.ProcessEnv = process.env) {
   return { url, key, origin, subjects, ready: Boolean(url && key && validOrigin && subjects.size) };
 }
 
-export function allowedStudioOwner(user: {
-  email?: string | null;
-  identities?: Array<{ provider?: string; identity_data?: Record<string, unknown> | null }> | null;
-} | null, subjects: ReadonlySet<string>): StudioOwner | null {
-  if (!user || !subjects.size || !user.email) return null;
+export function verifiedGoogleIdentityForEmail(user: StudioAuthUser | null, approvedEmail: string,
+  allowedSubjects?: ReadonlySet<string>): StudioOwner | null {
+  if (!user?.email || !approvedEmail || user.email.toLowerCase() !== approvedEmail.toLowerCase()) return null;
   const identity = user.identities?.find((entry) => entry.provider === "google" &&
-    typeof entry.identity_data?.sub === "string" && subjects.has(entry.identity_data.sub));
-  if (!identity || identity.identity_data?.email_verified !== true ||
-      String(identity.identity_data.email || "").toLowerCase() !== user.email.toLowerCase()) return null;
-  return { ownerId: String(identity.identity_data.sub), email: user.email };
+    typeof entry.identity_data?.sub === "string" && entry.identity_data.sub.length > 0 &&
+    (!allowedSubjects || allowedSubjects.has(entry.identity_data.sub)) &&
+    entry.identity_data.email_verified === true &&
+    typeof entry.identity_data.email === "string" &&
+    entry.identity_data.email.toLowerCase() === approvedEmail.toLowerCase());
+  return identity ? { ownerId: String(identity.identity_data!.sub), email: user.email } : null;
+}
+
+export function allowedStudioOwner(user: StudioAuthUser | null, subjects: ReadonlySet<string>): StudioOwner | null {
+  if (!user?.email || !subjects.size) return null;
+  return verifiedGoogleIdentityForEmail(user, user.email, subjects);
 }
 
 export function sameStudioOrigin(request: Request, expectedOrigin: string) {

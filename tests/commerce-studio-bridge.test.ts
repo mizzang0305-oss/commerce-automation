@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { allowedStudioOwner, sameStudioOrigin, studioAuthConfig } from "@/lib/commerce-studio/auth/config";
+import { allowedStudioOwner, sameStudioOrigin, studioAuthConfig, verifiedGoogleIdentityForEmail } from "@/lib/commerce-studio/auth/config";
 import { InMemoryStudioBridge } from "@/lib/commerce-studio/bridge/memoryStore";
 import { signStudioHostRequest, verifyStudioHostRequest } from "@/lib/commerce-studio/bridge/hostAuth";
 
@@ -24,6 +24,20 @@ describe("Studio owner boundary", () => {
   it("rejects cross-origin mutations", () => {
     const request = new Request("https://studio.example/api/studio/control", { method: "POST", headers: { origin: "https://attacker.example" } });
     expect(sameStudioOrigin(request, "https://studio.example")).toBe(false);
+  });
+
+  it("verifies only the approved email's Google identity without granting owner access", () => {
+    const user = { email: "owner@example.com", identities: [
+      { provider: "google", identity_data: { sub: "other", email: "other@example.com", email_verified: true } },
+      { provider: "google", identity_data: { sub: "approved", email: "owner@example.com", email_verified: true } }
+    ] };
+    expect(verifiedGoogleIdentityForEmail(user, "owner@example.com")?.ownerId).toBe("approved");
+    expect(verifiedGoogleIdentityForEmail(user, "someone@example.com")).toBeNull();
+    expect(allowedStudioOwner(user, new Set(["other"]))).toBeNull();
+    expect(allowedStudioOwner(user, new Set(["approved"]))?.ownerId).toBe("approved");
+    expect(verifiedGoogleIdentityForEmail({ email: "owner@example.com", identities: [
+      { provider: "google", identity_data: { sub: "approved", email: "owner@example.com", email_verified: false } }
+    ] }, "owner@example.com")).toBeNull();
   });
 });
 
