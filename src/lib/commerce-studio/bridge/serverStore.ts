@@ -18,6 +18,7 @@ export function createStudioServerBridge() {
   const binding = studioServerBinding();
   if (!binding) return null;
   const client = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    db: { schema: "commerce_studio" },
     auth: { autoRefreshToken: false, persistSession: false }
   });
   const store: StudioCompareSwapStore = {
