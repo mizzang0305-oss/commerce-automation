@@ -6,6 +6,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { readConfiguredSimpleProducerConfig, isPathInside } from "../../src/lib/simple-producer/config";
 import { snapshotEnvelopeSchema, snapshotPayloadSchema, studioCandidateSchema, studioPlanSchema, type StudioSnapshot } from "../../src/lib/commerce-studio/bridge/contracts";
 import { signStudioHostRequest } from "../../src/lib/commerce-studio/bridge/hostAuth";
+import { parseStudioExportAck } from "../../src/lib/commerce-studio/bridge/exportAck";
 import { studioPreviewProtectionHeaders } from "../../src/lib/commerce-studio/bridge/previewProtection";
 import type { SimpleProducerState } from "../../src/lib/simple-producer/types";
 import type { YouTubePublicPublisherState } from "../../src/lib/youtube-public-publisher/publisher";
@@ -49,10 +50,9 @@ async function main() {
       headers: { "Content-Type": "application/json", "x-studio-host-id": signed.hostId, "x-studio-timestamp": signed.timestamp,
         "x-studio-nonce": signed.nonce, "x-studio-signature": signed.signature, ...protectionHeaders }, body });
     if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) throw new Error("STUDIO_EXPORT_DELIVERY_NOT_ACKNOWLEDGED");
-    const result = await response.json() as { status?: { status?: string } };
-    if (!["accepted", "duplicate"].includes(result.status?.status || "")) throw new Error("STUDIO_EXPORT_DELIVERY_NOT_ACKNOWLEDGED");
+    const status = parseStudioExportAck(await response.json());
     await writeSequence(sequencePath, { sequence: envelope.sourceSequence, pending: null });
-    console.log(JSON.stringify({ event: "studio_export", status: result.status?.status, sourceSequence: envelope.sourceSequence }));
+    console.log(JSON.stringify({ event: "studio_export", status, sourceSequence: envelope.sourceSequence }));
   } finally { await lock.close(); await rm(`${sequencePath}.lock`, { force: true }); }
 }
 
