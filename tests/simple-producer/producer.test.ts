@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,9 @@ import { runSimpleProducerOnce } from "@/lib/simple-producer/producer";
 import { InMemorySimpleProducerStore } from "@/lib/simple-producer/state";
 import type { SimpleProducerConfig, SimpleProducerPipelineResult } from "@/lib/simple-producer/types";
 import { InMemoryYouTubePublicPublisherStore } from "@/lib/youtube-public-publisher/publisher";
+import { signedTestReview, TEST_REVIEW_PUBLIC_KEY } from "../fixtures/productVisualReview";
+
+const PRODUCT_ID = "coupang:product:100:item:200:vendor:300";
 
 const roots: string[] = [];
 
@@ -24,7 +28,7 @@ const config: SimpleProducerConfig = {
 };
 
 describe("simple producer run-once", () => {
-  test("creates exactly one ready job after machine QA and never calls videos.insert", async () => {
+  test("creates exactly one ready job only after a signed content review and never calls videos.insert", async () => {
     const videoPath = await createVideo();
     const producerStore = new InMemorySimpleProducerStore();
     const publisherStore = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
@@ -35,6 +39,7 @@ describe("simple producer run-once", () => {
       producerStore,
       publisherStore,
       now: new Date("2026-09-23T00:00:00.000Z"),
+      reviewPublicKey: TEST_REVIEW_PUBLIC_KEY,
       executePipeline: async () => {
         calls += 1;
         return passedPipeline(videoPath);
@@ -70,6 +75,20 @@ describe("simple producer run-once", () => {
     expect((await publisherStore.read()).jobs).toHaveLength(0);
   });
 
+  test("machine QA alone cannot create a ready job", async () => {
+    const videoPath = await createVideo();
+    const producerStore = new InMemorySimpleProducerStore();
+    const publisherStore = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
+    const result = await runSimpleProducerOnce({
+      config, producerStore, publisherStore,
+      now: new Date("2026-09-23T00:00:00.000Z"),
+      reviewPublicKey: TEST_REVIEW_PUBLIC_KEY,
+      executePipeline: async () => ({ ...passedPipeline(videoPath), item: { ...passedPipeline(videoPath).item!, productVisualReview: undefined } })
+    });
+    expect(result).toMatchObject({ status: "failed", safeError: "PRODUCT_CONTENT_REVIEW_MISSING", readyJobCreated: 0 });
+    expect((await publisherStore.read()).jobs).toHaveLength(0);
+  });
+
   test("does not run outside a configured slot or backfill after 21:00", async () => {
     const producerStore = new InMemorySimpleProducerStore();
     const publisherStore = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
@@ -86,7 +105,7 @@ describe("simple producer run-once", () => {
     const producerStore = new InMemorySimpleProducerStore();
     const publisherStore = new InMemoryYouTubePublicPublisherStore({
       jobs: [{ ...readyJob(videoPath), id: "queued", productId: "queued-product", affiliateProductId: "queued-product" }],
-      ledger: [{ channelKey: "father_jobs", channelId: "channel", productId: "published-product", videoSha256: "a".repeat(64), youtubeVideoId: "prior", youtubeUrl: "https://youtu.be/prior", visibility: "public", publishedAt: "2026-09-20T00:00:00.000Z", recordedAt: "2026-09-20T00:00:00.000Z" }]
+      ledger: [{ channelKey: "father_jobs", channelId: "channel", productId: "published-product", videoSha256: "a".repeat(64), youtubeVideoId: "A1234567890", youtubeUrl: "https://youtu.be/A1234567890", visibility: "public", publishedAt: "2026-09-20T00:00:00.000Z", recordedAt: "2026-09-20T00:00:00.000Z" }]
     });
     let excluded: string[] = [];
     const result = await runSimpleProducerOnce({
@@ -94,9 +113,10 @@ describe("simple producer run-once", () => {
       producerStore,
       publisherStore,
       now: new Date("2026-09-23T06:00:00.000Z"),
+      reviewPublicKey: TEST_REVIEW_PUBLIC_KEY,
       executePipeline: async (input) => {
         excluded = input.excludedProductIds;
-        return passedPipeline(videoPath, "new-product");
+        return passedPipeline(videoPath, PRODUCT_ID, ["A1234567890"]);
       }
     });
 
@@ -113,14 +133,14 @@ async function createVideo() {
   return videoPath;
 }
 
-function passedPipeline(videoPath: string, productId = "new-product"): SimpleProducerPipelineResult {
+function passedPipeline(videoPath: string, productId = PRODUCT_ID, reviewedPriorVideoIds?: string[]): SimpleProducerPipelineResult {
   return {
     ok: true,
     safeError: "",
     searchCalls: 3,
     rawProductsFound: 10,
     eligibleProductsFound: 4,
-    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true }
+    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true, productVisualReview: signedTestReview(productId, createHash("sha256").update("test-video").digest("hex"), reviewedPriorVideoIds) }
   };
 }
 

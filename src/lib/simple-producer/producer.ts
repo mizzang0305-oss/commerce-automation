@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { verifyProductVisualReview } from "@/lib/video-automation/productVisualReview";
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
 import {
   enqueueYouTubePublicUploadJob,
@@ -22,6 +23,7 @@ export type SimpleProducerRunInput = {
   publisherStore: YouTubePublicPublisherStore;
   executePipeline: (input: SimpleProducerPipelineInput) => Promise<SimpleProducerPipelineResult>;
   now?: Date;
+  reviewPublicKey?: string;
 };
 
 export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Promise<SimpleProducerRunResult> {
@@ -67,6 +69,17 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
   if (!videoSha256) {
     await completeSlot(input.producerStore, time, { status: "failed", safeError: "SIMPLE_PRODUCER_VIDEO_ASSET_NOT_READY" });
     return failed(time, "SIMPLE_PRODUCER_VIDEO_ASSET_NOT_READY", pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
+  }
+  const contentReview = verifyProductVisualReview({
+    receipt: pipeline.item.productVisualReview,
+    productId: pipeline.item.productId,
+    videoSha256,
+    publicKey: input.reviewPublicKey,
+    requiredPriorVideoIds: publisherState.ledger.map((entry) => entry.youtubeVideoId)
+  });
+  if (!contentReview.ok) {
+    await completeSlot(input.producerStore, time, { status: "failed", safeError: contentReview.safeError });
+    return failed(time, contentReview.safeError, pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
   }
 
   const job = createReadyJob({
@@ -122,6 +135,7 @@ function createReadyJob(input: {
     channelKey: input.channelKey,
     videoPath: input.item.videoPath,
     videoSha256: input.videoSha256,
+    productVisualReview: input.item.productVisualReview,
     affiliateUrl: input.item.affiliateUrl,
     affiliateProductId: input.item.productId,
     canonicalProductName: input.item.canonicalProductName,

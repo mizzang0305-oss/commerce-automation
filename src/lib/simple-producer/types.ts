@@ -1,4 +1,5 @@
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
+import type { ProductVisualReviewReceipt } from "@/lib/video-automation/productVisualReview";
 
 export const SIMPLE_PRODUCER_SCHEMA = "simple-producer/v1";
 
@@ -43,6 +44,7 @@ export type SimpleProducerPipelineItem = {
   useCase: "vehicle_organization" | "laundry_drying";
   videoPath: string;
   machineQaPassed: boolean;
+  productVisualReview?: ProductVisualReviewReceipt;
 };
 
 export type SimpleProducerPipelineResult = {

@@ -9,7 +9,6 @@ import {
   normalizeLiveProduct,
   rankLiveProducts,
   resolveExactProductReference,
-  resolveOwnerReviewedUsageEvidence,
   searchLiveCoupangProducts,
   selectDistinctLiveProductSlots,
   selectLiveProductTargetCount,
@@ -175,16 +174,14 @@ type Runtime = ReturnType<typeof readRuntime>;
 
 async function prepareCandidate(ranked: RankedLiveProduct, root: string, slot: number, attempt: number, runtime: Runtime, runId: string) {
   const slotRoot = join(root, `slot-${String(slot).padStart(2, "0")}`, `candidate-attempt-${attempt}`);
-  const usage = await resolveOwnerReviewedUsageEvidence({ candidate: ranked.candidate, assetRoot: runtime.assetRoot });
-  if (!usage) throw new Error("USAGE_EVIDENCE_NOT_AVAILABLE");
   const reference = await resolveExactProductReference({
     candidate: ranked.candidate,
     outputDir: join(slotRoot, "product-reference"),
     pythonExe: runtime.python,
     visualQaScript: resolve("tools", "video-automation", "visual_qa.py")
   });
-  const input = adaptLiveProductToVideoInput({ candidate: ranked.candidate, exactReference: reference, usageEvidence: usage, runId });
-  await writeJson(join(slotRoot, "product.json"), { ...ranked.candidate, exactProductReference: { ...reference, localPathPresent: true }, genericUsageEvidence: { assetId: usage.assetId, identityType: usage.identityType, ownerReviewStatus: usage.ownerReviewStatus }, exactProductUse: false, overclaim: false });
+  const input = adaptLiveProductToVideoInput({ candidate: ranked.candidate, exactReference: reference, runId });
+  await writeJson(join(slotRoot, "product.json"), { ...ranked.candidate, exactProductReference: { ...reference, localPathPresent: true }, visualMode: "product_information", exactProductUse: false, overclaim: false });
   await writeJson(join(slotRoot, "product-score.json"), ranked.score);
   return { ranked, reference, input };
 }
