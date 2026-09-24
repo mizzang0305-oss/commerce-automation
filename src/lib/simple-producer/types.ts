@@ -1,4 +1,5 @@
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
+import type { StudioCandidate, StudioPlan } from "@/lib/commerce-studio/bridge/contracts";
 
 export const SIMPLE_PRODUCER_SCHEMA = "simple-producer/v1";
 
@@ -10,6 +11,7 @@ export type SimpleProducerConfig = {
   generationSlots: string[];
   timeZone: "Asia/Seoul";
   evidenceRoot: string;
+  studioSettingsRevision?: number;
 };
 
 export type SimpleProducerSlotStatus = "running" | "succeeded" | "failed";
@@ -28,12 +30,18 @@ export type SimpleProducerSlotRecord = {
 export type SimpleProducerState = {
   schema: typeof SIMPLE_PRODUCER_SCHEMA;
   slots: SimpleProducerSlotRecord[];
+  studioSettingsRevision?: number;
+  studioPlans?: StudioPlan[];
+  studioCandidates?: StudioCandidate[];
+  studioCandidatesScoutedAt?: string;
+  studioCommandReceipts?: Array<{ commandId: string; status: "applied" | "rejected" | "pending"; safeError: string; appliedVersion: number | null }>;
 };
 
 export type SimpleProducerPipelineInput = {
   runId: string;
   outputRoot: string;
   excludedProductIds: string[];
+  lockedProductId?: string | null;
 };
 
 export type SimpleProducerPipelineItem = {
@@ -59,6 +67,8 @@ export type SimpleProducerRunStatus =
   | "outside_slot"
   | "daily_target_reached"
   | "slot_already_recorded"
+  | "plan_held"
+  | "settings_reconcile_required"
   | "ready_job_created"
   | "failed";
 

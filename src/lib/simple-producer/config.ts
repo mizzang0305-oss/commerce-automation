@@ -38,6 +38,9 @@ export function parseSimpleProducerConfig(value: unknown, cwd = process.cwd()): 
   const generationSlots = value.generationSlots.map((entry) => String(entry));
   if (new Set(generationSlots).size !== generationSlots.length || !generationSlots.every(isValidSlot) || !isAscending(generationSlots)) throw new Error("SIMPLE_PRODUCER_SLOTS_INVALID");
   if (typeof value.evidenceRoot !== "string" || !isAbsolute(value.evidenceRoot)) throw new Error("SIMPLE_PRODUCER_EVIDENCE_ROOT_INVALID");
+  if (value.studioSettingsRevision !== undefined &&
+      (typeof value.studioSettingsRevision !== "number" || !Number.isSafeInteger(value.studioSettingsRevision) || value.studioSettingsRevision < 0))
+    throw new Error("SIMPLE_PRODUCER_SETTINGS_REVISION_INVALID");
   const evidenceRoot = resolve(value.evidenceRoot);
   if (isPathInside(evidenceRoot, resolve(cwd))) throw new Error("SIMPLE_PRODUCER_EVIDENCE_ROOT_INSIDE_REPOSITORY");
   return {
@@ -47,7 +50,8 @@ export function parseSimpleProducerConfig(value: unknown, cwd = process.cwd()): 
     maxItemsPerRun: 1,
     generationSlots,
     timeZone: "Asia/Seoul",
-    evidenceRoot
+    evidenceRoot,
+    studioSettingsRevision: (value.studioSettingsRevision as number | undefined) ?? 0
   };
 }
 

@@ -56,7 +56,12 @@ async function main(): Promise<void> {
   const runnableRanked = ranked.filter((entry) => settings.allowedUseCases.has(entry.candidate.useCase) && !settings.excludedProductIds.has(entry.candidate.productKey));
   const distinctSelection = selectDistinctLiveProductSlots({ ranked: runnableRanked, maxAttemptsPerSlot: MAX_CANDIDATE_ATTEMPTS_PER_SLOT });
   const targetSelection = selectLiveProductTargetCount({ candidates: runnableRanked, targetCount: maxProducts });
-  const selection = maxProducts === DEFAULT_MAX_FINAL_PRODUCTS && settings.usesDefaultSelection
+  const lockedRanked = settings.lockedProductId
+    ? runnableRanked.filter((entry) => entry.score.eligible && entry.candidate.productKey === settings.lockedProductId).slice(0, 1)
+    : null;
+  const selection = lockedRanked
+    ? { selected: lockedRanked, attempts: { target: lockedRanked.length }, rejected: runnableRanked.filter((entry) => !entry.score.eligible).map((entry) => ({ productKey: entry.candidate.productKey, reasons: entry.score.blockers })) }
+    : maxProducts === DEFAULT_MAX_FINAL_PRODUCTS && settings.usesDefaultSelection
     ? distinctSelection
     : {
         selected: targetSelection.selected,
@@ -67,11 +72,13 @@ async function main(): Promise<void> {
   await writeJson(join(root, "discovery.json"), buildDiscoveryManifest({ providerConfigured, contexts, window, rawCount: raw.length, candidates, ranked, providerResults, apiCallCount, discoverySeconds, selectedCount: selection.selected.length }));
   await writeJson(join(root, "candidate-ranking.json"), ranked);
   if (!runtime.configured) return blocked(root, "BLOCKED_FOR_OWNER_DECISION", "LOCAL_VIDEO_RUNTIME_NOT_CONFIGURED", apiCallCount, started);
-  if (selection.selected.length !== maxProducts) return blocked(root, "LIVE_PRODUCT_TO_VIDEO_V1_PARTIAL", "LIVE_PRODUCT_SLOT_UNFILLED", apiCallCount, started, { selection, discoverySeconds, rankingMs });
+  if (selection.selected.length !== maxProducts) return blocked(root, "LIVE_PRODUCT_TO_VIDEO_V1_PARTIAL", settings.lockedProductId ? "LIVE_LOCKED_PRODUCT_NOT_ELIGIBLE" : "LIVE_PRODUCT_SLOT_UNFILLED", apiCallCount, started, { selection, discoverySeconds, rankingMs });
 
   const assetStarted = performance.now();
   const useCases = ["vehicle_organization", "desk_organization", "laundry_drying"] as const;
-  const pools = maxProducts === DEFAULT_MAX_FINAL_PRODUCTS && settings.usesDefaultSelection
+  const pools = lockedRanked
+    ? [lockedRanked]
+    : maxProducts === DEFAULT_MAX_FINAL_PRODUCTS && settings.usesDefaultSelection
     ? useCases.map((useCase) => runnableRanked.filter((entry) => entry.candidate.useCase === useCase && entry.score.eligible).slice(0, MAX_CANDIDATE_ATTEMPTS_PER_SLOT))
     : [runnableRanked.filter((entry) => entry.score.eligible).slice(0, MAX_CANDIDATE_ATTEMPTS_PER_SLOT)];
   const prepared: Array<Awaited<ReturnType<typeof prepareCandidate>> | null> = Array.from({ length: maxProducts }, () => null);
@@ -273,6 +280,7 @@ type RunSettings = {
   targetCount: number;
   allowedUseCases: Set<LiveProductUseCase>;
   excludedProductIds: Set<string>;
+  lockedProductId: string | null;
   usesDefaultSelection: boolean;
 };
 
@@ -283,10 +291,13 @@ function readRunSettings(): RunSettings {
   const allowedUseCases = new Set<LiveProductUseCase>(allowedValues);
   if (allowedUseCases.size === 0) throw new Error("LIVE_PRODUCT_VIDEO_ALLOWED_USE_CASES_INVALID");
   const excludedProductIds = new Set(readJsonStringArray(process.env.LIVE_PRODUCT_VIDEO_EXCLUDED_PRODUCT_IDS, "LIVE_PRODUCT_VIDEO_EXCLUDED_PRODUCT_IDS_INVALID"));
+  const lockedProductId = process.env.LIVE_PRODUCT_VIDEO_LOCKED_PRODUCT_ID?.trim() || null;
+  if (lockedProductId && (targetCount !== 1 || !/^coupang:product:\d+:item:\d+:vendor:\d+$/u.test(lockedProductId))) throw new Error("LIVE_LOCKED_PRODUCT_ID_INVALID");
   return {
     targetCount,
     allowedUseCases,
     excludedProductIds,
+    lockedProductId,
     usesDefaultSelection: targetCount === DEFAULT_MAX_FINAL_PRODUCTS
       && excludedProductIds.size === 0
       && allowedUseCases.size === 3
