@@ -42,7 +42,10 @@ export const studioLedgerSchema = z.strictObject({
 export const studioCandidateSchema = z.strictObject({
   snapshotId: z.string().min(1), slotId: z.string().regex(/^\d{4}-\d{2}-\d{2}\|(?:0\d|1\d|2[01]):[0-5]\d$/u),
   sourceRevision: z.string().min(1), productId: z.string().regex(/^coupang:product:\d+:item:\d+:vendor:\d+$/u), productName: z.string().min(1),
-  channelKey, eligible: z.boolean(), eligibilityCheckedAt: iso, safeBlockers: z.array(z.string()).max(20)
+  channelKey, eligible: z.boolean(), eligibilityCheckedAt: iso, safeBlockers: z.array(z.string()).max(20),
+  imageUrl: z.url().max(2048).nullable().optional(), priceText: z.string().max(80).nullable().optional(),
+  useCase: z.enum(["vehicle_organization", "laundry_drying"]).optional(),
+  selectionRank: z.number().int().positive().optional()
 });
 
 export const studioPlanSchema = z.strictObject({

@@ -6,6 +6,7 @@ import { readConfiguredSimpleProducerConfig } from "../../src/lib/simple-produce
 import { FileSimpleProducerStore } from "../../src/lib/simple-producer/state";
 import { studioCommandSchema } from "../../src/lib/commerce-studio/bridge/contracts";
 import { signStudioHostRequest } from "../../src/lib/commerce-studio/bridge/hostAuth";
+import { studioPreviewProtectionHeaders } from "../../src/lib/commerce-studio/bridge/previewProtection";
 import { applyStudioHostCommand } from "../../src/lib/commerce-studio/plans/apply";
 import type { YouTubePublicPublisherState } from "../../src/lib/youtube-public-publisher/publisher";
 
@@ -33,12 +34,18 @@ async function main() {
   const producerStore = new FileSimpleProducerStore(resolve(configured.config.evidenceRoot, "simple-producer-state.json"));
   // No Task settings adapter is wired. Settings requests fail closed; no partial config write.
   const receipt = await applyStudioHostCommand({ command, producerStore, ownerId, hostId, environmentId,
-    now: new Date(), usedProductIds });
+    now: new Date(), generationSlots: configured.config.generationSlots, usedProductIds });
   if (receipt.status === "pending") throw new Error("STUDIO_HOST_COMMAND_RECONCILE_PENDING");
   const ackPath = `/api/studio-host/commands/${command.commandId}/ack`;
-  await signedFetch({ origin, pathname: ackPath, method: "POST", secret, hostId,
+  const ackResponse = await signedFetch({ origin, pathname: ackPath, method: "POST", secret, hostId,
     body: JSON.stringify({ status: receipt.status, receipt: receipt.safeError || "STUDIO_HOST_APPLIED",
       appliedRevision: receipt.appliedVersion }) });
+  const ack = await ackResponse.json() as { command?: { command?: { commandId?: string }; status?: string;
+    appliedRevision?: number | null; receipt?: string } };
+  if (ack.command?.command?.commandId !== command.commandId || ack.command.status !== receipt.status ||
+      ack.command.appliedRevision !== receipt.appliedVersion ||
+      ack.command.receipt !== (receipt.safeError || "STUDIO_HOST_APPLIED"))
+    throw new Error("STUDIO_HOST_COMMAND_ACK_MISMATCH");
   console.log(JSON.stringify({ event: "studio_command", commandId: command.commandId,
     result: receipt.status, safeError: receipt.safeError || null }));
 }
@@ -48,10 +55,13 @@ async function signedFetch(input: { origin: string; pathname: string; method: "G
   const body = input.body || "";
   const signed = signStudioHostRequest({ secret: input.secret, hostId: input.hostId, method: input.method,
     pathname: input.pathname, body, timestamp: new Date().toISOString(), nonce: randomUUID() });
+  const protectionHeaders = studioPreviewProtectionHeaders({ endpoint: input.origin,
+    allowedOrigin: process.env.STUDIO_VERCEL_AUTOMATION_BYPASS_ORIGIN,
+    bypassSecret: process.env.STUDIO_VERCEL_AUTOMATION_BYPASS_SECRET });
   const response = await fetch(`${input.origin}${input.pathname}`, { method: input.method, redirect: "manual",
     signal: AbortSignal.timeout(20_000), headers: { "Content-Type": "application/json",
       "x-studio-host-id": signed.hostId, "x-studio-timestamp": signed.timestamp,
-      "x-studio-nonce": signed.nonce, "x-studio-signature": signed.signature },
+      "x-studio-nonce": signed.nonce, "x-studio-signature": signed.signature, ...protectionHeaders },
     body: input.method === "POST" ? body : undefined });
   if (!response.ok || !response.headers.get("content-type")?.includes("application/json"))
     throw new Error("STUDIO_HOST_COMMAND_TRANSPORT_FAILED");

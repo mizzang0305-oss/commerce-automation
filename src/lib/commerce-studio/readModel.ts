@@ -89,8 +89,11 @@ export async function readCommerceStudioModel(now = new Date()): Promise<StudioM
   return {
     observedAt: now.toISOString(),
     queriedAt: now.toISOString(),
+    snapshotCursor: null,
     producerObservedAt: latestIso(records.map((record) => record.updatedAt)),
     publisherObservedAt: latestIso([...(publisherReady ? publisherState!.jobs.map((job) => job.updatedAt || job.createdAt) : []), ...(publisherReady ? publisherState!.ledger.map((entry) => entry.recordedAt) : [])]),
+    candidateObservedAt: latestIso((producerReady ? producerState!.studioCandidates ?? [] : []).map((candidate) => candidate.eligibilityCheckedAt)),
+    candidateSourceStale: true,
     receivedAt: null,
     timeZone: "Asia/Seoul",
     calendarDates: dates,

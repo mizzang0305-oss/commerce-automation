@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3,
   ExternalLink, Film, LayoutDashboard, Link2, LogOut, PackageSearch, Settings2, ShieldCheck,
   Sparkles, Sun, Moon, TriangleAlert, WifiOff
 } from "lucide-react";
 import type { StudioModel, StudioSlot } from "@/lib/commerce-studio/model";
+import { useStudioSnapshot } from "./useStudioSnapshot";
 import "./studio.css";
 
 type Section = "overview" | "calendar" | "content" | "products" | "settings" | "connections";
@@ -28,7 +29,8 @@ const TITLES: Record<Section, string> = {
 
 function href(section: Section) { return section === "overview" ? "/studio" : `/studio/${section}`; }
 
-export function StudioApp({ section, model, authSetupRequired = false }: { section: Section; model: StudioModel; authSetupRequired?: boolean }) {
+export function StudioApp({ section, model: initialModel, authSetupRequired = false }: { section: Section; model: StudioModel; authSetupRequired?: boolean }) {
+  const { model, authExpired, syncDelayed } = useStudioSnapshot(initialModel, !authSetupRequired);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "light");
   const changeTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -55,6 +57,8 @@ export function StudioApp({ section, model, authSetupRequired = false }: { secti
         <main className="studio-main">
           <div className="studio-page-intro"><div><div className="studio-eyebrow"><span className="studio-eyebrow-line" />콘텐츠 운영</div><h1>{TITLES[section]}</h1><p>실행 기록은 확인된 원천만 표시합니다. 연결되지 않은 값은 비워 둡니다.</p></div><div className="studio-sync"><span className={model.producerSource === "connected" && model.publisherSource === "connected" && !model.sourceStale ? "studio-sync-dot ok" : "studio-sync-dot"} />{model.sourceStale ? "최근 호스트 동기화 지연" : model.producerSource === "connected" && model.publisherSource === "connected" ? "원천 상태 확인" : "실행 상태 연결 대기"}<small>조회 {formatTimestamp(model.queriedAt)}{model.producerObservedAt && <> · 관측 {formatTimestamp(model.producerObservedAt)}</>}{model.receivedAt && <> · 수신 {formatTimestamp(model.receivedAt)}</>}</small></div></div>
           {authSetupRequired && <div className="studio-notice studio-notice-amber" role="status"><ShieldCheck size={19} /><div><strong>소유자 로그인 설정 대기</strong><span>이 화면은 데이터 없는 디자인 검토용입니다. 앱 로그인 설정 전에는 운영 파일을 읽거나 변경할 수 없습니다.</span></div></div>}
+          {authExpired && <div className="studio-notice studio-notice-amber" role="alert"><ShieldCheck size={19} /><div><strong>로그인이 만료되었습니다</strong><span>운영 데이터 표시를 중지했습니다. 다시 로그인해 주세요.</span></div></div>}
+          {syncDelayed && !authExpired && <div className="studio-notice" role="status"><WifiOff size={19} /><div><strong>화면 동기화 재시도 중</strong><span>마지막 확인된 기록을 유지합니다. 원천 관측 시각을 확인해 주세요.</span></div></div>}
           {!authSetupRequired && (model.producerSource !== "connected" || model.publisherSource !== "connected") && <div className="studio-notice" role="status"><WifiOff size={19} /><div><strong>운영 데이터 일부가 연결되지 않았습니다</strong><span>서버가 운영 PC의 실행 파일에 직접 접근할 수 없습니다. 실제 수치를 추정하거나 예시 데이터를 운영 결과로 표시하지 않습니다.</span></div></div>}
           {model.sourceStale && <div className="studio-notice" role="status"><Clock3 size={19} /><div><strong>운영 PC의 최근 동기화가 지연되었습니다</strong><span>아래 값은 마지막 정상 snapshot입니다. 화면 새로고침 시각을 원천 관측 시각으로 오해하지 마세요.</span></div></div>}
           {section === "overview" && <Overview model={model} today={today} produced={produced} published={published} ready={ready} failures={failures} />}
@@ -114,7 +118,7 @@ function Products({ model, today }: { model: StudioModel; today: string }) {
       const slotId = `${slot.date}|${slot.time}`;
       const candidates = model.candidates.filter((candidate) => candidate.slotId === slotId);
       return <div key={slotId} className="studio-product-plan"><div className="studio-slot-row"><div className="studio-slot-icon"><PackageSearch size={19} /></div><div className="studio-row-main"><strong>{formatDate(slot.date)} · {slot.time}</strong><span>{slot.productName ?? "상품 미선정"} · {slot.planStatus === "selected" ? "호스트 선택 기록" : "실행 전"}</span></div></div>
-        {candidates.length ? <div className="studio-candidate-list">{candidates.map((candidate) => <div className="studio-candidate" key={`${slotId}-${candidate.snapshotId}`}><div><strong>{candidate.productName}</strong><small>{channelLabel(candidate.channelKey)} · {candidate.eligible && !candidate.safeBlockers.length ? "선택 가능" : "선택 불가"}</small></div><button type="button" className="studio-outline-button" disabled={!model.commandsAvailable || command.busy || !candidate.eligible || candidate.safeBlockers.length > 0} onClick={() => command.submit({ type: "SELECT_PRODUCT", targetId: slotId, expectedVersion: slot.planVersion ?? 0, payload: { candidateSnapshotId: candidate.snapshotId, productId: candidate.productId } })}>이 상품 선택</button></div>)}</div> : <p className="studio-inline-note">이 시간의 검증된 실제 후보가 아직 없습니다.</p>}</div>;
+        {candidates.length ? <div className="studio-candidate-list">{candidates.map((candidate) => <div className="studio-candidate" key={`${slotId}-${candidate.snapshotId}`}><div><strong>{candidate.productName}</strong><small>{channelLabel(candidate.channelKey)} · {candidate.priceText ? `원천 가격 ${candidate.priceText} · ` : "가격 미확인 · "}{model.candidateSourceStale ? "후보 확인 시각 만료" : candidate.eligible && !candidate.safeBlockers.length ? "선택 가능" : `선택 불가${candidate.safeBlockers.length ? `: ${candidate.safeBlockers.join(", ")}` : ""}`}</small><small>상품 ID · {candidate.productId}</small></div><button type="button" className="studio-outline-button" disabled={!model.commandsAvailable || model.candidateSourceStale || command.busy || !candidate.eligible || candidate.safeBlockers.length > 0} onClick={() => command.submit({ type: "SELECT_PRODUCT", targetId: slotId, expectedVersion: slot.planVersion ?? 0, payload: { candidateSnapshotId: candidate.snapshotId, productId: candidate.productId } })}>이 상품 선택</button></div>)}</div> : <p className="studio-inline-note">이 시간의 검증된 실제 후보가 아직 없습니다.</p>}</div>;
     })}</div> : <EmptyState title="확인 가능한 예정 시간이 없습니다" message="호스트 연결 후 아직 시작하지 않은 일정만 표시합니다." />}</div></>;
 }
 
@@ -132,12 +136,17 @@ function Settings({ model }: { model: StudioModel }) {
 function useStudioCommand() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const pendingRequest = useRef<{ key: string; body: string } | null>(null);
   async function submit(input: Record<string, unknown>) {
     if (busy) return;
     setBusy(true);
     setMessage("운영 PC의 수신을 기다리는 중입니다.");
     try {
-      const response = await fetch("/api/studio/commands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+      const body = JSON.stringify(input);
+      if (!pendingRequest.current || pendingRequest.current.body !== body)
+        pendingRequest.current = { key: crypto.randomUUID(), body };
+      const response = await fetch("/api/studio/commands", { method: "POST", headers: {
+        "Content-Type": "application/json", "x-studio-idempotency-key": pendingRequest.current.key }, body });
       const result = await response.json();
       if (!response.ok || !result.commandId) throw new Error(result.safeError || "STUDIO_COMMAND_SUBMIT_FAILED");
       for (let index = 0; index < 15; index++) {
@@ -145,8 +154,8 @@ function useStudioCommand() {
         const statusResponse = await fetch(`/api/studio/commands?id=${encodeURIComponent(result.commandId)}`, { cache: "no-store" });
         if (!statusResponse.ok) throw new Error("STUDIO_COMMAND_STATUS_UNAVAILABLE");
         const status = (await statusResponse.json()).command;
-        if (status?.status === "applied") { setMessage("운영 PC가 적용을 확인했습니다. 화면을 새로고침해 최신 상태를 확인하세요."); return; }
-        if (status?.status === "rejected") { setMessage(`운영 PC가 변경을 거부했습니다: ${status.receipt || "사유 확인 필요"}`); return; }
+        if (status?.status === "applied") { pendingRequest.current = null; setMessage("운영 PC가 적용을 확인했습니다. 화면 동기화를 기다리는 중입니다."); return; }
+        if (status?.status === "rejected") { pendingRequest.current = null; setMessage(`운영 PC가 변경을 거부했습니다: ${status.receipt || "사유 확인 필요"}`); return; }
       }
       setMessage("호스트 확인이 지연되고 있습니다. 적용 여부는 아직 미확인입니다.");
     } catch (error) { setMessage(error instanceof Error ? `명령을 적용할 수 없습니다: ${error.message}` : "명령 상태를 확인할 수 없습니다."); }

@@ -11,6 +11,7 @@ export type SimpleProducerConfig = {
   generationSlots: string[];
   timeZone: "Asia/Seoul";
   evidenceRoot: string;
+  studioSettingsRevision?: number;
 };
 
 export type SimpleProducerSlotStatus = "running" | "succeeded" | "failed";
@@ -32,6 +33,7 @@ export type SimpleProducerState = {
   studioSettingsRevision?: number;
   studioPlans?: StudioPlan[];
   studioCandidates?: StudioCandidate[];
+  studioCandidatesScoutedAt?: string;
   studioCommandReceipts?: Array<{ commandId: string; status: "applied" | "rejected" | "pending"; safeError: string; appliedVersion: number | null }>;
 };
 
@@ -66,6 +68,7 @@ export type SimpleProducerRunStatus =
   | "daily_target_reached"
   | "slot_already_recorded"
   | "plan_held"
+  | "settings_reconcile_required"
   | "ready_job_created"
   | "failed";
 

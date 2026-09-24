@@ -60,9 +60,10 @@ export class InMemoryStudioBridge {
     });
   }
 
-  pendingForHost(hostId: string, now = new Date()) {
+  pendingForHost(hostId: string, _now = new Date()) {
     if (hostId !== this.host.hostId) throw new Error("STUDIO_HOST_FORBIDDEN");
-    return [...this.commands.values()].filter((entry) => entry.status === "pending" && new Date(entry.command.expiresAt) > now)
+    void _now;
+    return [...this.commands.values()].filter((entry) => entry.status === "pending")
       .map((entry) => structuredClone(entry));
   }
 

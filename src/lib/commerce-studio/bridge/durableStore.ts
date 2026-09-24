@@ -4,15 +4,20 @@ import { snapshotEnvelopeSchema, snapshotPayloadSchema, studioCommandSchema, typ
 
 export type StudioHostBinding = { environmentId: string; ownerId: string; hostId: string };
 export type StudioStoredCommand = { command: StudioCommand; status: "pending" | "applied" | "rejected"; receipt: string | null; appliedRevision: number | null };
+type SourceKey = "producer" | "publisher" | "plans" | "candidates";
+type SourceObservedAt = Record<SourceKey, string | null>;
 export type StudioDocument = {
-  snapshot: { envelope: StudioSnapshot; payload: StudioSnapshotPayload; receivedAt: string } | null;
+  snapshot: { envelope: StudioSnapshot; payload: StudioSnapshotPayload; receivedAt: string; sourceObservedAt?: SourceObservedAt } | null;
   eventHashes: Record<string, string>;
   nonces: Record<string, number>;
   commands: Record<string, StudioStoredCommand>;
 };
 const documentSchema = z.strictObject({
   snapshot: z.strictObject({ envelope: snapshotEnvelopeSchema, payload: snapshotPayloadSchema,
-    receivedAt: z.iso.datetime({ offset: true }) }).nullable(),
+    receivedAt: z.iso.datetime({ offset: true }), sourceObservedAt: z.strictObject({
+      producer: z.iso.datetime({ offset: true }).nullable(), publisher: z.iso.datetime({ offset: true }).nullable(),
+      plans: z.iso.datetime({ offset: true }).nullable(), candidates: z.iso.datetime({ offset: true }).nullable()
+    }).optional() }).nullable(),
   eventHashes: z.record(z.string(), z.string().regex(/^[0-9a-f]{64}$/u)),
   nonces: z.record(z.string(), z.number().int().nonnegative()),
   commands: z.record(z.string(), z.strictObject({ command: studioCommandSchema,
@@ -54,7 +59,18 @@ export class DurableStudioBridge {
         plans: envelope.completeness.plans ? envelope.payload.plans : previous?.plans ?? null,
         candidates: envelope.completeness.candidates ? envelope.payload.candidates : previous?.candidates ?? null
       };
-      document.snapshot = { envelope, payload, receivedAt };
+      const sourceObservedAt = ({} as SourceObservedAt);
+      for (const key of ["producer", "publisher", "plans", "candidates"] as const) {
+        sourceObservedAt[key] = envelope.completeness[key] ?
+          (key === "candidates" && envelope.payload.candidates?.length
+            ? envelope.payload.candidates.reduce((oldest, candidate) =>
+                candidate.eligibilityCheckedAt < oldest ? candidate.eligibilityCheckedAt : oldest,
+              envelope.payload.candidates[0].eligibilityCheckedAt)
+            : envelope.observedAt) :
+          document.snapshot?.sourceObservedAt?.[key] ??
+          (document.snapshot?.envelope.completeness[key] ? document.snapshot.envelope.observedAt : null);
+      }
+      document.snapshot = { envelope, payload, receivedAt, sourceObservedAt };
       document.eventHashes[envelope.eventId] = hash;
       // Old events cannot be replayed after eviction: their sequence is stale.
       const ids = Object.keys(document.eventHashes);
@@ -81,7 +97,7 @@ export class DurableStudioBridge {
     return this.change((document) => {
       const existing = document.commands[command.commandId];
       if (existing) {
-        if (JSON.stringify(existing.command) !== JSON.stringify(command)) throw new Error("STUDIO_COMMAND_ID_COLLISION");
+        if (!sameCommandIntent(existing.command, command)) throw new Error("STUDIO_COMMAND_ID_COLLISION");
         return { changed: false, result: existing };
       }
       if (Object.keys(document.commands).length >= 200) throw new Error("STUDIO_COMMAND_RETENTION_LIMIT_REACHED");
@@ -91,10 +107,13 @@ export class DurableStudioBridge {
     });
   }
 
-  async pendingForHost(hostId: string, now = new Date()) {
+  async pendingForHost(hostId: string, _now = new Date()) {
     this.assertHost(hostId);
+    void _now;
     const document = (await this.store.read(this.binding))?.document;
-    return Object.values(document?.commands ?? {}).filter((entry) => entry.status === "pending" && new Date(entry.command.expiresAt) > now);
+    // An expired command may already have been applied locally before its ACK was lost.
+    // The host returns its durable terminal receipt; a never-applied command is rejected by applyStudioHostCommand.
+    return Object.values(document?.commands ?? {}).filter((entry) => entry.status === "pending");
   }
 
   async acknowledge(hostId: string, commandId: string, input: { status: "applied" | "rejected"; receipt: string; appliedRevision: number | null }) {
@@ -132,4 +151,11 @@ export class DurableStudioBridge {
     }
     throw new Error("STUDIO_CONCURRENT_WRITE_RETRY_EXHAUSTED");
   }
+}
+
+function sameCommandIntent(left: StudioCommand, right: StudioCommand): boolean {
+  return left.type === right.type && left.environmentId === right.environmentId &&
+    left.ownerId === right.ownerId && left.hostId === right.hostId &&
+    left.targetId === right.targetId && left.expectedVersion === right.expectedVersion &&
+    JSON.stringify(left.payload) === JSON.stringify(right.payload);
 }

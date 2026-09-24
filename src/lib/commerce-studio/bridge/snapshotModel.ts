@@ -1,8 +1,10 @@
 import type { StudioModel, StudioSlot, StudioContent } from "@/lib/commerce-studio/model";
 import { emptyStudioModel } from "@/lib/commerce-studio/model";
 import type { StudioSnapshot, StudioSnapshotPayload } from "./contracts";
+import { STUDIO_CANDIDATE_MAX_AGE_MS } from "@/lib/commerce-studio/candidates/policy";
 
-type Stored = { envelope: StudioSnapshot; payload: StudioSnapshotPayload; receivedAt: string };
+type Stored = { envelope: StudioSnapshot; payload: StudioSnapshotPayload; receivedAt: string;
+  sourceObservedAt?: Record<"producer" | "publisher" | "plans" | "candidates", string | null> };
 const CHANNELS = [
   { key: "neoman_moleulgeol" as const, title: "너만모를껄?", expectedChannelId: "UCOdvPLaFnvzAI-_VyIXTdOw" },
   { key: "father_jobs" as const, title: "father jobs", expectedChannelId: "UC38rroV6ZRTIzqKgWr5vWrw" }
@@ -69,10 +71,19 @@ export function studioModelFromSnapshot(stored: Stored | null, now = new Date(),
   }
   contents.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const stale = now.getTime() - Date.parse(envelope.observedAt) > 180_000 || now.getTime() - Date.parse(receivedAt) > 180_000;
+  const sourceTime = (key: "producer" | "publisher" | "plans" | "candidates") =>
+    stored.sourceObservedAt?.[key] ?? (envelope.completeness[key] ? envelope.observedAt : null);
+  const candidateObservedAt = sourceTime("candidates");
   return {
     ...model, observedAt: envelope.observedAt, queriedAt: now.toISOString(),
-    producerObservedAt: producer ? envelope.observedAt : null,
-    publisherObservedAt: publisher ? envelope.observedAt : null,
+    snapshotCursor: { sourceSequence: envelope.sourceSequence, sourceRevision: envelope.sourceRevision,
+      eventId: envelope.eventId, environmentId: envelope.environmentId, hostId: envelope.hostId },
+    producerObservedAt: producer ? sourceTime("producer") : null,
+    publisherObservedAt: publisher ? sourceTime("publisher") : null,
+    candidateObservedAt,
+    candidateSourceStale: candidateObservedAt === null || !Number.isFinite(Date.parse(candidateObservedAt)) ||
+      Date.parse(candidateObservedAt) > now.getTime() ||
+      now.getTime() - Date.parse(candidateObservedAt) >= STUDIO_CANDIDATE_MAX_AGE_MS,
     receivedAt, sourceStale: stale, commandsAvailable: commandsAvailable && !stale,
     producerSource: producer ? "connected" : "unavailable",
     publisherSource: publisher ? "connected" : "unavailable",
@@ -84,7 +95,9 @@ export function studioModelFromSnapshot(stored: Stored | null, now = new Date(),
     calendarDates: dates, slots, contents,
     candidates: (payload.candidates ?? []).map((candidate) => ({ snapshotId: candidate.snapshotId,
       slotId: candidate.slotId, productId: candidate.productId, productName: candidate.productName,
-      channelKey: candidate.channelKey, eligible: candidate.eligible, safeBlockers: candidate.safeBlockers })),
+      channelKey: candidate.channelKey, eligible: candidate.eligible, safeBlockers: candidate.safeBlockers,
+      imageUrl: candidate.imageUrl, priceText: candidate.priceText, useCase: candidate.useCase,
+      selectionRank: candidate.selectionRank })),
     youtubeChannels: CHANNELS.map((channel) => ({ ...channel, credentialConfigured: false,
       historicalPublicationObserved: Boolean(publisher?.ledger.some((entry) => entry.channelKey === channel.key &&
         entry.channelId === channel.expectedChannelId && entry.visibility === "public")) }))

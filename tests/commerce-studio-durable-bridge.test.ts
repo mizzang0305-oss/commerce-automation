@@ -63,6 +63,28 @@ describe("durable Studio bridge isolated CAS store", () => {
     expect(await restarted.pendingForHost(binding.hostId, new Date("2026-09-23T00:02:00.000Z"))).toHaveLength(0);
   });
 
+  it("reuses a lost-202 command ID but rejects another payload with that ID", async () => {
+    const bridge = new DurableStudioBridge(fixtureStore(), binding);
+    const command = { commandId: randomUUID(), ...binding, type: "HOLD_PLAN", targetId: "2026-09-24|09:00",
+      expectedVersion: 0, requestedAt: "2026-09-23T00:00:00.000Z", expiresAt: "2026-09-23T00:05:00.000Z", payload: {} };
+    const now = new Date("2026-09-23T00:01:00.000Z");
+    const first = await bridge.enqueue(command, binding.ownerId, now);
+    const repeated = await bridge.enqueue({ ...command, requestedAt: "2026-09-23T00:01:00.000Z",
+      expiresAt: "2026-09-23T00:06:00.000Z" }, binding.ownerId, now);
+    expect(repeated).toEqual(first);
+    expect(await bridge.pendingForHost(binding.hostId, now)).toHaveLength(1);
+    await expect(bridge.enqueue({ ...command, targetId: "2026-09-24|15:00" }, binding.ownerId, now))
+      .rejects.toThrow("STUDIO_COMMAND_ID_COLLISION");
+  });
+
+  it("redelivers a still-pending command after TTL for terminal receipt recovery", async () => {
+    const bridge = new DurableStudioBridge(fixtureStore(), binding);
+    const command = { commandId: randomUUID(), ...binding, type: "HOLD_PLAN", targetId: "2026-09-24|09:00",
+      expectedVersion: 0, requestedAt: "2026-09-23T00:00:00.000Z", expiresAt: "2026-09-23T00:05:00.000Z", payload: {} };
+    await bridge.enqueue(command, binding.ownerId, new Date("2026-09-23T00:01:00.000Z"));
+    expect(await bridge.pendingForHost(binding.hostId, new Date("2026-09-23T01:00:00.000Z"))).toHaveLength(1);
+  });
+
   it("keeps historical 09:00 execution after schedule moves to 10:00 and marks stale source", async () => {
     const bridge = new DurableStudioBridge(fixtureStore(), binding);
     const base = snapshot(1);
@@ -80,5 +102,18 @@ describe("durable Studio bridge isolated CAS store", () => {
     expect(model.slots.some((slot) => slot.date === "2026-09-23" && slot.time === "10:00")).toBe(true);
     expect(model.sourceStale).toBe(true);
     expect(model.commandsAvailable).toBe(false);
+  });
+
+  it("does not refresh a carried publisher section's observation time", async () => {
+    const bridge = new DurableStudioBridge(fixtureStore(), binding);
+    await bridge.ingest(snapshot(1), "2026-09-23T00:00:00.000Z");
+    const later = { ...snapshot(2), observedAt: "2026-09-23T00:05:00.000Z",
+      completeness: { producer: false, publisher: false, plans: false, candidates: false },
+      payload: { producer: null, publisher: null, plans: null, candidates: null } };
+    await bridge.ingest(later, "2026-09-23T00:05:00.000Z");
+    const stored = await bridge.read(binding.ownerId);
+    const model = studioModelFromSnapshot(stored, new Date("2026-09-23T00:05:00.000Z"));
+    expect(model.publisherSource).toBe("connected");
+    expect(model.publisherObservedAt).toBe("2026-09-23T00:00:00.000Z");
   });
 });

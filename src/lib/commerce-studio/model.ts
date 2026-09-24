@@ -29,8 +29,11 @@ export type StudioContent = {
 export type StudioModel = {
   observedAt: string;
   queriedAt: string;
+  snapshotCursor: { sourceSequence: number; sourceRevision: string; eventId: string; environmentId: string; hostId: string } | null;
   producerObservedAt: string | null;
   publisherObservedAt: string | null;
+  candidateObservedAt: string | null;
+  candidateSourceStale: boolean;
   receivedAt: string | null;
   sourceStale?: boolean;
   commandsAvailable?: boolean;
@@ -49,7 +52,8 @@ export type StudioModel = {
   } | null;
   slots: StudioSlot[];
   contents: StudioContent[];
-  candidates: Array<{ snapshotId: string; slotId: string; productId: string; productName: string; channelKey: "neoman_moleulgeol" | "father_jobs"; eligible: boolean; safeBlockers: string[] }>;
+  candidates: Array<{ snapshotId: string; slotId: string; productId: string; productName: string; channelKey: "neoman_moleulgeol" | "father_jobs"; eligible: boolean; safeBlockers: string[];
+    imageUrl?: string | null; priceText?: string | null; useCase?: "vehicle_organization" | "laundry_drying"; selectionRank?: number }>;
   youtubeChannels: {
     key: "neoman_moleulgeol" | "father_jobs";
     title: string;
@@ -61,7 +65,7 @@ export type StudioModel = {
 
 export function emptyStudioModel(now = new Date()): StudioModel {
   return {
-    observedAt: now.toISOString(), queriedAt: now.toISOString(), producerObservedAt: null, publisherObservedAt: null, receivedAt: null, sourceStale: false, commandsAvailable: false, timeZone: "Asia/Seoul", calendarDates: [],
+    observedAt: now.toISOString(), queriedAt: now.toISOString(), snapshotCursor: null, producerObservedAt: null, publisherObservedAt: null, candidateObservedAt: null, candidateSourceStale: true, receivedAt: null, sourceStale: false, commandsAvailable: false, timeZone: "Asia/Seoul", calendarDates: [],
     producerSource: "unavailable", publisherSource: "unavailable",
     producerSafeError: "OWNER_AUTH_NOT_CONFIGURED", publisherSafeError: "OWNER_AUTH_NOT_CONFIGURED",
     settings: null, slots: [], contents: [], candidates: [], youtubeChannels: []

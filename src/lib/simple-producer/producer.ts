@@ -31,6 +31,7 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
   if (!input.config.generationSlots.includes(time.slot)) return noOp("outside_slot", "SIMPLE_PRODUCER_OUTSIDE_GENERATION_SLOT", time.date, null);
 
   const claim = await claimSlot(input.producerStore, input.config, time);
+  if (claim.kind === "settings_reconcile_required") return noOp("settings_reconcile_required", "SIMPLE_PRODUCER_SETTINGS_RECONCILE_REQUIRED", time.date, time.slot);
   if (claim.kind === "existing") return noOp("slot_already_recorded", "SIMPLE_PRODUCER_SLOT_ALREADY_RECORDED", time.date, time.slot);
   if (claim.kind === "daily_target_reached") return noOp("daily_target_reached", "SIMPLE_PRODUCER_DAILY_TARGET_REACHED", time.date, time.slot);
   if (claim.kind === "held") return noOp("plan_held", "SIMPLE_PRODUCER_PLAN_HELD", time.date, time.slot);
@@ -156,6 +157,8 @@ function createReadyJob(input: {
 
 async function claimSlot(store: SimpleProducerStore, config: SimpleProducerConfig, time: KstTime) {
   return store.mutate((state) => {
+    if ((state.studioSettingsRevision ?? 0) !== (config.studioSettingsRevision ?? 0))
+      return { kind: "settings_reconcile_required" } as const;
     const today = state.slots.filter((record) => record.date === time.date);
     if (today.some((record) => record.slot === time.slot)) return { kind: "existing" } as const;
     if (today.filter((record) => record.status === "succeeded").length >= config.dailyGenerateTarget) return { kind: "daily_target_reached" } as const;
@@ -230,7 +233,7 @@ function kstTime(now: Date): KstTime {
   return { date: `${value("year")}-${value("month")}-${value("day")}`, slot: `${value("hour")}:${value("minute")}`, now: now.toISOString() };
 }
 
-function noOp(status: Extract<SimpleProducerRunResult["status"], "disabled" | "outside_slot" | "daily_target_reached" | "slot_already_recorded" | "plan_held">, safeError: string, date: string, slot: string | null): SimpleProducerRunResult {
+function noOp(status: Extract<SimpleProducerRunResult["status"], "disabled" | "outside_slot" | "daily_target_reached" | "slot_already_recorded" | "plan_held" | "settings_reconcile_required">, safeError: string, date: string, slot: string | null): SimpleProducerRunResult {
   return { status, safeError, date, slot, productId: null, uploadJobId: null, channelKey: null, readyJobCreated: 0, videosInsertCalls: 0, searchCalls: 0, rawProductsFound: 0, eligibleProductsFound: 0 };
 }
 
