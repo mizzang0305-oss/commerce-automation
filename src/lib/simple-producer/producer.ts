@@ -73,6 +73,9 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
   const contentReview = verifyProductVisualReview({
     receipt: pipeline.item.productVisualReview,
     productId: pipeline.item.productId,
+    canonicalProductName: pipeline.item.canonicalProductName,
+    affiliateProductId: pipeline.item.productId,
+    affiliateUrl: pipeline.item.affiliateUrl,
     videoSha256,
     publicKey: input.reviewPublicKey,
     requiredPriorVideoIds: publisherState.ledger.map((entry) => entry.youtubeVideoId)

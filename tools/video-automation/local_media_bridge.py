@@ -149,22 +149,24 @@ def prepare_reviewed_asset(request: dict[str, Any]) -> dict[str, Any]:
 def layout_plan(request: dict[str, Any]) -> dict[str, Any]:
     hook = " ".join(str(request.get("hook", "")).split())
     usage_label = " ".join(str(request.get("usage_label", USAGE_LABEL)).split())
+    product_information = usage_label == "상품 이미지 · 실사용 아님"
+    badge_box = {**USAGE_BADGE_BOX, "width": 560} if product_information else USAGE_BADGE_BOX
     blockers: list[str] = []
     if not hook or len(hook) > 24 or "..." in hook:
         blockers.append("VIDEO_LAYOUT_HOOK_CLIPPED")
     if not usage_label:
         blockers.append("VIDEO_LAYOUT_USAGE_BADGE_REQUIRED")
-    font = ImageFont.truetype(str(FONT_PATH), 38) if FONT_PATH.is_file() else ImageFont.load_default()
+    font = ImageFont.truetype(str(FONT_PATH), 34 if product_information else 38) if FONT_PATH.is_file() else ImageFont.load_default()
     text_box = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), usage_label, font=font)
-    if text_box[2] - text_box[0] > USAGE_BADGE_BOX["width"] - 48:
+    if text_box[2] - text_box[0] > badge_box["width"] - 48:
         blockers.append("VIDEO_LAYOUT_USAGE_BADGE_TOO_WIDE")
-    actual_gap = USAGE_BADGE_BOX["y"] - (HOOK_BOX["y"] + HOOK_BOX["height"])
-    collision = boxes_overlap(HOOK_BOX, USAGE_BADGE_BOX)
+    actual_gap = badge_box["y"] - (HOOK_BOX["y"] + HOOK_BOX["height"])
+    collision = boxes_overlap(HOOK_BOX, badge_box)
     if collision or actual_gap < HOOK_USAGE_MIN_GAP_PX:
         blockers.append("VIDEO_LAYOUT_HOOK_USAGE_COLLISION")
-    if USAGE_BADGE_BOX["x"] + USAGE_BADGE_BOX["width"] > VIDEO_WIDTH - 180:
+    if badge_box["x"] + badge_box["width"] > VIDEO_WIDTH - 180:
         blockers.append("VIDEO_LAYOUT_RIGHT_CONTROL_COLLISION")
-    return {"status": "success" if not blockers else "blocked", "passed": not blockers, "blockers": blockers, "hook_box": HOOK_BOX, "usage_badge_box": USAGE_BADGE_BOX, "minimum_gap_px": HOOK_USAGE_MIN_GAP_PX, "actual_gap_px": actual_gap, "collision": collision, "usage_label": usage_label}
+    return {"status": "success" if not blockers else "blocked", "passed": not blockers, "blockers": blockers, "hook_box": HOOK_BOX, "usage_badge_box": badge_box, "minimum_gap_px": HOOK_USAGE_MIN_GAP_PX, "actual_gap_px": actual_gap, "collision": collision, "usage_label": usage_label}
 
 
 def tts(request: dict[str, Any]) -> dict[str, Any]:
@@ -311,8 +313,8 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         short_text = str(short_label_path).replace("\\", "/").replace(":", "\\:")
         if product_information:
             filters.extend([
-                "drawbox=x=72:y=500:w=560:h=72:color=0x0f172a@0.88:t=fill",
-                f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=34:x=96:y=513",
+                "drawbox=x=72:y=510:w=560:h=72:color=0x0f172a@0.88:t=fill",
+                f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=34:x=96:y=523",
             ])
         elif reference_paths:
             reference_text = str(reference_label_path).replace("\\", "/").replace(":", "\\:")

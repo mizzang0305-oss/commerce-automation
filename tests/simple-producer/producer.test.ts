@@ -89,6 +89,21 @@ describe("simple producer run-once", () => {
     expect((await publisherStore.read()).jobs).toHaveLength(0);
   });
 
+  test("does not create READY when the file changed after independent review", async () => {
+    const videoPath = await createVideo();
+    await writeFile(videoPath, "changed-after-review", "utf8");
+    const producerStore = new InMemorySimpleProducerStore();
+    const publisherStore = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
+    const result = await runSimpleProducerOnce({
+      config, producerStore, publisherStore,
+      now: new Date("2026-09-23T00:00:00.000Z"),
+      reviewPublicKey: TEST_REVIEW_PUBLIC_KEY,
+      executePipeline: async () => passedPipeline(videoPath)
+    });
+    expect(result).toMatchObject({ status: "failed", safeError: "PRODUCT_CONTENT_REVIEW_CONTRACT_INVALID", readyJobCreated: 0 });
+    expect((await publisherStore.read()).jobs).toHaveLength(0);
+  });
+
   test("does not run outside a configured slot or backfill after 21:00", async () => {
     const producerStore = new InMemorySimpleProducerStore();
     const publisherStore = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
@@ -140,7 +155,7 @@ function passedPipeline(videoPath: string, productId = PRODUCT_ID, reviewedPrior
     searchCalls: 3,
     rawProductsFound: 10,
     eligibleProductsFound: 4,
-    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true, productVisualReview: signedTestReview(productId, createHash("sha256").update("test-video").digest("hex"), reviewedPriorVideoIds) }
+    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true, productVisualReview: signedTestReview(productId, createHash("sha256").update("test-video").digest("hex"), reviewedPriorVideoIds, "검증 빨래 건조대") }
   };
 }
 

@@ -11,8 +11,8 @@ This change is a fail-closed source candidate. It is not adopted by the operatin
 
 ## Publishing contract
 
-- Machine QA alone never creates a READY job. A signed `product-visual-review/v1` receipt must bind the exact product ID and current video SHA-256, asset/audio/narration hashes, rights evidence, completed product/audio/cross-video review, reviewer/evidence identity, and all prior published video IDs.
-- The receipt is verified with an Ed25519 public key in `PRODUCT_CONTENT_REVIEW_PUBLIC_KEY` both before producer READY and again immediately before publisher token acquisition and `videos.insert`. The private signing key must remain outside producer, publisher, Git, and their environment. No signer or operating public key is provisioned by this PR.
+- Machine QA alone never creates a READY job. A signed `product-visual-review/v1` receipt must bind the exact product ID and canonical name, affiliate product ID and URL hash, current video SHA-256, input image/audio/narration/script hashes, a verified rights-evidence ID, a distinct-from-prior-publications result covering all prior video IDs, and reviewer ID/version/time/evidence. A nonempty ID is not itself proof of rights; only an independent trusted reviewer may sign after inspecting the underlying evidence.
+- The receipt is verified with an Ed25519 public key in `PRODUCT_CONTENT_REVIEW_PUBLIC_KEY` before producer READY, after publisher claim, and again after channel identity/readiness immediately before `videos.insert`. The private signing key must remain outside producer, publisher, Git, and their environment. No signer or operating public key is provisioned by this PR.
 - A changed file, wrong product, missing/forged/stale receipt, or unconfigured verifier fails closed. The uploader also rehashes bytes immediately before creating a YouTube upload session.
 - Duplicate admission now blocks either a previously used product ID or identical whole-file bytes across channels. The signed cross-video review must cover the current full ledger because whole-file hashes do not detect a reused body with a different intro.
 

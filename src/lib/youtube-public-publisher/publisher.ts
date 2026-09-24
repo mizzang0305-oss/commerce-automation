@@ -243,6 +243,14 @@ export async function runYouTubePublicPublisherOnce(input: RunOnceInput): Promis
     return { status: "manual_review", jobId: job.id, safeError: attempt.safeError, videosInsertCalls: 0, canariesImported };
   }
 
+  // Token/channel probes can take time. Re-bind the current bytes and signed
+  // review immediately before opening the upload path, not only after claim.
+  const preInsertValidation = await validateJob(job, input.getVideoSha256, (input.env ?? process.env).PRODUCT_CONTENT_REVIEW_PUBLIC_KEY, (await input.store.read()).ledger.map((entry) => entry.youtubeVideoId));
+  if (!preInsertValidation.ok) {
+    await moveToManualReview(input.store, job.id, input.claimOwner, preInsertValidation.safeError, now);
+    return { status: "manual_review", jobId: job.id, safeError: preInsertValidation.safeError, videosInsertCalls: 0, canariesImported };
+  }
+
   const upload = await input.client.insertPublicVideo({
     accessToken: token.accessToken,
     videoPath: job.videoPath,
@@ -354,7 +362,7 @@ async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceI
   if (!job.title || !job.description || !job.disclosureText || !job.description.includes(job.affiliateUrl) || !job.description.includes(job.disclosureText)) {
     return { ok: false as const, safeError: "METADATA_OR_DISCLOSURE_NOT_READY" };
   }
-  const contentReview = verifyProductVisualReview({ receipt: job.productVisualReview, productId: job.productId, videoSha256: actualSha256, publicKey: reviewPublicKey, requiredPriorVideoIds: priorVideoIds });
+  const contentReview = verifyProductVisualReview({ receipt: job.productVisualReview, productId: job.productId, canonicalProductName: job.canonicalProductName, affiliateProductId: job.affiliateProductId, affiliateUrl: job.affiliateUrl, videoSha256: actualSha256, publicKey: reviewPublicKey, requiredPriorVideoIds: priorVideoIds });
   if (!contentReview.ok) return { ok: false as const, safeError: contentReview.safeError };
   return { ok: true as const };
 }

@@ -21,6 +21,9 @@ export const VIDEO_LAYOUT = Object.freeze({
   HOOK_USAGE_MIN_GAP_PX: 32
 } as const);
 
+const PRODUCT_INFORMATION_LABEL = "상품 이미지 · 실사용 아님";
+const PRODUCT_INFORMATION_BADGE_BOX: LayoutBox = { x: 72, y: 510, width: 560, height: 72 };
+
 export type LayoutCollisionResult = {
   passed: boolean;
   blockers: string[];
@@ -37,16 +40,17 @@ export function boxesOverlap(left: LayoutBox, right: LayoutBox): boolean {
 
 export function evaluateHookUsageLayout(input: { hook: string; usageLabel: string; hookBox?: LayoutBox; usageBadgeBox?: LayoutBox }): LayoutCollisionResult {
   const hookBox = input.hookBox ?? VIDEO_LAYOUT.hookBox;
-  const usageBadgeBox = input.usageBadgeBox ?? VIDEO_LAYOUT.usageBadgeBox;
+  const normalizedLabel = normalizeText(input.usageLabel);
+  const productInformation = normalizedLabel === PRODUCT_INFORMATION_LABEL;
+  const usageBadgeBox = input.usageBadgeBox ?? (productInformation ? PRODUCT_INFORMATION_BADGE_BOX : VIDEO_LAYOUT.usageBadgeBox);
   const blockers: string[] = [];
   const collision = boxesOverlap(hookBox, usageBadgeBox);
   const actualGapPx = usageBadgeBox.y - (hookBox.y + hookBox.height);
   const normalizedHook = normalizeText(input.hook);
-  const normalizedLabel = normalizeText(input.usageLabel);
 
   if (!normalizedHook || normalizedHook.length > VIDEO_LAYOUT.hookMaxCharsPerLine * VIDEO_LAYOUT.hookMaxLines || normalizedHook.includes("...")) blockers.push("VIDEO_LAYOUT_HOOK_CLIPPED");
   if (!normalizedLabel) blockers.push("VIDEO_LAYOUT_USAGE_BADGE_REQUIRED");
-  if (normalizedLabel.length > VIDEO_LAYOUT.usageBadgeMaxChars) blockers.push("VIDEO_LAYOUT_USAGE_BADGE_TOO_WIDE");
+  if (normalizedLabel.length > (productInformation ? 16 : VIDEO_LAYOUT.usageBadgeMaxChars)) blockers.push("VIDEO_LAYOUT_USAGE_BADGE_TOO_WIDE");
   if (collision || actualGapPx < VIDEO_LAYOUT.HOOK_USAGE_MIN_GAP_PX) blockers.push("VIDEO_LAYOUT_HOOK_USAGE_COLLISION");
   for (const box of [hookBox, usageBadgeBox]) {
     if (box.x < 0 || box.y < VIDEO_LAYOUT.topUiExclusion || box.x + box.width > VIDEO_LAYOUT.width || box.y + box.height > VIDEO_LAYOUT.height - VIDEO_LAYOUT.bottomUiExclusion) blockers.push("VIDEO_LAYOUT_SAFE_AREA_VIOLATION");

@@ -210,6 +210,41 @@ describe("guarded run-once public publisher", () => {
     expect(result).toMatchObject({ status: "manual_review", safeError, videosInsertCalls: 0 });
   });
 
+  test("re-hashes the current file and blocks a changed video before videos.insert", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: unreachableClient(),
+      getVideoSha256: async () => "b".repeat(64),
+      env: publisherEnv(),
+      now: "2026-09-22T01:00:00.000Z",
+      claimOwner: "test-publisher"
+    });
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
+  });
+
+  test("re-hashes again after channel identity and blocks a late file change", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    let hashChecks = 0;
+    let insertCalls = 0;
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: {
+        getAccessToken: async () => ({ ok: true, accessToken: "test-access-token" }),
+        probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+        insertPublicVideo: async () => { insertCalls += 1; throw new Error("must not upload"); },
+        readbackVideo: async () => { throw new Error("must not read back"); }
+      },
+      getVideoSha256: async () => (++hashChecks === 1 ? "a" : "b").repeat(64),
+      env: publisherEnv(),
+      now: "2026-09-22T01:00:00.000Z",
+      claimOwner: "test-publisher"
+    });
+    expect(hashChecks).toBe(2);
+    expect(insertCalls).toBe(0);
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
+  });
+
   test("imports verified canaries idempotently and blocks their duplicate identity", async () => {
     const canaryJob = {
       ...readyJob(),

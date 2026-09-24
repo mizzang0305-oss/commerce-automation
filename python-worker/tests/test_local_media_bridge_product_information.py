@@ -38,6 +38,11 @@ class ProductInformationBridgeTests(unittest.TestCase):
         self.assertFalse(result["publication_ready"])
         self.assertEqual(result["source_sha256"], [hashlib.sha256(self.image.read_bytes()).hexdigest()])
 
+    def test_truthful_product_information_label_fits_actual_render_badge(self) -> None:
+        result = bridge.layout_plan({"hook": "빨래, 왜 3가지를 확인할까요?", "usage_label": "상품 이미지 · 실사용 아님"})
+        self.assertTrue(result["passed"], result["blockers"])
+        self.assertEqual(result["usage_badge_box"]["width"], 560)
+
     def test_relabeling_other_product_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "PRODUCT_SOURCE_IDENTITY_MISMATCH"):
             bridge.visual_gate_product_information({
