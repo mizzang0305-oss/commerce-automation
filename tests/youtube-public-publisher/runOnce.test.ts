@@ -210,6 +210,26 @@ describe("guarded run-once public publisher", () => {
     expect(result).toMatchObject({ status: "manual_review", safeError, videosInsertCalls: 0 });
   });
 
+  test("fails closed when video bytes change after claim and before insert", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    let hashReads = 0;
+    let inserts = 0;
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: {
+        getAccessToken: async () => ({ ok: true, accessToken: "test-access-token" }),
+        probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+        insertPublicVideo: async () => { inserts++; throw new Error("must not insert changed bytes"); },
+        readbackVideo: async () => { throw new Error("must not read back"); }
+      },
+      getVideoSha256: async () => ++hashReads === 1 ? "a".repeat(64) : "b".repeat(64),
+      env: publisherEnv(), now: "2026-09-22T01:00:00.000Z", claimOwner: "test-publisher"
+    });
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
+    expect(hashReads).toBe(2);
+    expect(inserts).toBe(0);
+  });
+
   test("re-hashes the current file and blocks a changed video before videos.insert", async () => {
     const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
     const result = await runYouTubePublicPublisherOnce({

@@ -1,0 +1,17 @@
+# Independent product visual review signing (v1)
+
+This is an offline reviewer-only workflow. It does not create a key, determine rights, call YouTube, or turn machine QA into human approval. The producer and publisher only receive the Ed25519 **public** key as `PRODUCT_CONTENT_REVIEW_PUBLIC_KEY`; neither runtime receives the private key, its path, or a signing command.
+
+1. Review the complete video **and** audio, canonical product and affiliate identity, each exact source image, applicable public promotional-video rights, and similarity against every current publication. Record explicit human decisions and independent evidence files. A source URL or Coupang search result is provenance, not a rights grant. The reviewer must reject missing/ambiguous evidence.
+2. Prepare a `product-visual-signing-manifest/v1` JSON outside the repository. Its `files` entry binds the current `video`, `audio`, `narration`, `script`, and each `sourceImages[]` path to a lowercase SHA-256. Each image also needs `productId`, `rightsStatus: "verified"`, `rightsEvidenceId`, `rightsEvidencePath`, and `policyReference`. `review` requires the same reviewer identity and dated, nonempty evidence files for `productIdentity`, `affiliateIdentity`, `fullHumanContent`, `exactSpokenName`, `rights`, and `crossVideo`; every `status` must be `passed`. `priorPublicationSources` must cover exactly the current ledger video IDs and product IDs, with source-image hashes. The signer rejects a repeated product ID or source-image hash across products; the human similarity review must additionally judge transformed body reuse.
+3. Provision an Ed25519 private key under a separate reviewer OS identity and restricted external path. Do not put it in Git, producer/publisher environment, Vercel, logs, or their readable ACL. A path outside Git alone is **not** proof of OS isolation. Keep the public key separately. Do not sign until an access test proves producer/publisher identities cannot read the private key.
+4. From an isolated review workstation, run:
+
+   ```text
+   node --import tsx scripts/video-automation/sign-product-visual-review-v1.ts --manifest <external-review-manifest.json> --current-ledger <external-current-publisher-state.json> --private-key-file <external-restricted-reviewer-key.pem> --public-key-file <external-reviewer-public-key.pem> --output <external-new-receipt.json>
+   ```
+
+   The CLI never prints key material or affiliate URLs. It refuses a key or output under the Git checkout and will not overwrite an existing receipt. It checks all current file hashes and verifies the signed receipt with the supplied public key before writing.
+5. Bind the unchanged receipt to the exact product/job. The existing producer READY and publisher pre-insert gates verify the public signature, product/name/affiliate/video hashes, current publication IDs, and current MP4 bytes. This is not permission to enable a disabled Task or upload.
+
+For the 2026-09-24 historical 7 and fresh 3 diagnostics, full human review, exact spoken-name approval and public-video image rights are incomplete. No operating signing key was provisioned or used. All remain excluded from release.
