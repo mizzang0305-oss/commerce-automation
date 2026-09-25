@@ -155,7 +155,7 @@ function passedPipeline(videoPath: string, productId = PRODUCT_ID, reviewedPrior
     searchCalls: 3,
     rawProductsFound: 10,
     eligibleProductsFound: 4,
-    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true, productVisualReview: signedTestReview(productId, createHash("sha256").update("test-video").digest("hex"), reviewedPriorVideoIds, "검증 빨래 건조대") }
+    item: { productId, canonicalProductName: "검증 빨래 건조대", affiliateUrl: "https://link.coupang.com/a/example", useCase: "laundry_drying", videoPath, machineQaPassed: true, productVisualReview: signedTestReview(productId, createHash("sha256").update("test-video").digest("hex"), reviewedPriorVideoIds ?? [], "검증 빨래 건조대") }
   };
 }
 

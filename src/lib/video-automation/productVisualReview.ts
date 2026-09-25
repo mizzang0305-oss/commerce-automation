@@ -97,6 +97,8 @@ export function verifyProductVisualReview(input: {
   }
   if (input.requiredPriorVideoIds && (
     new Set(receipt.reviewedPriorVideoIds).size !== receipt.reviewedPriorVideoIds.length ||
+    new Set(input.requiredPriorVideoIds).size !== input.requiredPriorVideoIds.length ||
+    receipt.reviewedPriorVideoIds.length !== input.requiredPriorVideoIds.length ||
     input.requiredPriorVideoIds.some((id) => !receipt.reviewedPriorVideoIds.includes(id))
   )) return { ok: false, safeError: "PRODUCT_BODY_REVIEW_STALE" };
   try {

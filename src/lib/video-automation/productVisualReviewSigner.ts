@@ -130,6 +130,7 @@ export async function signProductVisualReview(input: {
     requireGate(assessment.crossVideoVerdict === "pass" && assessment.auditStatus === "complete" &&
       currentPriorVideoIds.every((id) => assessmentInput.comparedVideoIds.includes(id)), "AI_CROSS_VIDEO_REVIEW_NOT_PASS");
     requireGate(assessment.contentVerdict === "pass", "AI_CONTENT_REVIEW_NOT_PASS");
+    requireGate(assessment.rightsVerdict === "verified" && !assessment.releaseBlockers.some((code) => code.startsWith("RIGHTS_")), "AI_RIGHTS_REVIEW_NOT_VERIFIED");
     contentEvidenceSha256 = m.review.aiContentAssessment.sha256;
   }
 

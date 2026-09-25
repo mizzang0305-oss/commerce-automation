@@ -105,6 +105,8 @@ describe("independent product visual signing gate", () => {
     expect(verifyProductVisualReview({ receipt: { ...receipt, reviewerType: "ai_multimodal" }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt: { ...receipt, contentEvidenceSha256: sha("other-review") }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt, ...context, publicKey, videoSha256: sha(await readFile(manifest.files.audio.path)) }).ok).toBe(false);
+    expect(verifyProductVisualReview({ receipt, ...context, publicKey, requiredPriorVideoIds: [priorIds[0]] }))
+      .toEqual({ ok: false, safeError: "PRODUCT_BODY_REVIEW_STALE" });
   });
 
   test("rejects a current ledger entry for the same product on another channel", async () => {
@@ -147,9 +149,19 @@ describe("independent product visual signing gate", () => {
     manifest.review.aiContentAssessment = assessmentFile;
     manifest.review.fullHumanContent.status = "unverified";
     manifest.review.exactSpokenName.status = "unverified";
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "AI_RIGHTS_REVIEW_NOT_VERIFIED" });
+    assessment.rights = { status: "verified", evidenceIds: [] };
+    const missingRightsEvidenceBytes = JSON.stringify(assessment);
+    await writeFile(assessmentFile.path, missingRightsEvidenceBytes);
+    assessmentFile.sha256 = sha(missingRightsEvidenceBytes);
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "AI_RIGHTS_REVIEW_NOT_VERIFIED" });
+    assessment.rights = { status: "verified", evidenceIds: ["bound-media"] };
+    const verifiedBytes = JSON.stringify(assessment);
+    await writeFile(assessmentFile.path, verifiedBytes);
+    assessmentFile.sha256 = sha(verifiedBytes);
     const receipt = await signFixture();
     expect(receipt.reviewerType).toBe("composite");
-    expect(receipt.contentEvidenceSha256).toBe(sha(bytes));
+    expect(receipt.contentEvidenceSha256).toBe(sha(verifiedBytes));
     expect(verifyProductVisualReview({ receipt, productId, canonicalProductName: manifest.canonicalProductName,
       affiliateProductId: productId, affiliateUrl: manifest.affiliateUrl, videoSha256: receipt.videoSha256,
       publicKey, requiredPriorVideoIds: priorIds })).toEqual({ ok: true });
