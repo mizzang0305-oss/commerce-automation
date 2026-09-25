@@ -74,6 +74,29 @@ export function restoreKnownCaptionTokens<T extends WordAlignmentToken>(words: r
   });
 }
 
+/** Forced alignment supplies timing only; it may not silently rewrite narration-intent captions. */
+export function requireNarrationIntentAlignment<T extends WordAlignmentToken>(narrationIntent: string, words: readonly T[]): T[] {
+  const compact = (value: string) => value.toLocaleLowerCase("ko").replace(/[^가-힣a-z0-9]/gu, "");
+  if (!compact(narrationIntent) || compact(words.map((word) => word.word).join(" ")) !== compact(narrationIntent)) {
+    throw new Error("CAPTION_ALIGNMENT_INTENT_MISMATCH");
+  }
+  return words.map((word) => ({ ...word }));
+}
+
+/** Split only a punctuation-fused long alignment token; never invent or replace spoken words. */
+export function splitOverlongPunctuationToken<T extends WordAlignmentToken>(words: readonly T[]): T[] {
+  return words.flatMap((word) => {
+    const duration = word.end - word.start;
+    if (duration <= 2.4) return [{ ...word }];
+    const match = word.word.match(/^(.+[,，])(.+)$/u);
+    if (!match) throw new Error("CAPTION_ALIGNMENT_TOKEN_TOO_LONG");
+    const total = [...match[1], ...match[2]].length;
+    const splitAt = word.start + duration * ([...match[1]].length / total);
+    if (splitAt - word.start > 2.4 || word.end - splitAt > 2.4) throw new Error("CAPTION_ALIGNMENT_TOKEN_TOO_LONG");
+    return [{ ...word, word: match[1], end: splitAt }, { ...word, word: match[2], start: splitAt }];
+  });
+}
+
 function normalizeKoreanToken(value: string): string { return value.replace(/[^가-힣]/gu, ""); }
 function editDistance(left: string, right: string): number {
   const row = Array.from({ length: right.length + 1 }, (_, index) => index);

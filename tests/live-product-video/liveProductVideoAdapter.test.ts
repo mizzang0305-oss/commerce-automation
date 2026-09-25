@@ -5,27 +5,14 @@ import { generateDeterministicCreativeCandidates } from "@/lib/video-automation/
 import { rankCreativeCandidates } from "@/lib/video-lab/creativeRanker";
 import { candidate } from "./fixtures";
 
-const usageEvidence = {
-  assetId: "v049-father-generic-use",
-  productKey: "old",
-  sourcePath: "C:/local/use.mp4",
-  reviewEvidencePath: "C:/local/review.json",
-  sourceType: "owner_reviewed_local_video" as const,
-  identityType: "generic_usage_example" as const,
-  usageType: "real_use_context" as const,
-  ownerReviewStatus: "pass" as const
-};
-
 describe("live product to proven V2 adapter", () => {
-  test("binds live identity, affiliate, provenance, exact reference, generic evidence, and disclosure", () => {
+  test("binds live identity, affiliate, provenance, exact-only visual mode, and disclosure", () => {
     const live = candidate();
     const result = adaptLiveProductToVideoInput({
       candidate: live,
       exactReference: { sourceUrl: live.productImageUrls[0], localPath: "C:/local/product.jpg", width: 800, height: 800, mimeType: "image/jpeg", sizeBytes: 100, identityType: "product_reference" },
-      usageEvidence,
       runId: "run-live-1"
     });
-    result.product.imagePaths = ["1", "2", "3", "4", "5"];
     expect(validateProductVideoInput(result)).toBe(result);
     expect(result.product).toMatchObject({ productKey: live.productKey, affiliateUrl: live.selectedAffiliateUrl, disclosureText: COUPANG_PARTNERS_DISCLOSURE });
     expect(generateDeterministicCreativeCandidates(result).every((creative) => creative.disclosure === COUPANG_PARTNERS_DISCLOSURE)).toBe(true);
@@ -34,12 +21,24 @@ describe("live product to proven V2 adapter", () => {
     const deskInput = { ...result, product: { ...result.product, anchors: ["정리", "책상", "공간", "고정"] } };
     expect(generateDeterministicCreativeCandidates(deskInput)[0].hook).toBe("책상 정리, 왜 자꾸 불편할까요?");
     expect(result.product.exactProductReference?.identityType).toBe("product_reference");
-    expect(result.product.realUseAsset?.identityType).toBe("generic_usage_example");
+    expect(result.product.visualMode).toBe("product_information");
+    expect(result.product.imagePaths).toEqual(["C:/local/product.jpg"]);
+    expect(result.product.realUseAsset).toBeUndefined();
     expect(result.product.sourceProvenance?.sourceRequestId).toBe(live.sourceRequestId);
   });
 
   test("blocks missing affiliate readiness", () => {
     const live = candidate({ selectedAffiliateUrl: "" });
-    expect(() => adaptLiveProductToVideoInput({ candidate: live, exactReference: { sourceUrl: live.productImageUrls[0], localPath: "x", width: 800, height: 800, mimeType: "image/jpeg", sizeBytes: 100, identityType: "product_reference" }, usageEvidence, runId: "run-live-1" })).toThrow("AFFILIATE_NOT_READY");
+    expect(() => adaptLiveProductToVideoInput({ candidate: live, exactReference: { sourceUrl: live.productImageUrls[0], localPath: "x", width: 800, height: 800, mimeType: "image/jpeg", sizeBytes: 100, identityType: "product_reference" }, runId: "run-live-1" })).toThrow("AFFILIATE_NOT_READY");
+  });
+
+  test("rejects generic frames or a relabeled product in product-information mode", () => {
+    const live = candidate();
+    const result = adaptLiveProductToVideoInput({ candidate: live, exactReference: { sourceUrl: live.productImageUrls[0], localPath: "C:/local/product.jpg", width: 800, height: 800, mimeType: "image/jpeg", sizeBytes: 100, identityType: "product_reference" }, runId: "run-live-1" });
+    result.product.imagePaths.push("C:/local/generic.jpg");
+    expect(() => validateProductVideoInput(result)).toThrow("PRODUCT_INFORMATION_EXACT_ASSET_REQUIRED");
+    result.product.imagePaths = ["C:/local/product.jpg"];
+    result.product.sourceProvenance!.productKey = "coupang:product:999:item:999:vendor:999";
+    expect(() => validateProductVideoInput(result)).toThrow("VIDEO_AUTOMATION_SOURCE_PROVENANCE_REQUIRED");
   });
 });

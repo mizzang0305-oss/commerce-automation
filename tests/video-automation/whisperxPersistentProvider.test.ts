@@ -26,4 +26,16 @@ describe("persistent WhisperX provider", () => {
     expect(result.transcript_source).toBe("provided_local_asr");
     await provider.close();
   });
+  test("labels forced alignment of narration intent separately from ASR evidence", async () => {
+    const stdin = new PassThrough(); const stdout = new PassThrough(); const stderr = new PassThrough();
+    const child = Object.assign(new PassThrough(), { stdin, stdout, stderr, kill: vi.fn(), once: PassThrough.prototype.once.bind(new PassThrough()) });
+    let request: Record<string, unknown> | undefined;
+    stdin.on("data", (chunk) => { request = JSON.parse(chunk.toString()); stdout.write(`${JSON.stringify({ id: request?.id, status: "success", transcript_source: "provided_narration_intent", words: [{ word: "접이식", start: 0, end: 0.3, confidence: 0.9 }], aligned_ratio: 1 })}\n`); });
+    const provider = new PersistentWhisperXProvider(() => child as never, 1_000);
+    const started = provider.start(); stdout.write(`${JSON.stringify({ event: "ready", load_seconds: 1 })}\n`); await started;
+    const result = await provider.align("voice.wav", "접이식", "narration_intent");
+    expect(request).toMatchObject({ transcript: "접이식", transcript_role: "narration_intent" });
+    expect(result.transcript_source).toBe("provided_narration_intent");
+    await provider.close();
+  });
 });

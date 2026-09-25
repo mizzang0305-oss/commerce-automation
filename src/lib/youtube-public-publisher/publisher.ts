@@ -3,6 +3,7 @@ import {
   type PublisherEnvironment,
   type YouTubePublicPublisherChannelKey
 } from "@/lib/youtube-public-publisher/channelConfig";
+import { verifyProductVisualReview, type ProductVisualReviewReceipt } from "@/lib/video-automation/productVisualReview";
 
 export type YouTubePublicUploadJobStatus = "ready" | "uploading" | "uploaded" | "error" | "manual_review";
 
@@ -20,6 +21,7 @@ export type YouTubePublicUploadJob = {
   description: string;
   disclosureText: string;
   machineQaStatus: "passed" | "failed" | "unknown";
+  productVisualReview?: ProductVisualReviewReceipt;
   status: YouTubePublicUploadJobStatus;
   attemptCount: number;
   claimedAt: string;
@@ -211,7 +213,7 @@ export async function runYouTubePublicPublisherOnce(input: RunOnceInput): Promis
   }
 
   const job = claimed.job;
-  const validation = await validateJob(job, input.getVideoSha256);
+  const validation = await validateJob(job, input.getVideoSha256, (input.env ?? process.env).PRODUCT_CONTENT_REVIEW_PUBLIC_KEY, (await input.store.read()).ledger.map((entry) => entry.youtubeVideoId));
   if (!validation.ok) {
     await moveToManualReview(input.store, job.id, input.claimOwner, validation.safeError, now);
     return { status: "manual_review", jobId: job.id, safeError: validation.safeError, videosInsertCalls: 0, canariesImported };
@@ -239,6 +241,14 @@ export async function runYouTubePublicPublisherOnce(input: RunOnceInput): Promis
   const attempt = await beginUploadAttempt(input.store, job.id, input.claimOwner, now, settings.maxAutoRetry);
   if (!attempt.ok) {
     return { status: "manual_review", jobId: job.id, safeError: attempt.safeError, videosInsertCalls: 0, canariesImported };
+  }
+
+  // Token/channel probes can take time. Re-bind the current bytes and signed
+  // review immediately before opening the upload path, not only after claim.
+  const preInsertValidation = await validateJob(job, input.getVideoSha256, (input.env ?? process.env).PRODUCT_CONTENT_REVIEW_PUBLIC_KEY, (await input.store.read()).ledger.map((entry) => entry.youtubeVideoId));
+  if (!preInsertValidation.ok) {
+    await moveToManualReview(input.store, job.id, input.claimOwner, preInsertValidation.safeError, now);
+    return { status: "manual_review", jobId: job.id, safeError: preInsertValidation.safeError, videosInsertCalls: 0, canariesImported };
   }
 
   const upload = await input.client.insertPublicVideo({
@@ -332,7 +342,7 @@ async function claimOneReadyJob(input: {
   });
 }
 
-async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceInput["getVideoSha256"]) {
+async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceInput["getVideoSha256"], reviewPublicKey: string | undefined, priorVideoIds: string[]) {
   if (!job.videoPath || !job.videoSha256) {
     return { ok: false as const, safeError: "VIDEO_ASSET_NOT_READY" };
   }
@@ -352,6 +362,8 @@ async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceI
   if (!job.title || !job.description || !job.disclosureText || !job.description.includes(job.affiliateUrl) || !job.description.includes(job.disclosureText)) {
     return { ok: false as const, safeError: "METADATA_OR_DISCLOSURE_NOT_READY" };
   }
+  const contentReview = verifyProductVisualReview({ receipt: job.productVisualReview, productId: job.productId, canonicalProductName: job.canonicalProductName, affiliateProductId: job.affiliateProductId, affiliateUrl: job.affiliateUrl, videoSha256: actualSha256, publicKey: reviewPublicKey, requiredPriorVideoIds: priorVideoIds });
+  if (!contentReview.ok) return { ok: false as const, safeError: contentReview.safeError };
   return { ok: true as const };
 }
 
@@ -462,9 +474,7 @@ function hasDuplicateLedgerIdentity(
   candidate: Pick<YouTubePublicUploadLedgerEntry, "channelKey" | "productId" | "videoSha256">
 ) {
   return ledger.some((entry) =>
-    entry.channelKey === candidate.channelKey &&
-    entry.productId === candidate.productId &&
-    sameSha256(entry.videoSha256, candidate.videoSha256)
+    entry.productId === candidate.productId || sameSha256(entry.videoSha256, candidate.videoSha256)
   );
 }
 

@@ -11,7 +11,12 @@ export function validateProductVideoInput(value: ProductVideoAutomationInput): P
   if (!value.product.canonicalProductName.trim()) throw new Error("VIDEO_AUTOMATION_CANONICAL_NAME_REQUIRED");
   if (value.product.aliases.length === 0) throw new Error("VIDEO_AUTOMATION_ALIASES_REQUIRED");
   if (value.product.anchors.length < 3) throw new Error("VIDEO_AUTOMATION_PRODUCT_ANCHORS_REQUIRED");
-  if (value.product.imagePaths.length < 5) throw new Error("VIDEO_AUTOMATION_SCENE_IMAGES_REQUIRED");
+  if (value.product.imagePaths.length < (value.product.visualMode === "product_information" ? 1 : 5)) throw new Error("VIDEO_AUTOMATION_SCENE_IMAGES_REQUIRED");
+  if (value.product.visualMode === "product_information" && (
+    !value.product.exactProductReference ||
+    value.product.imagePaths.some((path) => path !== value.product.exactProductReference?.localPath) ||
+    value.product.realUseAsset
+  )) throw new Error("PRODUCT_INFORMATION_EXACT_ASSET_REQUIRED");
   if (value.product.affiliateUrl && !value.product.disclosureText?.trim()) throw new Error("VIDEO_AUTOMATION_DISCLOSURE_REQUIRED");
   if (value.product.exactProductReference) {
     if (value.product.exactProductReference.identityType !== "product_reference") throw new Error("VIDEO_AUTOMATION_EXACT_REFERENCE_ROLE_INVALID");

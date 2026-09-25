@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -74,6 +76,56 @@ def visual_gate(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def visual_gate_product_information(request: dict[str, Any]) -> dict[str, Any]:
+    """Structural local check only; this is not a semantic or rights approval."""
+    product_id = request.get("product_id")
+    if not isinstance(product_id, str) or not re.fullmatch(r"coupang:product:\d+:item:\d+:vendor:\d+", product_id):
+        raise ValueError("PRODUCT_ID_INVALID")
+    if product_id != request.get("source_product_id"):
+        raise ValueError("PRODUCT_SOURCE_IDENTITY_MISMATCH")
+    raw_paths = request.get("image_paths")
+    if not isinstance(raw_paths, list) or not raw_paths or len(raw_paths) > 20:
+        raise ValueError("EXACT_PRODUCT_IMAGES_REQUIRED")
+    paths = exact_product_paths(raw_paths, request.get("allowed_root"))
+    if any(not path.is_file() or path.stat().st_size <= 0 for path in paths):
+        raise ValueError("EXACT_PRODUCT_IMAGE_NOT_READY")
+    if any(path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"} for path in paths):
+        raise ValueError("EXACT_PRODUCT_IMAGE_TYPE_INVALID")
+    try:
+        for path in paths:
+            with Image.open(path) as picture:
+                picture.verify()
+    except Exception as exc:
+        raise ValueError("EXACT_PRODUCT_IMAGE_DECODE_FAILED") from exc
+    return {
+        "gate_pass": True,
+        "identity_type": "product_reference",
+        "source_count": len(paths),
+        "source_sha256": [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths],
+        "semantic_product_match_verified": False,
+        "rights_verified": False,
+        "publication_ready": False,
+    }
+
+
+def exact_product_paths(values: list[str], raw_root: Any) -> list[Path]:
+    if not isinstance(raw_root, str) or not Path(raw_root).is_absolute():
+        raise ValueError("PRODUCT_INFORMATION_ALLOWED_ROOT_REQUIRED")
+    root = Path(raw_root).resolve(strict=True)
+    paths: list[Path] = []
+    for value in values:
+        if not isinstance(value, str) or not Path(value).is_absolute() or ".." in Path(value).parts:
+            raise ValueError("PRODUCT_INFORMATION_ABSOLUTE_PATH_REQUIRED")
+        raw_path = Path(value)
+        if any(parent.is_symlink() for parent in (raw_path, *raw_path.parents)):
+            raise ValueError("PRODUCT_INFORMATION_SYMLINK_FORBIDDEN")
+        path = raw_path.resolve(strict=True)
+        if not path.is_relative_to(root):
+            raise ValueError("PRODUCT_INFORMATION_PATH_OUTSIDE_ROOT")
+        paths.append(path)
+    return paths
+
+
 def prepare_reviewed_asset(request: dict[str, Any]) -> dict[str, Any]:
     source = Path(request["source_path"]).resolve(strict=True)
     target_dir = Path(request["target_dir"]).resolve()
@@ -97,22 +149,24 @@ def prepare_reviewed_asset(request: dict[str, Any]) -> dict[str, Any]:
 def layout_plan(request: dict[str, Any]) -> dict[str, Any]:
     hook = " ".join(str(request.get("hook", "")).split())
     usage_label = " ".join(str(request.get("usage_label", USAGE_LABEL)).split())
+    product_information = usage_label == "상품 이미지 · 실사용 아님"
+    badge_box = {**USAGE_BADGE_BOX, "width": 560} if product_information else USAGE_BADGE_BOX
     blockers: list[str] = []
     if not hook or len(hook) > 24 or "..." in hook:
         blockers.append("VIDEO_LAYOUT_HOOK_CLIPPED")
     if not usage_label:
         blockers.append("VIDEO_LAYOUT_USAGE_BADGE_REQUIRED")
-    font = ImageFont.truetype(str(FONT_PATH), 38) if FONT_PATH.is_file() else ImageFont.load_default()
+    font = ImageFont.truetype(str(FONT_PATH), 34 if product_information else 38) if FONT_PATH.is_file() else ImageFont.load_default()
     text_box = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), usage_label, font=font)
-    if text_box[2] - text_box[0] > USAGE_BADGE_BOX["width"] - 48:
+    if text_box[2] - text_box[0] > badge_box["width"] - 48:
         blockers.append("VIDEO_LAYOUT_USAGE_BADGE_TOO_WIDE")
-    actual_gap = USAGE_BADGE_BOX["y"] - (HOOK_BOX["y"] + HOOK_BOX["height"])
-    collision = boxes_overlap(HOOK_BOX, USAGE_BADGE_BOX)
+    actual_gap = badge_box["y"] - (HOOK_BOX["y"] + HOOK_BOX["height"])
+    collision = boxes_overlap(HOOK_BOX, badge_box)
     if collision or actual_gap < HOOK_USAGE_MIN_GAP_PX:
         blockers.append("VIDEO_LAYOUT_HOOK_USAGE_COLLISION")
-    if USAGE_BADGE_BOX["x"] + USAGE_BADGE_BOX["width"] > VIDEO_WIDTH - 180:
+    if badge_box["x"] + badge_box["width"] > VIDEO_WIDTH - 180:
         blockers.append("VIDEO_LAYOUT_RIGHT_CONTROL_COLLISION")
-    return {"status": "success" if not blockers else "blocked", "passed": not blockers, "blockers": blockers, "hook_box": HOOK_BOX, "usage_badge_box": USAGE_BADGE_BOX, "minimum_gap_px": HOOK_USAGE_MIN_GAP_PX, "actual_gap_px": actual_gap, "collision": collision, "usage_label": usage_label}
+    return {"status": "success" if not blockers else "blocked", "passed": not blockers, "blockers": blockers, "hook_box": HOOK_BOX, "usage_badge_box": badge_box, "minimum_gap_px": HOOK_USAGE_MIN_GAP_PX, "actual_gap_px": actual_gap, "collision": collision, "usage_label": usage_label}
 
 
 def tts(request: dict[str, Any]) -> dict[str, Any]:
@@ -179,12 +233,21 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     output = Path(request["output"]).resolve()
     work = output.parent / "render-inputs"
     work.mkdir(parents=True, exist_ok=True)
-    source_paths = [Path(value).resolve(strict=True) for value in request["image_paths"]]
+    product_information = request.get("visual_mode") == "product_information"
+    source_paths = exact_product_paths(request["image_paths"], request.get("allowed_root")) if product_information else [Path(value).resolve(strict=True) for value in request["image_paths"]]
     scene_roles = request.get("scene_roles")
     if not isinstance(scene_roles, list) or len(scene_roles) != len(source_paths):
+        if product_information:
+            raise ValueError("PRODUCT_INFORMATION_SCENE_ROLES_REQUIRED")
         scene_roles = ["generic_usage_example"] * len(source_paths)
     if any(role not in {"product_reference", "generic_usage_example"} for role in scene_roles):
         raise ValueError("VIDEO_SCENE_ROLE_INVALID")
+    if product_information and (not source_paths or any(role != "product_reference" for role in scene_roles)):
+        raise ValueError("PRODUCT_INFORMATION_EXACT_SCENES_REQUIRED")
+    source_hashes = request.get("source_sha256")
+    if product_information and (not isinstance(source_hashes, list) or len(source_hashes) != len(source_paths) or
+                                any(hashlib.sha256(path.read_bytes()).hexdigest() != sha for path, sha in zip(source_paths, source_hashes))):
+        raise ValueError("PRODUCT_INFORMATION_SOURCE_HASH_MISMATCH")
     captions = request.get("captions")
     if not isinstance(captions, list) or not captions:
         raise ValueError("LOCAL_MEDIA_CAPTIONS_REQUIRED")
@@ -201,12 +264,15 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     shot_durations = [max(0.12, (starts[index + 1] if index + 1 < len(starts) else audio_duration) - start) for index, start in enumerate(starts)]
     generic_paths = [path for path, role in zip(source_paths, scene_roles) if role == "generic_usage_example"]
     reference_paths = [path for path, role in zip(source_paths, scene_roles) if role == "product_reference"]
-    if not generic_paths:
+    if not generic_paths and not product_information:
         raise ValueError("GENERIC_USAGE_SCENES_REQUIRED")
-    shot_images = [
-        reference_paths[0] if index == 0 and reference_paths else generic_paths[(index - (1 if reference_paths else 0)) % len(generic_paths)]
-        for index in range(len(shot_captions))
-    ]
+    shot_images = (
+        [reference_paths[index % len(reference_paths)] for index in range(len(shot_captions))]
+        if product_information else [
+            reference_paths[0] if index == 0 and reference_paths else generic_paths[(index - (1 if reference_paths else 0)) % len(generic_paths)]
+            for index in range(len(shot_captions))
+        ]
+    )
     srt = output.parent / "captions.srt"
     write_srt("\n".join(shot_captions), srt, shot_durations, shot_captions)
 
@@ -237,7 +303,7 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     short_label_path = work / "usage-label-short.txt"
     reference_label_path = work / "product-reference-label.txt"
     full_label_path.write_text(str(planned["usage_label"]), encoding="utf-8")
-    short_label_path.write_text("사용 예시", encoding="utf-8")
+    short_label_path.write_text("상품 이미지 · 실사용 아님" if product_information else "사용 예시", encoding="utf-8")
     reference_label_path.write_text("상품 참고 이미지", encoding="utf-8")
 
     def build_v2_filters(*args: Any, **kwargs: Any) -> list[str]:
@@ -245,7 +311,12 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         font_clause = f"fontfile='{str(FONT_PATH).replace(chr(92), '/').replace(':', chr(92) + ':')}':" if FONT_PATH.is_file() else ""
         full_text = str(full_label_path).replace("\\", "/").replace(":", "\\:")
         short_text = str(short_label_path).replace("\\", "/").replace(":", "\\:")
-        if reference_paths:
+        if product_information:
+            filters.extend([
+                "drawbox=x=72:y=510:w=560:h=72:color=0x0f172a@0.88:t=fill",
+                f"drawtext={font_clause}textfile='{full_text}':fontcolor=0xfacc15:fontsize=34:x=96:y=523",
+            ])
+        elif reference_paths:
             reference_text = str(reference_label_path).replace("\\", "/").replace(":", "\\:")
             reference_end = shot_durations[0]
             generic_full_end = reference_end + min(1.8, shot_durations[1] if len(shot_durations) > 1 else 1.8)
@@ -299,6 +370,8 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         video_renderer._build_base_video_filter = original_base
         video_renderer.build_drawtext_subtitle_filters = original_builder
         video_renderer.wrap_caption = original_wrap
+    if product_information and any(hashlib.sha256(path.read_bytes()).hexdigest() != sha for path, sha in zip(source_paths, source_hashes)):
+        raise ValueError("PRODUCT_INFORMATION_SOURCE_CHANGED_DURING_RENDER")
     return {
         "status": "success", "output": str(output), "shot_count": len(shot_images),
         "hook_font_px": 104, "caption_font_px": int(request.get("caption_font_px", 66)),
@@ -306,8 +379,10 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         "primary_visual_width_ratio": float(request.get("primary_visual_width_ratio", 0.92)),
         "canvas_fill_ratio": float(request.get("canvas_fill_ratio", 0.93)),
         "motion_preset": "push_pan", "usage_label_mode": "full_then_abbreviated",
-        "product_reference_scene_count": 1 if reference_paths else 0,
+        "product_reference_scene_count": len(shot_images) if product_information else 1 if reference_paths else 0,
         "generic_usage_scene_source_count": len(generic_paths),
+        "visual_mode": "product_information" if product_information else "generic_usage_example",
+        "publication_ready": False,
         "exact_product_use_claimed": False,
         "usage_labels_separate_from_hook": True, "layout": planned,
         "hook_text_file": str(output.parent / "drawtext-subtitles" / "subtitle-cue-001-line-01.txt"),
@@ -367,7 +442,7 @@ def main() -> int:
     try:
         request = read_request()
         operation = request.get("operation")
-        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "layout_plan": layout_plan, "tts": tts, "render": render, "render_v2": render_v2, "inspect": inspect}[operation](request)
+        result = {"prepare_reviewed_asset": prepare_reviewed_asset, "visual_gate": visual_gate, "visual_gate_product_information": visual_gate_product_information, "layout_plan": layout_plan, "tts": tts, "render": render, "render_v2": render_v2, "inspect": inspect}[operation](request)
         emit(result)
         return 0
     except Exception as exc:

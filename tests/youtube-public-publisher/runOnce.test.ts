@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { signedTestReview, TEST_REVIEW_PUBLIC_KEY } from "../fixtures/productVisualReview";
 import {
   InMemoryYouTubePublicPublisherStore,
   enqueueYouTubePublicUploadJob,
@@ -8,20 +9,22 @@ import {
 } from "@/lib/youtube-public-publisher/publisher";
 
 function readyJob(): YouTubePublicUploadJob {
+  const productId = "coupang:product:100:item:200:vendor:300";
   return {
     id: "job-new-product",
-    productId: "product-new",
+    productId,
     channelKey: "father_jobs",
     videoPath: "D:\\render\\product-new.mp4",
     videoSha256: "a".repeat(64),
     affiliateUrl: "https://link.coupang.com/a/example",
-    affiliateProductId: "product-new",
+    affiliateProductId: productId,
     canonicalProductName: "검증 상품",
     metadataProductName: "검증 상품",
     title: "검증 상품 Shorts",
     description: "https://link.coupang.com/a/example\n쿠팡파트너스 활동의 일환으로 일정액의 수수료를 제공받을 수 있습니다.",
     disclosureText: "쿠팡파트너스 활동의 일환으로 일정액의 수수료를 제공받을 수 있습니다.",
     machineQaStatus: "passed",
+    productVisualReview: signedTestReview(productId, "a".repeat(64)),
     status: "ready",
     attemptCount: 0,
     claimedAt: "",
@@ -46,6 +49,19 @@ describe("guarded run-once public publisher", () => {
     });
   });
 
+  test("rejects reuse across product IDs or channels even when only the file or product matches", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    const otherProduct = "coupang:product:101:item:201:vendor:301";
+    await expect(enqueueYouTubePublicUploadJob(store, {
+      ...readyJob(), id: "different-product-same-bytes", productId: otherProduct, affiliateProductId: otherProduct,
+      channelKey: "neoman_moleulgeol", productVisualReview: signedTestReview(otherProduct, "a".repeat(64))
+    })).resolves.toMatchObject({ created: false, safeError: "DUPLICATE_UPLOAD_JOB" });
+    await expect(enqueueYouTubePublicUploadJob(store, {
+      ...readyJob(), id: "same-product-different-bytes", videoSha256: "b".repeat(64),
+      productVisualReview: signedTestReview("coupang:product:100:item:200:vendor:300", "b".repeat(64))
+    })).resolves.toMatchObject({ created: false, safeError: "DUPLICATE_UPLOAD_JOB" });
+  });
+
   test("uploads one valid ready job only after readback and persists its ledger entry", async () => {
     const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
     const client: YouTubePublicPublisherClient = {
@@ -67,6 +83,7 @@ describe("guarded run-once public publisher", () => {
       getVideoSha256: async () => "a".repeat(64),
       env: {
         YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true",
+        PRODUCT_CONTENT_REVIEW_PUBLIC_KEY: TEST_REVIEW_PUBLIC_KEY,
         YOUTUBE_PUBLIC_PUBLISHER_NEOMAN_TOKEN_FILE: "D:\\secure\\youtube-neoman.json",
         YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json"
       },
@@ -80,7 +97,7 @@ describe("guarded run-once public publisher", () => {
     expect(store.snapshot().ledger).toEqual(expect.arrayContaining([
       expect.objectContaining({
         channelKey: "father_jobs",
-        productId: "product-new",
+        productId: "coupang:product:100:item:200:vendor:300",
         videoSha256: "a".repeat(64),
         youtubeVideoId: "new-video-id",
         visibility: "public"
@@ -102,6 +119,7 @@ describe("guarded run-once public publisher", () => {
       getVideoSha256: async () => "a".repeat(64),
       env: {
         YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true",
+        PRODUCT_CONTENT_REVIEW_PUBLIC_KEY: TEST_REVIEW_PUBLIC_KEY,
         YOUTUBE_PUBLIC_PUBLISHER_NEOMAN_TOKEN_FILE: "D:\\secure\\youtube-neoman.json",
         YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json",
         YOUTUBE_PUBLIC_PUBLISHER_MAX_AUTO_RETRY: "999"
@@ -173,7 +191,9 @@ describe("guarded run-once public publisher", () => {
   const invalidJobPatches: ReadonlyArray<[string, Partial<YouTubePublicUploadJob>, string]> = [
     ["machine QA", { machineQaStatus: "failed" }, "MACHINE_QA_NOT_PASS"],
     ["affiliate", { affiliateUrl: "" }, "AFFILIATE_PRODUCT_MISMATCH"],
-    ["disclosure", { disclosureText: "" }, "METADATA_OR_DISCLOSURE_NOT_READY"]
+    ["disclosure", { disclosureText: "" }, "METADATA_OR_DISCLOSURE_NOT_READY"],
+    ["content review", { productVisualReview: undefined }, "PRODUCT_CONTENT_REVIEW_MISSING"],
+    ["tampered review", { productVisualReview: { ...signedTestReview("coupang:product:100:item:200:vendor:300", "a".repeat(64)), evidenceId: "tampered" } }, "PRODUCT_CONTENT_REVIEW_SIGNATURE_INVALID"]
   ];
 
   test.each(invalidJobPatches)("blocks missing %s before videos.insert", async (_label, patch, safeError) => {
@@ -188,6 +208,61 @@ describe("guarded run-once public publisher", () => {
     });
 
     expect(result).toMatchObject({ status: "manual_review", safeError, videosInsertCalls: 0 });
+  });
+
+  test("fails closed when video bytes change after claim and before insert", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    let hashReads = 0;
+    let inserts = 0;
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: {
+        getAccessToken: async () => ({ ok: true, accessToken: "test-access-token" }),
+        probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+        insertPublicVideo: async () => { inserts++; throw new Error("must not insert changed bytes"); },
+        readbackVideo: async () => { throw new Error("must not read back"); }
+      },
+      getVideoSha256: async () => ++hashReads === 1 ? "a".repeat(64) : "b".repeat(64),
+      env: publisherEnv(), now: "2026-09-22T01:00:00.000Z", claimOwner: "test-publisher"
+    });
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
+    expect(hashReads).toBe(2);
+    expect(inserts).toBe(0);
+  });
+
+  test("re-hashes the current file and blocks a changed video before videos.insert", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: unreachableClient(),
+      getVideoSha256: async () => "b".repeat(64),
+      env: publisherEnv(),
+      now: "2026-09-22T01:00:00.000Z",
+      claimOwner: "test-publisher"
+    });
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
+  });
+
+  test("re-hashes again after channel identity and blocks a late file change", async () => {
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
+    let hashChecks = 0;
+    let insertCalls = 0;
+    const result = await runYouTubePublicPublisherOnce({
+      store,
+      client: {
+        getAccessToken: async () => ({ ok: true, accessToken: "test-access-token" }),
+        probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+        insertPublicVideo: async () => { insertCalls += 1; throw new Error("must not upload"); },
+        readbackVideo: async () => { throw new Error("must not read back"); }
+      },
+      getVideoSha256: async () => (++hashChecks === 1 ? "a" : "b").repeat(64),
+      env: publisherEnv(),
+      now: "2026-09-22T01:00:00.000Z",
+      claimOwner: "test-publisher"
+    });
+    expect(hashChecks).toBe(2);
+    expect(insertCalls).toBe(0);
+    expect(result).toMatchObject({ status: "manual_review", safeError: "VIDEO_HASH_MISMATCH", videosInsertCalls: 0 });
   });
 
   test("imports verified canaries idempotently and blocks their duplicate identity", async () => {
@@ -254,6 +329,7 @@ describe("guarded run-once public publisher", () => {
 function publisherEnv(overrides: Record<string, string> = {}) {
   return {
     YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true",
+    PRODUCT_CONTENT_REVIEW_PUBLIC_KEY: TEST_REVIEW_PUBLIC_KEY,
     YOUTUBE_PUBLIC_PUBLISHER_NEOMAN_TOKEN_FILE: "D:\\secure\\youtube-neoman.json",
     YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json",
     ...overrides
