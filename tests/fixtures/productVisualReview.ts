@@ -18,6 +18,8 @@ export function signedTestReview(productId: string, videoSha256: string, reviewe
     narrationSha256: "d".repeat(64),
     scriptSha256: "e".repeat(64),
     captionSha256: "f".repeat(64),
+    reviewerType: "human",
+    contentEvidenceSha256: "1".repeat(64),
     rightsEvidenceId: "TEST_ONLY_RIGHTS_EVIDENCE",
     rightsReview: "passed",
     productContentReview: "passed",

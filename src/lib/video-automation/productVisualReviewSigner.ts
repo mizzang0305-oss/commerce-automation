@@ -1,6 +1,7 @@
 import { createHash, createPrivateKey, sign } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { productVisualReviewPayload, type ProductVisualReviewReceipt } from "./productVisualReview";
+import { evaluateAiContentReview, type AiContentReviewInput } from "./aiContentReviewV2";
 
 type Attestation = { status: "passed" | "unverified"; evidencePath: string; reviewerId: string; reviewedAt: string };
 type BoundFile = { path: string; sha256: string };
@@ -27,6 +28,8 @@ export type ProductVisualSigningManifest = {
     }>;
   };
   review: {
+    reviewerType: "human" | "ai_multimodal";
+    aiContentAssessment?: BoundFile;
     productIdentity: Attestation;
     affiliateIdentity: Attestation;
     fullHumanContent: Attestation;
@@ -56,11 +59,12 @@ function requireGate(condition: unknown, code: string): asserts condition {
   if (!condition) throw new SigningGateError(code);
 }
 
-async function verifyBoundFile(file: BoundFile, code: string): Promise<void> {
+async function verifyBoundFile(file: BoundFile, code: string): Promise<Buffer> {
   requireGate(typeof file?.path === "string" && file.path.length > 0 && SHA256.test(file.sha256), code);
   let bytes: Buffer;
   try { bytes = await readFile(file.path); } catch { throw new SigningGateError(code); }
   requireGate(createHash("sha256").update(bytes).digest("hex") === file.sha256, code);
+  return bytes;
 }
 
 async function verifyEvidenceFile(path: string, code: string): Promise<void> {
@@ -91,11 +95,10 @@ export async function signProductVisualReview(input: {
     m.review.priorPublicationSources.every((entry) => input.currentPriorPublications.some((current) => current.youtubeVideoId === entry.youtubeVideoId && current.productId === entry.productId) &&
       Array.isArray(entry.sourceSha256) && entry.sourceSha256.length > 0 && entry.sourceSha256.every((hash) => SHA256.test(hash))), "PRIOR_PUBLICATION_SOURCE_EVIDENCE_MISSING");
 
+  requireGate(m.review.reviewerType === "human" || m.review.reviewerType === "ai_multimodal", "REVIEWER_TYPE_INVALID");
   for (const [name, attestation] of Object.entries({
     productIdentity: m.review.productIdentity,
     affiliateIdentity: m.review.affiliateIdentity,
-    fullHumanContent: m.review.fullHumanContent,
-    exactSpokenName: m.review.exactSpokenName,
     rights: m.review.rights,
     crossVideo: m.review.crossVideo
   })) {
@@ -103,14 +106,39 @@ export async function signProductVisualReview(input: {
       typeof attestation.reviewedAt === "string" && Number.isFinite(Date.parse(attestation.reviewedAt)), `${name.toUpperCase()}_REVIEW_MISSING`);
     await verifyEvidenceFile(attestation.evidencePath, `${name.toUpperCase()}_EVIDENCE_MISSING`);
   }
+  let contentEvidenceSha256: string;
+  if (m.review.reviewerType === "human") {
+    for (const [name, attestation] of Object.entries({ fullHumanContent: m.review.fullHumanContent, exactSpokenName: m.review.exactSpokenName })) {
+      requireGate(attestation?.status === "passed" && attestation.reviewerId === m.review.reviewerId &&
+        typeof attestation.reviewedAt === "string" && Number.isFinite(Date.parse(attestation.reviewedAt)), `${name.toUpperCase()}_REVIEW_MISSING`);
+      await verifyEvidenceFile(attestation.evidencePath, `${name.toUpperCase()}_EVIDENCE_MISSING`);
+    }
+    contentEvidenceSha256 = createHash("sha256").update(await readFile(m.review.fullHumanContent.evidencePath)).digest("hex");
+  } else {
+    requireGate(m.review.aiContentAssessment, "AI_CONTENT_ASSESSMENT_MISSING");
+    const assessmentBytes = await verifyBoundFile(m.review.aiContentAssessment, "AI_CONTENT_ASSESSMENT_HASH_MISMATCH");
+    let assessmentInput: AiContentReviewInput;
+    try { assessmentInput = JSON.parse(assessmentBytes.toString("utf8")); }
+    catch { throw new SigningGateError("AI_CONTENT_ASSESSMENT_INVALID"); }
+    requireGate(assessmentInput?.reviewer?.kind === "ai" && assessmentInput.identity?.productId === m.productId &&
+      assessmentInput.identity.videoSha256 === m.files.video.sha256 && assessmentInput.identity.audioSha256 === m.files.audio.sha256,
+    "AI_CONTENT_ASSESSMENT_IDENTITY_MISMATCH");
+    const assessment = evaluateAiContentReview(assessmentInput);
+    requireGate(assessment.visualVerdict === "pass", "AI_VISUAL_REVIEW_NOT_PASS");
+    requireGate(assessment.acousticVerdict === "pass", "AI_ACOUSTIC_REVIEW_NOT_PASS");
+    requireGate(assessment.crossVideoVerdict === "pass" && assessment.auditStatus === "complete" &&
+      currentPriorVideoIds.every((id) => assessmentInput.comparedVideoIds.includes(id)), "AI_CROSS_VIDEO_REVIEW_NOT_PASS");
+    requireGate(assessment.contentVerdict === "pass", "AI_CONTENT_REVIEW_NOT_PASS");
+    contentEvidenceSha256 = m.review.aiContentAssessment.sha256;
+  }
 
   await verifyBoundFile(m.files.video, "VIDEO_HASH_MISMATCH");
   await verifyBoundFile(m.files.audio, "AUDIO_HASH_MISMATCH");
   await verifyBoundFile(m.files.narration, "NARRATION_HASH_MISMATCH");
   await verifyBoundFile(m.files.script, "SCRIPT_HASH_MISMATCH");
-  await verifyBoundFile(m.files.captions, "CAPTION_HASH_MISMATCH");
+  const captionBytes = await verifyBoundFile(m.files.captions, "CAPTION_HASH_MISMATCH");
   let captionTimeline: { schema?: unknown; audioSha256?: unknown; canonicalProductName?: unknown; cues?: Array<{ text?: unknown }> };
-  try { captionTimeline = JSON.parse(await readFile(m.files.captions.path, "utf8")); }
+  try { captionTimeline = JSON.parse(captionBytes.toString("utf8")); }
   catch { throw new SigningGateError("CAPTION_TIMELINE_INVALID"); }
   requireGate(captionTimeline?.schema === "fresh-caption-timeline/v1" && Array.isArray(captionTimeline.cues) && captionTimeline.cues.length > 0, "CAPTION_TIMELINE_INVALID");
   requireGate(captionTimeline.audioSha256 === m.files.audio.sha256, "CAPTION_AUDIO_BINDING_MISMATCH");
@@ -144,6 +172,7 @@ export async function signProductVisualReview(input: {
     audioSha256: m.files.audio.sha256, narrationSha256: m.files.narration.sha256,
     scriptSha256: m.files.script.sha256,
     captionSha256: m.files.captions.sha256,
+    reviewerType: m.review.reviewerType, contentEvidenceSha256,
     rightsEvidenceId: m.files.sourceImages.map((image) => image.rightsEvidenceId).join(","),
     rightsReview: "passed", productContentReview: "passed", audioScriptReview: "passed", crossVideoReview: "passed",
     priorPublicationSimilarityResult: "distinct", reviewedPriorVideoIds: [...m.review.reviewedPriorVideoIds],

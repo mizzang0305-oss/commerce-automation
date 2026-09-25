@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { signProductVisualReview, type ProductVisualSigningManifest } from "@/lib/video-automation/productVisualReviewSigner";
 import { productVisualReviewPayload, verifyProductVisualReview } from "@/lib/video-automation/productVisualReview";
+import type { AiContentReviewInput } from "@/lib/video-automation/aiContentReviewV2";
 
 const productId = "coupang:product:100:item:200:vendor:300";
 const priorIds = ["t4F3OHxGGeg", "f9zPg0OEqG8"];
@@ -40,6 +41,7 @@ beforeEach(async () => {
         policyReference: "TEST_ONLY_CONTRACT" }]
     },
     review: { productIdentity: { ...attestation }, affiliateIdentity: { ...attestation },
+      reviewerType: "human",
       fullHumanContent: { ...attestation }, exactSpokenName: { ...attestation }, rights: { ...attestation }, crossVideo: { ...attestation },
       priorPublicationSimilarityResult: "distinct", reviewedPriorVideoIds: [...priorIds],
       priorPublicationSources: priorPublications.map((entry, index) => ({ ...entry, sourceSha256: [String(index + 1).repeat(64)] })),
@@ -100,6 +102,8 @@ describe("independent product visual signing gate", () => {
     expect(verifyProductVisualReview({ receipt: { ...receipt, canonicalProductName: "다른 이름" }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt: { ...receipt, signature: "" }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt: { ...receipt, captionSha256: sha("other-caption") }, ...context, publicKey }).ok).toBe(false);
+    expect(verifyProductVisualReview({ receipt: { ...receipt, reviewerType: "ai_multimodal" }, ...context, publicKey }).ok).toBe(false);
+    expect(verifyProductVisualReview({ receipt: { ...receipt, contentEvidenceSha256: sha("other-review") }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt, ...context, publicKey, videoSha256: sha(await readFile(manifest.files.audio.path)) }).ok).toBe(false);
   });
 
@@ -122,5 +126,37 @@ describe("independent product visual signing gate", () => {
     await writeFile(manifest.files.captions.path, aliasCaption);
     manifest.files.captions.sha256 = sha(aliasCaption);
     await expect(signFixture()).rejects.toMatchObject({ safeCode: "CAPTION_CANONICAL_NAME_MISMATCH" });
+  });
+
+  test("accepts explicit independent AI visual and acoustic evidence without claiming human review", async () => {
+    const check = (basis: string) => ({ verdict: "pass" as const, evidenceIds: ["bound-media"], rationale: "Independent review fixture", basis });
+    const assessment: AiContentReviewInput = {
+      schema: "ai-content-assessment/v2",
+      identity: { productId, videoSha256: manifest.files.video.sha256, audioSha256: manifest.files.audio.sha256 },
+      expected: { productId, videoSha256: manifest.files.video.sha256, audioSha256: manifest.files.audio.sha256 },
+      reviewer: { kind: "ai", id: "independent-ai-fixture", model: "audio-visual-fixture", version: "v2", runId: "review-run", generatorRunId: "generator-run" },
+      evidenceIds: ["bound-media"], durationSeconds: 20, decodeComplete: true,
+      visual: { method: "native_video_review", analyzedIntervals: [[0, 20]], unresolvedIntervals: [], frameCount: 40, maxSampleGapSeconds: 0.5, sourceLineageReviewed: true },
+      audio: { method: "native_audio_review", analyzedIntervals: [[0, 20]], unresolvedIntervals: [], asrFullPass: true },
+      checks: { product: check("visual_evidence"), caption: check("visual_and_transcript"), script: check("original_script_and_asr"), spokenName: check("audio_evidence"), crossVideo: check("source_lineage_and_body_comparison") },
+      comparedVideoIds: priorIds, requiredPriorVideoIds: priorIds, findings: [], rights: { status: "unverified", evidenceIds: [] }
+    };
+    const bytes = JSON.stringify(assessment);
+    const assessmentFile = await file("ai-assessment.json", bytes);
+    manifest.review.reviewerType = "ai_multimodal";
+    manifest.review.aiContentAssessment = assessmentFile;
+    manifest.review.fullHumanContent.status = "unverified";
+    manifest.review.exactSpokenName.status = "unverified";
+    const receipt = await signFixture();
+    expect(receipt.reviewerType).toBe("ai_multimodal");
+    expect(receipt.contentEvidenceSha256).toBe(sha(bytes));
+    expect(verifyProductVisualReview({ receipt, productId, canonicalProductName: manifest.canonicalProductName,
+      affiliateProductId: productId, affiliateUrl: manifest.affiliateUrl, videoSha256: receipt.videoSha256,
+      publicKey, requiredPriorVideoIds: priorIds })).toEqual({ ok: true });
+    assessment.audio.method = "asr_only";
+    const asrOnly = JSON.stringify(assessment);
+    await writeFile(assessmentFile.path, asrOnly);
+    assessmentFile.sha256 = sha(asrOnly);
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "AI_ACOUSTIC_REVIEW_NOT_PASS" });
   });
 });
