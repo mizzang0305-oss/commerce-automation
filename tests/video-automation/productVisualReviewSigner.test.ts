@@ -34,6 +34,7 @@ beforeEach(async () => {
       audio: await file("tts.wav", "tts-fixture"),
       narration: await file("narration.json", "narration-fixture"),
       script: await file("script.txt", "script-fixture"),
+      captions: await file("captions.json", JSON.stringify({ schema: "fresh-caption-timeline/v1", audioSha256: sha("tts-fixture"), canonicalProductName: "정확한 상품명", cues: [{ text: "정확한 상품명" }] })),
       sourceImages: [{ ...(await file("image.jpg", "product-image-fixture")), productId,
         rightsStatus: "verified", rightsEvidenceId: "TEST_RIGHTS", rightsEvidencePath: review.path,
         policyReference: "TEST_ONLY_CONTRACT" }]
@@ -52,6 +53,7 @@ const signFixture = () => signProductVisualReview({ manifest, currentPriorPublic
 describe("independent product visual signing gate", () => {
   test("signer and publisher verifier serialize the same payload bytes", async () => {
     const receipt = await signFixture();
+    expect(receipt.captionSha256).toBe(manifest.files.captions.sha256);
     expect(verifyProductVisualReview({ receipt, productId, canonicalProductName: manifest.canonicalProductName, affiliateProductId: productId,
       affiliateUrl: manifest.affiliateUrl, videoSha256: manifest.files.video.sha256, publicKey, requiredPriorVideoIds: priorIds })).toEqual({ ok: true });
     expect(productVisualReviewPayload(receipt)).not.toContain("signature");
@@ -82,7 +84,8 @@ describe("independent product visual signing gate", () => {
     ["narration bytes", async () => { await writeFile(manifest.files.narration.path, "changed"); }, "NARRATION_HASH_MISMATCH"],
     ["audio bytes", async () => { await writeFile(manifest.files.audio.path, "changed"); }, "AUDIO_HASH_MISMATCH"],
     ["video bytes", async () => { await writeFile(manifest.files.video.path, "changed"); }, "VIDEO_HASH_MISMATCH"],
-    ["script bytes", async () => { await writeFile(manifest.files.script.path, "changed"); }, "SCRIPT_HASH_MISMATCH"]
+    ["script bytes", async () => { await writeFile(manifest.files.script.path, "changed"); }, "SCRIPT_HASH_MISMATCH"],
+    ["caption bytes", async () => { await writeFile(manifest.files.captions.path, "historical-caption"); }, "CAPTION_HASH_MISMATCH"]
   ])("rejects changed %s before signing", async (_name, mutate, expected) => {
     await mutate();
     await expect(signFixture()).rejects.toMatchObject({ safeCode: expected });
@@ -96,6 +99,7 @@ describe("independent product visual signing gate", () => {
     expect(verifyProductVisualReview({ receipt, ...context, publicKey: other }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt: { ...receipt, canonicalProductName: "다른 이름" }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt: { ...receipt, signature: "" }, ...context, publicKey }).ok).toBe(false);
+    expect(verifyProductVisualReview({ receipt: { ...receipt, captionSha256: sha("other-caption") }, ...context, publicKey }).ok).toBe(false);
     expect(verifyProductVisualReview({ receipt, ...context, publicKey, videoSha256: sha(await readFile(manifest.files.audio.path)) }).ok).toBe(false);
   });
 
@@ -104,5 +108,19 @@ describe("independent product visual signing gate", () => {
     manifest.review.priorPublicationSources[0].productId = productId;
     await expect(signProductVisualReview({ manifest, currentPriorPublications: publications, privateKeyPem }))
       .rejects.toMatchObject({ safeCode: "PRODUCT_ALREADY_PUBLISHED" });
+  });
+
+  test("rejects a historical caption timeline bound to another audio hash", async () => {
+    const oldCaption = JSON.stringify({ schema: "fresh-caption-timeline/v1", audioSha256: sha("old-audio"), canonicalProductName: manifest.canonicalProductName, cues: [{ text: manifest.canonicalProductName }] });
+    await writeFile(manifest.files.captions.path, oldCaption);
+    manifest.files.captions.sha256 = sha(oldCaption);
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "CAPTION_AUDIO_BINDING_MISMATCH" });
+  });
+
+  test("rejects a speech alias or other name in visible captions", async () => {
+    const aliasCaption = JSON.stringify({ schema: "fresh-caption-timeline/v1", audioSha256: manifest.files.audio.sha256, canonicalProductName: "이지바이", cues: [{ text: "이지바이" }] });
+    await writeFile(manifest.files.captions.path, aliasCaption);
+    manifest.files.captions.sha256 = sha(aliasCaption);
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "CAPTION_CANONICAL_NAME_MISMATCH" });
   });
 });

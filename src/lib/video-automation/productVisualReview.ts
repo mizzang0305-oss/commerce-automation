@@ -16,6 +16,7 @@ export type ProductVisualReviewReceipt = {
   audioSha256: string;
   narrationSha256: string;
   scriptSha256: string;
+  captionSha256: string;
   rightsEvidenceId: string;
   rightsReview: "passed";
   productContentReview: "passed";
@@ -43,6 +44,7 @@ export function productVisualReviewPayload(receipt: ProductVisualReviewReceipt):
     audioSha256: receipt.audioSha256,
     narrationSha256: receipt.narrationSha256,
     scriptSha256: receipt.scriptSha256,
+    captionSha256: receipt.captionSha256,
     rightsEvidenceId: receipt.rightsEvidenceId,
     rightsReview: receipt.rightsReview,
     productContentReview: receipt.productContentReview,
@@ -78,7 +80,7 @@ export function verifyProductVisualReview(input: {
       !SHA256.test(receipt.affiliateUrlSha256) || receipt.affiliateUrlSha256 !== sha256(input.affiliateUrl) ||
       !SHA256.test(receipt.videoSha256) || receipt.videoSha256 !== input.videoSha256.toLowerCase() ||
       !Array.isArray(receipt.sourceSha256) || receipt.sourceSha256.length < 1 || receipt.sourceSha256.some((hash) => !SHA256.test(hash)) ||
-      !SHA256.test(receipt.audioSha256) || !SHA256.test(receipt.narrationSha256) || !SHA256.test(receipt.scriptSha256) ||
+      !SHA256.test(receipt.audioSha256) || !SHA256.test(receipt.narrationSha256) || !SHA256.test(receipt.scriptSha256) || !SHA256.test(receipt.captionSha256) ||
       receipt.rightsReview !== "passed" ||
       receipt.productContentReview !== "passed" || receipt.audioScriptReview !== "passed" || receipt.crossVideoReview !== "passed" ||
       receipt.priorPublicationSimilarityResult !== "distinct" ||

@@ -17,6 +17,7 @@ export type ProductVisualSigningManifest = {
     audio: BoundFile;
     narration: BoundFile;
     script: BoundFile;
+    captions: BoundFile;
     sourceImages: Array<BoundFile & {
       productId: string;
       rightsStatus: "verified" | "unverified";
@@ -77,7 +78,7 @@ export async function signProductVisualReview(input: {
   const currentPriorVideoIds = input.currentPriorPublications.map((entry) => entry.youtubeVideoId);
   requireGate(m?.schema === "product-visual-signing-manifest/v1", "REVIEW_MANIFEST_INVALID");
   requireGate(PRODUCT_ID.test(m.productId) && m.affiliateProductId === m.productId && m.canonicalProductName?.trim() && /^https:\/\//u.test(m.affiliateUrl), "PRODUCT_IDENTITY_INVALID");
-  requireGate(m.files?.video && m.files.audio && m.files.narration && m.files.script && Array.isArray(m.files.sourceImages) && m.files.sourceImages.length > 0, "REVIEW_FILES_MISSING");
+  requireGate(m.files?.video && m.files.audio && m.files.narration && m.files.script && m.files.captions && Array.isArray(m.files.sourceImages) && m.files.sourceImages.length > 0, "REVIEW_FILES_MISSING");
   requireGate(m.review?.reviewerId?.trim() && m.review.reviewerVersion?.trim() && m.review.evidenceId?.trim(), "REVIEWER_IDENTITY_MISSING");
   requireGate(m.review.priorPublicationSimilarityResult === "distinct", "PRIOR_PUBLICATION_SIMILARITY_UNVERIFIED");
   requireGate(Array.isArray(input.currentPriorPublications) && input.currentPriorPublications.every((entry) => VIDEO_ID.test(entry.youtubeVideoId) && PRODUCT_ID.test(entry.productId)) &&
@@ -107,6 +108,15 @@ export async function signProductVisualReview(input: {
   await verifyBoundFile(m.files.audio, "AUDIO_HASH_MISMATCH");
   await verifyBoundFile(m.files.narration, "NARRATION_HASH_MISMATCH");
   await verifyBoundFile(m.files.script, "SCRIPT_HASH_MISMATCH");
+  await verifyBoundFile(m.files.captions, "CAPTION_HASH_MISMATCH");
+  let captionTimeline: { schema?: unknown; audioSha256?: unknown; canonicalProductName?: unknown; cues?: Array<{ text?: unknown }> };
+  try { captionTimeline = JSON.parse(await readFile(m.files.captions.path, "utf8")); }
+  catch { throw new SigningGateError("CAPTION_TIMELINE_INVALID"); }
+  requireGate(captionTimeline?.schema === "fresh-caption-timeline/v1" && Array.isArray(captionTimeline.cues) && captionTimeline.cues.length > 0, "CAPTION_TIMELINE_INVALID");
+  requireGate(captionTimeline.audioSha256 === m.files.audio.sha256, "CAPTION_AUDIO_BINDING_MISMATCH");
+  const compact = (value: string): string => value.toLocaleLowerCase("ko").replace(/[^가-힣a-z0-9]/gu, "");
+  const visibleText = captionTimeline.cues.map((cue) => cue.text).filter((text): text is string => typeof text === "string").join(" ");
+  requireGate(captionTimeline.canonicalProductName === m.canonicalProductName && compact(visibleText).includes(compact(m.canonicalProductName)), "CAPTION_CANONICAL_NAME_MISMATCH");
   const imageHashes = new Set<string>();
   for (const image of m.files.sourceImages) {
     requireGate(image.productId === m.productId, "SOURCE_PRODUCT_MISMATCH");
@@ -133,6 +143,7 @@ export async function signProductVisualReview(input: {
     sourceSha256: m.files.sourceImages.map((image) => image.sha256),
     audioSha256: m.files.audio.sha256, narrationSha256: m.files.narration.sha256,
     scriptSha256: m.files.script.sha256,
+    captionSha256: m.files.captions.sha256,
     rightsEvidenceId: m.files.sourceImages.map((image) => image.rightsEvidenceId).join(","),
     rightsReview: "passed", productContentReview: "passed", audioScriptReview: "passed", crossVideoReview: "passed",
     priorPublicationSimilarityResult: "distinct", reviewedPriorVideoIds: [...m.review.reviewedPriorVideoIds],
