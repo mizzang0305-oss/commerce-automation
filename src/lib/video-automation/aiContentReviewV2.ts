@@ -40,7 +40,7 @@ export type AiContentReviewAssessment = {
   auditStatus: "complete" | "incomplete" | "invalid";
   contentVerdict: "pass" | "fail" | "indeterminate";
   reviewerKind: "ai" | "human" | "unknown";
-  reviewerType: "ai_multimodal" | "ai_visual" | "human" | "unknown";
+  reviewerType: "composite" | "ai_visual" | "ai_audio" | "human" | "unknown";
   visualVerdict: "pass" | "fail" | "indeterminate";
   asrVerdict: "pass" | "indeterminate";
   acousticVerdict: "pass" | "fail" | "not_tested" | "indeterminate";
@@ -112,7 +112,7 @@ export function evaluateAiContentReview(input: AiContentReviewInput): AiContentR
     if (!["ai", "human"].includes(reviewer.kind) || ![reviewer.id, reviewer.version, reviewer.runId, reviewer.generatorRunId].every(filled) || (reviewer.kind === "ai" && !filled(reviewer.model))) return invalid("REVIEWER_INVALID");
     if (reviewer.runId === reviewer.generatorRunId) return invalid("GENERATOR_SELF_REVIEW");
     result.reviewerKind = reviewer.kind;
-    result.reviewerType = reviewer.kind === "human" ? "human" : input.audio.method === "asr_only" ? "ai_visual" : "ai_multimodal";
+    result.reviewerType = reviewer.kind === "human" ? "human" : input.audio.method === "asr_only" ? "ai_visual" : input.visual.frameCount === 0 || input.visual.analyzedIntervals.length === 0 ? "ai_audio" : "composite";
     result.humanReviewClaimed = reviewer.kind === "human";
     if (!Array.isArray(input.evidenceIds) || !input.evidenceIds.length || !input.evidenceIds.every(filled) || !unique(input.evidenceIds)) return invalid("EVIDENCE_INDEX_INVALID");
     const refs = (ids: string[]): boolean => Array.isArray(ids) && ids.length > 0 && unique(ids) && ids.every((id) => input.evidenceIds.includes(id));

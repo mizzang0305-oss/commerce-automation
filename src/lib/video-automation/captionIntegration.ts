@@ -74,6 +74,15 @@ export function restoreKnownCaptionTokens<T extends WordAlignmentToken>(words: r
   });
 }
 
+/** Forced alignment supplies timing only; it may not silently rewrite narration-intent captions. */
+export function requireNarrationIntentAlignment<T extends WordAlignmentToken>(narrationIntent: string, words: readonly T[]): T[] {
+  const compact = (value: string) => value.toLocaleLowerCase("ko").replace(/[^가-힣a-z0-9]/gu, "");
+  if (!compact(narrationIntent) || compact(words.map((word) => word.word).join(" ")) !== compact(narrationIntent)) {
+    throw new Error("CAPTION_ALIGNMENT_INTENT_MISMATCH");
+  }
+  return words.map((word) => ({ ...word }));
+}
+
 /** Split only a punctuation-fused long alignment token; never invent or replace spoken words. */
 export function splitOverlongPunctuationToken<T extends WordAlignmentToken>(words: readonly T[]): T[] {
   return words.flatMap((word) => {

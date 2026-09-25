@@ -17,7 +17,7 @@ export type ProductVisualReviewReceipt = {
   narrationSha256: string;
   scriptSha256: string;
   captionSha256: string;
-  reviewerType: "human" | "ai_multimodal";
+  reviewerType: "human" | "composite" | "ai_multimodal";
   contentEvidenceSha256: string;
   rightsEvidenceId: string;
   rightsReview: "passed";
@@ -85,7 +85,7 @@ export function verifyProductVisualReview(input: {
       !SHA256.test(receipt.videoSha256) || receipt.videoSha256 !== input.videoSha256.toLowerCase() ||
       !Array.isArray(receipt.sourceSha256) || receipt.sourceSha256.length < 1 || receipt.sourceSha256.some((hash) => !SHA256.test(hash)) ||
       !SHA256.test(receipt.audioSha256) || !SHA256.test(receipt.narrationSha256) || !SHA256.test(receipt.scriptSha256) || !SHA256.test(receipt.captionSha256) ||
-      !["human", "ai_multimodal"].includes(receipt.reviewerType) || !SHA256.test(receipt.contentEvidenceSha256) ||
+      !["human", "composite", "ai_multimodal"].includes(receipt.reviewerType) || !SHA256.test(receipt.contentEvidenceSha256) ||
       receipt.rightsReview !== "passed" ||
       receipt.productContentReview !== "passed" || receipt.audioScriptReview !== "passed" || receipt.crossVideoReview !== "passed" ||
       receipt.priorPublicationSimilarityResult !== "distinct" ||

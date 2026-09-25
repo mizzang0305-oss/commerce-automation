@@ -33,11 +33,33 @@ export function normalizeProductNameForPronunciation(canonicalProductName: strin
     .replace(/행거/gu, "행거,")
     .replace(/스테인리스/gu, "스테인리스,")
     .replace(/슬랩/gu, "슬랩,")
-    .replace(/분리수납함/gu, "분리 수납함");
+    .replace(/분리수납함/gu, "분리 수납함")
+    .replace(/[,，]$/u, "");
+}
+
+/** Restore display identity for caption text; this never certifies what the audio actually says. */
+export function restoreCanonicalDisplayNarration(spokenNarration: string, canonicalProductName: string, pronunciationProductName: string): string {
+  const canonical = normalize(canonicalProductName);
+  const pronunciation = normalize(pronunciationProductName);
+  if (!canonical || !pronunciation || !spokenNarration.includes(pronunciation)) throw new Error("CAPTION_NARRATION_PRODUCT_IDENTITY_MISSING");
+  return spokenNarration.split(pronunciation).join(canonical);
 }
 
 function replaceCanonicalProductName(value: string, canonical: string, pronunciation: string): string {
-  return value.split(canonical).join(pronunciation);
+  const parts = value.split(canonical);
+  if (parts.length === 1) return value;
+  const last = canonical.codePointAt(canonical.length - 1) ?? 0;
+  const coda = last >= 0xac00 && last <= 0xd7a3 ? (last - 0xac00) % 28 : null;
+  let result = parts[0];
+  for (const suffix of parts.slice(1)) {
+    const corrected = suffix.replace(/^(으로|로|을|를)/u, (particle) => {
+      if (coda === null) return particle;
+      if (particle === "으로" || particle === "로") return coda === 0 || coda === 8 ? "로" : "으로";
+      return coda === 0 ? "를" : "을";
+    });
+    result += pronunciation + corrected;
+  }
+  return result;
 }
 
 export function normalizeKoreanTtsPronunciation(value: string): string {

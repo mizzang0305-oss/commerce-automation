@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildPopGroupCaptions, restoreKnownCaptionTokens, splitOverlongPunctuationToken } from "@/lib/video-automation/captionIntegration";
+import { buildPopGroupCaptions, requireNarrationIntentAlignment, restoreKnownCaptionTokens, splitOverlongPunctuationToken } from "@/lib/video-automation/captionIntegration";
 
 describe("caption integration", () => {
   test("builds monotonic POP_GROUP cues with word arrays", () => {
@@ -28,5 +28,16 @@ describe("caption integration", () => {
   });
   test("does not split a long word without a real punctuation boundary", () => {
     expect(() => splitOverlongPunctuationToken([{ word: "긴정렬오류", start: 0, end: 3, confidence: null }])).toThrow("CAPTION_ALIGNMENT_TOKEN_TOO_LONG");
+  });
+  test("rejects ASR-like typo instead of promoting it into caption text", () => {
+    const alignment = [{ word: "접이씨", start: 0, end: 0.4, confidence: 0.8 }];
+    expect(() => requireNarrationIntentAlignment("접이식", alignment)).toThrow("CAPTION_ALIGNMENT_INTENT_MISMATCH");
+  });
+  test("accepts aligned canonical display text while ignoring punctuation-only drift", () => {
+    const alignment = [
+      { word: "EasyBuy", start: 0, end: 0.3, confidence: 0.8 },
+      { word: "접이식", start: 0.4, end: 0.8, confidence: 0.8 }
+    ];
+    expect(requireNarrationIntentAlignment("EasyBuy, 접이식.", alignment)).toEqual(alignment);
   });
 });

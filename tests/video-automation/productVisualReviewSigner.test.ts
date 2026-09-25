@@ -143,12 +143,12 @@ describe("independent product visual signing gate", () => {
     };
     const bytes = JSON.stringify(assessment);
     const assessmentFile = await file("ai-assessment.json", bytes);
-    manifest.review.reviewerType = "ai_multimodal";
+    manifest.review.reviewerType = "composite";
     manifest.review.aiContentAssessment = assessmentFile;
     manifest.review.fullHumanContent.status = "unverified";
     manifest.review.exactSpokenName.status = "unverified";
     const receipt = await signFixture();
-    expect(receipt.reviewerType).toBe("ai_multimodal");
+    expect(receipt.reviewerType).toBe("composite");
     expect(receipt.contentEvidenceSha256).toBe(sha(bytes));
     expect(verifyProductVisualReview({ receipt, productId, canonicalProductName: manifest.canonicalProductName,
       affiliateProductId: productId, affiliateUrl: manifest.affiliateUrl, videoSha256: receipt.videoSha256,
@@ -157,6 +157,10 @@ describe("independent product visual signing gate", () => {
     const asrOnly = JSON.stringify(assessment);
     await writeFile(assessmentFile.path, asrOnly);
     assessmentFile.sha256 = sha(asrOnly);
-    await expect(signFixture()).rejects.toMatchObject({ safeCode: "AI_ACOUSTIC_REVIEW_NOT_PASS" });
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "AI_COMPOSITE_MODALITIES_REQUIRED" });
+  });
+  test.each(["ai_visual", "ai_audio"])("cannot sign an incomplete %s reviewer type", async (reviewerType) => {
+    manifest.review.reviewerType = reviewerType as never;
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "REVIEWER_TYPE_INVALID" });
   });
 });

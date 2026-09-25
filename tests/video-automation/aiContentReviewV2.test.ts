@@ -24,7 +24,7 @@ describe("AI content review V2 policy (not a publish authorization)", () => {
   it("permits an independent AI content assessment without claiming human playback", () => {
     const result = evaluateAiContentReview(review());
     expect(result).toMatchObject({
-      auditStatus: "complete", contentVerdict: "pass", reviewerKind: "ai", reviewerType: "ai_multimodal",
+      auditStatus: "complete", contentVerdict: "pass", reviewerKind: "ai", reviewerType: "composite",
       humanReviewClaimed: false, visualVerdict: "pass", asrVerdict: "pass", acousticVerdict: "pass",
       rightsVerdict: "unverified", crossVideoVerdict: "pass", publicationEligibility: false, platformUploadAllowed: false
     });
@@ -43,6 +43,16 @@ describe("AI content review V2 policy (not a publish authorization)", () => {
     expect(evaluateAiContentReview(input)).toMatchObject({
       auditStatus: "incomplete", contentVerdict: "indeterminate", acousticVerdict: "not_tested", publicationEligibility: false
     });
+  });
+  it("distinguishes an audio-only AI review from a composite review", () => {
+    const input = review();
+    input.visual.analyzedIntervals = [];
+    input.visual.frameCount = 0;
+    input.visual.sourceLineageReviewed = false;
+    const result = evaluateAiContentReview(input);
+    expect(result.reviewerType).toBe("ai_audio");
+    expect(result.visualVerdict).toBe("indeterminate");
+    expect(result.contentVerdict).toBe("indeterminate");
   });
 
   it("does not convert a claimed spoken-name PASS based on ASR text into acoustic PASS", () => {

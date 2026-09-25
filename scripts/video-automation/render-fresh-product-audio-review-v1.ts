@@ -3,10 +3,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { buildPopGroupCaptions, restoreKnownCaptionTokens, splitOverlongPunctuationToken } from "../../src/lib/video-automation/captionIntegration";
+import { buildPopGroupCaptions, requireNarrationIntentAlignment, splitOverlongPunctuationToken } from "../../src/lib/video-automation/captionIntegration";
 import { evaluateFreshAudioIdentity } from "../../src/lib/video-automation/freshAudioIdentity";
 import { runJsonProcess } from "../../src/lib/video-automation/localRuntime";
 import { createLocalWhisperXProcess, PersistentWhisperXProvider } from "../../src/lib/video-automation/whisperxPersistentProvider";
+import { restoreCanonicalDisplayNarration } from "../../src/lib/video-automation/ttsNormalization";
 
 type Item = { historicalVideoId: string; historicalProductRoot: string; liveInputManifest: string; requiredExactTerms: string[]; pronunciationAliases?: Record<string, string> };
 type Config = { outputRoot: string; items: Item[] };
@@ -40,7 +41,7 @@ async function main(): Promise<void> {
       const videoRoot = join(itemRoot, "review-only-video-attempt-3");
       await mkdir(videoRoot); // exclusive; never overwrite an earlier render
       const audioEvidence = JSON.parse(await readFile(join(itemRoot, "audio-identity-result.json"), "utf8")) as {
-        productId: string; canonicalProductName: string; asrTranscript: string; audioSha256: string; historicalAudioSha256: string;
+        productId: string; canonicalProductName: string; pronunciationProductName: string; asrTranscript: string; audioSha256: string; historicalAudioSha256: string;
         sourceImageSha256: string; historicalNarrationSha256: string;
       };
       const live = JSON.parse(await readFile(resolve(item.liveInputManifest), "utf8")) as { products?: Array<{ product: {
@@ -55,13 +56,14 @@ async function main(): Promise<void> {
       if (hash(await readFile(imagePath)) !== audioEvidence.sourceImageSha256) throw new Error("SOURCE_IMAGE_CHANGED");
       const audioPath = join(itemRoot, "tts.wav");
       if (hash(await readFile(audioPath)) !== audioEvidence.audioSha256) throw new Error("NEW_AUDIO_CHANGED_SINCE_ASR");
-      const alignment = await whisper.align(audioPath, audioEvidence.asrTranscript);
-      if (alignment.status !== "success" || alignment.transcript_source !== "provided_local_asr" || !alignment.words?.length || (alignment.aligned_ratio ?? 0) < 0.95) throw new Error("NEW_AUDIO_ALIGNMENT_FAILED");
-      await writeFile(join(videoRoot, "alignment-raw.json"), `${JSON.stringify({ alignedRatio: alignment.aligned_ratio, words: alignment.words }, null, 2)}\n`, "utf8");
-      const alignedWords = splitOverlongPunctuationToken(alignment.words).map((word) => ({ ...word, word: word.word.replace(/이지바이/gu, "EasyBuy") }));
-      const words = restoreKnownCaptionTokens(alignedWords, product.canonicalProductName.split(/\s+/u));
-      const captions = buildPopGroupCaptions(words);
       const narration = (await readFile(join(itemRoot, "narration.txt"), "utf8")).trim();
+      const captionIntent = restoreCanonicalDisplayNarration(narration, product.canonicalProductName, audioEvidence.pronunciationProductName);
+      const alignment = await whisper.align(audioPath, captionIntent, "narration_intent");
+      if (alignment.status !== "success" || alignment.transcript_source !== "provided_narration_intent" || !alignment.words?.length || (alignment.aligned_ratio ?? 0) < 0.95) throw new Error("NEW_AUDIO_ALIGNMENT_FAILED");
+      await writeFile(join(videoRoot, "alignment-raw.json"), `${JSON.stringify({ alignedRatio: alignment.aligned_ratio, words: alignment.words }, null, 2)}\n`, "utf8");
+      const alignedWords = splitOverlongPunctuationToken(alignment.words);
+      const words = requireNarrationIntentAlignment(captionIntent, alignedWords);
+      const captions = buildPopGroupCaptions(words);
       const oldCandidate = JSON.parse(await readFile(join(historicalRoot, "render-plan.json"), "utf8")) as { candidateId: string };
       // The prior narration digest was captured in the audio probe; it is compared again below.
       const gate = evaluateFreshAudioIdentity({
@@ -72,7 +74,7 @@ async function main(): Promise<void> {
         requiredExactTerms: item.requiredExactTerms, pronunciationAliases: item.pronunciationAliases
       });
       if (hash(narration) === audioEvidence.historicalNarrationSha256 || audioEvidence.audioSha256 === audioEvidence.historicalAudioSha256) throw new Error("HISTORICAL_NARRATION_OR_AUDIO_REUSED");
-      await writeFile(join(videoRoot, "captions.json"), `${JSON.stringify({ schema: "fresh-caption-timeline/v1", source: "new_tts_then_new_asr_then_alignment", audioSha256: audioEvidence.audioSha256, canonicalProductName: product.canonicalProductName, cues: captions, canonicalNameMatch: gate.captionNameMatch }, null, 2)}\n`, "utf8");
+      await writeFile(join(videoRoot, "captions.json"), `${JSON.stringify({ schema: "fresh-caption-timeline/v1", source: "narration_intent_forced_alignment_with_separate_asr_gate", audioSha256: audioEvidence.audioSha256, canonicalProductName: product.canonicalProductName, cues: captions, canonicalNameMatch: gate.captionNameMatch }, null, 2)}\n`, "utf8");
       await writeFile(join(videoRoot, "alignment.json"), `${JSON.stringify({ alignedRatio: alignment.aligned_ratio, transcriptSource: alignment.transcript_source, words: alignment.words }, null, 2)}\n`, "utf8");
       const label = "상품 이미지 · 실사용 아님";
       const layout = await runJsonProcess(python, [bridge], { operation: "layout_plan", hook: plan.selectedHook, usage_label: label }, 60_000);

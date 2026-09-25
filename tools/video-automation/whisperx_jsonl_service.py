@@ -28,6 +28,12 @@ def words_from_alignment(aligned: dict[str, Any]) -> tuple[list[dict[str, Any]],
     return words, missing
 
 
+def provided_transcript_source(role: str) -> str:
+    if role not in ("local_asr", "narration_intent"):
+        raise ValueError("WHISPERX_TRANSCRIPT_ROLE_INVALID")
+    return "provided_narration_intent" if role == "narration_intent" else "provided_local_asr"
+
+
 def main() -> int:
     try:
         import psutil  # type: ignore[import-not-found]
@@ -52,9 +58,10 @@ def main() -> int:
             audio = whisperx.load_audio(str(request["audio_path"]))
             provided_transcript = str(request.get("transcript", "")).strip()
             if provided_transcript:
+                transcript_role = request.get("transcript_role", "local_asr")
                 duration = len(audio) / 16000
                 transcript_segments = [{"start": 0.0, "end": duration, "text": provided_transcript}]
-                transcript_source = "provided_local_asr"
+                transcript_source = provided_transcript_source(transcript_role)
             else:
                 transcript = model.transcribe(audio, batch_size=4, language="ko")
                 transcript_segments = transcript["segments"]

@@ -28,7 +28,7 @@ export type ProductVisualSigningManifest = {
     }>;
   };
   review: {
-    reviewerType: "human" | "ai_multimodal";
+    reviewerType: "human" | "composite" | "ai_multimodal";
     aiContentAssessment?: BoundFile;
     productIdentity: Attestation;
     affiliateIdentity: Attestation;
@@ -95,7 +95,7 @@ export async function signProductVisualReview(input: {
     m.review.priorPublicationSources.every((entry) => input.currentPriorPublications.some((current) => current.youtubeVideoId === entry.youtubeVideoId && current.productId === entry.productId) &&
       Array.isArray(entry.sourceSha256) && entry.sourceSha256.length > 0 && entry.sourceSha256.every((hash) => SHA256.test(hash))), "PRIOR_PUBLICATION_SOURCE_EVIDENCE_MISSING");
 
-  requireGate(m.review.reviewerType === "human" || m.review.reviewerType === "ai_multimodal", "REVIEWER_TYPE_INVALID");
+  requireGate(m.review.reviewerType === "human" || m.review.reviewerType === "composite" || m.review.reviewerType === "ai_multimodal", "REVIEWER_TYPE_INVALID");
   for (const [name, attestation] of Object.entries({
     productIdentity: m.review.productIdentity,
     affiliateIdentity: m.review.affiliateIdentity,
@@ -124,6 +124,7 @@ export async function signProductVisualReview(input: {
       assessmentInput.identity.videoSha256 === m.files.video.sha256 && assessmentInput.identity.audioSha256 === m.files.audio.sha256,
     "AI_CONTENT_ASSESSMENT_IDENTITY_MISMATCH");
     const assessment = evaluateAiContentReview(assessmentInput);
+    requireGate(assessment.reviewerType === "composite", "AI_COMPOSITE_MODALITIES_REQUIRED");
     requireGate(assessment.visualVerdict === "pass", "AI_VISUAL_REVIEW_NOT_PASS");
     requireGate(assessment.acousticVerdict === "pass", "AI_ACOUSTIC_REVIEW_NOT_PASS");
     requireGate(assessment.crossVideoVerdict === "pass" && assessment.auditStatus === "complete" &&
