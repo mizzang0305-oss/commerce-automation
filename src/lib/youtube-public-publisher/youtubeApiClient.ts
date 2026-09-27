@@ -121,7 +121,7 @@ export function createYouTubePublicPublisherClient(
           },
           body: JSON.stringify({
             snippet: { title: input.title, description: input.description },
-            status: { privacyStatus: "public", selfDeclaredMadeForKids: false }
+            status: { privacyStatus: input.visibility ?? "public", selfDeclaredMadeForKids: false }
           })
         });
       } catch {

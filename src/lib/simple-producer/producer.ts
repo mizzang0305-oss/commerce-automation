@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { verifyProductVisualReview } from "@/lib/video-automation/productVisualReview";
+import { fastProductionModeEnabled, verifyFastProductionReview, FAST_PRODUCTION_DISCLOSURE } from "@/lib/video-automation/fastProductionReview";
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
 import {
   enqueueYouTubePublicUploadJob,
@@ -24,6 +25,7 @@ export type SimpleProducerRunInput = {
   executePipeline: (input: SimpleProducerPipelineInput) => Promise<SimpleProducerPipelineResult>;
   now?: Date;
   reviewPublicKey?: string;
+  env?: Readonly<Record<string, string | undefined>>;
 };
 
 export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Promise<SimpleProducerRunResult> {
@@ -70,7 +72,15 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
     await completeSlot(input.producerStore, time, { status: "failed", safeError: "SIMPLE_PRODUCER_VIDEO_ASSET_NOT_READY" });
     return failed(time, "SIMPLE_PRODUCER_VIDEO_ASSET_NOT_READY", pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
   }
-  const contentReview = verifyProductVisualReview({
+  const contentReview = fastProductionModeEnabled(input.env ?? {})
+    ? verifyFastProductionReview({
+      review: pipeline.item.fastProductionReview,
+      productId: pipeline.item.productId,
+      canonicalProductName: pipeline.item.canonicalProductName,
+      videoSha256,
+      disclosureText: FAST_PRODUCTION_DISCLOSURE
+    })
+    : verifyProductVisualReview({
     receipt: pipeline.item.productVisualReview,
     productId: pipeline.item.productId,
     canonicalProductName: pipeline.item.canonicalProductName,
@@ -79,7 +89,7 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
     videoSha256,
     publicKey: input.reviewPublicKey,
     requiredPriorVideoIds: publisherState.ledger.map((entry) => entry.youtubeVideoId)
-  });
+    });
   if (!contentReview.ok) {
     await completeSlot(input.producerStore, time, { status: "failed", safeError: contentReview.safeError });
     return failed(time, contentReview.safeError, pipeline.searchCalls, pipeline.rawProductsFound, pipeline.eligibleProductsFound);
@@ -91,7 +101,8 @@ export async function runSimpleProducerOnce(input: SimpleProducerRunInput): Prom
     now: time.now,
     item: pipeline.item,
     channelKey,
-    videoSha256
+    videoSha256,
+    fastMode: fastProductionModeEnabled(input.env ?? {})
   });
   const enqueued = await enqueueYouTubePublicUploadJob(input.publisherStore, job);
   if (!enqueued.created) {
@@ -127,8 +138,11 @@ function createReadyJob(input: {
   item: NonNullable<SimpleProducerPipelineResult["item"]>;
   channelKey: YouTubePublicPublisherChannelKey;
   videoSha256: string;
+  fastMode: boolean;
 }): YouTubePublicUploadJob {
-  const disclosureText = "이 포스팅은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받습니다.";
+  const disclosureText = input.fastMode
+    ? FAST_PRODUCTION_DISCLOSURE
+    : "이 포스팅은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받습니다.";
   const title = input.item.canonicalProductName.slice(0, 100);
   const description = `${input.item.canonicalProductName}\n\n${input.item.affiliateUrl}\n\n${disclosureText}`;
   const idMaterial = `${input.date}|${input.slot}|${input.item.productId}|${input.videoSha256}`;
@@ -139,6 +153,7 @@ function createReadyJob(input: {
     videoPath: input.item.videoPath,
     videoSha256: input.videoSha256,
     productVisualReview: input.item.productVisualReview,
+    fastProductionReview: input.item.fastProductionReview,
     affiliateUrl: input.item.affiliateUrl,
     affiliateProductId: input.item.productId,
     canonicalProductName: input.item.canonicalProductName,
@@ -147,6 +162,7 @@ function createReadyJob(input: {
     description,
     disclosureText,
     machineQaStatus: "passed",
+    visibility: input.fastMode ? "unlisted" : "public",
     status: "ready",
     attemptCount: 0,
     claimedAt: "",

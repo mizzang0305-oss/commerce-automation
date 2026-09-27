@@ -8,6 +8,7 @@ import type { SimpleProducerPipelineResult, SimpleProducerRunResult } from "@/li
 import { FileYouTubePublicPublisherStore } from "@/lib/youtube-public-publisher/fileStore";
 import type { YouTubePublicPublisherState } from "@/lib/youtube-public-publisher/publisher";
 import type { ProductVisualReviewReceipt } from "@/lib/video-automation/productVisualReview";
+import type { FastProductionReview } from "@/lib/video-automation/fastProductionReview";
 
 type ConfiguredSimpleProducerRunResult = SimpleProducerRunResult | {
   status: "configuration_error";
@@ -44,6 +45,7 @@ export async function runConfiguredSimpleProducerOnce(input: {
     publisherStore,
     now: input.now,
     reviewPublicKey: env.PRODUCT_CONTENT_REVIEW_PUBLIC_KEY,
+    env,
     executePipeline: (pipelineInput) => executeLivePipeline({ cwd, env, ...pipelineInput })
   });
 }
@@ -97,6 +99,9 @@ async function executeLivePipeline(input: {
       machineQaPassed: true,
       productVisualReview: isRecord(machineItem.productVisualReview)
         ? machineItem.productVisualReview as ProductVisualReviewReceipt
+        : undefined,
+      fastProductionReview: isRecord(machineItem.fastProductionReview)
+        ? machineItem.fastProductionReview as FastProductionReview
         : undefined
     }
   };

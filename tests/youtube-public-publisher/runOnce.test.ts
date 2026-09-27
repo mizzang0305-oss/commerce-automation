@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { signedTestReview, TEST_REVIEW_PUBLIC_KEY } from "../fixtures/productVisualReview";
+import { FAST_PRODUCTION_DISCLOSURE } from "@/lib/video-automation/fastProductionReview";
 import {
   InMemoryYouTubePublicPublisherStore,
   enqueueYouTubePublicUploadJob,
@@ -39,6 +40,36 @@ function readyJob(): YouTubePublicUploadJob {
 }
 
 describe("guarded run-once public publisher", () => {
+  test("Fast Mode uploads an exact QA bound job as unlisted without a review receipt", async () => {
+    const job = readyJob();
+    job.productVisualReview = undefined;
+    job.visibility = "unlisted";
+    job.affiliateUrl = "";
+    job.productUrl = "https://www.coupang.com/vp/products/100?itemId=200&vendorItemId=300";
+    job.disclosureText = FAST_PRODUCTION_DISCLOSURE;
+    job.description = `${job.productUrl}\n${FAST_PRODUCTION_DISCLOSURE}`;
+    job.fastProductionReview = {
+      schema: "fast-production-qa/v1", productId: job.productId,
+      canonicalProductName: job.canonicalProductName, videoSha256: job.videoSha256,
+      sourceImageSha256: ["b".repeat(64), "c".repeat(64), "d".repeat(64)],
+      disclosureText: FAST_PRODUCTION_DISCLOSURE,
+      checks: { PRODUCT_MATCH: true, VIDEO_VALID: true, CONTENT_SAFE: true, DISCLOSURE_PRESENT: true }
+    };
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [job], ledger: [] });
+    let sentVisibility = "";
+    const client: YouTubePublicPublisherClient = {
+      getAccessToken: async () => ({ ok: true, accessToken: "test-access-token" }),
+      probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+      insertPublicVideo: async (request) => { sentVisibility = request.visibility ?? ""; return { ok: true, youtubeVideoId: "new-video-id" }; },
+      readbackVideo: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", privacyStatus: "unlisted", title: job.title, description: job.description })
+    };
+    const result = await runYouTubePublicPublisherOnce({ store, client, getVideoSha256: async () => job.videoSha256,
+      env: { FAST_PRODUCTION_MODE: "true", OWNER_DIRECT_OPERATION_APPROVAL: "true", YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true",
+        YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json" }, claimOwner: "test-fast" });
+    expect(result.status).toBe("uploaded");
+    expect(sentVisibility).toBe("unlisted");
+    expect(store.snapshot().ledger.at(-1)?.visibility).toBe("unlisted");
+  });
   test("accepts a ready job once and rejects its duplicate identity", async () => {
     const store = new InMemoryYouTubePublicPublisherStore({ jobs: [], ledger: [] });
 

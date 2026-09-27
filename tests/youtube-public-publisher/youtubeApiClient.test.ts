@@ -1,7 +1,26 @@
 import { describe, expect, test } from "vitest";
 import { createYouTubePublicPublisherClient } from "@/lib/youtube-public-publisher/youtubeApiClient";
+import { createHash } from "node:crypto";
 
 describe("YouTube public publisher API client", () => {
+  test("opens an unlisted resumable session for the first Fast Mode smoke", async () => {
+    const video = Buffer.from("test-video-bytes");
+    let sessionVisibility = "";
+    const client = createYouTubePublicPublisherClient({
+      readVideoFile: async () => video,
+      fetchImpl: async (input, init) => {
+        if (String(input).includes("uploadType=resumable")) {
+          sessionVisibility = (JSON.parse(String(init?.body)) as { status: { privacyStatus: string } }).status.privacyStatus;
+          return new Response(null, { status: 200, headers: { Location: "https://upload.example/session" } });
+        }
+        return Response.json({ id: "test-video-id" });
+      }
+    });
+    const result = await client.insertPublicVideo({ accessToken: "test-access-token", videoPath: "D:\\render\\product.mp4",
+      videoSha256: createHash("sha256").update(video).digest("hex"), title: "title", description: "description", visibility: "unlisted" });
+    expect(result).toEqual({ ok: true, youtubeVideoId: "test-video-id" });
+    expect(sessionVisibility).toBe("unlisted");
+  });
   test("refreshes from only the explicitly routed channel token file", async () => {
     const tokenPaths: string[] = [];
     const client = createYouTubePublicPublisherClient({

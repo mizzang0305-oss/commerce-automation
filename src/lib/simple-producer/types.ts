@@ -1,5 +1,6 @@
 import type { YouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
 import type { ProductVisualReviewReceipt } from "@/lib/video-automation/productVisualReview";
+import type { FastProductionReview } from "@/lib/video-automation/fastProductionReview";
 
 export const SIMPLE_PRODUCER_SCHEMA = "simple-producer/v1";
 
@@ -45,6 +46,7 @@ export type SimpleProducerPipelineItem = {
   videoPath: string;
   machineQaPassed: boolean;
   productVisualReview?: ProductVisualReviewReceipt;
+  fastProductionReview?: FastProductionReview;
 };
 
 export type SimpleProducerPipelineResult = {
