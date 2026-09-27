@@ -4,6 +4,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { readConfiguredSimpleProducerConfig } from "@/lib/simple-producer/config";
 import { runSimpleProducerOnce } from "@/lib/simple-producer/producer";
 import { FileSimpleProducerStore } from "@/lib/simple-producer/state";
+import { executeFreshImageShortsQueue } from "@/lib/simple-producer/freshImageShorts";
 import type { SimpleProducerPipelineResult, SimpleProducerRunResult } from "@/lib/simple-producer/types";
 import { FileYouTubePublicPublisherStore } from "@/lib/youtube-public-publisher/fileStore";
 import type { YouTubePublicPublisherState } from "@/lib/youtube-public-publisher/publisher";
@@ -46,7 +47,9 @@ export async function runConfiguredSimpleProducerOnce(input: {
     now: input.now,
     reviewPublicKey: env.PRODUCT_CONTENT_REVIEW_PUBLIC_KEY,
     env,
-    executePipeline: (pipelineInput) => executeLivePipeline({ cwd, env, ...pipelineInput })
+    executePipeline: (pipelineInput) => env.SIMPLE_PRODUCER_FRESH_QUEUE_PATH?.trim()
+      ? executeFreshImageShortsQueue({ cwd, env, queuePath: env.SIMPLE_PRODUCER_FRESH_QUEUE_PATH.trim(), ...pipelineInput })
+      : executeLivePipeline({ cwd, env, ...pipelineInput })
   });
 }
 
