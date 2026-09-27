@@ -59,10 +59,13 @@ async function prepareOne(input: {
   fetchImpl?: typeof fetch;
 }) {
   const match = PRODUCT_ID.exec(input.productId);
-  const name = String(input.source.canonicalProductName ?? "").trim();
+  const sourceName = String(input.source.canonicalProductName ?? "").trim();
+  const displayName = input.candidate.displayName.trim();
+  const name = displayName;
   const raw = parseUrl(String(input.source.rawProductUrl ?? ""));
   const affiliate = parseUrl(String(input.source.selectedAffiliateUrl ?? ""));
-  if (!match || !name || !input.candidate.displayName.trim() || !name.includes(input.candidate.displayName.split(" ")[0]) ||
+  if (!match || !sourceName || !displayName ||
+      !displayName.split(/\s+/u).every((word) => sourceName.toLocaleLowerCase().includes(word.toLocaleLowerCase())) ||
       raw.hostname !== "www.coupang.com" || raw.pathname !== `/vp/products/${match[1]}` ||
       raw.searchParams.get("itemId") !== match[2] || raw.searchParams.get("vendorItemId") !== match[3] ||
       affiliate.hostname !== "link.coupang.com" || !/^\/(?:a|re)\/[^/]+$/u.test(affiliate.pathname) ||
@@ -95,7 +98,6 @@ async function prepareOne(input: {
   const python = input.env.VIDEO_AUTOMATION_PYTHON?.trim() ?? "";
   const ttsCommand = input.env.VIDEO_AUTOMATION_TTS_COMMAND?.trim() ?? "";
   if (!python || !ttsCommand) throw new Error("FRESH_TTS_RUNTIME_MISSING");
-  const displayName = input.candidate.displayName.trim();
   const hook = input.candidate.useCase === "vehicle_organization" ? "차 안 물건, 한곳에 정리해 보세요" : "빨래 건조 공간을 살펴보세요";
   const script = input.candidate.useCase === "vehicle_organization" ? "컵과 휴지, 휴대폰을 한곳에 놓을 수 있어요. 상품 정보는 설명에서 확인하세요." : "접이식 구조와 크기를 상품 상세에서 확인하세요.";
   const narration = `${displayName}. ${hook}. ${script}`;
