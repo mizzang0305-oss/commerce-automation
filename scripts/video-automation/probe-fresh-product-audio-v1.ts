@@ -14,6 +14,7 @@ type Item = {
   liveInputManifest: string;
   requiredExactTerms: string[];
   pronunciationAliases?: Record<string, string>;
+  pronunciationAliasEvidenceId?: string;
 };
 type Config = { outputRoot: string; items: Item[] };
 const SHA = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
@@ -63,7 +64,8 @@ async function main(): Promise<void> {
       canonicalProductName: summary.canonicalProductName, asrTranscript: asr.transcript,
       captionText: "", narration: narrationPlan.narration, historicalNarration,
       audioSha256: freshAudioSha256, historicalAudioSha256,
-      requiredExactTerms: item.requiredExactTerms, pronunciationAliases: item.pronunciationAliases
+      requiredExactTerms: item.requiredExactTerms, pronunciationAliases: item.pronunciationAliases,
+      pronunciationAliasEvidenceId: item.pronunciationAliasEvidenceId
     });
     const result = {
       historicalVideoId: item.historicalVideoId, productId: summary.productKey,

@@ -15,8 +15,12 @@ export function evaluateFreshAudioIdentity(input: {
   historicalAudioSha256: string;
   requiredExactTerms: string[];
   pronunciationAliases?: Record<string, string>;
+  pronunciationAliasEvidenceId?: string;
 }): { passed: boolean; blockers: string[]; asrNameMatch: boolean; captionNameMatch: boolean } {
   const blockers: string[] = [];
+  if (Object.keys(input.pronunciationAliases ?? {}).length > 0 && !input.pronunciationAliasEvidenceId?.trim()) {
+    blockers.push("PRONUNCIATION_ALIAS_UNVERIFIED");
+  }
   const canonical = input.canonicalProductName.trim();
   const expectedSpoken = Object.entries(input.pronunciationAliases ?? {}).reduce(
     (name, [written, spoken]) => name.split(written).join(spoken), canonical

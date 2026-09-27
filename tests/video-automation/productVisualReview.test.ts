@@ -10,6 +10,8 @@ describe("independent product visual review receipt", () => {
   test("accepts only a signed exact video/product receipt covering published history", () => {
     const receipt = signedTestReview(productId, videoSha256);
     expect(verifyProductVisualReview({ receipt, ...identity, requiredPriorVideoIds: ["t4F3OHxGGeg", "f9zPg0OEqG8"] })).toEqual({ ok: true });
+    expect(verifyProductVisualReview({ receipt, ...identity, requiredPriorVideoIds: ["f9zPg0OEqG8", "t4F3OHxGGeg"] })).toEqual({ ok: true });
+    expect(verifyProductVisualReview({ receipt, ...identity, requiredPriorVideoIds: ["t4F3OHxGGeg"] })).toMatchObject({ ok: false, safeError: "PRODUCT_BODY_REVIEW_STALE" });
     expect(verifyProductVisualReview({ receipt, ...identity, requiredPriorVideoIds: ["t4F3OHxGGeg", "f9zPg0OEqG8", "N_-zn9Jxw2A"] })).toMatchObject({ ok: false, safeError: "PRODUCT_BODY_REVIEW_STALE" });
   });
 

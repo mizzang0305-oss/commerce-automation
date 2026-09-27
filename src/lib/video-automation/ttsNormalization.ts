@@ -28,7 +28,6 @@ export function buildKoreanProductNarrationPlan(input: { canonicalProductName: s
 
 export function normalizeProductNameForPronunciation(canonicalProductName: string): string {
   return normalize(canonicalProductName)
-    .replace(/EasyBuy/gu, "이지바이")
     .replace(/접이식/gu, "접이식,")
     .replace(/행거/gu, "행거,")
     .replace(/스테인리스/gu, "스테인리스,")

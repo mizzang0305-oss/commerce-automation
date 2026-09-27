@@ -9,7 +9,7 @@ import { runJsonProcess } from "../../src/lib/video-automation/localRuntime";
 import { createLocalWhisperXProcess, PersistentWhisperXProvider } from "../../src/lib/video-automation/whisperxPersistentProvider";
 import { restoreCanonicalDisplayNarration } from "../../src/lib/video-automation/ttsNormalization";
 
-type Item = { historicalVideoId: string; historicalProductRoot: string; liveInputManifest: string; requiredExactTerms: string[]; pronunciationAliases?: Record<string, string> };
+type Item = { historicalVideoId: string; historicalProductRoot: string; liveInputManifest: string; requiredExactTerms: string[]; pronunciationAliases?: Record<string, string>; pronunciationAliasEvidenceId?: string };
 type Config = { outputRoot: string; items: Item[] };
 const hash = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 
@@ -71,7 +71,8 @@ async function main(): Promise<void> {
         captionText: captions.map((cue) => cue.text).join(" "), narration,
         historicalNarrationSha256: audioEvidence.historicalNarrationSha256, audioSha256: audioEvidence.audioSha256,
         historicalAudioSha256: audioEvidence.historicalAudioSha256,
-        requiredExactTerms: item.requiredExactTerms, pronunciationAliases: item.pronunciationAliases
+        requiredExactTerms: item.requiredExactTerms, pronunciationAliases: item.pronunciationAliases,
+        pronunciationAliasEvidenceId: item.pronunciationAliasEvidenceId
       });
       if (hash(narration) === audioEvidence.historicalNarrationSha256 || audioEvidence.audioSha256 === audioEvidence.historicalAudioSha256) throw new Error("HISTORICAL_NARRATION_OR_AUDIO_REUSED");
       await writeFile(join(videoRoot, "captions.json"), `${JSON.stringify({ schema: "fresh-caption-timeline/v1", source: "narration_intent_forced_alignment_with_separate_asr_gate", audioSha256: audioEvidence.audioSha256, canonicalProductName: product.canonicalProductName, cues: captions, canonicalNameMatch: gate.captionNameMatch }, null, 2)}\n`, "utf8");
