@@ -73,6 +73,21 @@ class ProductInformationBridgeTests(unittest.TestCase):
                 "source_sha256": ["0" * 64],
             })
 
+    def test_rights_safe_text_requires_card_role_and_source_hash(self) -> None:
+        with self.assertRaisesRegex(ValueError, "RIGHTS_SAFE_TEXT_CARD_REQUIRED"):
+            bridge.render_v2({
+                "visual_mode": "rights_safe_text", "output": str(Path(self.temp.name) / "output.mp4"),
+                "image_paths": [str(self.image)], "allowed_root": self.temp.name,
+                "scene_roles": ["product_reference"],
+                "source_sha256": [hashlib.sha256(self.image.read_bytes()).hexdigest()],
+            })
+        with self.assertRaisesRegex(ValueError, "PRODUCT_INFORMATION_SOURCE_HASH_MISMATCH"):
+            bridge.render_v2({
+                "visual_mode": "rights_safe_text", "output": str(Path(self.temp.name) / "output.mp4"),
+                "image_paths": [str(self.image)], "allowed_root": self.temp.name,
+                "scene_roles": ["rights_safe_text_card"], "source_sha256": ["0" * 64],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

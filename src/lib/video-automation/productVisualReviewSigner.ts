@@ -9,6 +9,7 @@ type BoundFile = { path: string; sha256: string };
 /** Human-authored input. The signer checks evidence bytes, but cannot replace a human rights or content judgment. */
 export type ProductVisualSigningManifest = {
   schema: "product-visual-signing-manifest/v1";
+  visualMode?: "product_information" | "rights_safe_text";
   productId: string;
   canonicalProductName: string;
   affiliateProductId: string;
@@ -21,6 +22,7 @@ export type ProductVisualSigningManifest = {
     captions: BoundFile;
     sourceImages: Array<BoundFile & {
       productId: string;
+      assetKind?: "self_created_text_card";
       rightsStatus: "verified" | "unverified";
       rightsEvidenceId: string;
       rightsEvidencePath: string;
@@ -80,7 +82,8 @@ export async function signProductVisualReview(input: {
 }): Promise<ProductVisualReviewReceipt> {
   const { manifest: m } = input;
   const currentPriorVideoIds = input.currentPriorPublications.map((entry) => entry.youtubeVideoId);
-  requireGate(m?.schema === "product-visual-signing-manifest/v1", "REVIEW_MANIFEST_INVALID");
+  requireGate(m?.schema === "product-visual-signing-manifest/v1" &&
+    (!m.visualMode || m.visualMode === "product_information" || m.visualMode === "rights_safe_text"), "REVIEW_MANIFEST_INVALID");
   requireGate(PRODUCT_ID.test(m.productId) && m.affiliateProductId === m.productId && m.canonicalProductName?.trim() && /^https:\/\//u.test(m.affiliateUrl), "PRODUCT_IDENTITY_INVALID");
   requireGate(m.files?.video && m.files.audio && m.files.narration && m.files.script && m.files.captions && Array.isArray(m.files.sourceImages) && m.files.sourceImages.length > 0, "REVIEW_FILES_MISSING");
   requireGate(m.review?.reviewerId?.trim() && m.review.reviewerVersion?.trim() && m.review.evidenceId?.trim(), "REVIEWER_IDENTITY_MISSING");
@@ -148,6 +151,9 @@ export async function signProductVisualReview(input: {
   const visibleText = captionTimeline.cues.map((cue) => cue.text).filter((text): text is string => typeof text === "string").join(" ");
   requireGate(captionTimeline.canonicalProductName === m.canonicalProductName && compact(visibleText).includes(compact(m.canonicalProductName)), "CAPTION_CANONICAL_NAME_MISMATCH");
   const imageHashes = new Set<string>();
+  if (m.visualMode === "rights_safe_text") {
+    requireGate(m.files.sourceImages.length === 1 && m.files.sourceImages[0].assetKind === "self_created_text_card", "RIGHTS_SAFE_TEXT_CARD_REQUIRED");
+  }
   for (const image of m.files.sourceImages) {
     requireGate(image.productId === m.productId, "SOURCE_PRODUCT_MISMATCH");
     requireGate(image.rightsStatus === "verified" && image.rightsEvidenceId?.trim() && image.policyReference?.trim(), "SOURCE_RIGHTS_UNVERIFIED");
@@ -165,7 +171,7 @@ export async function signProductVisualReview(input: {
   try { key = createPrivateKey(input.privateKeyPem); } catch { throw new SigningGateError("REVIEW_SIGNING_KEY_INVALID"); }
   requireGate(key.asymmetricKeyType === "ed25519", "REVIEW_SIGNING_KEY_INVALID");
   const receipt: ProductVisualReviewReceipt = {
-    schema: "product-visual-review/v1", visualMode: "product_information",
+    schema: "product-visual-review/v1", visualMode: m.visualMode ?? "product_information",
     productId: m.productId, canonicalProductName: m.canonicalProductName,
     affiliateProductId: m.affiliateProductId,
     affiliateUrlSha256: createHash("sha256").update(m.affiliateUrl).digest("hex"),

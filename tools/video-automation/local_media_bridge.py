@@ -233,16 +233,20 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     output = Path(request["output"]).resolve()
     work = output.parent / "render-inputs"
     work.mkdir(parents=True, exist_ok=True)
-    product_information = request.get("visual_mode") == "product_information"
+    visual_mode = request.get("visual_mode")
+    rights_safe_text = visual_mode == "rights_safe_text"
+    product_information = visual_mode == "product_information" or rights_safe_text
     source_paths = exact_product_paths(request["image_paths"], request.get("allowed_root")) if product_information else [Path(value).resolve(strict=True) for value in request["image_paths"]]
     scene_roles = request.get("scene_roles")
     if not isinstance(scene_roles, list) or len(scene_roles) != len(source_paths):
         if product_information:
             raise ValueError("PRODUCT_INFORMATION_SCENE_ROLES_REQUIRED")
         scene_roles = ["generic_usage_example"] * len(source_paths)
-    if any(role not in {"product_reference", "generic_usage_example"} for role in scene_roles):
+    if any(role not in {"product_reference", "generic_usage_example", "rights_safe_text_card"} for role in scene_roles):
         raise ValueError("VIDEO_SCENE_ROLE_INVALID")
-    if product_information and (not source_paths or any(role != "product_reference" for role in scene_roles)):
+    if rights_safe_text and (len(source_paths) != 1 or scene_roles != ["rights_safe_text_card"]):
+        raise ValueError("RIGHTS_SAFE_TEXT_CARD_REQUIRED")
+    if product_information and not rights_safe_text and (not source_paths or any(role != "product_reference" for role in scene_roles)):
         raise ValueError("PRODUCT_INFORMATION_EXACT_SCENES_REQUIRED")
     source_hashes = request.get("source_sha256")
     if product_information and (not isinstance(source_hashes, list) or len(source_hashes) != len(source_paths) or
@@ -263,7 +267,7 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     starts = [float(cue["start"]) for cue in captions]
     shot_durations = [max(0.12, (starts[index + 1] if index + 1 < len(starts) else audio_duration) - start) for index, start in enumerate(starts)]
     generic_paths = [path for path, role in zip(source_paths, scene_roles) if role == "generic_usage_example"]
-    reference_paths = [path for path, role in zip(source_paths, scene_roles) if role == "product_reference"]
+    reference_paths = [path for path, role in zip(source_paths, scene_roles) if role in {"product_reference", "rights_safe_text_card"}]
     if not generic_paths and not product_information:
         raise ValueError("GENERIC_USAGE_SCENES_REQUIRED")
     shot_images = (
@@ -303,7 +307,7 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
     short_label_path = work / "usage-label-short.txt"
     reference_label_path = work / "product-reference-label.txt"
     full_label_path.write_text(str(planned["usage_label"]), encoding="utf-8")
-    short_label_path.write_text("상품 이미지 · 실사용 아님" if product_information else "사용 예시", encoding="utf-8")
+    short_label_path.write_text("상품 정보 카드" if rights_safe_text else "상품 이미지 · 실사용 아님" if product_information else "사용 예시", encoding="utf-8")
     reference_label_path.write_text("상품 참고 이미지", encoding="utf-8")
 
     def build_v2_filters(*args: Any, **kwargs: Any) -> list[str]:
@@ -379,9 +383,10 @@ def render_v2(request: dict[str, Any]) -> dict[str, Any]:
         "primary_visual_width_ratio": float(request.get("primary_visual_width_ratio", 0.92)),
         "canvas_fill_ratio": float(request.get("canvas_fill_ratio", 0.93)),
         "motion_preset": "push_pan", "usage_label_mode": "full_then_abbreviated",
-        "product_reference_scene_count": len(shot_images) if product_information else 1 if reference_paths else 0,
+        "product_reference_scene_count": 0 if rights_safe_text else len(shot_images) if product_information else 1 if reference_paths else 0,
+        "rights_safe_text_card_scene_count": len(shot_images) if rights_safe_text else 0,
         "generic_usage_scene_source_count": len(generic_paths),
-        "visual_mode": "product_information" if product_information else "generic_usage_example",
+        "visual_mode": "rights_safe_text" if rights_safe_text else "product_information" if product_information else "generic_usage_example",
         "publication_ready": False,
         "exact_product_use_claimed": False,
         "usage_labels_separate_from_hook": True, "layout": planned,

@@ -6,7 +6,7 @@ const PRODUCT_ID = /^coupang:product:\d+:item:\d+:vendor:\d+$/u;
 /** Signed by an independent reviewer, never by the producer or publisher. */
 export type ProductVisualReviewReceipt = {
   schema: "product-visual-review/v1";
-  visualMode: "product_information";
+  visualMode: "product_information" | "rights_safe_text";
   productId: string;
   canonicalProductName: string;
   affiliateProductId: string;
@@ -77,7 +77,7 @@ export function verifyProductVisualReview(input: {
   if (!receipt) return { ok: false, safeError: "PRODUCT_CONTENT_REVIEW_MISSING" };
   if (!input.publicKey?.trim()) return { ok: false, safeError: "PRODUCT_CONTENT_REVIEW_VERIFIER_NOT_CONFIGURED" };
   if (!nonEmptyString(input.affiliateUrl) || !nonEmptyString(input.canonicalProductName)) return { ok: false, safeError: "PRODUCT_CONTENT_REVIEW_CONTRACT_INVALID" };
-  if (receipt.schema !== "product-visual-review/v1" || receipt.visualMode !== "product_information" ||
+  if (receipt.schema !== "product-visual-review/v1" || !["product_information", "rights_safe_text"].includes(receipt.visualMode) ||
       !PRODUCT_ID.test(receipt.productId) || receipt.productId !== input.productId ||
       !nonEmptyString(receipt.canonicalProductName) || receipt.canonicalProductName !== input.canonicalProductName ||
       !PRODUCT_ID.test(receipt.affiliateProductId) || receipt.affiliateProductId !== input.affiliateProductId || receipt.affiliateProductId !== receipt.productId ||

@@ -62,6 +62,30 @@ describe("independent product visual signing gate", () => {
     expect(receipt.signature.length).toBeGreaterThan(80);
   });
 
+  test("owned text card has a distinct signed mode and still requires source rights", async () => {
+    manifest.visualMode = "rights_safe_text";
+    manifest.files.sourceImages[0].assetKind = "self_created_text_card";
+    manifest.files.sourceImages[0].rightsEvidenceId = "TEST_OWNED_CARD";
+    const receipt = await signFixture();
+    expect(receipt.visualMode).toBe("rights_safe_text");
+    expect(verifyProductVisualReview({ receipt, productId, canonicalProductName: manifest.canonicalProductName,
+      affiliateProductId: productId, affiliateUrl: manifest.affiliateUrl,
+      videoSha256: manifest.files.video.sha256, publicKey, requiredPriorVideoIds: priorIds })).toEqual({ ok: true });
+    expect(verifyProductVisualReview({ receipt: { ...receipt, visualMode: "product_information" }, productId,
+      canonicalProductName: manifest.canonicalProductName, affiliateProductId: productId,
+      affiliateUrl: manifest.affiliateUrl, videoSha256: manifest.files.video.sha256,
+      publicKey, requiredPriorVideoIds: priorIds })).toMatchObject({ ok: false, safeError: "PRODUCT_CONTENT_REVIEW_SIGNATURE_INVALID" });
+    manifest.files.sourceImages[0].rightsStatus = "unverified";
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "SOURCE_RIGHTS_UNVERIFIED" });
+  });
+
+  test("text mode cannot relabel a seller image or omit the owned card", async () => {
+    manifest.visualMode = "rights_safe_text";
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "RIGHTS_SAFE_TEXT_CARD_REQUIRED" });
+    manifest.files.sourceImages = [];
+    await expect(signFixture()).rejects.toMatchObject({ safeCode: "REVIEW_FILES_MISSING" });
+  });
+
   test.each([
     ["other product", (m: ProductVisualSigningManifest) => { m.affiliateProductId = "coupang:product:101:item:200:vendor:300"; }, "PRODUCT_IDENTITY_INVALID"],
     ["missing human review", (m: ProductVisualSigningManifest) => { m.review.fullHumanContent.status = "unverified"; }, "FULLHUMANCONTENT_REVIEW_MISSING"],

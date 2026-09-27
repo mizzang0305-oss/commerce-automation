@@ -12,4 +12,9 @@ describe("product input", () => {
     expect(() => validateProductVideoInput({ ...valid, product: { ...valid.product, affiliateUrl: "https://link.coupang.com/a/x", disclosureText: "파트너스 고지", exactProductReference: { sourceUrl: "https://image.coupangcdn.com/a.jpg", localPath: "x", identityType: "product_reference", sourceProvider: "provider", sourceRequestId: "request" } } })).toThrow("VIDEO_AUTOMATION_SOURCE_PROVENANCE_REQUIRED");
   });
   test("recognizes a mildly mistranscribed Korean product phrase", () => expect(bestKoreanSubstringSimilarity("차량용 컵홀더 정리함", "차량용 커플 더 정리함으로 시작합니다")).toBeGreaterThanOrEqual(0.65));
+  test("owned text card cannot be mixed with an exact seller photo", () => {
+    const card = { ...valid.product, imagePaths: ["owned-card.png"], visualMode: "rights_safe_text" as const };
+    expect(validateProductVideoInput({ ...valid, product: card })).toMatchObject({ product: { visualMode: "rights_safe_text" } });
+    expect(() => validateProductVideoInput({ ...valid, product: { ...card, imagePaths: ["owned-card.png", "seller.jpg"] } })).toThrow("RIGHTS_SAFE_TEXT_CARD_REQUIRED");
+  });
 });
