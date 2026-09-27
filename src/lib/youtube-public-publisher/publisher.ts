@@ -349,6 +349,9 @@ async function claimOneReadyJob(input: {
 }
 
 async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceInput["getVideoSha256"], env: PublisherEnvironment, priorVideoIds: string[]) {
+  if (env.YOUTUBE_PUBLIC_PUBLISHER_PUBLIC_UPLOAD_ENABLED === "false" && job.visibility !== "unlisted") {
+    return { ok: false as const, safeError: "PUBLIC_UPLOAD_DISABLED" };
+  }
   if (!job.videoPath || !job.videoSha256) {
     return { ok: false as const, safeError: "VIDEO_ASSET_NOT_READY" };
   }
@@ -362,7 +365,10 @@ async function validateJob(job: YouTubePublicUploadJob, getVideoSha256: RunOnceI
   if (!job.canonicalProductName || job.canonicalProductName !== job.metadataProductName) {
     return { ok: false as const, safeError: "CANONICAL_PRODUCT_NAME_MISMATCH" };
   }
-  const ctaUrl = fastProductionModeEnabled(env) ? job.productUrl || job.affiliateUrl : job.affiliateUrl;
+  if (fastProductionModeEnabled(env) && env.FAST_PRODUCTION_REQUIRE_AFFILIATE_URL === "true" && !job.affiliateUrl) {
+    return { ok: false as const, safeError: "AFFILIATE_URL_REQUIRED" };
+  }
+  const ctaUrl = job.affiliateUrl || (fastProductionModeEnabled(env) ? job.productUrl : "");
   if (!ctaUrl || job.affiliateProductId !== job.productId) {
     return { ok: false as const, safeError: "AFFILIATE_PRODUCT_MISMATCH" };
   }
@@ -496,7 +502,7 @@ function matchesReadback(
   return readback.channelId === expectedChannelId &&
     readback.privacyStatus === (job.visibility ?? "public") &&
     readback.title === job.title &&
-    readback.description.includes(fastMode ? job.productUrl || job.affiliateUrl : job.affiliateUrl) &&
+    readback.description.includes(job.affiliateUrl || (fastMode ? job.productUrl ?? "" : "")) &&
     readback.description.includes(job.disclosureText);
 }
 

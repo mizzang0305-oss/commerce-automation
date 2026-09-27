@@ -7,7 +7,7 @@ import { enqueueYouTubePublicUploadJob, type YouTubePublicPublisherState, type Y
 import { isYouTubePublicPublisherChannelKey } from "@/lib/youtube-public-publisher/channelConfig";
 import { FAST_PRODUCTION_DISCLOSURE, fastProductionModeEnabled, verifyFastProductionReview, type FastProductionReview } from "@/lib/video-automation/fastProductionReview";
 
-type FastQueueInput = { qaPath: string; productUrl: string; channelKey: string };
+type FastQueueInput = { qaPath: string; productUrl: string; affiliateUrl?: string; channelKey: string };
 
 export async function enqueueFastProduct(input: FastQueueInput, env = process.env, cwd = process.cwd()) {
   if (!fastProductionModeEnabled(env)) return { created: false, safeError: "FAST_PRODUCTION_MODE_DISABLED" };
@@ -15,10 +15,24 @@ export async function enqueueFastProduct(input: FastQueueInput, env = process.en
   if (!statePath || !isAbsolute(statePath) || insideRepo(statePath, cwd)) return { created: false, safeError: "PUBLISHER_STATE_PATH_INVALID" };
   if (!isAbsolute(input.qaPath) || !isYouTubePublicPublisherChannelKey(input.channelKey)) return { created: false, safeError: "FAST_PRODUCT_INPUT_INVALID" };
   const productUrl = new URL(input.productUrl);
-  if (productUrl.protocol !== "https:" || !["www.coupang.com", "link.coupang.com"].includes(productUrl.hostname)) {
+  if (productUrl.protocol !== "https:" || productUrl.hostname !== "www.coupang.com") {
     return { created: false, safeError: "PRODUCT_URL_INVALID" };
   }
   const raw = JSON.parse(await readFile(input.qaPath, "utf8")) as FastProductionReview & { videoPath?: string; publicationEligibility?: string };
+  const match = /^coupang:product:(\d+):item:(\d+):vendor:(\d+)$/u.exec(raw.productId);
+  if (!match || productUrl.pathname !== `/vp/products/${match[1]}` || productUrl.searchParams.get("itemId") !== match[2] || productUrl.searchParams.get("vendorItemId") !== match[3]) {
+    return { created: false, safeError: "PRODUCT_URL_IDENTITY_MISMATCH" };
+  }
+  const affiliateUrl = input.affiliateUrl?.trim() ?? "";
+  if (env.FAST_PRODUCTION_REQUIRE_AFFILIATE_URL === "true" && !affiliateUrl) return { created: false, safeError: "AFFILIATE_URL_REQUIRED" };
+  if (affiliateUrl) {
+    let affiliate: URL;
+    try { affiliate = new URL(affiliateUrl); } catch { return { created: false, safeError: "AFFILIATE_URL_INVALID" }; }
+    if (affiliate.protocol !== "https:" || affiliate.hostname !== "link.coupang.com" || !/^\/(?:a|re)\/[^/]+$/u.test(affiliate.pathname) ||
+        affiliate.searchParams.get("pageKey") !== match[1] || affiliate.searchParams.get("itemId") !== match[2] || affiliate.searchParams.get("vendorItemId") !== match[3]) {
+      return { created: false, safeError: "AFFILIATE_URL_IDENTITY_MISMATCH" };
+    }
+  }
   if (!raw.videoPath || !isAbsolute(raw.videoPath) || raw.publicationEligibility !== "READY") return { created: false, safeError: "FAST_PRODUCT_VIDEO_NOT_READY" };
   const sha = createHash("sha256").update(await readFile(raw.videoPath)).digest("hex");
   const review = verifyFastProductionReview({ review: raw, productId: raw.productId, canonicalProductName: raw.canonicalProductName,
@@ -27,10 +41,10 @@ export async function enqueueFastProduct(input: FastQueueInput, env = process.en
   const now = new Date().toISOString();
   const job: YouTubePublicUploadJob = {
     id: `fast-product-${sha.slice(0, 24)}`, productId: raw.productId, channelKey: input.channelKey,
-    videoPath: raw.videoPath, videoSha256: sha, affiliateUrl: "", productUrl: productUrl.toString(), affiliateProductId: raw.productId,
+    videoPath: raw.videoPath, videoSha256: sha, affiliateUrl, productUrl: productUrl.toString(), affiliateProductId: raw.productId,
     canonicalProductName: raw.canonicalProductName, metadataProductName: raw.canonicalProductName,
     title: `${raw.canonicalProductName.slice(0, 85)} #Shorts`,
-    description: `${raw.canonicalProductName}\n${productUrl.toString()}\n\n${FAST_PRODUCTION_DISCLOSURE}`,
+    description: `${raw.canonicalProductName}\n\n상품 확인:\n${affiliateUrl || productUrl.toString()}\n\n${FAST_PRODUCTION_DISCLOSURE}`,
     disclosureText: FAST_PRODUCTION_DISCLOSURE, machineQaStatus: "passed", fastProductionReview: raw,
     visibility: "unlisted", status: "ready", attemptCount: 0, claimedAt: "", claimOwner: "", lastError: "",
     youtubeVideoId: "", youtubeUrl: "", publishedAt: "", createdAt: now, updatedAt: now
