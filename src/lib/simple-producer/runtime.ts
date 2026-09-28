@@ -4,9 +4,12 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { readConfiguredSimpleProducerConfig } from "@/lib/simple-producer/config";
 import { runSimpleProducerOnce } from "@/lib/simple-producer/producer";
 import { FileSimpleProducerStore } from "@/lib/simple-producer/state";
+import { executeFreshImageShortsQueue } from "@/lib/simple-producer/freshImageShorts";
 import type { SimpleProducerPipelineResult, SimpleProducerRunResult } from "@/lib/simple-producer/types";
 import { FileYouTubePublicPublisherStore } from "@/lib/youtube-public-publisher/fileStore";
 import type { YouTubePublicPublisherState } from "@/lib/youtube-public-publisher/publisher";
+import type { ProductVisualReviewReceipt } from "@/lib/video-automation/productVisualReview";
+import type { FastProductionReview } from "@/lib/video-automation/fastProductionReview";
 
 type ConfiguredSimpleProducerRunResult = SimpleProducerRunResult | {
   status: "configuration_error";
@@ -42,7 +45,11 @@ export async function runConfiguredSimpleProducerOnce(input: {
     producerStore,
     publisherStore,
     now: input.now,
-    executePipeline: (pipelineInput) => executeLivePipeline({ cwd, env, ...pipelineInput })
+    reviewPublicKey: env.PRODUCT_CONTENT_REVIEW_PUBLIC_KEY,
+    env,
+    executePipeline: (pipelineInput) => env.SIMPLE_PRODUCER_FRESH_QUEUE_PATH?.trim()
+      ? executeFreshImageShortsQueue({ cwd, env, queuePath: env.SIMPLE_PRODUCER_FRESH_QUEUE_PATH.trim(), ...pipelineInput })
+      : executeLivePipeline({ cwd, env, ...pipelineInput })
   });
 }
 
@@ -92,7 +99,13 @@ async function executeLivePipeline(input: {
       affiliateUrl: candidate.selectedAffiliateUrl,
       useCase: candidate.useCase,
       videoPath: machineItem.finalVideo,
-      machineQaPassed: true
+      machineQaPassed: true,
+      productVisualReview: isRecord(machineItem.productVisualReview)
+        ? machineItem.productVisualReview as ProductVisualReviewReceipt
+        : undefined,
+      fastProductionReview: isRecord(machineItem.fastProductionReview)
+        ? machineItem.fastProductionReview as FastProductionReview
+        : undefined
     }
   };
 }

@@ -7,6 +7,11 @@ describe("hook and usage badge layout collision gate", () => {
     expect(result).toMatchObject({ passed: true, collision: false, actualGapPx: VIDEO_LAYOUT.HOOK_USAGE_MIN_GAP_PX });
   });
 
+  test("keeps the truthful product-information disclosure inside its wider final badge", () => {
+    const result = evaluateHookUsageLayout({ hook: "빨래, 왜 3가지를 확인할까요?", usageLabel: "상품 이미지 · 실사용 아님" });
+    expect(result).toMatchObject({ passed: true, usageBadgeBox: { width: 560 } });
+  });
+
   test("blocks the previous defective overlap even when every other QA signal passes", () => {
     const layout = evaluateHookUsageLayout({ hook: "컵홀더 정리 조건 확인", usageLabel: "연출된 사용 예시", usageBadgeBox: { x: 250, y: 288, width: 360, height: 62 } });
     const qa = buildLocalQaStatus({ technicalQaPassed: true, captionQaPassed: true, layoutQaPassed: layout.passed, visualEvidencePassed: true });

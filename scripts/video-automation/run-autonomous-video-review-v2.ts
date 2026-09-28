@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { rankCreativeCandidates } from "../../src/lib/video-lab/creativeRanker";
 import { evaluateV143ReusableCreativePolicy } from "../../src/lib/uploads/videoAssets/v143ReusableCreativePolicy";
@@ -18,6 +18,7 @@ import { buildKoreanProductNarration } from "../../src/lib/video-automation/ttsN
 import { createLocalWhisperXProcess, PersistentWhisperXProvider } from "../../src/lib/video-automation/whisperxPersistentProvider";
 
 const USAGE_LABEL = "연출된 사용 예시";
+const PRODUCT_INFORMATION_LABEL = "상품 이미지 · 실사용 아님";
 const PREFERRED_HOOK_FAMILY: Record<string, HookFamily> = {
   "v057-lets-buy-cable-organizer": "CHECKLIST",
   "v057-father-jobs-car-cup-organizer": "QUESTION",
@@ -71,13 +72,18 @@ async function main(): Promise<void> {
     const productRoot = join(outputRoot, `product-${String(index + 1).padStart(3, "0")}`);
     await mkdir(productRoot, { recursive: true });
     try {
+    const productInformation = input.product.visualMode === "product_information";
     const asset = input.product.realUseAsset;
-    if (!asset || asset.ownerReviewStatus !== "pass" || asset.identityType !== "generic_usage_example") throw new Error("OWNER_REVIEWED_GENERIC_USE_ASSET_REQUIRED");
-    await Promise.all([stat(asset.sourcePath), stat(asset.reviewEvidencePath)]);
-    const frames = await runJsonProcess(required.python, [mediaBridge], { operation: "prepare_reviewed_asset", source_path: asset.sourcePath, target_dir: join(productRoot, "source-frames") }, 180_000);
-    if (frames.status !== "success" || !Array.isArray(frames.image_paths) || frames.image_paths.length < 5) throw new Error("OWNER_REVIEWED_FRAME_EXTRACTION_FAILED");
-    const genericImagePaths = frames.image_paths.map(String);
+    if (!productInformation && (!asset || asset.ownerReviewStatus !== "pass" || asset.identityType !== "generic_usage_example")) throw new Error("OWNER_REVIEWED_GENERIC_USE_ASSET_REQUIRED");
+    let genericImagePaths: string[] = [];
+    if (!productInformation && asset) {
+      await Promise.all([stat(asset.sourcePath), stat(asset.reviewEvidencePath)]);
+      const frames = await runJsonProcess(required.python, [mediaBridge], { operation: "prepare_reviewed_asset", source_path: asset.sourcePath, target_dir: join(productRoot, "source-frames") }, 180_000);
+      if (frames.status !== "success" || !Array.isArray(frames.image_paths) || frames.image_paths.length < 5) throw new Error("OWNER_REVIEWED_FRAME_EXTRACTION_FAILED");
+      genericImagePaths = frames.image_paths.map(String);
+    }
     const exactReference = input.product.exactProductReference;
+    if (productInformation && !exactReference) throw new Error("PRODUCT_INFORMATION_EXACT_ASSET_REQUIRED");
     if (exactReference) await stat(exactReference.localPath);
     input.product.imagePaths = exactReference ? [exactReference.localPath, ...genericImagePaths] : genericImagePaths;
     validateProductVideoInput(input);
@@ -121,15 +127,19 @@ async function main(): Promise<void> {
       const captions = buildPopGroupCaptions(words);
       if (captions.some((cue) => cue.words.length > 4)) throw new Error("CAPTION_SAFE_TIMELINE_FAILED");
       await writeJson(join(value.productRoot, "captions.json"), { mode: "POP_GROUP", animation: "pop", maxWordsPerCue: 4, maxEmphasisWordsPerCue: 1, cues: captions });
-      const visualGate = await runJsonProcess(required.python, [mediaBridge], { operation: "visual_gate", image_paths: value.genericImagePaths, real_use_asset: input.product.realUseAsset }, 120_000);
-      if (visualGate.gate_pass !== true || visualGate.identity_type !== "generic_usage_example" || Number(visualGate.exact_product_scene_count) !== 0) throw new Error("VISUAL_EVIDENCE_GATE_FAILED");
-      const v143 = evaluateV143ReusableCreativePolicy({ hook_font_px: 104, hook_max_lines: 2, hook_visible_within_seconds: 0, hook_high_contrast: true, real_usage_scene_present: true, usage_source_role: "generic_usage_example", usage_label_present: true, exact_product_identity_claim: false, exact_product_identity_verified: false, actor_nationality_verified: false, product_identity_binding_verified: true, tts_provider_approved: true, tts_language: "ko", tts_speed_multiplier: 1.2, tts_delivery_style: "brisk_confident_sales", safe_to_upload: false, safe_to_public_upload: false });
-      if (!v143.passed) throw new Error("V143_CREATIVE_POLICY_FAILED");
-      const layout = evaluateHookUsageLayout({ hook: value.selected.candidate.hook, usageLabel: USAGE_LABEL });
+      const productInformation = input.product.visualMode === "product_information";
+      const visualGate = productInformation
+        ? await runJsonProcess(required.python, [mediaBridge], { operation: "visual_gate_product_information", image_paths: input.product.imagePaths, allowed_root: dirname(resolve(liveInputManifest)), product_id: input.product.productKey, source_product_id: input.product.sourceProvenance?.productKey }, 120_000)
+        : await runJsonProcess(required.python, [mediaBridge], { operation: "visual_gate", image_paths: value.genericImagePaths, real_use_asset: input.product.realUseAsset }, 120_000);
+      if (visualGate.gate_pass !== true || (productInformation ? visualGate.identity_type !== "product_reference" : visualGate.identity_type !== "generic_usage_example" || Number(visualGate.exact_product_scene_count) !== 0)) throw new Error("VISUAL_EVIDENCE_GATE_FAILED");
+      const v143 = productInformation ? null : evaluateV143ReusableCreativePolicy({ hook_font_px: 104, hook_max_lines: 2, hook_visible_within_seconds: 0, hook_high_contrast: true, real_usage_scene_present: true, usage_source_role: "generic_usage_example", usage_label_present: true, exact_product_identity_claim: false, exact_product_identity_verified: false, actor_nationality_verified: false, product_identity_binding_verified: true, tts_provider_approved: true, tts_language: "ko", tts_speed_multiplier: 1.2, tts_delivery_style: "brisk_confident_sales", safe_to_upload: false, safe_to_public_upload: false });
+      if (v143 && !v143.passed) throw new Error("V143_CREATIVE_POLICY_FAILED");
+      const visualLabel = productInformation ? PRODUCT_INFORMATION_LABEL : USAGE_LABEL;
+      const layout = evaluateHookUsageLayout({ hook: value.selected.candidate.hook, usageLabel: visualLabel });
       if (!layout.passed) throw new Error(layout.blockers[0]);
-      const bridgeLayout = await runJsonProcess(required.python, [mediaBridge], { operation: "layout_plan", hook: value.selected.candidate.hook, usage_label: USAGE_LABEL }, 60_000);
+      const bridgeLayout = await runJsonProcess(required.python, [mediaBridge], { operation: "layout_plan", hook: value.selected.candidate.hook, usage_label: visualLabel }, 60_000);
       if (bridgeLayout.passed !== true) throw new Error(String((bridgeLayout.blockers as string[])[0]));
-      await writeJson(join(value.productRoot, "render-plan.json"), { candidateId: value.selected.candidate.id, selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), captions, visualGate, v143, layout: bridgeLayout, identityType: "mixed_reference_and_generic_usage", exactProductReference: input.product.exactProductReference ? { ...input.product.exactProductReference, localPathPresent: true } : null, genericUsageEvidence: input.product.realUseAsset ? { assetId: input.product.realUseAsset.assetId, identityType: input.product.realUseAsset.identityType, ownerReviewStatus: input.product.realUseAsset.ownerReviewStatus } : null, disclosureText: input.product.disclosureText ?? "", sourceProvenance: input.product.sourceProvenance ?? null, exactProductUseClaimed: false, productIdentityBound: true, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS });
+      await writeJson(join(value.productRoot, "render-plan.json"), { candidateId: value.selected.candidate.id, selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), captions, visualGate, v143, layout: bridgeLayout, identityType: productInformation ? "product_information" : "mixed_reference_and_generic_usage", exactProductReference: input.product.exactProductReference ? { ...input.product.exactProductReference, localPathPresent: true } : null, genericUsageEvidence: productInformation ? null : input.product.realUseAsset ? { assetId: input.product.realUseAsset.assetId, identityType: input.product.realUseAsset.identityType, ownerReviewStatus: input.product.realUseAsset.ownerReviewStatus } : null, disclosureText: input.product.disclosureText ?? "", sourceProvenance: input.product.sourceProvenance ?? null, exactProductUseClaimed: false, productIdentityBound: visualGate.gate_pass === true, publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS });
 
       let profile: RenderRepairProfile = !liveInputManifest && input.product.productKey.includes("cable-organizer") ? LEGACY_INITIAL_PROFILE : V2_PROVEN_PROFILE;
       let chosen: { review: AutomatedVideoReview; input: AutomatedReviewInput; outputPath: string } | null = null;
@@ -139,24 +149,31 @@ async function main(): Promise<void> {
         const attemptRoot = join(value.productRoot, attempt);
         await mkdir(attemptRoot, { recursive: true });
         const outputPath = join(attemptRoot, "output.mp4");
-        const renderOperation = profile.motionPreset === "static" ? "render" : "render_v2";
+        const renderOperation = productInformation ? "render_v2" : profile.motionPreset === "static" ? "render" : "render_v2";
         const renderStarted = performance.now();
         const render = await runJsonProcess(required.python, [mediaBridge], {
           operation: renderOperation, output: outputPath, audio_path: value.audioPath, image_paths: input.product.imagePaths,
           scene_roles: input.product.exactProductReference ? ["product_reference", ...value.genericImagePaths.map(() => "generic_usage_example")] : value.genericImagePaths.map(() => "generic_usage_example"),
-          captions, hook: value.selected.candidate.hook, title: input.product.canonicalProductName, usage_label: USAGE_LABEL,
+          visual_mode: productInformation ? "product_information" : "generic_usage_example",
+          source_sha256: productInformation ? visualGate.source_sha256 : undefined,
+          allowed_root: productInformation ? dirname(resolve(liveInputManifest)) : undefined,
+          captions, hook: value.selected.candidate.hook, title: input.product.canonicalProductName, usage_label: visualLabel,
           layout_plan: bridgeLayout, caption_font_px: profile.captionFontPx, caption_animation: profile.captionAnimation,
           primary_visual_width_ratio: profile.primaryVisualWidthRatio, canvas_fill_ratio: profile.canvasFillRatio
         }, 900_000);
         if (render.status !== "success") throw new Error("RENDER_FAILED");
+        const productIdentityBound = productInformation
+          ? Number(render.product_reference_scene_count) === captions.length && Number(render.generic_usage_scene_source_count) === 0 && input.product.sourceProvenance?.productKey === input.product.productKey
+          : Boolean(input.product.exactProductReference);
+        if (!productIdentityBound) throw new Error("PRODUCT_VISUAL_IDENTITY_BINDING_FAILED");
         const measurements = await runJsonProcess(required.python, [visualQaBridge], { operation: "analyze", video_path: outputPath, output_dir: join(attemptRoot, "visual-qa"), canvas_fill_ratio: profile.canvasFillRatio }, 420_000) as unknown as VisualQaMeasurements & { status: string };
         if (measurements.status !== "success") throw new Error("VISUAL_QA_FAILED");
         const reviewInput: AutomatedReviewInput = {
           productKey: input.product.productKey, attempt, selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), measurements,
           asrPassed: value.asrPassed, alignedRatio: alignment.aligned_ratio ?? 0, layoutCollision: layout.collision,
           captionTimelinePassed: true, captionMaxWords: Math.max(...captions.map((cue) => cue.words.length)), captionFontPx: profile.captionFontPx,
-          captionAnimation: profile.captionAnimation, primaryVisualWidthRatio: profile.primaryVisualWidthRatio, genericUsage: true, genericOverclaim: false,
-          productIdentityBound: true, productAnchorCount: value.recognizedAnchors.length, hookFamilyUniqueInBatch: true,
+          captionAnimation: profile.captionAnimation, primaryVisualWidthRatio: profile.primaryVisualWidthRatio, genericUsage: !productInformation, genericOverclaim: false,
+          productIdentityBound, productAnchorCount: value.recognizedAnchors.length, hookFamilyUniqueInBatch: true,
           usageLabelFullOnce: profile.usageLabelMode === "full_then_abbreviated", usageLabelAbbreviatedAfterIntro: profile.usageLabelMode === "full_then_abbreviated",
           hookVisibleAtSeconds: 0, hookFontPx: 104, hookHighContrast: true
         };
@@ -191,7 +208,7 @@ async function main(): Promise<void> {
       const finalReview = evaluateAutomatedVideoQuality(finalInput);
       await writeJson(join(finalRoot, "review-input.json"), finalInput);
       await writeJson(join(finalRoot, "automated-review.json"), finalReview);
-      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, exactProductReference: Boolean(input.product.exactProductReference), genericUsageEvidence: Boolean(input.product.realUseAsset), exactProductUse: false, overclaim: false, sourceProvider: input.product.sourceProvenance?.sourceProvider ?? null, sourceRequestId: input.product.sourceProvenance?.sourceRequestId ?? null, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
+      const summary = { productKey: input.product.productKey, canonicalProductName: input.product.canonicalProductName, status: "AWAITING_CODEX_VISUAL_REVIEW", visualMode: productInformation ? "product_information" : "generic_usage_example", selectedHook: value.selected.candidate.hook, hookFamily: classifyHookFamily(value.selected.candidate.hook), creativeScore: value.selected.score.totalScore, asrSimilarity: value.similarity, recognizedAnchors: value.recognizedAnchors, coreAnchor: input.product.anchors[0], coreAnchorSimilarity: value.coreAnchorSimilarity, whisperxAlignedRatio: alignment.aligned_ratio, score: finalReview.score, machineQaPassed: finalReview.machineQaPassed, finalAutomatedQaPassed: false, visualReviewExecuted: false, repairs, exactProductReference: Boolean(input.product.exactProductReference), genericUsageEvidence: !productInformation && Boolean(input.product.realUseAsset), exactProductUse: false, overclaim: false, sourceProvider: input.product.sourceProvenance?.sourceProvider ?? null, sourceRequestId: input.product.sourceProvenance?.sourceRequestId ?? null, finalVideo, firstFramePath: finalMeasurements.firstFramePath, firstThreeSecondsContactSheetPath: finalMeasurements.firstThreeSecondsContactSheetPath, contactSheetPath: finalMeasurements.contactSheetPath, qaOverheadSeconds: finalMeasurements.qaOverheadSeconds, totalSeconds: elapsed(itemStarted), humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
       items.push(summary);
       await writeJson(join(value.productRoot, "summary.json"), summary);
       } catch (error) {

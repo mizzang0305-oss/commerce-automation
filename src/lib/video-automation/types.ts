@@ -33,6 +33,7 @@ export type ProductVideoAutomationInput = {
     category: string;
     priceText?: string;
     imagePaths: string[];
+    visualMode?: "product_information" | "rights_safe_text";
     affiliateUrl?: string;
     disclosureText?: string;
     exactProductReference?: {
