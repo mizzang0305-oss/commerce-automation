@@ -14,6 +14,7 @@ describe("api routes", () => {
     resetMockRepositoryForTests();
     delete process.env.N8N_NIGHTLY_SCOUT_WEBHOOK_URL;
     delete process.env.N8N_WEBHOOK_SECRET;
+    process.env.COMMERCE_AUTOMATION_API_SECRET = "settings-secret";
   });
 
   afterEach(() => {
@@ -34,6 +35,7 @@ describe("api routes", () => {
     const response = await postSettings(
       new Request("http://localhost/api/settings", {
         method: "POST",
+        headers: { Authorization: "Bearer settings-secret" },
         body: JSON.stringify({ interval_hours: 3 })
       })
     );
@@ -41,6 +43,20 @@ describe("api routes", () => {
 
     expect(response.status).toBe(200);
     expect(payload.settings).toMatchObject({ interval_hours: 3 });
+  });
+
+  test("POST /api/settings rejects unauthenticated mutation", async () => {
+    const response = await postSettings(
+      new Request("http://localhost/api/settings", {
+        method: "POST",
+        body: JSON.stringify({ interval_hours: 6 })
+      })
+    );
+    const payload = await readJson(response);
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect((await getAutomationRepository().getSettings()).interval_hours).toBe(1);
   });
 
   test("GET /api/queue returns seeded queue items", async () => {
