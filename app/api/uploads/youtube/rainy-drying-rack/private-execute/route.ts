@@ -107,6 +107,25 @@ export async function POST(request: Request) {
     }), { status: 400 });
   }
 
+  const readiness = buildYouTubeUploadReadiness();
+  const executeReadiness = buildYouTubeExecuteReadiness({
+    confirmation: APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD,
+    visibility: "private",
+    executionIntent: "private_execute"
+  });
+  const readinessBlockedReasons = [
+    ...readiness.blocked_reasons,
+    ...executeReadiness.blocked_reasons
+  ];
+  if (!readiness.can_upload || !executeReadiness.can_execute) {
+    return NextResponse.json(blockedReport({
+      errorCode: "BLOCKED_BY_YOUTUBE_READINESS",
+      blockedReasons: readinessBlockedReasons.length ? readinessBlockedReasons : ["youtube_readiness_blocked"],
+      readinessCanUpload: false,
+      readinessBlockedReasons
+    }), { status: 403 });
+  }
+
   try {
     const repository = getAutomationRepository();
     const result = await runRainyDryingRackPrivatePipeline({
@@ -361,37 +380,6 @@ async function renderRegisterAndUpload(input: {
       productPackagePrepare: "PASS",
       readinessCanUpload: false,
       readinessBlockedReasons: uploadRequest.missing_reasons
-    });
-  }
-
-  const readiness = buildYouTubeUploadReadiness();
-  const executeReadiness = buildYouTubeExecuteReadiness({
-    confirmation: APPROVE_MERGE_PR122_AND_COMPLETE_RAINY_DRYING_RACK_PRIVATE_UPLOAD,
-    visibility: "private",
-    executionIntent: "private_execute"
-  });
-  const readinessBlockedReasons = [
-    ...readiness.blocked_reasons,
-    ...executeReadiness.blocked_reasons
-  ];
-  if (!readiness.can_upload || !executeReadiness.can_execute) {
-    return blockedReport({
-      errorCode: "BLOCKED_BY_YOUTUBE_READINESS",
-      blockedReasons: readinessBlockedReasons.length ? readinessBlockedReasons : ["youtube_readiness_blocked"],
-      selectedKeyword: input.selectedKeyword,
-      externalApiCallCount: input.externalApiCallCount,
-      candidate: input.candidate,
-      candidateScore: input.candidateScore,
-      renderAttempted: true,
-      mp4Created: true,
-      asset,
-      r2Uploaded,
-      productAssetsWritten,
-      rowsWritten,
-      preparedVideoAssetRefPresent: true,
-      productPackagePrepare: "PASS",
-      readinessCanUpload: false,
-      readinessBlockedReasons
     });
   }
 

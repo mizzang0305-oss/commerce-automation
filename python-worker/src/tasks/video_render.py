@@ -57,7 +57,7 @@ def run_video_render(job: dict, config: WorkerConfig, storage: StorageClient, he
         image_path = downloaded_by_url.get(shot_image_url)
         if image_path is None:
             target_name = "product.jpg" if len(image_urls) == 1 else f"shot-{index:03d}.jpg"
-            image_path = download_image(shot_image_url, work_dir / target_name)
+            image_path = download_image(shot_image_url, work_dir / target_name, allowed_root=work_dir)
             downloaded_by_url[shot_image_url] = image_path
             heartbeat()
         shot_image_paths.append(image_path)
