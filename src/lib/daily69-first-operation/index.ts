@@ -120,6 +120,10 @@ export async function armFirstOperation(input: {
     directSlots: sourceReadiness.scheduled,
     policy: operationalAdmissionPolicy(source.settings, source.registry.maxSameSourceVideoDaily, source.registry.assets.filter((asset) => ["owner_reviewed_video", "sanitized_local_video", "derived_clip", "derived_frame_pack"].includes(asset.sourceKind)).map((asset) => asset.sourceId)),
   });
+  if (!operationalReserveCoverage.pass) throw new Error("OPERATIONAL_RESERVE_COVERAGE_GAP");
+  if (operationalReserveCoverage.maximumBipartiteMatchingSize !== source.reserve.length) {
+    throw new Error("OPERATIONAL_RESERVE_MATCHING_GAP");
+  }
   const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
   if (existing) {
     if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace

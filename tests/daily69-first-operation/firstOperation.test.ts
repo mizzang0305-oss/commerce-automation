@@ -177,7 +177,7 @@ describe("first no-upload Daily69 operation", { timeout: 30_000 }, () => {
     await expect(readFile(join(fixture.operationBase, "operation-2026-08-11", "operation-manifest.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("records zero operational fallback coverage as telemetry without blocking V1 operation creation", async () => {
+  it("rejects zero operational fallback coverage before creating an operation", async () => {
     const fixture = await sourceFixture();
     const queuePath = join(fixture.sourceRoot, "queue.json");
     const reservePath = join(fixture.sourceRoot, "reserve-pool.json");
@@ -189,10 +189,27 @@ describe("first no-upload Daily69 operation", { timeout: 30_000 }, () => {
     await writeFile(queuePath, `${JSON.stringify(queue)}\n`);
     await writeFile(reservePath, `${JSON.stringify(reserve)}\n`);
     const operationBase = join(fixture.parent, "operational-gap");
-    const armed = await armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase, assetBoundaryRoot: fixture.parent, usageMaterializationAssetRoot: fixture.assetRoot, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "7".repeat(40) });
-    expect(armed.manifest.operationalReserveCoverage).toMatchObject({ pass: false, safeCode: "OPERATIONAL_RESERVE_COVERAGE_GAP" });
-    expect(armed.manifest.operationalReserveCoverage?.slotsWithZeroOperationalFallback.length).toBeGreaterThan(0);
-    await expect(readFile(join(armed.operationRoot, "operational-reserve-coverage.json"), "utf8")).resolves.toContain("OPERATIONAL_RESERVE_COVERAGE_GAP");
+    await expect(armFirstOperation({ sourceRoot: fixture.sourceRoot, operationBase, assetBoundaryRoot: fixture.parent, usageMaterializationAssetRoot: fixture.assetRoot, now: new Date("2026-08-09T17:00:00.000Z"), expectedGitHead: "7".repeat(40) }))
+      .rejects.toThrow("OPERATIONAL_RESERVE_COVERAGE_GAP");
+    await expect(readFile(join(operationBase, "operation-2026-08-11", "operation-manifest.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects an incomplete reserve matching even when every direct slot has a fallback", async () => {
+    const fixture = await sourceFixture();
+    const reservePath = join(fixture.sourceRoot, "reserve-pool.json");
+    const reserve = JSON.parse(await readFile(reservePath, "utf8")) as ReserveCandidate[];
+    reserve[0].claimedBySlot = "slot-010";
+    await writeFile(reservePath, `${JSON.stringify(reserve)}\n`);
+    await expect(armFirstOperation({
+      sourceRoot: fixture.sourceRoot,
+      operationBase: fixture.operationBase,
+      assetBoundaryRoot: fixture.parent,
+      usageMaterializationAssetRoot: fixture.assetRoot,
+      now: new Date("2026-08-09T17:00:00.000Z"),
+      expectedGitHead: "8".repeat(40),
+    })).rejects.toThrow("OPERATIONAL_RESERVE_MATCHING_GAP");
+    await expect(readFile(join(fixture.operationBase, "operation-2026-08-11", "operation-manifest.json"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("uses a derived source parent namespace as the immutable carry-forward origin fallback", async () => {
