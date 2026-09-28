@@ -5,6 +5,7 @@ import { buildAffiliateReadinessReport, type AffiliateReadinessReport } from "@/
 import { atomicWriteJson, readJson } from "@/lib/queue-scheduler/atomicJson";
 import { inspectQueueMediaEvidence } from "@/lib/queue-scheduler/mediaEvidence";
 import { LocalQueueRepository } from "@/lib/queue-scheduler/repository";
+import { DAILY69_MAX_PRODUCT_CANDIDATES } from "@/lib/queue-scheduler/settings";
 import type { LocalQueueItem, QueueSchedulerSettings, ReserveCandidate } from "@/lib/queue-scheduler/types";
 import {
   preflightDaily69MaterializationEligibility,
@@ -15,6 +16,9 @@ import {
 import { normalizeFirstOperationLifecycleStatus, validateLevel3Completion, type FirstOperationLifecycleStatus, type LegacyFirstOperationLifecycleStatus, type Level3RetainedEvidence } from "./level3";
 import type { Level3SheetsAuditGateway } from "./postCloseout";
 import { assertFirstOperationIdentity, firstOperationNamespace, isFirstOperationDate } from "./operationIdentity";
+import type { CodexRuntimeBinding } from "@/lib/queue-scheduler/codexRuntimeBinding";
+import { verifyFirstOperationCapsuleAdmission } from "./runtimeCapsule";
+import { buildOperationalReserveCoverage, operationalAdmissionPolicy, type OperationalReserveCoverage } from "@/lib/queue-scheduler/operationalAdmission";
 
 export const FIRST_OPERATION_DECISION = "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_ARMED" as const;
 export const FIRST_OPERATION_MODE = "no_upload_daily69_first_operation" as const;
@@ -64,8 +68,10 @@ export type FirstOperationManifest = {
     aiReviewExecutions: 0;
   };
   materializationEligibility?: Daily69MaterializationPreflight;
+  operationalReserveCoverage?: OperationalReserveCoverage;
+  codexReviewRuntime?: CodexRuntimeBinding;
   safety: { SAFE_TO_UPLOAD: false; SAFE_TO_PUBLIC_UPLOAD: false; PLATFORM_UPLOAD: 0; GOOGLE_DRIVE_WRITE: 0; PRODUCTION_DB_WRITE: 0; R2_WRITE: 0 };
-  closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
+  closeout?: { closedAt: string; completion?: "PASS" | "PENDING" | "FAILED"; terminalState?: "CLEAN_COMPLETE" | "COMPLETE_WITH_BLOCKED_ITEMS" | "PENDING" | "FAILED"; perfectDay?: boolean; firstOperationReady: boolean; continuousDaily69Ready: boolean; reviewPending: number; decision: string };
 };
 
 export async function armFirstOperation(input: {
@@ -79,7 +85,10 @@ export async function armFirstOperation(input: {
   namespace?: string;
   attemptNumber?: number;
   previousAttemptNamespace?: string;
+  codexReviewRuntime?: CodexRuntimeBinding;
 }) {
+  // Runtime admission precedes source reads, namespace creation and every queue write.
+  await verifyFirstOperationCapsuleAdmission(input.codexReviewRuntime);
   const operationDate = input.operationDate ?? nextKstDate(input.now);
   if (!isFirstOperationDate(operationDate)) throw new Error("FIRST_OPERATION_DATE_INVALID");
   if (operationDate <= kstDate(input.now)) throw new Error("TARGET_OPERATION_DATE_WINDOW_MISSED");
@@ -105,11 +114,22 @@ export async function armFirstOperation(input: {
     requiredReserve: 14,
   });
   if (!materializationEligibility.pass) throw new Error(materializationEligibility.safeCode);
+  const operationalReserveCoverage = buildOperationalReserveCoverage({
+    items: source.queue,
+    reserve: source.reserve,
+    directSlots: sourceReadiness.scheduled,
+    policy: operationalAdmissionPolicy(source.settings, source.registry.maxSameSourceVideoDaily, source.registry.assets.filter((asset) => ["owner_reviewed_video", "sanitized_local_video", "derived_clip", "derived_frame_pack"].includes(asset.sourceKind)).map((asset) => asset.sourceId)),
+  });
+  if (!operationalReserveCoverage.pass) throw new Error("OPERATIONAL_RESERVE_COVERAGE_GAP");
+  if (operationalReserveCoverage.maximumBipartiteMatchingSize !== source.reserve.length) {
+    throw new Error("OPERATIONAL_RESERVE_MATCHING_GAP");
+  }
   const existing = await readJson<FirstOperationManifest | null>(join(operationRoot, "operation-manifest.json"), null);
   if (existing) {
     if (existing.operationDate !== operationDate || existing.expectedGitHead !== input.expectedGitHead || existing.namespace !== namespace
       || (existing.attemptNumber ?? 1) !== attemptNumber || (existing.previousAttemptNamespace ?? "") !== previousAttemptNamespace
-      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot) {
+      || resolve(existing.usageMaterializationAssetRoot ?? "") !== usageMaterializationAssetRoot
+      || JSON.stringify(existing.codexReviewRuntime) !== JSON.stringify(input.codexReviewRuntime)) {
       throw new Error("FIRST_OPERATION_EXISTING_MANIFEST_MISMATCH");
     }
     await verifySourceBundle(input.sourceRoot, existing, input.assetBoundaryRoot);
@@ -141,7 +161,7 @@ export async function armFirstOperation(input: {
     endHour: schedule.length > 0 ? schedule[schedule.length - 1].hourKst : 4,
     minimumFreeGb: 20,
     maxAttempts: 2,
-    maxProductCandidates: 3,
+    maxProductCandidates: DAILY69_MAX_PRODUCT_CANDIDATES,
     uploadEnabled: false,
     enabled: true,
     isPaused: false,
@@ -159,7 +179,8 @@ export async function armFirstOperation(input: {
     atomicWriteJson(join(operationRoot, "runs.json"), []),
     atomicWriteJson(join(operationRoot, "control-state.json"), { localRevision: 1, projectionRevision: 0, snapshotHash: "", projectedAt: "", source: "local_queue_scheduler" }),
     atomicWriteJson(join(operationRoot, "control-state-initial.json"), { enabled: true, isPaused: false, observationMode: true, uploadEnabled: false, SAFE_TO_UPLOAD: false }),
-    atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry)
+    atomicWriteJson(join(operationRoot, "selected-registry.json"), source.registry),
+    atomicWriteJson(join(operationRoot, "operational-reserve-coverage.json"), operationalReserveCoverage)
   ]);
 
   const after = await sourceBundle(sourceRoot, source.queue, sourceAssetBoundaryRoot);
@@ -193,6 +214,8 @@ export async function armFirstOperation(input: {
     schedule,
     affiliateReadiness,
     materializationEligibility,
+    operationalReserveCoverage,
+    ...(input.codexReviewRuntime ? { codexReviewRuntime: input.codexReviewRuntime } : {}),
     safety: { SAFE_TO_UPLOAD: false, SAFE_TO_PUBLIC_UPLOAD: false, PLATFORM_UPLOAD: 0, GOOGLE_DRIVE_WRITE: 0, PRODUCTION_DB_WRITE: 0, R2_WRITE: 0 }
   };
   await atomicWriteJson(join(operationRoot, "operation-manifest.json"), manifest);
@@ -205,6 +228,7 @@ export async function transitionFirstOperationArmStatus(operationRoot: string, n
   const manifest = await readJson<FirstOperationManifest | null>(manifestPath, null);
   if (!manifest || manifest.schemaVersion !== "daily69-first-operation-v2" || !manifest.armStatus) throw new Error("FIRST_OPERATION_ARM_CONTRACT_NOT_FOUND");
   const current = normalizeFirstOperationLifecycleStatus(manifest.armStatus, manifest.decision);
+  if (next === "tasks_armed" || next === "running") await verifyFirstOperationCapsuleAdmission(manifest.codexReviewRuntime);
   const allowed: Record<FirstOperationArmStatus, readonly FirstOperationArmStatus[]> = {
     prepared: ["projection_verified", "closing", "held"],
     projection_verified: ["tasks_armed", "closing", "held"],
@@ -228,6 +252,7 @@ export async function promoteFirstOperationActivePointer(operationRoot: string) 
   const root = resolve(operationRoot);
   const manifest = await readJson<FirstOperationManifest | null>(join(root, "operation-manifest.json"), null);
   if (!manifest || manifest.schemaVersion !== "daily69-first-operation-v2" || manifest.armStatus !== "tasks_armed") throw new Error("FIRST_OPERATION_ACTIVE_POINTER_PROMOTION_FORBIDDEN");
+  await verifyFirstOperationCapsuleAdmission(manifest.codexReviewRuntime);
   if (basename(root) !== manifest.namespace) throw new Error("FIRST_OPERATION_ROOT_NAMESPACE_MISMATCH");
   const existing = await readJson<Record<string, unknown> | null>(join(dirname(root), "active-operation.json"), null);
   if (existing && !pointerMatchesManifest(existing, manifest, "tasks_armed")) await assertExistingPointerTerminalInactive(root, existing);
@@ -320,6 +345,7 @@ export async function closeoutFirstOperation(operationRoot: string, dependencies
   now?: () => Date;
   inspectMedia?: typeof inspectQueueMediaEvidence;
   sheetsGateway?: Level3SheetsAuditGateway;
+  executionMode?: "natural" | "functional_shadow";
 } = {}) {
   const root = resolve(operationRoot);
   await assertNoRunnerLock(root);
@@ -335,7 +361,11 @@ export async function closeoutFirstOperation(operationRoot: string, dependencies
   const { captureLevel3RetainedEvidence, collectLevel3CompletionInput } = await import("./postCloseout");
   let retainedEvidence: Level3RetainedEvidence | null = null;
   try { retainedEvidence = await captureLevel3RetainedEvidence(root, dependencies.sheetsGateway); } catch { retainedEvidence = null; }
-  const input = await collectLevel3CompletionInput(root, refreshed, { inspectMedia: dependencies.inspectMedia ?? inspectQueueMediaEvidence, retainedEvidenceOverride: retainedEvidence });
+  const input = await collectLevel3CompletionInput(root, refreshed, {
+    inspectMedia: dependencies.inspectMedia ?? inspectQueueMediaEvidence,
+    retainedEvidenceOverride: retainedEvidence,
+    executionMode: dependencies.executionMode,
+  });
   const matrix = validateLevel3Completion(input);
   const firstOperationReady = matrix.completion === "PASS";
   const continuousDaily69Ready = firstOperationReady;
@@ -354,7 +384,7 @@ export async function closeoutFirstOperation(operationRoot: string, dependencies
       : "NO_UPLOAD_DAILY69_FIRST_OPERATION_DAY_CLOSEOUT_PENDING";
   const closedAt = snapshot.manifest.closeout?.closedAt || (dependencies.now?.() ?? new Date()).toISOString();
   const armStatus: FirstOperationArmStatus = matrix.completion === "PASS" ? "closed_success" : matrix.completion === "FAILED" ? "closed_failed" : "closing";
-  const manifest: FirstOperationManifest = { ...refreshed.manifest, decision, armStatus, closeout: { closedAt, completion: matrix.completion, firstOperationReady, continuousDaily69Ready, reviewPending: refreshed.status.reviewPending, decision } };
+  const manifest: FirstOperationManifest = { ...refreshed.manifest, decision, armStatus, closeout: { closedAt, completion: matrix.completion, terminalState: matrix.terminalState, perfectDay: matrix.perfectDay, firstOperationReady, continuousDaily69Ready, reviewPending: refreshed.status.reviewPending, decision } };
   await atomicWriteJson(join(root, "operation-manifest.json"), manifest);
   await synchronizeActivePointerIfPresent(root, refreshed.manifest, manifest);
   await atomicWriteJson(join(root, "closeout", "closeout-report.json"), {
@@ -362,8 +392,11 @@ export async function closeoutFirstOperation(operationRoot: string, dependencies
     namespace: manifest.namespace,
     operationDate: manifest.operationDate,
     expectedGitHead: manifest.expectedGitHead,
+    executionMode: dependencies.executionMode ?? "natural",
     decision,
     completion: matrix.completion,
+    terminalState: matrix.terminalState,
+    perfectDay: matrix.perfectDay,
     firstOperationReady,
     continuousDaily69Ready,
     status: refreshed.status,
@@ -441,6 +474,7 @@ function cloneQueueItem(
     status: "scheduled",
     attemptCount: 0,
     productCandidateAttempt: 1,
+    maxProductCandidates: DAILY69_MAX_PRODUCT_CANDIDATES,
     leaseOwner: "",
     leaseAcquiredAt: "",
     leaseExpiresAt: "",

@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
+export class LocalJsonProcessError extends Error {
+  readonly diagnostic: Record<string, unknown> | null;
+
+  constructor(code: string, diagnostic: Record<string, unknown> | null) {
+    super(code);
+    this.name = "LocalJsonProcessError";
+    this.diagnostic = diagnostic;
+  }
+}
+
 export async function runJsonProcess(command: string, args: string[], input: unknown, timeoutMs: number): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd: process.cwd(), env: { ...process.env, PYTHONIOENCODING: "utf-8" }, stdio: ["pipe", "pipe", "pipe"] });
@@ -14,10 +24,11 @@ export async function runJsonProcess(command: string, args: string[], input: unk
       clearTimeout(timer);
       if (code !== 0) {
         try {
-          const failed = JSON.parse(stdout) as { safe_error?: unknown; error_type?: unknown };
+          const failed = JSON.parse(stdout) as { safe_error?: unknown; error_type?: unknown; diagnostic?: unknown };
           if (typeof failed.safe_error === "string" && /^[A-Z0-9_:-]+$/u.test(failed.safe_error)) {
             const suffix = typeof failed.error_type === "string" ? `:${failed.error_type.toUpperCase()}` : "";
-            return reject(new Error(`${failed.safe_error}${suffix}`));
+            const diagnostic = retainSafeLocalDiagnostic(failed.diagnostic);
+            return reject(new LocalJsonProcessError(`${failed.safe_error}${suffix}`, diagnostic));
           }
         } catch { /* retain the generic safe error */ }
         return reject(new Error(stderr.includes("TIMEOUT") ? "LOCAL_PROCESS_TIMEOUT" : "LOCAL_PROCESS_FAILED"));
@@ -26,6 +37,30 @@ export async function runJsonProcess(command: string, args: string[], input: unk
     });
     child.stdin.end(JSON.stringify(input));
   });
+}
+
+function retainSafeLocalDiagnostic(value: unknown): Record<string, unknown> | null {
+  const sanitized = sanitizeDiagnosticValue(value, 0);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized) ? sanitized as Record<string, unknown> : null;
+}
+
+function sanitizeDiagnosticValue(value: unknown, depth: number): unknown {
+  if (depth > 8) return "REDACTED_DEPTH_LIMIT";
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    if (/^(?:[a-z]:[\\/]|\\\\|\/)/iu.test(value)) return "REDACTED_ABSOLUTE_PATH";
+    return value.slice(0, 512);
+  }
+  if (Array.isArray(value)) return value.slice(0, 128).map((entry) => sanitizeDiagnosticValue(entry, depth + 1));
+  if (typeof value !== "object") return null;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 128).map(([key, entry]) => {
+    const unsafePathField = key !== "rawAbsolutePathsStored" && /absolutePath|rawPath|fullPath/iu.test(key);
+    return [
+      unsafePathField ? "redactedField" : key.slice(0, 80),
+      unsafePathField ? "REDACTED_PATH_FIELD" : sanitizeDiagnosticValue(entry, depth + 1),
+    ];
+  }));
 }
 
 export async function runFasterWhisper(input: { pythonExe: string; scriptPath: string; modelPath: string; audioPath: string; outputPath: string }): Promise<{ transcript: string }> {

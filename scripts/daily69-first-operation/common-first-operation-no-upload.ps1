@@ -8,10 +8,15 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('control', 'batch', 'closeout')][string]$InvocationRole,
     [Parameter(Mandatory = $true)][string]$TaskName,
     [Parameter(Mandatory = $true)][string]$WrapperPath,
+    [string]$CodexRuntimeCapsulePath,
+    [string]$CodexRuntimeCapsuleManifestSha256,
+    [string]$CodexRuntimeCapsuleBundleDigest,
+    [string]$CodexRuntimeBinarySha256,
     [switch]$LibraryOnly
 )
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'timing-contract.ps1')
+. (Join-Path $PSScriptRoot 'runtime-capsule-task-contract.ps1')
 
 function Read-Daily69QueueItems {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -53,8 +58,15 @@ function Invoke-Daily69Utf8Process {
         [Parameter(Mandatory = $true)][string]$WorkingDirectory
     )
     $resolvedWorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
+    $resolvedFilePath = if ([IO.Path]::IsPathRooted($FilePath)) {
+        (Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).Path
+    } else {
+        (Get-Command $FilePath -CommandType Application -ErrorAction Stop).Source
+    }
+    $startedAt = [DateTimeOffset]::UtcNow
+    $clock = [Diagnostics.Stopwatch]::StartNew()
     $startInfo = New-Object Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $FilePath
+    $startInfo.FileName = $resolvedFilePath
     $startInfo.Arguments = $Arguments
     $startInfo.WorkingDirectory = $resolvedWorkingDirectory
     $startInfo.UseShellExecute = $false
@@ -66,13 +78,19 @@ function Invoke-Daily69Utf8Process {
     $startInfo.StandardErrorEncoding = $utf8
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $startInfo
+    $processStarted = $false
     try {
         if (-not $process.Start()) { throw 'DAILY69_UTF8_CHILD_START_FAILED' }
+        $processStarted = $true
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
         $process.WaitForExit()
         $stdout = $stdoutTask.Result
         $stderr = $stderrTask.Result
+        $stdoutByteLength = [Text.Encoding]::UTF8.GetByteCount($stdout)
+        $stderrByteLength = [Text.Encoding]::UTF8.GetByteCount($stderr)
+        $stdoutSha256 = Get-Daily69StringSha256 -Value $stdout
+        $stderrSha256 = Get-Daily69StringSha256 -Value $stderr
         $captureLimit = 1MB
         if ($stdout.Length -gt $captureLimit -or $stderr.Length -gt $captureLimit) {
             $stdout = 'DAILY69_UTF8_CAPTURE_LIMIT_EXCEEDED'
@@ -92,19 +110,82 @@ function Invoke-Daily69Utf8Process {
             combinedLines = @($stdoutLines) + @($stderrLines)
             stdoutEncoding = 'utf-8'
             stderrEncoding = 'utf-8'
+            nativeProcessStarted = $true
+            processId = [int]$process.Id
+            startedAtUtc = $startedAt.ToString('o')
+            completedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            durationMs = [Math]::Round($clock.Elapsed.TotalMilliseconds)
+            resolvedExecutableFingerprint = Get-Daily69StringSha256 -Value $resolvedFilePath.ToLowerInvariant()
+            stdoutSha256 = $stdoutSha256
+            stderrSha256 = $stderrSha256
+            stdoutByteLength = $stdoutByteLength
+            stderrByteLength = $stderrByteLength
         }
+    } catch {
+        $_.Exception.Data['daily69NativeProcessStarted'] = $processStarted
+        $_.Exception.Data['daily69ExecutableFingerprint'] = Get-Daily69StringSha256 -Value $resolvedFilePath.ToLowerInvariant()
+        $_.Exception.Data['daily69DurationMs'] = [Math]::Round($clock.Elapsed.TotalMilliseconds)
+        throw
     } finally { $process.Dispose() }
 }
 
 function Invoke-Daily69Utf8NpmScript {
     param(
-        [Parameter(Mandatory = $true)][ValidateSet('queue-video:run-next')][string]$ScriptName,
+        [Parameter(Mandatory = $true)][ValidateSet('queue-video:run-next', 'daily69:first-day:preflight', 'queue-control:run-once')][string]$ScriptName,
         [Parameter(Mandatory = $true)][string]$WorkingDirectory
     )
     $npmPath = (Get-Command npm.cmd -ErrorAction Stop).Source
     $commandPath = if ($env:ComSpec) { $env:ComSpec } else { Join-Path $env:SystemRoot 'System32\cmd.exe' }
-    $arguments = '/d /s /c ""{0}" run {1} --silent"' -f $npmPath, $ScriptName
+    $approvedTail = if ($ScriptName -eq 'daily69:first-day:preflight') { ' -- --sheets' } else { '' }
+    $arguments = '/d /s /c ""{0}" run {1} --silent{2}"' -f $npmPath, $ScriptName, $approvedTail
     return Invoke-Daily69Utf8Process -FilePath $commandPath -Arguments $arguments -WorkingDirectory $WorkingDirectory
+}
+
+function Get-Daily69ProcessDiagnostic {
+    param([AllowNull()][object]$Capture)
+    if ($null -eq $Capture) { return $null }
+    return [ordered]@{
+        nativeProcessStarted = [bool]$Capture.nativeProcessStarted
+        processId = [int]$Capture.processId
+        exitCode = [int]$Capture.exitCode
+        startedAtUtc = [string]$Capture.startedAtUtc
+        completedAtUtc = [string]$Capture.completedAtUtc
+        durationMs = [int64]$Capture.durationMs
+        resolvedExecutableFingerprint = [string]$Capture.resolvedExecutableFingerprint
+        stdoutSha256 = [string]$Capture.stdoutSha256
+        stderrSha256 = [string]$Capture.stderrSha256
+        stdoutByteLength = [int64]$Capture.stdoutByteLength
+        stderrByteLength = [int64]$Capture.stderrByteLength
+    }
+}
+
+function Get-Daily69ExceptionDiagnostic {
+    param([AllowNull()][object]$ErrorRecord, [string]$Phase)
+    if ($null -eq $ErrorRecord) { return $null }
+    $exception = $ErrorRecord.Exception
+    $typeName = if ($null -ne $exception) { $exception.GetType().FullName } else { '' }
+    $allowedType = if ($typeName -in @(
+        'System.Management.Automation.RemoteException',
+        'System.Management.Automation.RuntimeException',
+        'System.ComponentModel.Win32Exception',
+        'System.IO.FileNotFoundException'
+    )) { $typeName } else { 'OTHER_EXCEPTION' }
+    $fqid = ConvertTo-Daily69SafeCode -Value $ErrorRecord.FullyQualifiedErrorId -Fallback ''
+    $stack = if ($ErrorRecord.ScriptStackTrace) { [string]$ErrorRecord.ScriptStackTrace } else { '' }
+    return [ordered]@{
+        phase = ConvertTo-Daily69SafeCode -Value $Phase -Fallback 'UNKNOWN_PHASE'
+        exceptionType = $allowedType
+        exceptionTypeSha256 = Get-Daily69StringSha256 -Value $typeName
+        fullyQualifiedErrorId = $fqid
+        fullyQualifiedErrorIdSha256 = Get-Daily69StringSha256 -Value ([string]$ErrorRecord.FullyQualifiedErrorId)
+        hresult = if ($null -ne $exception) { [int]$exception.HResult } else { 0 }
+        scriptStackSha256 = Get-Daily69StringSha256 -Value $stack
+        nativeProcessStarted = if ($null -ne $exception -and $exception.Data.Contains('daily69NativeProcessStarted')) { [bool]$exception.Data['daily69NativeProcessStarted'] } else { $false }
+        resolvedExecutableFingerprint = if ($null -ne $exception -and $exception.Data.Contains('daily69ExecutableFingerprint')) { [string]$exception.Data['daily69ExecutableFingerprint'] } else { '' }
+        durationMs = if ($null -ne $exception -and $exception.Data.Contains('daily69DurationMs')) { [int64]$exception.Data['daily69DurationMs'] } else { 0 }
+        capturedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        wrapperProcessId = $PID
+    }
 }
 
 function Get-Daily69SafeCodeFromOutput {
@@ -255,6 +336,40 @@ function Select-Daily69SanitizedBatchRecord {
     }
 }
 
+function Test-Daily69RetainedBatchExitContract {
+    param(
+        [AllowNull()][object]$Record,
+        [int]$ChildExitCode
+    )
+    if ($null -eq $Record `
+        -or [string]$Record.schemaVersion -ne 'daily69-retained-batch-result-v1' `
+        -or [string]$Record.event -ne 'queue_batch_complete' `
+        -or -not [string]::IsNullOrEmpty([string]$Record.safeError)) {
+        return $false
+    }
+    $claimed = 0; $completed = 0; $blocked = 0; $failed = 0; $retried = 0
+    foreach ($entry in @(
+        @{ Name = 'claimed'; Ref = [ref]$claimed },
+        @{ Name = 'completed'; Ref = [ref]$completed },
+        @{ Name = 'blocked'; Ref = [ref]$blocked },
+        @{ Name = 'failed'; Ref = [ref]$failed },
+        @{ Name = 'retried'; Ref = [ref]$retried }
+    )) {
+        $value = $Record.($entry.Name)
+        if ($null -eq $value -or -not [int]::TryParse([string]$value, $entry.Ref) -or $entry.Ref.Value -lt 0) { return $false }
+    }
+    if (@($Record.results).Count -ne $claimed -or ($completed + $blocked + $failed + $retried) -ne $claimed) { return $false }
+    $status = [string]$Record.status
+    if ($ChildExitCode -eq 0) {
+        return ($status -eq 'success' -and $completed -eq $claimed -and $blocked -eq 0 -and $failed -eq 0 -and $retried -eq 0) `
+            -or ($status -eq 'noop' -and $claimed -eq 0)
+    }
+    if ($ChildExitCode -eq 2) {
+        return $status -eq 'partial' -and $claimed -gt 0 -and $failed -eq 0 -and ($blocked + $retried) -gt 0
+    }
+    return $false
+}
+
 function Get-Daily69CompletionFromOutput {
     param([object[]]$Lines)
     foreach ($line in @($Lines)) {
@@ -279,7 +394,7 @@ function Resolve-Daily69FailureOutcome {
         'FIRST_OPERATION_PREFLIGHT_FAILED',
         'QUEUE_BATCH_BLOCKED_PREFLIGHT'
     )
-    if ($guardCodes -contains $code -or $code -match '(?:^|_)REVISION_MISMATCH$') {
+    if ($guardCodes -contains $code -or $code -match '(?:^|_)REVISION_MISMATCH$' -or $code -cmatch '^CODEX_CAPSULE_') {
         return [pscustomobject]@{ outcome = 'guard_blocked'; safeError = $code; wrapperExitCode = 3 }
     }
     if ($code -eq 'UNEXPECTED_EXCEPTION') {
@@ -439,7 +554,10 @@ function Complete-Daily69InvocationEvidence {
         [int]$Claimed = 0,
         [int]$Completed = 0,
         [int]$Failed = 0,
-        [int]$Retried = 0
+        [int]$Retried = 0,
+        [string]$Phase = 'RECEIPT_FINALIZE',
+        [AllowNull()][object]$ProcessCapture = $null,
+        [AllowNull()][object]$ExceptionRecord = $null
     )
     if (-not $script:Daily69InvocationEvidencePath -or $script:Daily69InvocationCompleted) { return }
     $now = Get-Daily69KstNow
@@ -457,6 +575,8 @@ function Complete-Daily69InvocationEvidence {
         $revisions.queueRevision = [int]$controlState.localRevision
         $revisions.projectionRevision = [int]$controlState.projectionRevision
     } catch { }
+    $processDiagnostic = Get-Daily69ProcessDiagnostic -Capture $ProcessCapture
+    $exceptionDiagnostic = Get-Daily69ExceptionDiagnostic -ErrorRecord $ExceptionRecord -Phase $Phase
     $receipt = [ordered]@{
         schemaVersion = 'daily69-retained-execution-v1'
         role = $script:Daily69InvocationRole
@@ -504,6 +624,12 @@ function Complete-Daily69InvocationEvidence {
         PRODUCTION_DB_WRITE = 0
         R2_WRITE = 0
         secretRedacted = $true
+        diagnostic = [ordered]@{
+            schemaVersion = 'daily69-invocation-diagnostic-v1'
+            phase = ConvertTo-Daily69SafeCode -Value $Phase -Fallback 'UNKNOWN_PHASE'
+            process = $processDiagnostic
+            exception = $exceptionDiagnostic
+        }
     }
     Write-Daily69FinalReceipt -Data $receipt
     Write-Daily69EvidenceLine -Data ([ordered]@{
@@ -536,6 +662,12 @@ function Complete-Daily69InvocationEvidence {
         PRODUCTION_DB_WRITE = 0
         R2_WRITE = 0
         secretRedacted = $true
+        diagnostic = [ordered]@{
+            schemaVersion = 'daily69-invocation-diagnostic-v1'
+            phase = ConvertTo-Daily69SafeCode -Value $Phase -Fallback 'UNKNOWN_PHASE'
+            process = $processDiagnostic
+            exception = $exceptionDiagnostic
+        }
     })
     $script:Daily69InvocationCompleted = $true
 }
@@ -668,7 +800,17 @@ function Wait-Daily69CloseoutIdle {
 function Stop-FirstOperationFailClosed {
     param([string]$Reason)
     $safeReason = ConvertTo-Daily69SafeCode -Value $Reason -Fallback 'FIRST_OPERATION_FAILED'
-    try { & npm.cmd run daily69:first-day:emergency-pause --silent | Out-Null } catch { }
+    # Capsule rejection occurs before credential-environment import. Never let
+    # the existing pause command consume an ambient queue root or working dir.
+    if ($script:Daily69FailClosedQueueRoot -and $script:Daily69FailClosedWorktreeRoot) {
+        $savedQueueRoot = $env:QUEUE_SCHEDULER_ROOT
+        Push-Location $script:Daily69FailClosedWorktreeRoot
+        try {
+            $env:QUEUE_SCHEDULER_ROOT = $script:Daily69FailClosedQueueRoot
+            & npm.cmd run daily69:first-day:emergency-pause --silent | Out-Null
+        } catch { }
+        finally { $env:QUEUE_SCHEDULER_ROOT = $savedQueueRoot; Pop-Location }
+    }
     foreach ($name in @("Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1")) {
         try { Disable-ScheduledTask -TaskName $name -ErrorAction Stop | Out-Null } catch { }
     }
@@ -677,6 +819,8 @@ function Stop-FirstOperationFailClosed {
 
 if ($LibraryOnly) { return }
 
+$script:Daily69FailClosedQueueRoot = $null
+$script:Daily69FailClosedWorktreeRoot = $null
 $resolvedWorktree = (Resolve-Path -LiteralPath $WorktreeRoot).Path
 $resolvedQueue = (Resolve-Path -LiteralPath $QueueRoot).Path
 $actualHead = (& git.exe -C $resolvedWorktree rev-parse HEAD 2>$null | Out-String).Trim()
@@ -684,6 +828,15 @@ $gitExitCode = $LASTEXITCODE
 Initialize-Daily69InvocationEvidence -ResolvedQueue $resolvedQueue -Role $InvocationRole -Name $TaskName -BoundNamespace $Namespace -ExpectedHead $ExpectedGitHead -ActualHead $actualHead -BoundWrapper $WrapperPath
 if ($Namespace -notmatch '^[A-Za-z0-9_-]{1,96}$' -or (Split-Path -Leaf $resolvedQueue) -ne $Namespace) { throw "FIRST_OPERATION_NAMESPACE_MISMATCH" }
 if ($gitExitCode -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw "RUNTIME_GIT_HEAD_MISMATCH" }
+$dirty = (& git.exe -C $resolvedWorktree status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
+$script:Daily69FailClosedQueueRoot = $resolvedQueue
+$script:Daily69FailClosedWorktreeRoot = $resolvedWorktree
+# Verify Task arguments and all capsule bytes before environment/auth loading,
+# hourly slot claims, control commands, or closeout projection side effects.
+$null = Assert-Daily69TaskCapsule -WorktreeRoot $resolvedWorktree -QueueRoot $resolvedQueue -Namespace $Namespace `
+    -CodexRuntimeCapsulePath $CodexRuntimeCapsulePath -CodexRuntimeCapsuleManifestSha256 $CodexRuntimeCapsuleManifestSha256 `
+    -CodexRuntimeCapsuleBundleDigest $CodexRuntimeCapsuleBundleDigest -CodexRuntimeBinarySha256 $CodexRuntimeBinarySha256
 $resolvedSource = (Resolve-Path -LiteralPath $SourceRoot).Path
 $resolvedEnv = (Resolve-Path -LiteralPath $EnvFile).Path
 . (Join-Path $resolvedWorktree "scripts\queue-control-integration\common-control-no-upload.ps1") -WorktreeRoot $resolvedWorktree -QueueRoot $resolvedQueue -Namespace $Namespace -EnvFile $resolvedEnv

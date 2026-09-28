@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { armFirstOperation, nextKstDate } from "../../src/lib/daily69-first-operation";
 import { acquireStrictProcessLock } from "../../src/lib/queue-scheduler/lock";
+import { verifyFirstOperationCapsuleAdmission } from "../../src/lib/daily69-first-operation/runtimeCapsule";
 
 async function main() {
   const sourceRoot = resolve(requiredArg("--source-root"));
@@ -12,6 +14,10 @@ async function main() {
   if (actualGitHead !== expectedGitHead) throw new Error("RUNTIME_GIT_HEAD_MISMATCH");
   const dirty = (await exec("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: process.cwd(), windowsHide: true })).stdout.trim();
   if (dirty) throw new Error("RUNTIME_GIT_WORKTREE_NOT_CLEAN");
+  if (process.argv.includes("--codex-command")) throw new Error("CODEX_CAPSULE_OPERATION_BINDING_REQUIRED");
+  const codexReviewRuntime = await verifyFirstOperationCapsuleAdmission(
+    JSON.parse(await readFile(requiredArg("--runtime-capsule-binding"), "utf8")),
+  );
   const operationBase = resolve(requiredArg("--operation-base"));
   const operationDate = optionalArg("--operation-date") ?? nextKstDate(new Date());
   const attemptNumber = optionalIntegerArg("--attempt-number") ?? 1;
@@ -22,6 +28,7 @@ async function main() {
       sourceRoot,
       operationBase,
       expectedGitHead,
+      codexReviewRuntime,
       assetBoundaryRoot: resolve(optionalArg("--asset-boundary-root") ?? sourceRoot),
       usageMaterializationAssetRoot: resolve(requiredArg("--usage-asset-root")),
       now: new Date(),

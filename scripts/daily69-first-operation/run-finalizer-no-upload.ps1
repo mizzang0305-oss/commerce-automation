@@ -5,12 +5,17 @@ param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[A-Za-z0-9_-]{1,96}$')][string]$Namespace,
     [Parameter(Mandatory = $true)][string]$SourceRoot,
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedGitHead,
-    [Parameter(Mandatory = $true)][string]$EnvFile
+    [Parameter(Mandatory = $true)][string]$EnvFile,
+    [Parameter(Mandatory = $true)][string]$CodexRuntimeCapsulePath,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleManifestSha256,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleBundleDigest,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeBinarySha256
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'principal-identity.ps1')
 . (Join-Path $PSScriptRoot 'finalizer-result.ps1')
 . (Join-Path $PSScriptRoot 'timing-contract.ps1')
+. (Join-Path $PSScriptRoot 'runtime-capsule-task-contract.ps1')
 $taskName = 'Minz-Commerce-Daily69-Finalizer-NoUpload-V1'
 $result = [ordered]@{
     schemaVersion='daily69-finalizer-result-v1'; resultId=[guid]::NewGuid().ToString('N')
@@ -35,6 +40,9 @@ try {
     if ($LASTEXITCODE -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw 'RUNTIME_GIT_HEAD_MISMATCH' }
     $dirty = (& git.exe -C $root status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
+    $null = Assert-Daily69TaskCapsule -WorktreeRoot $root -QueueRoot $queue -Namespace $Namespace `
+        -CodexRuntimeCapsulePath $CodexRuntimeCapsulePath -CodexRuntimeCapsuleManifestSha256 $CodexRuntimeCapsuleManifestSha256 `
+        -CodexRuntimeCapsuleBundleDigest $CodexRuntimeCapsuleBundleDigest -CodexRuntimeBinarySha256 $CodexRuntimeBinarySha256
     $timing = Get-Daily69Timing -OperationDate $result.operationDate
     $now = [datetimeoffset]::UtcNow
     if ($now -lt $timing.finalizerAt.ToUniversalTime() -or $now -ge $timing.finalizerDeadline.ToUniversalTime()) { throw 'DAILY69_FINALIZER_OUTSIDE_WINDOW' }

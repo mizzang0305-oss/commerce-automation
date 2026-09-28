@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { access, mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -9,6 +8,9 @@ import { assertCodexUsageEvidenceBinding, type CodexUsageEvidenceProvenance } fr
 import { acquireProcessLock } from "./lock";
 import type { CodexReviewEvidenceV2 } from "./types";
 import { assertCodexVisualEvidenceBinding, CODEX_VISUAL_EVIDENCE_ROLES, readCodexVisualEvidenceBinding, type CodexVisualEvidenceRole } from "./visualEvidenceBinding";
+import { inspectCodexRuntimeBinding, readOperationCodexRuntime, verifyCodexRuntimeBeforeInvocation, type CodexRuntimeBinding } from "./codexRuntimeBinding";
+import { captureCliProcess, cliInvocationError, CodexCliInvocationError, receiptCliDiagnostic, type CapturedCliProcess, type CodexCliFailureDiagnostic } from "./codexCliDiagnostics";
+import { assertDiagnosticIsolation, assertDiagnosticPath } from "./codexReviewDiagnosticPaths";
 
 export const CODEX_REVIEW_OUTPUT_SCHEMA_VERSION = "queue-codex-review-output-v1" as const;
 export const CODEX_REVIEW_RECEIPT_SCHEMA_VERSION = "queue-codex-review-executor-receipt-v2" as const;
@@ -36,6 +38,8 @@ export type CodexReviewRequest = {
   usageEvidenceProvenance: CodexUsageEvidenceProvenance;
   receiptRoot: string;
   provenance: CodexReviewProvenance;
+  diagnosticRoot?: string;
+  diagnosticRuntimeBinding?: CodexRuntimeBinding;
   regenerationCount?: number;
   originOperationNamespace?: string;
   originQueueId?: string;
@@ -72,7 +76,21 @@ type InvocationResult = {
   exitCode: number;
   output: unknown;
   usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number };
+  processDiagnostic?: CodexCliProcessDiagnostic;
 };
+
+// Minimal process-to-receipt linkage for Level3 success proof. Never retain
+// stdout/stderr text, arguments, environment, or authentication state here.
+type CodexCliProcessDiagnostic = Pick<CapturedCliProcess,
+  "processId" | "exitCode" | "signal" | "startedAt" | "completedAt" | "terminationConfirmed"
+  | "stdoutByteLength" | "stderrByteLength" | "stdoutSha256" | "stderrSha256"
+  | "stdoutWasTruncated" | "stderrWasTruncated"> & {
+    schemaVersion: "codex-cli-process-diagnostic-v1";
+    phase: "exit";
+    durationMs: number;
+    codexCliVersion: string;
+    resolvedExecutableFingerprint: string;
+  };
 
 type ReviewDependencies = {
   invoke?: (input: {
@@ -83,9 +101,11 @@ type ReviewDependencies = {
     cwd: string;
     timeoutMs: number;
     env: NodeJS.ProcessEnv;
+    runtimeBinding?: CodexRuntimeBinding;
   }) => Promise<InvocationResult>;
   now?: () => Date;
   env?: NodeJS.ProcessEnv;
+  delay?: (milliseconds: number) => Promise<void>;
 };
 
 type ExecutorReceipt = {
@@ -125,9 +145,14 @@ type ExecutorReceipt = {
   originOperationNamespace?: string;
   originQueueId?: string;
   originVideoSha256?: string;
-  exitCode?: number;
+  exitCode?: number | null;
   errorCode?: string;
+  startedAt?: string;
+  completedAt?: string;
+  diagnostic?: CodexCliFailureDiagnostic;
+  processDiagnostic?: CodexCliProcessDiagnostic;
   usage?: InvocationResult["usage"];
+  runtimeBinding?: CodexRuntimeBinding;
   SAFE_TO_UPLOAD: false;
   SAFE_TO_PUBLIC_UPLOAD: false;
   PLATFORM_UPLOAD: 0;
@@ -162,6 +187,10 @@ const DAILY_INVOCATION_CAP = 69;
 const PER_VIDEO_ATTEMPT_CAP = 2;
 const INVOCATION_TIMEOUT_MS = 10 * 60_000;
 
+export function buildCodexReviewOutputSchema(requestedAt: Date) {
+  return { ...OUTPUT_SCHEMA, properties: { ...OUTPUT_SCHEMA.properties, reviewedAt: { type: "string", const: requestedAt.toISOString() } } };
+}
+
 export async function executeAuthenticatedCodexReview(
   input: CodexReviewRequest,
   dependencies: ReviewDependencies = {},
@@ -169,9 +198,22 @@ export async function executeAuthenticatedCodexReview(
   const now = dependencies.now ?? (() => new Date());
   const env = dependencies.env ?? process.env;
   const invoke = dependencies.invoke ?? invokeCodexCli;
+  // This gate must run before directory/lock/receipt creation or ledger recovery.
+  const diagnosticRoot = input.provenance === "diagnostic" ? await assertDiagnosticIsolation(input) : undefined;
+  if (input.provenance !== "diagnostic" && input.diagnosticRuntimeBinding) throw new Error("CODEX_REVIEW_DIAGNOSTIC_RUNTIME_FORBIDDEN");
   const receiptRoot = resolve(input.receiptRoot);
   const receiptsRoot = join(receiptRoot, "receipts");
   const attemptsRoot = join(receiptRoot, "attempts");
+  let runtimeBinding: CodexRuntimeBinding | undefined;
+  // Infrastructure admission must fail before any executor directory, lock,
+  // receipt, or attempt counter is created. Historical operations are read only.
+  try {
+    runtimeBinding = diagnosticRoot
+      ? input.diagnosticRuntimeBinding ? await inspectCodexRuntimeBinding(input.diagnosticRuntimeBinding) : undefined
+      : await readOperationCodexRuntime(dirname(receiptRoot), input.operationNamespace, Boolean(env.FIRST_OPERATION_SOURCE_ROOT));
+  } catch (error) {
+    return failed(safeError(error), false, 0, "");
+  }
   await Promise.all([mkdir(receiptsRoot, { recursive: true }), mkdir(attemptsRoot, { recursive: true })]);
   let release: (() => Promise<void>) | null = null;
   try {
@@ -191,6 +233,10 @@ export async function executeAuthenticatedCodexReview(
       return { status: completed.reviewResult ?? "block", errorCode: "", retryable: false, attempts: sameSha.length, deduplicated: true, receiptPath, ...(evidence ? { evidence } : {}) };
     }
     const invokedCount = receipts.filter((receipt) => receipt.invoked).length;
+    const lastAttempt = sameSha.filter(receipt => receipt.invoked).sort((a, b) => b.attempt - a.attempt)[0];
+    if (lastAttempt?.status === "error" && lastAttempt.errorCode && codexCliRetryDelayMs(lastAttempt.errorCode, lastAttempt.attempt) === null) {
+      return failed(lastAttempt.errorCode, false, sameSha.length, receiptFile(receiptsRoot, validated.video.sha256, lastAttempt.attempt));
+    }
     if (invokedCount >= DAILY_INVOCATION_CAP) return failed("CODEX_REVIEW_DAILY_CAP_REACHED", false, sameSha.length, "");
     if (sameSha.filter((receipt) => receipt.invoked).length >= PER_VIDEO_ATTEMPT_CAP) {
       const latestAttempt = Math.max(...sameSha.map((receipt) => receipt.attempt));
@@ -199,6 +245,10 @@ export async function executeAuthenticatedCodexReview(
 
     let lastFailure: CodexReviewExecution | null = null;
     for (let attempt = sameSha.length + 1; attempt <= PER_VIDEO_ATTEMPT_CAP; attempt += 1) {
+      if (runtimeBinding) {
+        try { await verifyCodexRuntimeBeforeInvocation(runtimeBinding); }
+        catch (error) { return failed(safeError(error), false, attempt - 1, lastFailure?.receiptPath ?? ""); }
+      }
       const currentReceipts = await readReceipts(receiptsRoot);
       if (currentReceipts.filter((receipt) => receipt.invoked).length >= DAILY_INVOCATION_CAP) {
         return failed("CODEX_REVIEW_DAILY_CAP_REACHED", false, attempt - 1, lastFailure?.receiptPath ?? "");
@@ -207,11 +257,17 @@ export async function executeAuthenticatedCodexReview(
       await mkdir(attemptRoot, { recursive: false });
       const schemaPath = join(attemptRoot, "output-schema.json");
       const outputPath = join(attemptRoot, "structured-output.json");
-      await writeFile(schemaPath, `${JSON.stringify(OUTPUT_SCHEMA, null, 2)}\n`, "utf8");
+      const requestedAt = now();
+      if (diagnosticRoot) {
+        await assertDiagnosticPath(diagnosticRoot, schemaPath);
+        await assertDiagnosticPath(diagnosticRoot, outputPath);
+      }
+      await writeFile(schemaPath, `${JSON.stringify(buildCodexReviewOutputSchema(requestedAt), null, 2)}\n`, "utf8");
       const receiptPath = receiptFile(receiptsRoot, validated.video.sha256, attempt);
       const started: ExecutorReceipt = {
         schemaVersion: CODEX_REVIEW_RECEIPT_SCHEMA_VERSION,
         status: "started",
+        startedAt: requestedAt.toISOString(),
         invoked: true,
         provenance: input.provenance,
         operationNamespace: input.operationNamespace,
@@ -241,27 +297,34 @@ export async function executeAuthenticatedCodexReview(
         SAFE_TO_UPLOAD: false,
         SAFE_TO_PUBLIC_UPLOAD: false,
         PLATFORM_UPLOAD: 0,
+        ...(runtimeBinding ? { runtimeBinding } : {}),
       };
       await atomicWriteJson(receiptPath, started);
       let invocationUsage: InvocationResult["usage"] | undefined;
+      let observedExitCode: number | undefined;
+      let processDiagnostic: CodexCliProcessDiagnostic | undefined;
       try {
         const result = await invoke({
-          prompt: buildPrompt(input, validated.video.sha256, validated.machineSummary, now()),
+          prompt: buildPrompt(input, validated.video.sha256, validated.machineSummary, requestedAt),
           imagePaths: [validated.productReference.path, ...validated.visualEvidence.map((entry) => entry.path)],
           schemaPath,
           outputPath,
           cwd: attemptRoot,
           timeoutMs: INVOCATION_TIMEOUT_MS,
           env,
+          runtimeBinding,
         });
         invocationUsage = result.usage;
+        observedExitCode = result.exitCode;
+        processDiagnostic = result.processDiagnostic ? receiptProcessDiagnostic(result.processDiagnostic) : undefined;
         if (result.exitCode !== 0) throw new Error("CODEX_REVIEW_CLI_EXIT_NONZERO");
-        const model = validateModelOutput(result.output, input, validated.video.sha256);
+        const model = validateModelOutput(result.output, input, validated.video.sha256, requestedAt.toISOString());
         const reviewedAt = now().toISOString();
         const finalReviewArtifact = await materializeFinalReviewArtifact({ input, model, validated, reviewedAt });
         const completedReceipt: ExecutorReceipt = {
           ...started,
           status: "completed",
+          completedAt: now().toISOString(),
           finalReviewArtifact: finalReviewArtifact.path,
           finalReviewArtifactSha256: finalReviewArtifact.sha256,
           reviewResult: model.reviewResult,
@@ -274,16 +337,23 @@ export async function executeAuthenticatedCodexReview(
           contactSheetNote: model.contactSheetNote,
           exitCode: result.exitCode,
           usage: result.usage,
+          ...(processDiagnostic ? { processDiagnostic } : {}),
         };
         await atomicWriteJson(receiptPath, completedReceipt);
         const evidence = input.provenance === "diagnostic" ? undefined : await evidenceFromReceipt(completedReceipt, receiptPath);
         return { status: model.reviewResult, errorCode: "", retryable: false, attempts: attempt, deduplicated: false, receiptPath, ...(evidence ? { evidence } : {}) };
       } catch (error) {
         const errorCode = safeError(error);
-        const retryable = isRetryable(errorCode) && attempt < PER_VIDEO_ATTEMPT_CAP;
-        await atomicWriteJson(receiptPath, { ...started, status: "error", errorCode, exitCode: errorCode === "CODEX_REVIEW_CLI_EXIT_NONZERO" ? 1 : undefined, ...(invocationUsage ? { usage: invocationUsage } : {}) });
-        lastFailure = failed(errorCode, retryable, attempt, receiptPath);
+        const delayMs = codexCliRetryDelayMs(errorCode, attempt);
+        const retryable = delayMs !== null;
+        const diagnostic = error instanceof CodexCliInvocationError ? receiptCliDiagnostic(error, Boolean(diagnosticRoot)) : undefined;
+        const admissionRejected = errorCode.startsWith("CODEX_CAPSULE_");
+        await atomicWriteJson(receiptPath, { ...started, ...(admissionRejected ? { invoked: false } : {}), status: "error", completedAt: now().toISOString(), errorCode,
+          exitCode: diagnostic ? diagnostic.cliExitCode : observedExitCode,
+          ...(diagnostic ? { diagnostic } : {}), ...(processDiagnostic ? { processDiagnostic } : {}), ...(invocationUsage ? { usage: invocationUsage } : {}) });
+        lastFailure = failed(errorCode, retryable, admissionRejected ? attempt - 1 : attempt, receiptPath);
         if (!retryable) return lastFailure;
+        await (dependencies.delay ?? (ms => new Promise(resolve => setTimeout(resolve, ms))))(delayMs!);
       }
     }
     return lastFailure ?? failed("CODEX_REVIEW_EXECUTOR_FAILED", false, PER_VIDEO_ATTEMPT_CAP, "");
@@ -312,6 +382,7 @@ export async function executeAuthenticatedCodexReview(
 }
 
 async function validateRequest(input: CodexReviewRequest) {
+  if (!["natural", "carry_forward_revalidation", "diagnostic"].includes(input.provenance)) throw new Error("CODEX_REVIEW_PROVENANCE_INVALID");
   if (!/^[A-Za-z0-9_-]{1,128}$/u.test(input.operationNamespace)) throw new Error("CODEX_REVIEW_NAMESPACE_INVALID");
   if (!/^slot-\d{3}$/u.test(input.slotId) || !input.queueId.trim() || !input.productKey.trim() || input.productName.trim().length < 2) throw new Error("CODEX_REVIEW_BINDING_INVALID");
   if (input.visualEvidencePaths.length !== CODEX_VISUAL_EVIDENCE_ROLES.length
@@ -380,12 +451,13 @@ function buildPrompt(input: CodexReviewRequest, videoSha256: string, machineSumm
     "reviewerType=codex",
     `executorType=${CODEX_REVIEW_EXECUTOR_TYPE}`,
     `requestedAt=${requestedAt.toISOString()}`,
+    "Echo requestedAt exactly as reviewedAt. This is a host-supplied immutable timestamp; do not infer, translate, or invent a timestamp.",
     `machineQa=${JSON.stringify(machineSummary)}`,
     "Never change the supplied queueId, productKey, or videoSha256 bindings.",
   ].join("\n");
 }
 
-function validateModelOutput(value: unknown, input: CodexReviewRequest, videoSha256: string): ModelReviewOutput {
+function validateModelOutput(value: unknown, input: CodexReviewRequest, videoSha256: string, requestedAt: string): ModelReviewOutput {
   if (!isRecord(value)) throw new Error("CODEX_REVIEW_STRUCTURED_OUTPUT_INVALID");
   const candidate = value as Partial<ModelReviewOutput>;
   if (candidate.schemaVersion !== CODEX_REVIEW_OUTPUT_SCHEMA_VERSION || candidate.queueId !== input.queueId
@@ -407,6 +479,7 @@ function validateModelOutput(value: unknown, input: CodexReviewRequest, videoSha
   }
   const modelReviewedAt = Date.parse(String(candidate.reviewedAt ?? ""));
   if (!Number.isFinite(modelReviewedAt)) throw new Error("CODEX_REVIEW_STRUCTURED_TIMESTAMP_INVALID");
+  if (candidate.reviewedAt !== requestedAt) throw new Error("CODEX_REVIEW_STRUCTURED_TIMESTAMP_MISMATCH");
   return candidate as ModelReviewOutput;
 }
 
@@ -425,6 +498,8 @@ async function materializeFinalReviewArtifact(input: {
   const passed = input.model.reviewResult === "pass";
   const artifact = {
     version: "autonomous-video-review-v2",
+    reviewProvenance: input.input.provenance,
+    promotionEligible: input.input.provenance !== "diagnostic",
     visualReviewExecuted: true,
     finalAutomatedQaPassed: passed ? 1 : 0,
     reviewedAt: input.reviewedAt,
@@ -497,6 +572,7 @@ export async function loadCompletedCodexEvidenceFromReceipt(receiptPath: string)
   if (receipt.schemaVersion !== CODEX_REVIEW_RECEIPT_SCHEMA_VERSION || receipt.status !== "completed" || receipt.invoked !== true) {
     throw new Error("CODEX_REVIEW_RECEIPT_INVALID");
   }
+  if (receipt.provenance === "diagnostic") throw new Error("CODEX_REVIEW_DIAGNOSTIC_PROMOTION_FORBIDDEN");
   return evidenceFromReceipt(receipt, inspected.path);
 }
 
@@ -508,15 +584,51 @@ async function invokeCodexCli(input: {
   cwd: string;
   timeoutMs: number;
   env: NodeJS.ProcessEnv;
+  runtimeBinding?: CodexRuntimeBinding;
 }): Promise<InvocationResult> {
-  const launch = resolveCodexLaunch(input.env);
+  const launch = input.runtimeBinding ? { executable: input.runtimeBinding.command, argsPrefix: [] } : resolveCodexLaunch(input.env);
   const codexArgs = buildCodexCliArguments(input);
-  const processResult = await spawnCaptured(launch.executable, [...launch.argsPrefix, ...codexArgs], input.env, input.timeoutMs, input.prompt);
-  if (processResult.exitCode !== 0) throw new Error(classifyCliFailure(`${processResult.stderr}\n${processResult.stdout}`));
+  let cliVersion = input.runtimeBinding?.cliVersion ?? "unavailable";
+  if (!input.runtimeBinding) {
+    const probe = await captureCliProcess({ command: launch.executable, args: [...launch.argsPrefix, "--version"], env: input.env, cwd: input.cwd, timeoutMs: 15_000, stdin: "" });
+    cliVersion = probe.stdout.trim().match(/^codex-cli (\d+\.\d+\.\d+)$/u)?.[1] ?? "unavailable";
+  }
+  const executableFingerprint = input.runtimeBinding?.commandSha256 ?? sha256Text(stableJson({
+    commandHash: await sha256File(launch.executable).catch(() => "unavailable"),
+    prefixHashes: await Promise.all(launch.argsPrefix.map(p => sha256File(p).catch(() => "unavailable"))), cliVersion,
+  }));
+  if (input.runtimeBinding) await verifyCodexRuntimeBeforeInvocation(input.runtimeBinding);
+  const processResult = await captureCliProcess({ command: launch.executable, args: [...launch.argsPrefix, ...codexArgs], env: input.env, cwd: input.cwd, timeoutMs: input.timeoutMs, stdin: input.prompt });
+  if (processResult.exitCode !== 0 || processResult.failurePhase !== "exit") {
+    const classifiedErrorCode = processResult.failurePhase === "timeout" ? "CODEX_REVIEW_CLI_TIMEOUT"
+      : processResult.failurePhase === "spawn" ? "CODEX_REVIEW_CLI_LAUNCH_FAILED"
+      : processResult.failurePhase === "stdin" ? "CODEX_REVIEW_CLI_STDIN_FAILED"
+      : classifyCliFailure(`${processResult.stderr}\n${processResult.stdout}`);
+    throw cliInvocationError({ process: processResult, classifiedErrorCode, cliVersion, executableFingerprint });
+  }
   let output: unknown = null;
   try { output = JSON.parse(await readFile(input.outputPath, "utf8")); }
-  catch { throw new Error("CODEX_REVIEW_STRUCTURED_OUTPUT_INVALID"); }
-  return { exitCode: processResult.exitCode, output, usage: parseUsage(processResult.stdout) };
+  catch { throw cliInvocationError({ process: processResult, classifiedErrorCode: "CODEX_REVIEW_STRUCTURED_OUTPUT_INVALID", cliVersion, executableFingerprint, phase: "structured_output" }); }
+  return { exitCode: processResult.exitCode, output, usage: parseUsage(processResult.stdout), processDiagnostic: receiptProcessDiagnostic({
+    ...processResult, schemaVersion: "codex-cli-process-diagnostic-v1", phase: "exit",
+    durationMs: Date.parse(processResult.completedAt) - Date.parse(processResult.startedAt),
+    codexCliVersion: cliVersion, resolvedExecutableFingerprint: executableFingerprint,
+  }) };
+}
+
+function receiptProcessDiagnostic(value: CodexCliProcessDiagnostic): CodexCliProcessDiagnostic {
+  // Explicit selection is intentional: an invocation result is not permission
+  // to serialize its arbitrary fields or raw process output.
+  return {
+    schemaVersion: value.schemaVersion, phase: value.phase,
+    processId: value.processId, exitCode: value.exitCode, signal: value.signal,
+    startedAt: value.startedAt, completedAt: value.completedAt, durationMs: value.durationMs,
+    terminationConfirmed: value.terminationConfirmed,
+    stdoutByteLength: value.stdoutByteLength, stderrByteLength: value.stderrByteLength,
+    stdoutSha256: value.stdoutSha256, stderrSha256: value.stderrSha256,
+    stdoutWasTruncated: value.stdoutWasTruncated, stderrWasTruncated: value.stderrWasTruncated,
+    codexCliVersion: value.codexCliVersion, resolvedExecutableFingerprint: value.resolvedExecutableFingerprint,
+  };
 }
 
 export function buildCodexCliArguments(input: {
@@ -524,35 +636,19 @@ export function buildCodexCliArguments(input: {
   schemaPath: string;
   outputPath: string;
   cwd: string;
+  runtimeBinding?: CodexRuntimeBinding;
 }): string[] {
   return [
     "exec", "-", "--ephemeral", "--json", "--skip-git-repo-check", "--sandbox", "read-only",
     "--output-schema", input.schemaPath, "--output-last-message", input.outputPath,
     "--cd", input.cwd,
+    ...(input.runtimeBinding ? ["--ignore-user-config", "--model", input.runtimeBinding.model, "-c", `model_reasoning_effort="${input.runtimeBinding.reasoningEffort}"`] : []),
     ...input.imagePaths.flatMap((path) => ["--image", path]),
   ];
 }
 
-async function spawnCaptured(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number, stdin: string) {
-  return new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: process.cwd(), env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    const finish = (callback: () => void) => { if (settled) return; settled = true; clearTimeout(timer); callback(); };
-    const timer = setTimeout(() => { child.kill(); finish(() => reject(new Error("CODEX_REVIEW_CLI_TIMEOUT"))); }, timeoutMs);
-    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code !== "EPIPE") finish(() => reject(error));
-    });
-    child.stdin.end(stdin, "utf8");
-    child.stdout.on("data", (chunk: Buffer) => { if (stdout.length < 2_000_000) stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { if (stderr.length < 16_384) stderr += chunk.toString("utf8"); });
-    child.once("error", (error) => finish(() => reject(error)));
-    child.once("close", (code) => finish(() => resolvePromise({ exitCode: Number(code ?? 1), stdout, stderr })));
-  });
-}
-
-function classifyCliFailure(stderr: string) {
+export function classifyCliFailure(stderr: string) {
+  if (/model.{0,100}requires a newer version of Codex/iu.test(stderr)) return "CODEX_REVIEW_CLI_UPGRADE_REQUIRED";
   if (/rate.?limit|usage.?limit|quota|credit/iu.test(stderr)) return "CODEX_REVIEW_CLI_USAGE_LIMIT";
   if (/not logged in|authentication|unauthorized|forbidden/iu.test(stderr)) return "CODEX_REVIEW_CLI_AUTH_UNAVAILABLE";
   if (/schema/iu.test(stderr)) return "CODEX_REVIEW_CLI_SCHEMA_REJECTED";
@@ -630,7 +726,12 @@ function receiptBindingMatches(receipt: ExecutorReceipt, input: CodexReviewReque
 function receiptFile(root: string, sha256: string, attempt: number) { return join(root, `${sha256}-attempt-${attempt}.json`); }
 function failed(errorCode: string, retryable: boolean, attempts: number, receiptPath: string): CodexReviewExecution { return { status: "error", errorCode, retryable, attempts, deduplicated: false, receiptPath }; }
 function safeError(error: unknown) { const value = error instanceof Error ? error.message : String(error); return /^[A-Z0-9_:-]+$/u.test(value) ? value : "CODEX_REVIEW_EXECUTOR_FAILED"; }
-function isRetryable(code: string) { return /TIMEOUT|EXIT_NONZERO|TEMPORARY|RATE_LIMIT|NETWORK|ECONN|EAI_AGAIN|STRUCTURED/u.test(code); }
+// No speculative stderr classifiers: only explicit transient categories may
+// enter this policy. Unknown/auth/usage/schema/input/upgrade/timeout fail closed.
+export function codexCliRetryDelayMs(code: string, attempt: number): number | null {
+  if (!Number.isInteger(attempt) || attempt < 1 || attempt >= PER_VIDEO_ATTEMPT_CAP) return null;
+  return ["CODEX_REVIEW_CLI_TEMPORARY_SERVICE", "CODEX_REVIEW_CLI_NETWORK"].includes(code) ? 2_000 : null;
+}
 function safeIdentity(value: string) { return value.replace(/[^A-Za-z0-9_:.@/-]/gu, "_").slice(0, 256); }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0; }

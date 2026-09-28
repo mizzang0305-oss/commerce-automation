@@ -102,7 +102,13 @@ export async function executeQueueVideoBatch(input: {
 
   if (prepared.length > 0 && videoRunId) {
     const videoInputManifestPath = join(runRoot, "video-inputs.json");
-    await writeFile(videoInputManifestPath, `${JSON.stringify({ version: "queue-video-input-v1", queueBindings: prepared.map(({ queueId, productKey }) => ({ queueId, productKey })), products: prepared.map((value) => value.input), SAFE_TO_UPLOAD: false, PLATFORM_UPLOAD: 0 }, null, 2)}\n`, "utf8");
+    await writeFile(videoInputManifestPath, `${JSON.stringify({
+      version: "queue-video-input-v1",
+      queueBindings: prepared.map(({ queueId, slotId, productKey }) => ({ queueId, slotId, productKey })),
+      products: prepared.map((value) => ({ ...value.input, diagnosticContext: { queueId: value.queueId, slotId: value.slotId } })),
+      SAFE_TO_UPLOAD: false,
+      PLATFORM_UPLOAD: 0,
+    }, null, 2)}\n`, "utf8");
     const videoRoot = join(runRoot, "video-automation", videoRunId);
     try {
       await spawnProcess(process.execPath, ["--import", "tsx", "scripts/video-automation/run-autonomous-video-review-v2.ts"], { ...process.env, LIVE_PRODUCT_VIDEO_INPUT_MANIFEST: videoInputManifestPath, VIDEO_AUTOMATION_RUN_ID: videoRunId, VIDEO_AUTOMATION_OUTPUT_ROOT: videoRoot, VIDEO_AUTOMATION_V2_MODE: "batch" }, 3_600_000);

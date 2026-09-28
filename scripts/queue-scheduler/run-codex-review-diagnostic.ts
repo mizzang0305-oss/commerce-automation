@@ -2,12 +2,18 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { atomicWriteJson } from "../../src/lib/queue-scheduler/atomicJson";
 import { executeAuthenticatedCodexReview, type CodexReviewRequest } from "../../src/lib/queue-scheduler/codexCliReviewExecutor";
+import { assertDiagnosticIsolation, assertDiagnosticPath } from "../../src/lib/queue-scheduler/codexReviewDiagnosticPaths";
 
 async function main() {
   const requestPath = resolve(requiredArg("--request"));
   const outputPath = resolve(requiredArg("--output"));
+  const diagnosticRoot = resolve(requiredArg("--incident-root"));
+  await assertDiagnosticPath(diagnosticRoot, requestPath);
   const request = JSON.parse(await readFile(requestPath, "utf8")) as CodexReviewRequest;
   if (request.provenance !== "diagnostic") throw new Error("CODEX_REVIEW_DIAGNOSTIC_PROVENANCE_REQUIRED");
+  if (request.diagnosticRoot && resolve(request.diagnosticRoot) !== diagnosticRoot) throw new Error("CODEX_REVIEW_DIAGNOSTIC_ROOT_MISMATCH");
+  request.diagnosticRoot = diagnosticRoot;
+  await assertDiagnosticIsolation(request, outputPath);
   const result = await executeAuthenticatedCodexReview(request);
   await atomicWriteJson(outputPath, {
     schemaVersion: "queue-codex-review-diagnostic-v1",

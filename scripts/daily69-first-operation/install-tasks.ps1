@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "principal-identity.ps1")
 . (Join-Path $PSScriptRoot 'timing-contract.ps1')
+. (Join-Path $PSScriptRoot 'runtime-capsule-task-contract.ps1')
 $names = @("Minz-Commerce-Scout-NoUpload-V1", "Minz-Commerce-VideoBatch-NoUpload-V1", "Minz-Commerce-ControlRunner-NoUpload-V1", "Minz-Commerce-Daily69-Closeout-NoUpload-V1", "Minz-Commerce-Daily69-Finalizer-NoUpload-V1")
 $root = (Resolve-Path -LiteralPath $WorktreeRoot).Path
 $queue = (Resolve-Path -LiteralPath $QueueRoot).Path
@@ -24,6 +25,14 @@ $manifestPath = Join-Path $queue "operation-manifest.json"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ([string]$manifest.schemaVersion -ne "daily69-first-operation-v2" -or [string]$manifest.armStatus -ne "projection_verified") { throw "FIRST_OPERATION_PROJECTION_VERIFICATION_REQUIRED" }
 if ([string]$manifest.namespace -ne $Namespace -or [string]$manifest.operationDate -ne $OperationDate -or [string]$manifest.expectedGitHead -ne $ExpectedGitHead) { throw "FIRST_OPERATION_TASK_BINDING_MISMATCH" }
+$actualHead = (& git.exe -C $root rev-parse HEAD 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $actualHead -ne $ExpectedGitHead) { throw 'RUNTIME_GIT_HEAD_MISMATCH' }
+$dirty = (& git.exe -C $root status --porcelain --untracked-files=all 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'RUNTIME_GIT_WORKTREE_NOT_CLEAN' }
+$capsuleBinding = Get-Daily69TaskCapsuleBinding -Manifest $manifest
+$null = Assert-Daily69TaskCapsule -WorktreeRoot $root -QueueRoot $queue -Namespace $Namespace `
+    -CodexRuntimeCapsulePath $capsuleBinding.canonicalPath -CodexRuntimeCapsuleManifestSha256 $capsuleBinding.manifestSha256 `
+    -CodexRuntimeCapsuleBundleDigest $capsuleBinding.bundleDigest -CodexRuntimeBinarySha256 $capsuleBinding.binarySha256
 $env:QUEUE_SCHEDULER_ROOT = $queue
 $env:FIRST_OPERATION_SOURCE_ROOT = $source
 $env:SAFE_TO_UPLOAD = "false"
@@ -63,6 +72,9 @@ function Assert-OwnedNoUploadTask([string]$Name) {
 function Quote([string]$Value) { return '"' + $Value.Replace('"', '\"') + '"' }
 function New-OperationAction([string]$Script) {
     $arguments = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File $(Quote $Script) -WorktreeRoot $(Quote $root) -QueueRoot $(Quote $queue) -Namespace $(Quote $Namespace) -SourceRoot $(Quote $source) -ExpectedGitHead $(Quote $ExpectedGitHead) -EnvFile $(Quote $envPath)"
+    # Owner-approved Task contract: PowerShell remains the direct action;
+    # arguments, operation manifest, and the actual Codex child exact-bind here.
+    $arguments += ' ' + (Get-Daily69CapsuleTaskArguments -Binding $capsuleBinding)
     return New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments -WorkingDirectory $root
 }
 
@@ -73,7 +85,7 @@ function Assert-TaskBinding([string]$Name, [string]$Role) {
     $actions = @($task.Actions)
     if ($actions.Count -ne 1 -or [string]$actions[0].Execute -cne [string]$expectedAction.Execute -or [string]$actions[0].Arguments -cne [string]$expectedAction.Arguments -or [string]$actions[0].WorkingDirectory -cne $root) { throw "FIRST_OPERATION_TASK_ACTION_VERIFY_FAILED:$Name" }
     $actionText = (@($task.Actions) | ForEach-Object { [string]$_.Execute + " " + [string]$_.Arguments }) -join " "
-    foreach ($required in @($root, $queue, $source, $envPath, $Namespace, $ExpectedGitHead)) {
+    foreach ($required in @($root, $queue, $source, $envPath, $Namespace, $ExpectedGitHead, $capsuleBinding.canonicalPath, $capsuleBinding.manifestSha256, $capsuleBinding.bundleDigest, $capsuleBinding.binarySha256)) {
         if ($actionText -notlike "*$required*") { throw "FIRST_OPERATION_TASK_BINDING_VERIFY_FAILED:$Name" }
     }
     if ([string]$task.State -eq "Disabled") { throw "FIRST_OPERATION_TASK_DISABLED:$Name" }
@@ -138,7 +150,7 @@ foreach ($name in $names) {
 }
 
 if ($WhatIfPreference) {
-    [pscustomobject]@{ event = "daily69_first_operation_tasks_plan"; operationDate = $OperationDate; namespace = $Namespace; batchTriggers = $expectedBatchCount; closeoutAt = $timing.closeoutAt.ToString('o'); finalizerAt = $timing.finalizerAt.ToString('o'); timingContract = $timing.contract; mutationPerformed = $false; SAFE_TO_UPLOAD = $false; PLATFORM_UPLOAD = 0 }
+    [pscustomobject]@{ event = "daily69_first_operation_tasks_plan"; operationDate = $OperationDate; namespace = $Namespace; batchTriggers = $expectedBatchCount; closeoutAt = $timing.closeoutAt.ToString('o'); finalizerAt = $timing.finalizerAt.ToString('o'); timingContract = $timing.contract; capsuleBinding = $capsuleBinding; mutationPerformed = $false; SAFE_TO_UPLOAD = $false; PLATFORM_UPLOAD = 0 }
     return
 }
 
@@ -156,6 +168,10 @@ $controlTrigger = New-ScheduledTaskTrigger -Once -At $operationLocal.AddMinutes(
 $closeoutTrigger = New-ScheduledTaskTrigger -Once -At $timing.closeoutAt
 $finalizerTrigger = New-ScheduledTaskTrigger -Once -At $timing.finalizerAt
 
+# Reopen at registration: an earlier read is not a lease on runtime files.
+$null = Assert-Daily69TaskCapsule -WorktreeRoot $root -QueueRoot $queue -Namespace $Namespace `
+    -CodexRuntimeCapsulePath $capsuleBinding.canonicalPath -CodexRuntimeCapsuleManifestSha256 $capsuleBinding.manifestSha256 `
+    -CodexRuntimeCapsuleBundleDigest $capsuleBinding.bundleDigest -CodexRuntimeBinarySha256 $capsuleBinding.binarySha256
 try {
     foreach ($name in $names[1..4]) { if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Unregister-ScheduledTask -TaskName $name -Confirm:$false } }
     if ($PSCmdlet.ShouldProcess($names[1], "Register first-operation 20-hour no-upload batch task")) { Register-ScheduledTask -TaskName $names[1] -Action (New-OperationAction $batchScript) -Trigger $batchTriggers -Settings $batchSettings -Principal $principal -Description "First operation day local video batches only; no upload." | Out-Null }
@@ -168,6 +184,9 @@ try {
     Assert-TaskBinding $names[3] "closeout"
     Assert-TaskBinding $names[4] "finalizer"
     if ([string](Get-ScheduledTask -TaskName $names[0] -ErrorAction Stop).State -ne "Disabled") { throw "FIRST_OPERATION_SCOUT_NOT_DISABLED" }
+    $null = Assert-Daily69TaskCapsule -WorktreeRoot $root -QueueRoot $queue -Namespace $Namespace `
+        -CodexRuntimeCapsulePath $capsuleBinding.canonicalPath -CodexRuntimeCapsuleManifestSha256 $capsuleBinding.manifestSha256 `
+        -CodexRuntimeCapsuleBundleDigest $capsuleBinding.bundleDigest -CodexRuntimeBinarySha256 $capsuleBinding.binarySha256
     Write-FinalizerTaskContract
     Push-Location $root
     try {

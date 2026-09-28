@@ -1,13 +1,13 @@
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { rankCreativeCandidates } from "../../src/lib/video-lab/creativeRanker";
 import { evaluateV143ReusableCreativePolicy } from "../../src/lib/uploads/videoAssets/v143ReusableCreativePolicy";
 import { buildPopGroupCaptions, restoreKnownCaptionTokens } from "../../src/lib/video-automation/captionIntegration";
 import { generateDeterministicCreativeCandidates } from "../../src/lib/video-automation/creativeCandidates";
 import { evaluateHookUsageLayout } from "../../src/lib/video-automation/layoutCollision";
-import { bestKoreanSubstringSimilarity, koreanTextSimilarity, runFasterWhisper, runJsonProcess } from "../../src/lib/video-automation/localRuntime";
+import { bestKoreanSubstringSimilarity, koreanTextSimilarity, LocalJsonProcessError, runFasterWhisper, runJsonProcess } from "../../src/lib/video-automation/localRuntime";
 import { loadApprovedProductFixtures } from "../../src/lib/video-automation/productFixtures";
 import { validateProductVideoInput } from "../../src/lib/video-automation/productInput";
 import { evaluateAutomatedVideoQuality } from "../../src/lib/video-automation/qa/automatedVideoQuality";
@@ -86,7 +86,10 @@ async function main(): Promise<void> {
       if (frames.status !== "success" || !Array.isArray(frames.image_paths) || frames.image_paths.length < 5) throw new Error("OWNER_REVIEWED_FRAME_EXTRACTION_FAILED");
       genericImagePaths = frames.image_paths.map(String);
       const exactReference = input.product.exactProductReference;
-      if (exactReference) await stat(exactReference.localPath);
+      if (exactReference) {
+        const ownedReference = await materializeOwnedInput(exactReference.localPath, join(productRoot, "source-inputs", `exact-product-reference${extensionOf(exactReference.localPath)}`));
+        exactReference.localPath = ownedReference.path;
+      }
       input.product.imagePaths = exactReference
         ? identitySafeImageSequence(exactReference.localPath, genericImagePaths)
         : genericImagePaths;
@@ -148,6 +151,7 @@ async function main(): Promise<void> {
         const outputPath = join(attemptRoot, "output.mp4");
         const renderOperation = profile.motionPreset === "static" ? "render" : "render_v2";
         const renderStarted = performance.now();
+        const queueContext = (input as unknown as { diagnosticContext?: { queueId?: string; slotId?: string } }).diagnosticContext;
         const render = await runJsonProcess(required.python, [mediaBridge], {
           operation: renderOperation, output: outputPath, audio_path: value.audioPath, image_paths: input.product.imagePaths,
           scene_roles: input.product.exactProductReference
@@ -155,7 +159,14 @@ async function main(): Promise<void> {
             : value.genericImagePaths.map(() => "generic_usage_example"),
           captions, hook: value.selected.candidate.hook, title: input.product.canonicalProductName, usage_label: USAGE_LABEL,
           layout_plan: bridgeLayout, caption_font_px: profile.captionFontPx, caption_animation: profile.captionAnimation,
-          primary_visual_width_ratio: profile.primaryVisualWidthRatio, canvas_fill_ratio: profile.canvasFillRatio
+          primary_visual_width_ratio: profile.primaryVisualWidthRatio, canvas_fill_ratio: profile.canvasFillRatio,
+          input_root: value.productRoot,
+          diagnostic_context: {
+            renderRunId: `${runId}-${input.product.productKey}-${attempt}`,
+            candidateId: value.selected.candidate.id,
+            queueId: queueContext?.queueId,
+            slotId: queueContext?.slotId
+          }
         }, 900_000);
         if (render.status !== "success") throw new Error("RENDER_FAILED");
         const measurements = await runJsonProcess(required.python, [visualQaBridge], { operation: "analyze", video_path: outputPath, output_dir: join(attemptRoot, "visual-qa"), canvas_fill_ratio: profile.canvasFillRatio }, 420_000) as unknown as VisualQaMeasurements & { status: string };
@@ -320,8 +331,25 @@ async function prepareAsrAttempt(input: Parameters<typeof synthesizeAndValidateV
 }
 function blockedItem(productKey: string, error: unknown): Record<string, unknown> {
   const blocker = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message) ? error.message : "VIDEO_AUTOMATION_REJECTED_PRODUCT";
-  return { productKey, status: "VIDEO_AUTOMATION_REJECTED_PRODUCT", voiceDiagnosticPassed: false, voiceDiagnostic: error instanceof TtsRecoveryError ? error.diagnostic : null, machineQaPassed: false, finalAutomatedQaPassed: false, blockers: [blocker], humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
+  return { productKey, status: "VIDEO_AUTOMATION_REJECTED_PRODUCT", voiceDiagnosticPassed: false, voiceDiagnostic: error instanceof TtsRecoveryError ? error.diagnostic : null, localProcessDiagnostic: error instanceof LocalJsonProcessError ? error.diagnostic : null, machineQaPassed: false, finalAutomatedQaPassed: false, blockers: [blocker], humanOwnerReviewStatus: "not_requested", publishReady: false, ...AUTONOMOUS_VIDEO_REVIEW_FLAGS };
 }
 async function writeJson(path: string, value: unknown): Promise<void> { await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8"); }
+async function materializeOwnedInput(sourcePath: string, targetPath: string): Promise<{ path: string; sha256: string }> {
+  const source = await realpath(sourcePath);
+  if (!(await stat(source)).isFile()) throw new Error("LOCAL_MEDIA_INPUT_NOT_FOUND");
+  await mkdir(dirname(targetPath), { recursive: true });
+  const bytes = await readFile(source);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const temporary = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(temporary, bytes, { flag: "wx" });
+    if (createHash("sha256").update(await readFile(temporary)).digest("hex") !== sha256) throw new Error("LOCAL_MEDIA_INPUT_HASH_MISMATCH");
+    await rename(temporary, targetPath);
+  } finally {
+    await unlink(temporary).catch(() => undefined);
+  }
+  return { path: await realpath(targetPath), sha256 };
+}
+function extensionOf(path: string) { const match = /\.[a-z0-9]{1,8}$/iu.exec(path); return match?.[0].toLowerCase() ?? ".image"; }
 function elapsed(started: number): number { return Math.round((performance.now() - started) / 10) / 100; }
 void main().catch((error: unknown) => { const message = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message) ? error.message : "AUTONOMOUS_VIDEO_REVIEW_V2_FAILED"; console.error(JSON.stringify({ event: "autonomous_video_v2_failed", safeError: message, SAFE_TO_UPLOAD: false })); process.exitCode = 1; });

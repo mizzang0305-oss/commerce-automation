@@ -3,6 +3,7 @@ export * from "./codexCliReviewExecutor";
 export * from "./codexReviewEvidence";
 export * from "./lock";
 export * from "./nightlyScout";
+export * from "./operationalAdmission";
 export * from "./repository";
 export * from "./retainedBatchEnvelope";
 export * from "./runtimePreflight";

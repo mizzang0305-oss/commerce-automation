@@ -5,7 +5,11 @@ param(
     [Parameter(Mandatory = $true)][string]$Namespace,
     [Parameter(Mandatory = $true)][string]$SourceRoot,
     [Parameter(Mandatory = $true)][string]$ExpectedGitHead,
-    [Parameter(Mandatory = $true)][string]$EnvFile
+    [Parameter(Mandatory = $true)][string]$EnvFile,
+    [Parameter(Mandatory = $true)][string]$CodexRuntimeCapsulePath,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleManifestSha256,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeCapsuleBundleDigest,
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{64}$')][string]$CodexRuntimeBinarySha256
 )
 $ErrorActionPreference = "Stop"
 $taskName = "Minz-Commerce-VideoBatch-NoUpload-V1"
@@ -49,6 +53,8 @@ try {
     . (Join-Path $PSScriptRoot "common-first-operation-no-upload.ps1") `
         -WorktreeRoot $WorktreeRoot -QueueRoot $QueueRoot -Namespace $Namespace `
         -SourceRoot $SourceRoot -ExpectedGitHead $ExpectedGitHead -EnvFile $EnvFile `
+        -CodexRuntimeCapsulePath $CodexRuntimeCapsulePath -CodexRuntimeCapsuleManifestSha256 $CodexRuntimeCapsuleManifestSha256 `
+        -CodexRuntimeCapsuleBundleDigest $CodexRuntimeCapsuleBundleDigest -CodexRuntimeBinarySha256 $CodexRuntimeBinarySha256 `
         -InvocationRole batch -TaskName $taskName -WrapperPath $PSCommandPath
 
     $slotClaim = Claim-Daily69BatchSlot -ResolvedQueue $resolvedQueue -BoundNamespace $Namespace
@@ -73,14 +79,29 @@ try {
     $batchOutput = @($batchCapture.combinedLines)
     $batchExit = $batchCapture.exitCode
     $retainedBatchRecord = Write-SanitizedBatchResult -ResolvedQueue $resolvedQueue -InvocationId $Daily69InvocationId -Lines $batchOutput
-    $projectionOutput = @(& npm.cmd run queue-control:project --silent 2>&1)
-    $projectionExit = $LASTEXITCODE
+    $batchEvidenceValid = Test-Daily69RetainedBatchExitContract -Record $retainedBatchRecord -ChildExitCode $batchExit
+    if ($batchEvidenceValid) {
+        $projectionOutput = @(& npm.cmd run queue-control:project --silent 2>&1)
+        $projectionExit = $LASTEXITCODE
+    } else {
+        # Never publish queue state or a successful Task receipt when the child
+        # exit code is not cross-bound to one exact retained terminal envelope.
+        $projectionOutput = @()
+        $projectionExit = -1
+    }
     $counters = Get-Daily69CountersFromOutput -Lines @(($retainedBatchRecord | ConvertTo-Json -Depth 6 -Compress))
 
-    if ($batchExit -eq 0 -and $projectionExit -eq 0) {
+    if (($batchExit -eq 0 -or $batchExit -eq 2) -and -not $batchEvidenceValid) {
+        $recordSafeError = ConvertTo-Daily69SafeCode -Value ([string]$retainedBatchRecord.safeError) -Fallback 'BATCH_RESULT_EXIT_CONTRACT_INVALID'
+        $safeError = if ([string]::IsNullOrEmpty([string]$retainedBatchRecord.safeError)) { 'BATCH_RESULT_EXIT_CONTRACT_INVALID' } else { $recordSafeError }
+        $resolution = Resolve-Daily69FailureOutcome -SafeCode $safeError
+    } elseif ($batchExit -eq 0 -and $projectionExit -eq 0) {
         $resolution = [pscustomobject]@{ outcome = 'success'; safeError = ''; wrapperExitCode = 0 }
     } elseif ($batchExit -eq 2 -and $projectionExit -eq 0) {
-        $resolution = [pscustomobject]@{ outcome = 'partial'; safeError = 'BATCH_PARTIAL'; wrapperExitCode = 2 }
+        # A slot-local partial is an honest retained outcome but a successful
+        # scheduler invocation. Keeping wrapper exit 0 allows the next natural
+        # trigger to run; childExitCode and BATCH_PARTIAL remain preserved.
+        $resolution = [pscustomobject]@{ outcome = 'partial'; safeError = 'BATCH_PARTIAL'; wrapperExitCode = 0 }
     } else {
         $safeError = if ($batchExit -ne 0) {
             Get-Daily69SafeCodeFromOutput -Lines $batchOutput -Fallback $(if ($batchExit -eq 3) { 'QUEUE_BATCH_BLOCKED_PREFLIGHT' } else { 'FIRST_OPERATION_BATCH_FAILED' })

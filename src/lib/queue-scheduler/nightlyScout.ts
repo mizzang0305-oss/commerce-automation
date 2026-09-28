@@ -53,10 +53,20 @@ export async function runNightlyScout(input: { repository?: LocalQueueRepository
   }
   if (registry) capacityPlan = planUsageEvidenceCapacity({ ranked, registry, settings, existing, rawCount: raw.length, normalizedCount: candidates.length });
   const insertion = await repository.insertRanked({ ranked, queueDate, now, dueNow: input.dueNow, capacityPlan: capacityPlan ?? undefined });
-  const capacityReady = insertion.queued.length + existing.length === settings.dailyTargetCount && insertion.reserveCount >= settings.minimumReserveCount;
-  const run: LocalRun = { runId, type: "nightly_discovery", status: capacityReady ? "success" : "partial", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: insertion.queued.length, blocked: 0, failed: 0, retried: 0, safeMessage: capacityReady ? "NIGHTLY_QUEUE_CREATED" : insertion.queued.length ? "DAILY_69_DIVERSITY_CAPACITY_INSUFFICIENT" : "NIGHTLY_NO_NEW_ITEMS", metrics: { queueDate, apiCallCount, providerQueryCount: providerResults.length, discovered: raw.length, normalized: candidates.length, eligible: ranked.filter((entry) => entry.score.eligible).length, selected: insertion.queued.length, reserveAdded: insertion.reserveAdded, reserveCount: insertion.reserveCount, requiredReserveCount: settings.minimumReserveCount, duplicateSkipped: insertion.duplicateSkipped, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...(capacityPlan?.diagnostics ?? {}), ...QUEUE_SCHEDULER_FLAGS } };
+  const { capacityReady, safeMessage } = classifyNightlyCapacity({ queued: insertion.queued.length, existing: existing.length,
+    dailyTarget: settings.dailyTargetCount, reserve: insertion.reserveCount, minimumReserve: settings.minimumReserveCount,
+    operationalCoveragePass: capacityPlan?.operationalCoverage.pass ?? false });
+  const run: LocalRun = { runId, type: "nightly_discovery", status: capacityReady ? "success" : "partial", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: insertion.queued.length, blocked: 0, failed: 0, retried: 0, safeMessage, metrics: { queueDate, apiCallCount, providerQueryCount: providerResults.length, discovered: raw.length, normalized: candidates.length, eligible: ranked.filter((entry) => entry.score.eligible).length, selected: insertion.queued.length, reserveAdded: insertion.reserveAdded, reserveCount: insertion.reserveCount, requiredReserveCount: settings.minimumReserveCount, duplicateSkipped: insertion.duplicateSkipped, durationSeconds: Math.round((performance.now() - started) / 10) / 100, ...(capacityPlan?.diagnostics ?? {}), ...QUEUE_SCHEDULER_FLAGS } };
   await repository.addRun(run);
   return { run, queued: insertion.queued, ranked, providerResults, rawCandidates: raw, normalizedCandidates: candidates };
+}
+
+export function classifyNightlyCapacity(input: { queued: number; existing: number; dailyTarget: number; reserve: number; minimumReserve: number; operationalCoveragePass: boolean }) {
+  // V1 keeps operational coverage as planning telemetry. Actual product,
+  // materialization, diversity and reserve-count admission remain hard gates.
+  const capacityReady = input.queued + input.existing === input.dailyTarget && input.reserve >= input.minimumReserve;
+  return { capacityReady, safeMessage: capacityReady ? "NIGHTLY_QUEUE_CREATED" : input.queued > 0 ? "DAILY_69_DIVERSITY_CAPACITY_INSUFFICIENT" : "NIGHTLY_NO_NEW_ITEMS",
+    operationalCoveragePass: input.operationalCoveragePass } as const;
 }
 
 async function recordNoop(repository: LocalQueueRepository, runId: string, startedAt: string, safeMessage: string, metrics: Record<string, number> = {}) { const run: LocalRun = { runId, type: "nightly_discovery", status: "noop", startedAt, finishedAt: new Date().toISOString(), claimed: 0, completed: 0, blocked: 0, failed: 0, retried: 0, safeMessage, metrics: { ...metrics, ...QUEUE_SCHEDULER_FLAGS } }; await repository.addRun(run); return { run, queued: [], ranked: [], providerResults: [], rawCandidates: [], normalizedCandidates: [] }; }
