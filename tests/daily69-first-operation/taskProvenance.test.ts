@@ -62,7 +62,7 @@ describe("Daily69 Task Scheduler provenance", () => {
     expect(classifyTaskInvocationProvenance({ taskName, events: completeEvents() }).classification).toBe("natural_scheduled");
     expect(classifyTaskInvocationProvenance({ taskName, events: explicitZero }).classification).toBe("natural_scheduled");
     expect(classifyTaskInvocationProvenance({ taskName, events: explicitFailure })).toMatchObject({
-      classification: "unknown",
+      classification: "natural_scheduled_terminal_failure",
       resultCodesPass: false,
       reasons: ["TASK_EVENT_RESULT_NONZERO"],
     });
@@ -83,7 +83,7 @@ describe("Daily69 Task Scheduler provenance", () => {
       reasons: expect.arrayContaining(["TASK_EVENT_RESULT_MISSING"]),
     });
     expect(classifyTaskInvocationProvenance({ taskName, events: events([107, 100, 129, 200, 201, 102], 1) })).toMatchObject({
-      classification: "unknown",
+      classification: "natural_scheduled_terminal_failure",
       reasons: expect.arrayContaining(["TASK_EVENT_RESULT_NONZERO"]),
     });
   });

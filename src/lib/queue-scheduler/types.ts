@@ -115,6 +115,7 @@ export type LocalQueueItem = {
   maxProductCandidates: number;
   candidateHistory: Array<{
     productKey: string;
+    candidateId?: string;
     canonicalProductName: string;
     startedAt: string;
     finishedAt: string;

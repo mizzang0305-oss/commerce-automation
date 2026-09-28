@@ -1,5 +1,9 @@
 from pathlib import Path
+import hashlib
+import os
+import shutil
 import subprocess
+import uuid
 
 from .subtitle_generator import resolve_subtitle_cue_texts, wrap_caption
 
@@ -33,6 +37,7 @@ HOOK_BOX_HEIGHT = 270
 HOOK_BOX_COLOR = "black@0.78"
 HOOK_ACCENT_COLOR = "0xfacc15@1"
 HOOK_ACCENT_HEIGHT = 10
+WINDOWS_CREATEPROCESS_COMMAND_LINE_LIMIT = 32767
 
 LAYOUT_PRESETS = {
     "hook": {
@@ -132,6 +137,8 @@ def build_render_command(
     shot_durations: list[float] | None = None,
     shot_captions: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
+    filter_complex: str | None = None,
+    filter_complex_path: Path | None = None,
 ) -> list[str]:
     if shot_image_paths is None:
         return [
@@ -181,18 +188,25 @@ def build_render_command(
             ]
         )
     audio_input_index = len(shot_image_paths)
+    graph = filter_complex
+    if graph is None:
+        graph = build_image_sequence_filter_complex(
+            srt_path,
+            image_count=len(shot_image_paths),
+            subtitle_text=subtitle_text,
+            shot_durations=durations,
+            shot_captions=shot_captions,
+        )
+    filter_option = (
+        ["-/filter_complex", str(filter_complex_path)]
+        if filter_complex_path is not None
+        else ["-filter_complex", graph]
+    )
     command.extend(
         [
             "-i",
             str(audio_path),
-            "-filter_complex",
-            build_image_sequence_filter_complex(
-                srt_path,
-                image_count=len(shot_image_paths),
-                subtitle_text=subtitle_text,
-                shot_durations=durations,
-                shot_captions=shot_captions,
-            ),
+            *filter_option,
             "-map",
             "[video]",
             "-map",
@@ -212,6 +226,93 @@ def build_render_command(
         ]
     )
     return command
+
+
+def windows_command_line_metrics(command: list[str]) -> dict[str, int]:
+    rendered = subprocess.list2cmdline([str(argument) for argument in command])
+    return {
+        "argumentCount": max(0, len(command) - 1),
+        "effectiveCommandLineChars": len(rendered),
+        "effectiveCommandLineCharsIncludingTerminator": len(rendered) + 1,
+        "longestArgumentChars": max((len(str(argument)) for argument in command[1:]), default=0),
+        "commandLineLimit": WINDOWS_CREATEPROCESS_COMMAND_LINE_LIMIT,
+    }
+
+
+def _is_reparse_path(path: Path) -> bool:
+    return path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction())
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _create_owned_render_root(target: Path) -> Path:
+    parent = target.parent.resolve(strict=True)
+    root = parent / f".render-{os.getpid()}-{uuid.uuid4().hex}"
+    root.mkdir(mode=0o700)
+    resolved = root.resolve(strict=True)
+    if resolved.parent != parent or _is_reparse_path(root):
+        raise ValueError("LOCAL_MEDIA_RENDER_TEMP_ROOT_INVALID")
+    return resolved
+
+
+def _write_owned_filtergraph(root: Path, filter_graph: str) -> tuple[Path, dict[str, object]]:
+    root = root.resolve(strict=True)
+    if _is_reparse_path(root):
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_ROOT_REPARSE_REJECTED")
+    script = root / "filtergraph.ffscript"
+    encoded = filter_graph.encode("utf-8")
+    with script.open("xb") as destination:
+        destination.write(encoded)
+        destination.flush()
+        os.fsync(destination.fileno())
+    resolved = script.resolve(strict=True)
+    if resolved.parent != root or not resolved.is_file() or _is_reparse_path(script):
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_INVALID")
+    reopened = resolved.read_bytes()
+    if reopened != encoded:
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_CONTENT_MISMATCH")
+    graph_sha256 = _sha256_bytes(encoded)
+    script_sha256 = _sha256_bytes(reopened)
+    if graph_sha256 != script_sha256:
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_HASH_MISMATCH")
+    return resolved, {
+        "filterTransport": "file",
+        "filterFileOption": "-/filter_complex",
+        "filterGraphChars": len(filter_graph),
+        "filterGraphUtf8Bytes": len(encoded),
+        "filterGraphSha256": graph_sha256,
+        "filterCount": filter_graph.count(",") + filter_graph.count(";") + 1,
+        "scriptBasename": resolved.name,
+        "scriptPathClassification": "RENDER_INVOCATION_TEMP",
+        "scriptFileSize": len(reopened),
+        "filterScriptSha256": script_sha256,
+        "filterScriptPresent": True,
+        "filterScriptRegularFile": True,
+        "filterScriptReparsePoint": False,
+        "rawFilterGraphStored": False,
+    }
+
+
+def _validate_owned_filtergraph(root: Path, script: Path, expected_sha256: str) -> None:
+    root = root.resolve(strict=True)
+    if _is_reparse_path(root):
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_ROOT_REPARSE_REJECTED")
+    if not script.exists():
+        raise RuntimeError("LOCAL_MEDIA_FILTER_SCRIPT_MISSING")
+    resolved = script.resolve(strict=True)
+    if resolved.parent != root or not resolved.is_file() or _is_reparse_path(script):
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_INVALID")
+    if _sha256_bytes(resolved.read_bytes()) != expected_sha256:
+        raise ValueError("LOCAL_MEDIA_FILTER_SCRIPT_HASH_MISMATCH")
+
+
+def _cleanup_owned_render_root(root: Path, target: Path) -> None:
+    parent = target.parent.resolve(strict=True)
+    if root.parent != parent or not root.name.startswith(f".render-{os.getpid()}-") or _is_reparse_path(root):
+        raise ValueError("LOCAL_MEDIA_RENDER_TEMP_OWNERSHIP_MISMATCH")
+    shutil.rmtree(root)
 
 
 def _build_base_video_filter() -> str:
@@ -430,20 +531,91 @@ def render_vertical_video(
     shot_durations: list[float] | None = None,
     shot_captions: list[str] | None = None,
     shot_image_paths: list[Path] | None = None,
+    process_runner=None,
+    lifecycle_diagnostic: dict[str, object] | None = None,
+    phase_callback=None,
 ) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
-    command = build_render_command(
-        image_path,
-        audio_path,
-        srt_path,
-        target,
-        ffmpeg_exe,
-        subtitle_text=subtitle_text,
-        shot_durations=shot_durations,
-        shot_captions=shot_captions,
-        shot_image_paths=shot_image_paths,
-    )
-    subprocess.run(command, check=True, capture_output=True, text=True)
-    if not target.exists():
-        raise RuntimeError("video render output was not created")
+    diagnostic = lifecycle_diagnostic if lifecycle_diagnostic is not None else {}
+    if phase_callback is not None:
+        phase_callback("CREATE_RENDER_TEMP_ROOT", "temp_root", target.parent)
+    root = _create_owned_render_root(target)
+    temporary_output = root / "temp-output.mp4"
+    diagnostic.update({
+        "renderTempRootBasename": root.name,
+        "renderTempRootPathSha256": hashlib.sha256(str(root).encode("utf-8")).hexdigest(),
+        "renderTempOwned": True,
+        "temporaryOutputBasename": temporary_output.name,
+    })
+    try:
+        filter_graph = None
+        filter_script = None
+        if shot_image_paths is not None:
+            if phase_callback is not None:
+                phase_callback("BUILD_FILTER_GRAPH", "filter_graph", root)
+            durations = list(shot_durations or [])
+            filter_graph = build_image_sequence_filter_complex(
+                srt_path,
+                image_count=len(shot_image_paths),
+                subtitle_text=subtitle_text,
+                shot_durations=durations,
+                shot_captions=shot_captions,
+            )
+            if phase_callback is not None:
+                phase_callback("CREATE_FILTER_SCRIPT", "filter_script", root / "filtergraph.ffscript")
+            filter_script, filter_metadata = _write_owned_filtergraph(root, filter_graph)
+            diagnostic.update(filter_metadata)
+            if phase_callback is not None:
+                phase_callback("VALIDATE_FILTER_SCRIPT", "filter_script", filter_script)
+            _validate_owned_filtergraph(root, filter_script, str(filter_metadata["filterScriptSha256"]))
+        command = build_render_command(
+            image_path,
+            audio_path,
+            srt_path,
+            temporary_output,
+            ffmpeg_exe,
+            subtitle_text=subtitle_text,
+            shot_durations=shot_durations,
+            shot_captions=shot_captions,
+            shot_image_paths=shot_image_paths,
+            filter_complex=filter_graph,
+            filter_complex_path=filter_script,
+        )
+        metrics = windows_command_line_metrics(command)
+        diagnostic["commandLine"] = metrics
+        if phase_callback is not None:
+            phase_callback("VALIDATE_WINDOWS_COMMAND_LINE", "command", ffmpeg_exe)
+        if os.name == "nt" and metrics["effectiveCommandLineCharsIncludingTerminator"] > WINDOWS_CREATEPROCESS_COMMAND_LINE_LIMIT:
+            diagnostic["processStarted"] = False
+            diagnostic["childPid"] = None
+            raise RuntimeError("WINDOWS_CREATEPROCESS_COMMAND_LINE_LIMIT_EXCEEDED")
+        runner = process_runner or subprocess.run
+        runner(command, check=True, capture_output=True, text=True)
+        diagnostic["processStarted"] = True
+        if phase_callback is not None:
+            phase_callback("VALIDATE_FFMPEG_OUTPUT", "temp_output", temporary_output)
+        if not temporary_output.is_file() or temporary_output.stat().st_size <= 0:
+            raise RuntimeError("video render output was not created")
+        if phase_callback is not None:
+            phase_callback("ATOMIC_RENDER_PUBLICATION", "temp_output", temporary_output)
+        os.replace(temporary_output, target)
+        if not target.is_file() or target.stat().st_size <= 0:
+            raise RuntimeError("video render output was not published")
+        diagnostic["atomicPublication"] = True
+    except BaseException:
+        diagnostic["failurePhaseBeforeCleanup"] = diagnostic.get("currentPhase", "UNKNOWN")
+        diagnostic["failureSnapshotBeforeCleanup"] = {
+            "tempRootPresent": root.is_dir(),
+            "filterScriptPresent": (root / "filtergraph.ffscript").is_file(),
+            "temporaryOutputPresent": temporary_output.is_file(),
+            "finalOutputPresent": target.is_file(),
+        }
+        raise
+    finally:
+        diagnostic["cleanupOwnedOnly"] = True
+        if root.exists():
+            if phase_callback is not None and "failureSnapshotBeforeCleanup" not in diagnostic:
+                phase_callback("CLEANUP_RENDER_TEMP", "temp_root", root)
+            _cleanup_owned_render_root(root, target)
+        diagnostic["renderTempCleaned"] = not root.exists()
     return target

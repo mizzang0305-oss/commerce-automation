@@ -10,6 +10,7 @@ import { loadAndAssertImmutableReviewOperationBinding, stableDigest } from "./im
 import type { RankedLiveProduct } from "@/lib/live-product-video";
 import type { UsageCapacityPlan } from "@/lib/usage-evidence";
 import { validateCoupangAffiliateUrl } from "@/lib/affiliate-readiness";
+import { createOperationalAdmissionState, evaluateOperationalCandidate, operationalAdmissionPolicy, type OperationalAdmissionDecision, type OperationalAdmissionReason } from "./operationalAdmission";
 
 export class LocalQueueRepository {
   readonly root: string;
@@ -78,7 +79,7 @@ export class LocalQueueRepository {
           sourceProvider: entry.candidate.sourceProvider, sourceKeyword: entry.candidate.sourceKeyword, productScore: entry.score.finalProductScore,
           scheduledAt: input.dueNow ? new Date(input.now.getTime() - 1_000).toISOString() : scheduledAt(input.queueDate, rank, settings),
           status: "scheduled", attemptCount: 0, productCandidateAttempt: 1, maxProductCandidates: settings.maxProductCandidates,
-          candidateHistory: [{ productKey: entry.candidate.productKey, canonicalProductName: entry.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "PRIMARY_SELECTED", schedulerAttempts: 0, replacementOfProductKey: "" }],
+          candidateHistory: [{ productKey: entry.candidate.productKey, candidateId: entry.candidate.candidateId, canonicalProductName: entry.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "PRIMARY_SELECTED", schedulerAttempts: 0, replacementOfProductKey: "" }],
           leaseOwner: "", leaseAcquiredAt: "", leaseExpiresAt: "", nextAttemptAt: "",
           claimedAt: "", startedAt: "", finishedAt: "", creativeScore: null, videoQualityScore: null, videoPath: "", reviewPath: "",
           errorCode: "", safeMessage: "", reviewMetadata: { codexReview: "not_executed" }, candidate: entry.candidate, usageEvidenceAllocation: allocationByProduct.get(entry.candidate.productKey), createdAt: nowIso, updatedAt: nowIso, localRevision: 0
@@ -194,7 +195,7 @@ export class LocalQueueRepository {
       item.updatedAt = input.now.toISOString();
     });
   }
-  async fail(input: { id: string; code: string; retryable: boolean; now: Date; settings: QueueSchedulerSettings }): Promise<"retry_wait" | "failed" | "blocked"> { let result: "retry_wait" | "failed" | "blocked" = "blocked"; await this.patch([input.id], (item) => { if (input.retryable && item.attemptCount < input.settings.maxAttempts) { result = "retry_wait"; item.status = result; item.nextAttemptAt = new Date(input.now.getTime() + input.settings.retryBackoffMinutes * 60_000).toISOString(); } else { result = input.retryable ? "failed" : "blocked"; item.status = result; item.finishedAt = input.now.toISOString(); } item.errorCode = safeCode(input.code); item.safeMessage = safeCode(input.code); item.leaseOwner = ""; item.leaseExpiresAt = ""; }); return result; }
+  async fail(input: { id: string; code: string; candidateReason?: string; retryable: boolean; now: Date; settings: QueueSchedulerSettings }): Promise<"retry_wait" | "failed" | "blocked"> { let result: "retry_wait" | "failed" | "blocked" = "blocked"; await this.patch([input.id], (item) => { if (input.retryable && item.attemptCount < input.settings.maxAttempts) { result = "retry_wait"; item.status = result; item.nextAttemptAt = new Date(input.now.getTime() + input.settings.retryBackoffMinutes * 60_000).toISOString(); } else { result = input.retryable ? "failed" : "blocked"; item.status = result; item.finishedAt = input.now.toISOString(); const active = [...(item.candidateHistory ?? [])].reverse().find((entry) => entry.outcome === "active"); if (active) { active.outcome = "blocked"; active.finishedAt = input.now.toISOString(); active.reason = safeCode(input.candidateReason ?? input.code); active.schedulerAttempts = item.attemptCount; } } item.errorCode = safeCode(input.code); item.safeMessage = safeCode(input.code); item.leaseOwner = ""; item.leaseExpiresAt = ""; }); return result; }
 
   async replaceWithReserve(input: { id: string; reason: string; now: Date; expectedRevision?: number }): Promise<LocalQueueItem | null> {
     const release = await acquireQueueMutationLock(join(this.root, "queue.mutation.lock"), `reserve-${process.pid}`);
@@ -205,15 +206,18 @@ export class LocalQueueRepository {
       const history = item.candidateHistory ?? [];
       const productCandidateAttempt = item.productCandidateAttempt ?? 1;
       if (productCandidateAttempt >= (item.maxProductCandidates ?? settings.maxProductCandidates)) return null;
-      const usedKeys = new Set(items.flatMap((entry) => [entry.productKey, ...(entry.candidateHistory ?? []).map((historyEntry) => historyEntry.productKey)]));
-      const compatible = reserve.filter((entry) => !entry.claimedBySlot
-        && !usedKeys.has(entry.candidate.productKey)
-        && entry.score.eligible
-        && validateCoupangAffiliateUrl(entry.candidate.selectedAffiliateUrl).affiliateReady);
+      const sourcePolicy = await this.sourceAdmissionPolicy();
+      const decisions = operationalReserveDecisions({ items, reserve, item, settings, ...sourcePolicy, failureStage: input.reason });
+      const compatible = decisions.filter((entry) => entry.decision.eligible).map((entry) => entry.candidate);
       const replacement = compatible.sort((left, right) => Number(right.candidate.useCase === item.candidate.useCase) - Number(left.candidate.useCase === item.candidate.useCase) || right.score.finalProductScore - left.score.finalProductScore || left.candidate.productKey.localeCompare(right.candidate.productKey))[0];
+      await this.recordOperationalAdmissionEvent({ item, reason: input.reason, now: input.now, decisions, replacement });
       if (!replacement) return null;
       const nowIso = input.now.toISOString();
       const previousKey = item.productKey;
+      // Preserve the currently bound identity before replacing it. Older
+      // history with no ID stays unknown; never derive an ID from a product key.
+      for (const entry of history) if (entry.productKey === previousKey && !entry.candidateId) entry.candidateId = item.candidate.candidateId;
+      if (!history.some((entry) => entry.productKey === previousKey)) history.push({ productKey: previousKey, candidateId: item.candidate.candidateId, canonicalProductName: item.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "CURRENT_IDENTITY_OBSERVED", schedulerAttempts: item.attemptCount, replacementOfProductKey: "" });
       const active = [...history].reverse().find((entry) => entry.outcome === "active");
       if (active) { active.outcome = "replaced"; active.finishedAt = nowIso; active.reason = safeCode(input.reason); active.schedulerAttempts = item.attemptCount; }
       replacement.claimedBySlot = item.slotId || `slot-${String(item.queueRank).padStart(3, "0")}`;
@@ -227,12 +231,65 @@ export class LocalQueueRepository {
         claimedAt: "", startedAt: "", finishedAt: "", leaseOwner: "", leaseAcquiredAt: "", leaseExpiresAt: "", nextAttemptAt: "",
         creativeScore: null, videoQualityScore: null, videoPath: "", reviewPath: "", errorCode: "", safeMessage: "PRODUCT_REPLACEMENT_SCHEDULED", updatedAt: nowIso
       });
-      item.candidateHistory = [...history, { productKey: replacement.candidate.productKey, canonicalProductName: replacement.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "RESERVE_FALLBACK", schedulerAttempts: 0, replacementOfProductKey: previousKey }];
+      item.candidateHistory = [...history, { productKey: replacement.candidate.productKey, candidateId: replacement.candidate.candidateId, canonicalProductName: replacement.candidate.canonicalProductName, startedAt: nowIso, finishedAt: "", outcome: "active", reason: "RESERVE_FALLBACK", schedulerAttempts: 0, replacementOfProductKey: previousKey }];
       const revision = await this.bumpLocalRevision();
       item.localRevision = revision;
       await Promise.all([atomicWriteJson(this.queuePath, items), atomicWriteJson(this.reservePath, reserve)]);
       return structuredClone(item);
     } finally { await release(); }
+  }
+
+  async candidateExhaustionCode(id: string): Promise<"CANDIDATE_POOL_EXHAUSTED" | "CANDIDATE_LADDER_LIMIT_REACHED"> {
+    const [items, settings, reserve] = await Promise.all([this.items(), this.settings(), this.reserveCandidates()]);
+    const item = items.find((entry) => entry.id === id);
+    if (!item) throw new Error("QUEUE_SLOT_NOT_FOUND");
+    const sourcePolicy = await this.sourceAdmissionPolicy();
+    return compatibleReserveCandidates({ items, reserve, item, settings, ...sourcePolicy }).length === 0
+      ? "CANDIDATE_POOL_EXHAUSTED"
+      : "CANDIDATE_LADDER_LIMIT_REACHED";
+  }
+
+  private async sourceAdmissionPolicy() {
+    const registry = await readJson<{ maxSameSourceVideoDaily?: unknown; assets?: Array<{ sourceId?: unknown; sourceKind?: unknown }> }>(join(this.root, "selected-registry.json"), {});
+    const value = Number(registry.maxSameSourceVideoDaily ?? 15);
+    if (!Number.isInteger(value) || value < 1 || value > 15) throw new Error("OPERATIONAL_SOURCE_CAP_INVALID");
+    const cappedKinds = new Set(["owner_reviewed_video", "sanitized_local_video", "derived_clip", "derived_frame_pack"]);
+    const cappedSourceIds = (registry.assets ?? []).filter((asset) => cappedKinds.has(String(asset.sourceKind))).map((asset) => String(asset.sourceId ?? "")).filter(Boolean);
+    return { maxSameSourceVideoDaily: value, cappedSourceIds };
+  }
+
+  private async recordOperationalAdmissionEvent(input: {
+    item: LocalQueueItem;
+    reason: string;
+    now: Date;
+    decisions: Array<{ candidate: ReserveCandidate; decision: OperationalAdmissionDecision }>;
+    replacement?: ReserveCandidate;
+  }) {
+    const path = join(this.root, "operational-admission-events.json");
+    const events = await readJson<Array<Record<string, unknown>>>(path, []);
+    const reasonCounts: Partial<Record<OperationalAdmissionReason, number>> = {};
+    for (const entry of input.decisions) for (const reason of entry.decision.reasons ?? []) reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    const eligible = input.decisions.filter((entry) => entry.decision.eligible);
+    events.push({
+      schemaVersion: "queue-operational-admission-event-v1",
+      recordedAt: input.now.toISOString(),
+      slotId: input.item.slotId,
+      failureStage: safeCode(input.reason),
+      candidatePoolRemaining: input.decisions.length,
+      operationalEligibleCount: eligible.length,
+      rejectionReasonCounts: reasonCounts,
+      capLedgerHash: input.decisions[0]?.decision.prefixStateHash ?? "",
+      eligibleCandidateIds: eligible.map((entry) =>
+        entry.decision.candidateIdentity?.candidateId
+        ?? entry.candidate.candidate.candidateId
+        ?? entry.candidate.candidate.productKey
+      ).sort(),
+      chosenCandidateId: input.replacement?.candidate.candidateId ?? "",
+      chosenProductKey: input.replacement?.candidate.productKey ?? "",
+      SAFE_TO_UPLOAD: false,
+      PLATFORM_UPLOAD: 0,
+    });
+    await atomicWriteJson(path, events.slice(-500));
   }
 
   async setPaused(paused: boolean): Promise<QueueSchedulerSettings> {
@@ -322,6 +379,37 @@ export function resolveDefaultQueueRoot(): string {
 
 function scheduledAt(queueDate: string, rank: number, settings: QueueSchedulerSettings): string { const slot = Math.floor((rank - 1) / settings.batchSize); return new Date(`${queueDate}T${String(Math.min(settings.endHour, settings.startHour + slot * settings.intervalHours)).padStart(2, "0")}:00:00+09:00`).toISOString(); }
 function normalizeName(value: string) { return value.toLowerCase().replace(/[^가-힣a-z0-9]/gu, ""); }
+function compatibleReserveCandidates(input: { items: LocalQueueItem[]; reserve: ReserveCandidate[]; item: LocalQueueItem; settings: QueueSchedulerSettings; maxSameSourceVideoDaily?: number; cappedSourceIds?: string[] }) {
+  return operationalReserveDecisions(input).filter((entry) => entry.decision.eligible).map((entry) => entry.candidate);
+}
+function operationalReserveDecisions(input: { items: LocalQueueItem[]; reserve: ReserveCandidate[]; item: LocalQueueItem; settings: QueueSchedulerSettings; maxSameSourceVideoDaily?: number; cappedSourceIds?: string[]; failureStage?: string }) {
+  if (input.settings.mode === "no_upload_pilot") {
+    const usedKeys = new Set(input.items.flatMap((entry) => [entry.productKey, ...(entry.candidateHistory ?? []).map((historyEntry) => historyEntry.productKey)]));
+    return input.reserve.filter((entry) => !entry.claimedBySlot && !usedKeys.has(entry.candidate.productKey) && entry.score.eligible && validateCoupangAffiliateUrl(entry.candidate.selectedAffiliateUrl).affiliateReady)
+      .map((candidate) => ({ candidate, decision: { eligible: true } as OperationalAdmissionDecision }));
+  }
+  const state = createOperationalAdmissionState(input.items, input.reserve);
+  const policy = operationalAdmissionPolicy(input.settings, input.maxSameSourceVideoDaily ?? 15, input.cappedSourceIds);
+  return input.reserve.filter((entry) => !entry.claimedBySlot).map((candidate) => ({
+    candidate,
+    decision: evaluateOperationalCandidate({
+      state,
+      candidate,
+      policy,
+      replacementContext: { slotId: input.item.slotId, plannedPrimaryProductKey: input.item.productKey, failedPrimaryProductKey: input.item.productKey, failureStage: input.failureStage },
+    }),
+  }));
+}
+export function isOperationalReserveCandidate(entry: ReserveCandidate, input: { items: LocalQueueItem[]; item: LocalQueueItem; settings: QueueSchedulerSettings; maxSameSourceVideoDaily?: number; cappedSourceIds?: string[] }) {
+  if (input.settings.mode === "no_upload_pilot") return true;
+  const state = createOperationalAdmissionState(input.items);
+  return evaluateOperationalCandidate({
+    state,
+    candidate: entry,
+    policy: operationalAdmissionPolicy(input.settings, input.maxSameSourceVideoDaily ?? 15, input.cappedSourceIds),
+    replacementContext: { slotId: input.item.slotId, plannedPrimaryProductKey: input.item.productKey, failedPrimaryProductKey: input.item.productKey },
+  }).eligible;
+}
 function safeCode(value: string) { return /^[A-Z0-9_:-]+$/u.test(value) ? value : "QUEUE_ITEM_FAILED"; }
 function selectDailyDiverseRanked(ranked: RankedLiveProduct[], settings: QueueSchedulerSettings, existing: LocalQueueItem[]) {
   const categoryMax = Math.max(1, Math.floor(settings.dailyTargetCount * settings.maxCategoryRatio));

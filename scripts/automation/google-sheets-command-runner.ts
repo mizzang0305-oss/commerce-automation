@@ -14,9 +14,12 @@ async function main() {
   let lock: Awaited<ReturnType<typeof acquireSheetsRunnerLock>> | undefined;
   try {
     lock = await acquireSheetsRunnerLock(process.cwd(), runnerId);
-  } catch {
-    process.stderr.write("SHEETS_COMMAND_RUNNER_ALREADY_RUNNING\n");
-    process.exitCode = 2;
+  } catch (error) {
+    const message = error instanceof Error && /^[A-Z0-9_:-]+$/u.test(error.message)
+      ? error.message
+      : "SHEETS_COMMAND_RUNNER_LOCK_FAILED";
+    process.stderr.write(`${message}\n`);
+    process.exitCode = message === "SHEETS_COMMAND_RUNNER_ALREADY_RUNNING" ? 2 : 3;
     return;
   }
 
