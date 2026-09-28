@@ -346,7 +346,7 @@ def _clean_dir_for_test(path: Path) -> Path:
     return path
 
 
-def _download_to_target(_url: str, target: Path) -> Path:
+def _download_to_target(_url: str, target: Path, **_kwargs) -> Path:
     return target
 
 
