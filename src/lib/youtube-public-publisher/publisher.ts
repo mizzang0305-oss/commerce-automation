@@ -28,6 +28,7 @@ export type YouTubePublicUploadJob = {
   visibility?: "public" | "unlisted";
   status: YouTubePublicUploadJobStatus;
   attemptCount: number;
+  preInsertRetryCount?: number;
   claimedAt: string;
   claimOwner: string;
   lastError: string;
@@ -232,6 +233,10 @@ export async function runYouTubePublicPublisherOnce(input: RunOnceInput): Promis
 
   const token = await input.client.getAccessToken({ channelKey: job.channelKey, tokenFilePath: route.tokenFilePath });
   if (!token.ok) {
+    if (token.safeError === "YOUTUBE_TOKEN_REFRESH_NETWORK_FAILURE") {
+      const retryScheduled = await schedulePreInsertTokenRetry(input.store, job.id, input.claimOwner, token.safeError, now);
+      return { status: retryScheduled ? "retry_scheduled" : "manual_review", jobId: job.id, safeError: token.safeError, videosInsertCalls: 0, canariesImported };
+    }
     await moveToManualReview(input.store, job.id, input.claimOwner, token.safeError, now);
     return { status: "manual_review", jobId: job.id, safeError: token.safeError, videosInsertCalls: 0, canariesImported };
   }
@@ -491,6 +496,26 @@ function hasDuplicateLedgerIdentity(
   return ledger.some((entry) =>
     entry.productId === candidate.productId || sameSha256(entry.videoSha256, candidate.videoSha256)
   );
+}
+
+async function schedulePreInsertTokenRetry(store: YouTubePublicPublisherStore, jobId: string, claimOwner: string, safeError: string, now: string) {
+  return store.mutate((state) => {
+    const job = findClaimedJob(state, jobId, claimOwner);
+    if (!job) return false;
+    const safeToRetry = job.attemptCount === 0 && !job.youtubeVideoId &&
+      !hasDuplicateLedgerIdentity(state.ledger, job) && (job.preInsertRetryCount ?? 0) < 1;
+    if (!safeToRetry) {
+      setManualReview(job, safeError, now);
+      return false;
+    }
+    job.preInsertRetryCount = (job.preInsertRetryCount ?? 0) + 1;
+    job.lastError = safeError;
+    job.status = "ready";
+    job.claimOwner = "";
+    job.claimedAt = "";
+    job.updatedAt = now;
+    return true;
+  });
 }
 
 function matchesReadback(

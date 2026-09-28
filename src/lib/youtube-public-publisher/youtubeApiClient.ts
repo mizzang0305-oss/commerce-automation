@@ -125,13 +125,14 @@ export function createYouTubePublicPublisherClient(
           })
         });
       } catch {
-        return { ok: false, safeError: "YOUTUBE_UPLOAD_SESSION_NETWORK_FAILURE", retryable: true };
+        // The videos.insert session request may have reached YouTube. Its outcome is unknown.
+        return { ok: false, safeError: "YOUTUBE_UPLOAD_SESSION_NETWORK_FAILURE", retryable: false };
       }
       if (!session.ok) {
         return {
           ok: false,
           safeError: `YOUTUBE_UPLOAD_SESSION_HTTP_${session.status}`,
-          retryable: session.status >= 500 || session.status === 429
+          retryable: session.status === 429
         };
       }
       const uploadUrl = session.headers.get("Location")?.trim() ?? "";

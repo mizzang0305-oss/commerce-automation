@@ -258,6 +258,59 @@ describe("guarded run-once public publisher", () => {
     expect(result).toMatchObject({ status: "manual_review", safeError, videosInsertCalls: 0 });
   });
 
+  test("retries one token refresh network failure at the next scheduled run without consuming an upload attempt", async () => {
+    const job = { ...readyJob(), visibility: "unlisted" as const };
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [job], ledger: [] });
+    let tokenCalls = 0;
+    let insertCalls = 0;
+    const client: YouTubePublicPublisherClient = {
+      getAccessToken: async () => ++tokenCalls === 1
+        ? { ok: false, safeError: "YOUTUBE_TOKEN_REFRESH_NETWORK_FAILURE" }
+        : { ok: true, accessToken: "test-access-token" },
+      probeMineChannel: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", channelTitle: "father jobs" }),
+      insertPublicVideo: async () => { insertCalls += 1; return { ok: true, youtubeVideoId: "retry-video-id" }; },
+      readbackVideo: async () => ({ ok: true, channelId: "UC38rroV6ZRTIzqKgWr5vWrw", privacyStatus: "unlisted", title: job.title, description: job.description })
+    };
+    const input = { store, client, getVideoSha256: async () => job.videoSha256,
+      env: { YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true", YOUTUBE_PUBLIC_PUBLISHER_PUBLIC_UPLOAD_ENABLED: "false",
+        PRODUCT_CONTENT_REVIEW_PUBLIC_KEY: TEST_REVIEW_PUBLIC_KEY,
+        YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json" }, claimOwner: "token-retry" };
+
+    await expect(runYouTubePublicPublisherOnce({ ...input, now: "2026-09-22T01:00:00.000Z" })).resolves.toMatchObject({
+      status: "retry_scheduled", safeError: "YOUTUBE_TOKEN_REFRESH_NETWORK_FAILURE", videosInsertCalls: 0
+    });
+    expect(store.snapshot().jobs[0]).toMatchObject({ status: "ready", attemptCount: 0, preInsertRetryCount: 1, youtubeVideoId: "" });
+    expect(store.snapshot().ledger.filter((entry) => entry.productId === job.productId)).toHaveLength(0);
+    expect(insertCalls).toBe(0);
+
+    await expect(runYouTubePublicPublisherOnce({ ...input, now: "2026-09-22T02:00:00.000Z" })).resolves.toMatchObject({
+      status: "uploaded", videosInsertCalls: 1
+    });
+    expect(store.snapshot().jobs[0]).toMatchObject({ status: "uploaded", attemptCount: 1, youtubeVideoId: "retry-video-id" });
+    expect(insertCalls).toBe(1);
+  });
+
+  test("holds a second token refresh failure before insert without consuming an upload attempt", async () => {
+    const job = { ...readyJob(), visibility: "unlisted" as const };
+    const store = new InMemoryYouTubePublicPublisherStore({ jobs: [job], ledger: [] });
+    let insertCalls = 0;
+    const input = { store, client: {
+      getAccessToken: async () => ({ ok: false as const, safeError: "YOUTUBE_TOKEN_REFRESH_NETWORK_FAILURE" }),
+      probeMineChannel: async () => ({ ok: false as const, safeError: "NOT_REACHED" }),
+      insertPublicVideo: async () => { insertCalls += 1; return { ok: false as const, safeError: "NOT_REACHED", retryable: false }; },
+      readbackVideo: async () => ({ ok: false as const, safeError: "NOT_REACHED" })
+    }, getVideoSha256: async () => job.videoSha256,
+      env: { YOUTUBE_PUBLIC_PUBLISHER_ENABLED: "true", YOUTUBE_PUBLIC_PUBLISHER_PUBLIC_UPLOAD_ENABLED: "false",
+        PRODUCT_CONTENT_REVIEW_PUBLIC_KEY: TEST_REVIEW_PUBLIC_KEY,
+        YOUTUBE_PUBLIC_PUBLISHER_FATHER_TOKEN_FILE: "D:\\secure\\youtube-father.json" }, claimOwner: "token-hold" };
+    await runYouTubePublicPublisherOnce({ ...input, now: "2026-09-22T01:00:00.000Z" });
+    await expect(runYouTubePublicPublisherOnce({ ...input, now: "2026-09-22T02:00:00.000Z" })).resolves.toMatchObject({
+      status: "manual_review", safeError: "YOUTUBE_TOKEN_REFRESH_NETWORK_FAILURE", videosInsertCalls: 0
+    });
+    expect(store.snapshot().jobs[0]).toMatchObject({ status: "manual_review", attemptCount: 0, preInsertRetryCount: 1 });
+    expect(insertCalls).toBe(0);
+  });
+
   test("fails closed when video bytes change after claim and before insert", async () => {
     const store = new InMemoryYouTubePublicPublisherStore({ jobs: [readyJob()], ledger: [] });
     let hashReads = 0;

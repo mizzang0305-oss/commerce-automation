@@ -21,6 +21,16 @@ describe("YouTube public publisher API client", () => {
     expect(result).toEqual({ ok: true, youtubeVideoId: "test-video-id" });
     expect(sessionVisibility).toBe("unlisted");
   });
+  test("never automatically retries an ambiguous videos.insert session network result", async () => {
+    const video = Buffer.from("test-video-bytes");
+    const client = createYouTubePublicPublisherClient({
+      readVideoFile: async () => video,
+      fetchImpl: async () => { throw new Error("network lost after request"); }
+    });
+    await expect(client.insertPublicVideo({ accessToken: "test-access-token", videoPath: "D:\\render\\product.mp4",
+      videoSha256: createHash("sha256").update(video).digest("hex"), title: "title", description: "description",
+      visibility: "unlisted" })).resolves.toEqual({ ok: false, safeError: "YOUTUBE_UPLOAD_SESSION_NETWORK_FAILURE", retryable: false });
+  });
   test("refreshes from only the explicitly routed channel token file", async () => {
     const tokenPaths: string[] = [];
     const client = createYouTubePublicPublisherClient({
