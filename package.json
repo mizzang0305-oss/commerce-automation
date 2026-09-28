@@ -93,7 +93,8 @@
     "simple-producer:settings": "node --conditions=react-server --import tsx scripts/simple-producer/settings.ts",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mpt:smoke": "node --conditions=react-server --import tsx scripts/moneyprinterturbo/run-local-smoke.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
