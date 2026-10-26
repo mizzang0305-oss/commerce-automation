@@ -1,0 +1,22 @@
+# Cloud media image: no credentials or developer output may enter build context.
+**/.env
+**/.env.*
+**/.git
+**/.vercel
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/outputs
+**/temp
+**/logs
+**/.next
+**/data
+**/tests
+**/*.mp4
+**/*.mp3
+**/*.wav
+**/*.mov
+**/*.webm
+**/*.sqlite
+**/*.db
