@@ -1,0 +1,16 @@
+# Manual Cloud Build only. No trigger or recurring expense is created.
+substitutions:
+  _IMAGE: 'asia-northeast3-docker.pkg.dev/PROJECT_ID/minz-media/cloud-media:manual'
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - --file
+      - python-worker/Dockerfile.cloud
+      - --tag
+      - '${_IMAGE}'
+      - .
+images:
+  - '${_IMAGE}'
+options:
+  logging: CLOUD_LOGGING_ONLY
