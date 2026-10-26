@@ -83,8 +83,12 @@ def validate_cloud_config(config, environ: dict | None = None) -> frozenset[str]
             or not config.korean_voice_command
             or not Path(config.korean_voice_command).is_file()):
         raise CloudGateError("Approved and packaged Linux Korean TTS executable is required before job claim")
-    for bucket in ("rendered-videos", "thumbnails", "subtitles", "upload-packages"):
-        _hostname(config.r2_public_base_urls.get(bucket, ""), context=f"R2 {bucket} public URL")
+    if getattr(config, "r2_media_bucket", "") != "minz":
+        raise CloudGateError("Cloud media requires the dedicated private minz bucket")
+    if not getattr(config, "worker_visual_binding_secret", ""):
+        raise CloudGateError("Signed render-plan verification secret is required before claim")
+    if not 60 <= getattr(config, "r2_review_url_ttl_seconds", 900) <= 3600:
+        raise CloudGateError("Private review URL lifetime must be 60-3600 seconds")
     return image_host_allowlist(env)
 
 
@@ -186,6 +190,8 @@ def process_one_job(api, heartbeat_api, config, storage, renderer, allowed_hosts
             api.fail_job(job_id, f"cloud_media_failure:{type(exc).__name__}")
         raise
 
+    if isinstance(getattr(storage, "receipts", None), list):
+        result = {**result, "private_artifacts": storage.receipts}
     api.complete_job(job_id, result)
     return {"status": "completed", "claimed": 1, "published": False}
 
@@ -199,7 +205,7 @@ def main():
         ensure_supported_runtime()
         from src.config import load_config
         from src.api_client import WorkerApiClient
-        from src.storage_client import StorageClient
+        from src.private_media_storage import PrivateMediaStorage
         from src.tasks.video_render import run_video_render
 
         config = load_config()
@@ -207,7 +213,7 @@ def main():
         config = cloud_worker_identity(config)
         api = WorkerApiClient(config)
         heartbeat_api = WorkerApiClient(config)
-        result = process_one_job(api, heartbeat_api, config, StorageClient(config), run_video_render, allowed_hosts)
+        result = process_one_job(api, heartbeat_api, config, PrivateMediaStorage(config), run_video_render, allowed_hosts)
         print(json.dumps(result, ensure_ascii=False))
         return 0
     except Exception as exc:
