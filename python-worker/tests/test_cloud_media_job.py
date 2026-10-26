@@ -21,6 +21,9 @@ class FakeConfig:
     s3_secret_access_key: str = "test-placeholder"
     heartbeat_interval_seconds: int = 5
     worker_id: str = "test"
+    r2_media_bucket: str = "minz"
+    r2_review_url_ttl_seconds: int = 900
+    worker_visual_binding_secret: str = "synthetic-binding-secret"
     korean_voice_provider: str = "local_command"
     korean_voice_provider_approved: bool = True
     korean_voice_command: str = str(Path(__file__).resolve())
@@ -64,6 +67,8 @@ class CloudMediaJobTests(unittest.TestCase):
                            replace(config, web_app_base_url="http://localhost:3000"),
                            replace(config, s3_endpoint_url="http://127.0.0.1:8000"),
                            replace(config, korean_voice_provider="disabled"),
+                           replace(config, r2_media_bucket="cn-wms-files"),
+                           replace(config, worker_visual_binding_secret=""),
                            replace(config, korean_voice_command="/missing/tts")]:
             with self.subTest(config=bad_config):
                 with self.assertRaises(cloud.CloudGateError):
@@ -130,6 +135,18 @@ class CloudMediaJobTests(unittest.TestCase):
             cloud.process_one_job(api, Mock(), FakeConfig(), Mock(), Mock(return_value=artifacts()),
                                   frozenset({"assets.example.com"}))
         api.fail_job.assert_not_called()
+
+    def test_completion_persists_private_object_identity(self):
+        api = Mock()
+        api.claim_job.return_value = job()
+        storage = Mock()
+        storage.receipts = [{"bucket": "minz", "key": "media-factory/rendered-videos/job-42/video.mp4",
+                             "sha256": "a" * 64, "readback_verified": True}]
+        cloud.process_one_job(api, Mock(), FakeConfig(), storage, Mock(return_value=artifacts()),
+                              frozenset({"assets.example.com"}))
+        sent = api.complete_job.call_args.args[1]
+        self.assertEqual(sent["private_artifacts"], storage.receipts)
+        self.assertEqual(sent["video_url"], artifacts()["video_url"])
 
     def test_worker_id_is_unique_per_cloud_execution(self):
         config = FakeConfig()

@@ -28,6 +28,8 @@ class WorkerConfig:
     korean_voice_speed: float = 1.14
     korean_voice_timeout_seconds: int = 600
     worker_visual_binding_secret: str = ""
+    r2_media_bucket: str = ""
+    r2_review_url_ttl_seconds: int = 900
 
 
 def first_env(*names: str, default: str = "") -> str:
@@ -83,4 +85,6 @@ def load_config() -> WorkerConfig:
         korean_voice_speed=float(os.getenv("KOREAN_VOICE_SPEED", "1.14")),
         korean_voice_timeout_seconds=int(os.getenv("KOREAN_VOICE_TIMEOUT_SECONDS", "600")),
         worker_visual_binding_secret=os.getenv("WORKER_VISUAL_BINDING_SECRET", "").strip(),
+        r2_media_bucket=os.getenv("R2_MEDIA_BUCKET", "").strip(),
+        r2_review_url_ttl_seconds=int(os.getenv("R2_REVIEW_URL_TTL_SECONDS", "900")),
     )
